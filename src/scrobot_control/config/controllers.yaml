@@ -1,0 +1,74 @@
+controller_manager:
+  ros__parameters:
+
+    update_rate: 100
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    diff_drive_controller:
+      type: diff_drive_controller/DiffDriveController
+
+
+diff_drive_controller:
+  ros__parameters:
+
+    # Drive joints
+    left_wheel_names:
+      - left_wheel_joint
+
+    right_wheel_names:
+      - right_wheel_joint
+
+    # Robot geometry
+    #
+    # REPLACE THESE TWO VALUES WITH YOUR ACTUAL ROBOT DIMENSIONS
+    wheel_separation: 0.XXX
+    wheel_radius: 0.XXX
+
+    wheel_separation_multiplier: 1.0
+    left_wheel_radius_multiplier: 1.0
+    right_wheel_radius_multiplier: 1.0
+
+    # Frames
+    odom_frame_id: odom
+    base_frame_id: base_footprint
+
+    # Use wheel feedback for odometry
+    open_loop: false
+    position_feedback: true
+
+    # TEMPORARY:
+    # let diff_drive_controller publish odom -> base_footprint
+    # until robot_localization EKF is added
+    enable_odom_tf: true
+
+    # Safety
+    cmd_vel_timeout: 0.5
+
+    # Odometry
+    publish_limited_velocity: true
+    velocity_rolling_window_size: 10
+
+    pose_covariance_diagonal:
+      - 0.001
+      - 0.001
+      - 0.001
+      - 0.001
+      - 0.001
+      - 0.01
+
+    twist_covariance_diagonal:
+      - 0.001
+      - 0.001
+      - 0.001
+      - 0.001
+      - 0.001
+      - 0.01
+
+    # Project requirement
+    linear.x.max_velocity: 1.0
+    linear.x.min_velocity: -1.0
+
+    # Leave acceleration / angular limits unrestricted here for now.
+    # They will later be handled by the command pipeline.
