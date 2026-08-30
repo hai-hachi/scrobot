@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ============================================ -->
+  <!-- Simulated IMU                                -->
+  <!-- ============================================ -->
+
+  <gazebo reference="imu_link">
+
+    <sensor name="imu_sensor" type="imu">
+
+      <always_on>true</always_on>
+
+      <update_rate>100.0</update_rate>
+
+      <visualize>false</visualize>
+
+      <topic>/imu/data</topic>
+
+    </sensor>
+
+  </gazebo>
+
+
+  <!-- ============================================ -->
+  <!-- RealSense D435i-like RGB-D camera            -->
+  <!-- ============================================ -->
+
+  <gazebo reference="camera_link">
+
+    <sensor
+      name="d435i_rgbd"
+      type="rgbd_camera">
+
+      <always_on>true</always_on>
+
+      <update_rate>30.0</update_rate>
+
+      <visualize>true</visualize>
+
+      <!--
+        Gazebo base topic.
+        Generates:
+          /camera/image
+          /camera/depth_image
+          /camera/camera_info
+          /camera/points
+      -->
+      <topic>/camera</topic>
+
+      <!-- Gazebo mechanical sensor frame -->
+      <gz_frame_id>camera_link</gz_frame_id>
+
+
+      <camera>
+
+        <!-- D435i RGB horizontal FOV ~= 69 deg -->
+        <horizontal_fov>1.20427718</horizontal_fov>
+
+
+        <image>
+
+          <width>640</width>
+          <height>360</height>
+
+          <format>R8G8B8</format>
+
+        </image>
+
+
+        <clip>
+
+          <near>0.30</near>
+          <far>3.0</far>
+
+        </clip>
+
+
+        <!--
+          Gazebo renders cameras with +X forward,
+          while ROS optical frames use +Z forward.
+
+          Your existing camera_color_optical_frame
+          already provides that transform.
+        -->
+        <optical_frame_id>
+          camera_color_optical_frame
+        </optical_frame_id>
+
+      </camera>
+
+    </sensor>
+
+  </gazebo>
+
+</robot>

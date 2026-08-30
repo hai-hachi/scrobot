@@ -1,0 +1,120 @@
+collision_monitor:
+  ros__parameters:
+
+    use_sim_time: true
+
+    # -------------------------------------------------
+    # Frames
+    # -------------------------------------------------
+
+    base_frame_id: base_footprint
+    odom_frame_id: odom
+
+    transform_tolerance: 0.2
+
+    # Correct obstacle positions for robot motion between
+    # point cloud timestamp and current control cycle.
+    base_shift_correction: true
+
+    # -------------------------------------------------
+    # Velocity pipeline
+    # -------------------------------------------------
+
+    cmd_vel_in_topic: /cmd_vel_smoothed
+    cmd_vel_out_topic: /diff_drive_controller/cmd_vel
+
+    enable_stamped_cmd_vel: true
+
+    # Publish active collision state for debugging.
+    state_topic: /collision_monitor_state
+
+    # If sensor data disappears, fail safe.
+    source_timeout: 0.3
+
+    # Continue publishing zero velocity temporarily
+    # after a stop is triggered.
+    stop_pub_timeout: 2.0
+
+
+    # -------------------------------------------------
+    # Safety zones
+    # -------------------------------------------------
+
+    polygons:
+      - stop_zone
+      - slowdown_zone
+
+
+    # =================================================
+    # STOP ZONE
+    # =================================================
+
+    stop_zone:
+      type: polygon
+
+      # Coordinates are relative to base_footprint.
+      #
+      # Current robot:
+      # chassis front ~= +0.30 m
+      # collector front ~= +0.55 m
+      #
+      # Therefore this extends beyond the collector.
+      points: "[[0.95, 0.40], [0.95, -0.40], [0.35, -0.40], [0.35, 0.40]]"
+
+      action_type: stop
+
+      min_points: 5
+
+      visualize: true
+      polygon_pub_topic: /collision_monitor/stop_zone
+
+      enabled: true
+
+
+    # =================================================
+    # SLOWDOWN ZONE
+    # =================================================
+
+    slowdown_zone:
+      type: polygon
+
+      points: "[[1.60, 0.60], [1.60, -0.60], [0.35, -0.60], [0.35, 0.60]]"
+
+      action_type: slowdown
+
+      min_points: 5
+
+      # Output speed = input speed × 0.3
+      slowdown_ratio: 0.3
+
+      visualize: true
+      polygon_pub_topic: /collision_monitor/slowdown_zone
+
+      enabled: true
+
+
+    # -------------------------------------------------
+    # Observation sources
+    # -------------------------------------------------
+
+    observation_sources:
+      - depth_pointcloud
+
+
+    depth_pointcloud:
+      type: pointcloud
+
+      topic: /camera/depth/points
+
+      # Ignore floor / shuttlecock-level points.
+      min_height: 0.08
+
+      # Detect legs, people, chairs, boxes, etc.
+      max_height: 1.50
+
+      # Reject very-close invalid/noisy depth readings.
+      min_range: 0.20
+
+      source_timeout: 0.3
+
+      enabled: true

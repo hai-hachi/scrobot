@@ -3,7 +3,6 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-
 from launch_ros.actions import Node
 
 
@@ -25,10 +24,16 @@ def generate_launch_description():
         'velocity_smoother.yaml'
     )
 
+    collision_monitor_config = os.path.join(
+        control_pkg,
+        'config',
+        'collision_monitor.yaml'
+    )
 
-    # -----------------------------------------
-    # Velocity command arbitration
-    # -----------------------------------------
+
+    # ==========================================
+    # twist_mux
+    # ==========================================
 
     twist_mux = Node(
         package='twist_mux',
@@ -37,25 +42,23 @@ def generate_launch_description():
 
         parameters=[
             twist_mux_config,
-            {
-                'use_sim_time': True
-            }
+            {'use_sim_time': True},
         ],
 
         remappings=[
             (
                 'cmd_vel_out',
                 '/cmd_vel_muxed'
-            )
+            ),
         ],
 
         output='screen',
     )
 
 
-    # -----------------------------------------
-    # Velocity smoothing
-    # -----------------------------------------
+    # ==========================================
+    # velocity_smoother
+    # ==========================================
 
     velocity_smoother = Node(
         package='nav2_velocity_smoother',
@@ -73,17 +76,34 @@ def generate_launch_description():
             ),
             (
                 'cmd_vel_smoothed',
-                '/diff_drive_controller/cmd_vel'
-            )
+                '/cmd_vel_smoothed'
+            ),
         ],
 
         output='screen',
     )
 
 
-    # -----------------------------------------
-    # Lifecycle manager
-    # -----------------------------------------
+    # ==========================================
+    # collision_monitor
+    # ==========================================
+
+    collision_monitor = Node(
+        package='nav2_collision_monitor',
+        executable='collision_monitor',
+        name='collision_monitor',
+
+        parameters=[
+            collision_monitor_config
+        ],
+
+        output='screen',
+    )
+
+
+    # ==========================================
+    # Nav2 Lifecycle Manager
+    # ==========================================
 
     lifecycle_manager = Node(
         package='nav2_lifecycle_manager',
@@ -93,10 +113,13 @@ def generate_launch_description():
         parameters=[
             {
                 'use_sim_time': True,
+
                 'autostart': True,
+
                 'node_names': [
-                    'velocity_smoother'
-                ]
+                    'velocity_smoother',
+                    'collision_monitor',
+                ],
             }
         ],
 
@@ -107,5 +130,6 @@ def generate_launch_description():
     return LaunchDescription([
         twist_mux,
         velocity_smoother,
+        collision_monitor,
         lifecycle_manager,
     ])

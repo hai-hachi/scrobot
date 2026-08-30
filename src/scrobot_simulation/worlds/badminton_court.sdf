@@ -22,6 +22,18 @@
       filename="gz-sim-scene-broadcaster-system"
       name="gz::sim::systems::SceneBroadcaster"/>
 
+    <plugin
+      filename="gz-sim-imu-system"
+      name="gz::sim::systems::Imu"/>
+
+    <plugin
+      filename="gz-sim-sensors-system"
+      name="gz::sim::systems::Sensors">
+
+      <render_engine>ogre2</render_engine>
+
+    </plugin>
+
     <!-- Lighting -->
     <light type="directional" name="sun">
       <cast_shadows>true</cast_shadows>
@@ -65,6 +77,44 @@
       </link>
 
       <pose>0 0 -0.01 0 0 0</pose>
+
+    </model>
+
+    <model name="test_box">
+
+      <static>true</static>
+
+      <pose>3 0 0.5 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+
+          <geometry>
+            <box>
+              <size>0.5 0.5 1.0</size>
+            </box>
+          </geometry>
+
+        </collision>
+
+
+        <visual name="visual">
+
+          <geometry>
+            <box>
+              <size>0.5 0.5 1.0</size>
+            </box>
+          </geometry>
+
+          <material>
+            <ambient>0.8 0.2 0.2 1</ambient>
+            <diffuse>0.8 0.2 0.2 1</diffuse>
+          </material>
+
+        </visual>
+
+      </link>
 
     </model>
 

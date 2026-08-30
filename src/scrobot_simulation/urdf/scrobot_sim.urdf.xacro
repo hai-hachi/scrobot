@@ -9,8 +9,14 @@
   <!-- ============================================ -->
 
   <xacro:include
-    filename="$(find scrobot_description)/urdf/scrobot.urdf.xacro"/>
+    filename="$(find scrobot_description)/urdf/scrobot.urdf.xacro"/>    
 
+  <!-- ============================================ -->
+  <!-- Gazebo sensors                               -->
+  <!-- ============================================ -->
+
+  <xacro:include
+    filename="$(find scrobot_simulation)/urdf/sensors_gazebo.xacro"/>
 
   <!-- ============================================ -->
   <!-- ros2_control interfaces for Gazebo            -->
