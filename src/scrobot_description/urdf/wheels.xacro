@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="drive_wheel" params="name y_position">
+    <link name="${name}_wheel_link">
+      <visual>
+        <!-- URDF cylinders are aligned with local Z; rotate them onto the Y axle. -->
+        <origin xyz="0 0 0" rpy="${pi / 2.0} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="scrobot_dark"/>
+      </visual>
+
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi / 2.0} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${name}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${name}_wheel_link"/>
+      <origin xyz="${wheel_x} ${y_position} ${wheel_radius - base_link_z}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="scrobot_wheels">
+    <xacro:drive_wheel name="left" y_position="${wheel_separation / 2.0}"/>
+    <xacro:drive_wheel name="right" y_position="${-wheel_separation / 2.0}"/>
+  </xacro:macro>
+
+</robot>

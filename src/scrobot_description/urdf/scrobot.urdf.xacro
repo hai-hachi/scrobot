@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="scrobot">
+
+  <!--
+    Placeholder dimensions for the first TF/URDF bring-up.
+    Replace these values with measured CAD dimensions later.
+    SI units: metres, kilograms, radians.
+  -->
+  <xacro:property name="base_length" value="0.60"/>
+  <xacro:property name="base_width" value="0.45"/>
+  <xacro:property name="base_height" value="0.15"/>
+  <xacro:property name="ground_clearance" value="0.05"/>
+  <xacro:property name="base_link_z" value="${ground_clearance + base_height / 2.0}"/>
+
+  <xacro:property name="wheel_radius" value="0.08"/>
+  <xacro:property name="wheel_width" value="0.04"/>
+  <xacro:property name="wheel_separation" value="0.49"/>
+  <xacro:property name="wheel_x" value="0.0"/>
+
+  <xacro:property name="collector_length" value="0.25"/>
+  <xacro:property name="collector_width" value="0.35"/>
+  <xacro:property name="collector_height" value="0.04"/>
+
+  <material name="scrobot_gray">
+    <color rgba="0.55 0.55 0.55 1.0"/>
+  </material>
+  <material name="scrobot_dark">
+    <color rgba="0.12 0.12 0.12 1.0"/>
+  </material>
+  <material name="scrobot_sensor">
+    <color rgba="0.20 0.35 0.80 1.0"/>
+  </material>
+  <material name="scrobot_collector">
+    <color rgba="0.85 0.55 0.10 1.0"/>
+  </material>
+
+  <xacro:include filename="$(find scrobot_description)/urdf/base.xacro"/>
+  <xacro:include filename="$(find scrobot_description)/urdf/wheels.xacro"/>
+  <xacro:include filename="$(find scrobot_description)/urdf/sensors.xacro"/>
+  <xacro:include filename="$(find scrobot_description)/urdf/collector.xacro"/>
+
+  <xacro:scrobot_base/>
+  <xacro:scrobot_wheels/>
+  <xacro:scrobot_sensors/>
+  <xacro:scrobot_collector/>
+
+</robot>
