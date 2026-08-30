@@ -20,3 +20,15 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# ML models / datasets
+*.pt
+*.pth
+*.engine
+*.onnx
+datasets/
+
+# ROS bags
+*.db3
+*.mcap
+rosbag2_*/
