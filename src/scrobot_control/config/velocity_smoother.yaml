@@ -1,0 +1,43 @@
+velocity_smoother:
+  ros__parameters:
+
+    use_sim_time: true
+
+    smoothing_frequency: 50.0
+
+    scale_velocities: false
+
+    feedback: "OPEN_LOOP"
+
+    enable_stamped_cmd_vel: true
+
+    max_velocity:
+      - 1.0
+      - 0.0
+      - 2.0
+
+    min_velocity:
+      - -1.0
+      - 0.0
+      - -2.0
+
+    max_accel:
+      - 1.0
+      - 0.0
+      - 2.0
+
+    max_decel:
+      - -1.5
+      - 0.0
+      - -2.5
+
+    deadband_velocity:
+      - 0.0
+      - 0.0
+      - 0.0
+
+    velocity_timeout: 0.5
+
+    odom_topic: /diff_drive_controller/odom
+
+    odom_duration: 0.1

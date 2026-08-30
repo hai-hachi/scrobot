@@ -13,62 +13,72 @@ controller_manager:
 diff_drive_controller:
   ros__parameters:
 
-    # Drive joints
+    # ==========================================
+    # Wheel joints
+    # ==========================================
+
     left_wheel_names:
       - left_wheel_joint
 
     right_wheel_names:
       - right_wheel_joint
 
+
+    # ==========================================
     # Robot geometry
-    #
-    # REPLACE THESE TWO VALUES WITH YOUR ACTUAL ROBOT DIMENSIONS
-    wheel_separation: 0.XXX
-    wheel_radius: 0.XXX
+    # Values currently defined in your Xacro
+    # ==========================================
+
+    wheel_radius: 0.08
+    wheel_separation: 0.49
 
     wheel_separation_multiplier: 1.0
     left_wheel_radius_multiplier: 1.0
     right_wheel_radius_multiplier: 1.0
 
+
+    # ==========================================
     # Frames
+    # ==========================================
+
     odom_frame_id: odom
     base_frame_id: base_footprint
 
-    # Use wheel feedback for odometry
+
+    # ==========================================
+    # Odometry feedback
+    # ==========================================
+
     open_loop: false
     position_feedback: true
 
-    # TEMPORARY:
-    # let diff_drive_controller publish odom -> base_footprint
-    # until robot_localization EKF is added
+    # Temporary.
+    # Later EKF will publish odom -> base_footprint.
     enable_odom_tf: true
 
-    # Safety
-    cmd_vel_timeout: 0.5
 
-    # Odometry
-    publish_limited_velocity: true
+    # ==========================================
+    # Publishing
+    # ==========================================
+
+    publish_rate: 50.0
+
     velocity_rolling_window_size: 10
 
-    pose_covariance_diagonal:
-      - 0.001
-      - 0.001
-      - 0.001
-      - 0.001
-      - 0.001
-      - 0.01
+    publish_limited_velocity: true
 
-    twist_covariance_diagonal:
-      - 0.001
-      - 0.001
-      - 0.001
-      - 0.001
-      - 0.001
-      - 0.01
 
-    # Project requirement
+    # ==========================================
+    # Command safety
+    # ==========================================
+
+    cmd_vel_timeout: 0.5
+
+
+    # ==========================================
+    # Velocity limits
+    # ==========================================
+
+    linear.x.has_velocity_limits: true
     linear.x.max_velocity: 1.0
     linear.x.min_velocity: -1.0
-
-    # Leave acceleration / angular limits unrestricted here for now.
-    # They will later be handled by the command pipeline.

@@ -18,6 +18,20 @@
           <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
         </geometry>
       </collision>
+
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.5"/>
+
+        <inertia
+          ixx="${0.5 / 12.0 * (3.0 * wheel_radius * wheel_radius + wheel_width * wheel_width)}"
+          ixy="0.0"
+          ixz="0.0"
+          iyy="${0.5 / 2.0 * wheel_radius * wheel_radius}"
+          iyz="0.0"
+          izz="${0.5 / 12.0 * (3.0 * wheel_radius * wheel_radius + wheel_width * wheel_width)}"/>
+      </inertial>
+
     </link>
 
     <joint name="${name}_wheel_joint" type="continuous">

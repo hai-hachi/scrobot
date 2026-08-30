@@ -15,9 +15,9 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
 
     xacro_file = PathJoinSubstitution([
-        FindPackageShare('scrobot_description'),
+        FindPackageShare('scrobot_simulation'),
         'urdf',
-        'scrobot.urdf.xacro'
+        'scrobot_sim.urdf.xacro'
     ])
 
     robot_description = ParameterValue(

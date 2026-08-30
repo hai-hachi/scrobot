@@ -16,6 +16,20 @@
           <box size="${collector_length} ${collector_width} ${collector_height}"/>
         </geometry>
       </collision>
+
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="1.0"/>
+
+        <inertia
+          ixx="${1.0 / 12.0 * (collector_width * collector_width + collector_height * collector_height)}"
+          ixy="0.0"
+          ixz="0.0"
+          iyy="${1.0 / 12.0 * (collector_length * collector_length + collector_height * collector_height)}"
+          iyz="0.0"
+          izz="${1.0 / 12.0 * (collector_length * collector_length + collector_width * collector_width)}"/>
+      </inertial>
+
     </link>
 
     <joint name="collector_joint" type="fixed">
