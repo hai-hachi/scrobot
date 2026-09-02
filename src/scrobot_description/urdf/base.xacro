@@ -1,70 +1,49 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-
   <xacro:macro name="scrobot_base">
-
-    <!--
-      Planar navigation reference.
-
-      This is primarily a TF frame, but because it is the root link of
-      the URDF we give it a very small non-zero inertia for Gazebo.
-    -->
     <link name="base_footprint">
       <inertial>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <mass value="0.001"/>
-        <inertia
-          ixx="0.000001"
-          ixy="0.0"
-          ixz="0.0"
-          iyy="0.000001"
-          iyz="0.0"
-          izz="0.000001"/>
+        <mass value="0.0001"/>
+        <inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
       </inertial>
     </link>
 
     <joint name="base_footprint_joint" type="fixed">
       <parent link="base_footprint"/>
       <child link="base_link"/>
-      <origin xyz="0 0 ${base_link_z}" rpy="0 0 0"/>
+      <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
     </joint>
 
-    <!-- Physical chassis -->
     <link name="base_link">
-
-      <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-          <box size="${base_length} ${base_width} ${base_height}"/>
-        </geometry>
-        <material name="scrobot_gray"/>
-      </visual>
-
-      <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-          <box size="${base_length} ${base_width} ${base_height}"/>
-        </geometry>
-      </collision>
-
       <inertial>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-
-        <!-- Placeholder mass -->
-        <mass value="10.0"/>
-
-        <!-- Inertia of a rectangular box -->
+        <origin xyz="-0.060 0.002 0.195" rpy="0 0 0"/>
+        <mass value="14.14"/>
         <inertia
-          ixx="${10.0 / 12.0 * (base_width * base_width + base_height * base_height)}"
-          ixy="0.0"
-          ixz="0.0"
-          iyy="${10.0 / 12.0 * (base_length * base_length + base_height * base_height)}"
-          iyz="0.0"
-          izz="${10.0 / 12.0 * (base_length * base_length + base_width * base_width)}"/>
+          ixx="0.766"
+          ixy="0.00107"
+          ixz="0.338"
+          iyy="1.060"
+          iyz="-0.00308"
+          izz="0.727"/>
       </inertial>
 
+      <visual name="base_visual">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://scrobot_description/meshes/visual/base.STL" scale="1 1 1"/>
+        </geometry>
+
+        <material name="aluminum_grey"/>
+        
+      </visual>
+
+      <collision name="base_collision">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://scrobot_description/meshes/collision/base_collision.STL" scale="1 1 1"/>
+        </geometry>
+      </collision>
     </link>
-
   </xacro:macro>
-
 </robot>

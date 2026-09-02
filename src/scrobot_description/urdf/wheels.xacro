@@ -1,50 +1,46 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-
-  <xacro:macro name="drive_wheel" params="name y_position">
+  <xacro:macro name="scrobot_drive_wheel" params="name y mesh_file">
     <link name="${name}_wheel_link">
-      <visual>
-        <!-- URDF cylinders are aligned with local Z; rotate them onto the Y axle. -->
-        <origin xyz="0 0 0" rpy="${pi / 2.0} 0 0"/>
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.155"/>
+        <inertia
+          ixx="1.37e-4"
+          ixy="0"
+          ixz="0"
+          iyy="2.55e-4"
+          iyz="0"
+          izz="1.37e-4"/>
+      </inertial>
+
+      <visual name="${name}_wheel_visual">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+          <mesh filename="package://scrobot_description/meshes/visual/${mesh_file}" scale="1 1 1"/>
         </geometry>
-        <material name="scrobot_dark"/>
+        <material name="rubber_black"/>
       </visual>
 
-      <collision>
-        <origin xyz="0 0 0" rpy="${pi / 2.0} 0 0"/>
+      <collision name="${name}_wheel_collision">
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
         <geometry>
           <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
         </geometry>
       </collision>
-
-      <inertial>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <mass value="0.5"/>
-
-        <inertia
-          ixx="${0.5 / 12.0 * (3.0 * wheel_radius * wheel_radius + wheel_width * wheel_width)}"
-          ixy="0.0"
-          ixz="0.0"
-          iyy="${0.5 / 2.0 * wheel_radius * wheel_radius}"
-          iyz="0.0"
-          izz="${0.5 / 12.0 * (3.0 * wheel_radius * wheel_radius + wheel_width * wheel_width)}"/>
-      </inertial>
-
     </link>
 
     <joint name="${name}_wheel_joint" type="continuous">
       <parent link="base_link"/>
       <child link="${name}_wheel_link"/>
-      <origin xyz="${wheel_x} ${y_position} ${wheel_radius - base_link_z}" rpy="0 0 0"/>
+      <origin xyz="0 ${y} 0" rpy="0 0 0"/>
       <axis xyz="0 1 0"/>
+      <dynamics damping="0.0" friction="0.0"/>
     </joint>
   </xacro:macro>
 
   <xacro:macro name="scrobot_wheels">
-    <xacro:drive_wheel name="left" y_position="${wheel_separation / 2.0}"/>
-    <xacro:drive_wheel name="right" y_position="${-wheel_separation / 2.0}"/>
+    <xacro:scrobot_drive_wheel name="left" y="${wheel_separation / 2.0}" mesh_file="left_wheel.STL"/>
+    <xacro:scrobot_drive_wheel name="right" y="${-wheel_separation / 2.0}" mesh_file="right_wheel.STL"/>
   </xacro:macro>
-
 </robot>

@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="scrobot_caster" params="name y">
+
+    <link name="${name}_caster_link">
+      <inertial>
+        <origin
+          xyz="${caster_fork_com_x} ${caster_fork_com_y} ${caster_fork_com_z}"
+          rpy="0 0 0"/>
+        <mass value="0.0561"/>
+        <inertia
+          ixx="1.74e-5"
+          ixy="0"
+          ixz="-2.98e-6"
+          iyy="1.81e-5"
+          iyz="0"
+          izz="1.83e-5"/>
+      </inertial>
+
+      <visual name="${name}_caster_fork_visual">
+        <origin
+          xyz="0 0 0"
+          rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://scrobot_description/meshes/visual/caster_fork.STL" scale="1 1 1"/>
+        </geometry>
+        
+        <material name="rubber_black"/>
+
+      </visual>
+    </link>
+
+    <joint name="${name}_caster_swivel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${name}_caster_link"/>
+      <origin xyz="${caster_x} ${y} ${caster_z}" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/>
+      <dynamics damping="0.002" friction="0.0"/>
+    </joint>
+
+    <link name="${name}_caster_wheel_link">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.0255"/>
+        <inertia
+          ixx="3.39e-6"
+          ixy="0"
+          ixz="0"
+          iyy="4.96e-6"
+          iyz="0"
+          izz="3.39e-6"/>
+      </inertial>
+
+      <visual name="${name}_caster_wheel_visual">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://scrobot_description/meshes/visual/caster_wheel.STL" scale="1 1 1"/>
+        </geometry>
+
+        <material name="rubber_black"/>
+
+      </visual>
+
+      <collision name="${name}_caster_wheel_collision">
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${caster_radius}" length="${caster_width}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${name}_caster_wheel_joint" type="continuous">
+      <parent link="${name}_caster_link"/>
+      <child link="${name}_caster_wheel_link"/>
+      <origin xyz="${caster_trail} 0 ${-caster_axle_drop}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <dynamics damping="0.0002" friction="0.0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="scrobot_casters">
+    <xacro:scrobot_caster name="left" y="${caster_y}"/>
+    <xacro:scrobot_caster name="right" y="${-caster_y}"/>
+  </xacro:macro>
+</robot>

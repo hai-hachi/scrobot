@@ -1,81 +1,61 @@
 <?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="scrobot">
 
-<robot
-  xmlns:xacro="http://www.ros.org/wiki/xacro"
-  name="scrobot">
-
-  <!-- ============================================ -->
-  <!-- Generic robot description                    -->
-  <!-- ============================================ -->
-
+  <!-- Real robot geometry -->
   <xacro:include
-    filename="$(find scrobot_description)/urdf/scrobot.urdf.xacro"/>    
+    filename="$(find scrobot_description)/urdf/scrobot.urdf.xacro"/>
 
-  <!-- ============================================ -->
-  <!-- Gazebo sensors                               -->
-  <!-- ============================================ -->
-
+  <!-- Gazebo sensors -->
   <xacro:include
     filename="$(find scrobot_simulation)/urdf/sensors_gazebo.xacro"/>
 
-  <!-- ============================================ -->
-  <!-- ros2_control interfaces for Gazebo            -->
-  <!-- ============================================ -->
+  <!-- Gazebo physical properties -->
+  <xacro:include
+    filename="$(find scrobot_simulation)/urdf/physics_gazebo.xacro"/>
 
-  <ros2_control
-    name="GazeboSimSystem"
-    type="system">
+  <xacro:scrobot_gazebo_sensors/>
+  <xacro:scrobot_gazebo_physics/>
 
+  <ros2_control name="GazeboSimSystem" type="system">
     <hardware>
       <plugin>gz_ros2_control/GazeboSimSystem</plugin>
     </hardware>
 
-
-    <!-- Left drive wheel -->
-
     <joint name="left_wheel_joint">
-
       <command_interface name="velocity"/>
-
       <state_interface name="position"/>
-
       <state_interface name="velocity"/>
-
     </joint>
-
-
-    <!-- Right drive wheel -->
 
     <joint name="right_wheel_joint">
-
       <command_interface name="velocity"/>
-
       <state_interface name="position"/>
-
       <state_interface name="velocity"/>
-
     </joint>
 
+    <joint name="left_caster_swivel_joint">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="left_caster_wheel_joint">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="right_caster_swivel_joint">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="right_caster_wheel_joint">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
   </ros2_control>
 
-
-  <!-- ============================================ -->
-  <!-- Gazebo ros2_control plugin                    -->
-  <!-- ============================================ -->
-
   <gazebo>
-
     <plugin
       filename="libgz_ros2_control-system.so"
       name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-
-      <parameters>
-        $(find scrobot_control)/config/controllers.yaml
-      </parameters>
-
+      <parameters>$(find scrobot_control)/config/controllers.yaml</parameters>
     </plugin>
-
   </gazebo>
-
-
 </robot>

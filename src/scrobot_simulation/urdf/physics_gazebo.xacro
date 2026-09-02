@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="scrobot_gazebo_physics">
+
+    <!-- ============================================================ -->
+    <!-- Drive wheels                                                -->
+    <!-- ============================================================ -->
+
+    <gazebo reference="left_wheel_link">
+      <mu1>1.0</mu1>
+      <mu2>1.0</mu2>
+      <maxContacts>10</maxContacts>
+    </gazebo>
+
+    <gazebo reference="right_wheel_link">
+      <mu1>1.0</mu1>
+      <mu2>1.0</mu2>
+      <maxContacts>10</maxContacts>
+    </gazebo>
+
+
+    <!-- ============================================================ -->
+    <!-- Passive caster wheels                                       -->
+    <!-- Lower friction than drive wheels initially                  -->
+    <!-- ============================================================ -->
+
+    <gazebo reference="left_caster_wheel_link">
+      <mu1>0.6</mu1>
+      <mu2>0.6</mu2>
+      <maxContacts>10</maxContacts>
+    </gazebo>
+
+    <gazebo reference="right_caster_wheel_link">
+      <mu1>0.6</mu1>
+      <mu2>0.6</mu2>
+      <maxContacts>10</maxContacts>
+    </gazebo>
+
+
+    <!-- ============================================================ -->
+    <!-- Base                                                        -->
+    <!-- Normally should NOT contact the floor                       -->
+    <!-- ============================================================ -->
+
+    <gazebo reference="base_link">
+      <mu1>0.4</mu1>
+      <mu2>0.4</mu2>
+    </gazebo>
+
+  </xacro:macro>
+
+</robot>

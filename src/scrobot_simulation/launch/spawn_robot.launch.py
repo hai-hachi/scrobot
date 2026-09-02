@@ -25,7 +25,7 @@ def generate_launch_description():
             'xacro ',
             xacro_file
         ]),
-        value_type=str
+        value_type=str  
     )
 
     x = LaunchConfiguration('x')
@@ -80,7 +80,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'z',
-            default_value='0.02'
+            default_value='0.003'
         ),
 
         DeclareLaunchArgument(

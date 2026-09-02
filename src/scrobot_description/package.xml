@@ -5,7 +5,7 @@
   <version>0.0.1</version>
   <description>URDF/Xacro description package for the SC Robot shuttlecock collection robot.</description>
 
-  <maintainer email="todo@example.com">TODO</maintainer>
+  <maintainer email="hai.hachi.154@gmail.com">sea</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

@@ -1,0 +1,18 @@
+imu_filter_madgwick:
+  ros__parameters:
+
+    use_mag: true
+
+    world_frame: "enu"
+
+    publish_tf: false
+
+    remove_gravity_vector: false
+
+    gain: 0.1
+    zeta: 0.0
+
+    orientation_stddev: 0.05
+
+    magnetic_declination_radians: 0.0
+    yaw_offset: 0.0

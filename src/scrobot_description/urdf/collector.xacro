@@ -1,57 +1,41 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-
   <xacro:macro name="scrobot_collector">
-    <!-- Physical collector assembly. -->
     <link name="collector_link">
-      <visual>
-        <geometry>
-          <box size="${collector_length} ${collector_width} ${collector_height}"/>
-        </geometry>
-        <material name="scrobot_collector"/>
-      </visual>
-
-      <collision>
-        <geometry>
-          <box size="${collector_length} ${collector_width} ${collector_height}"/>
-        </geometry>
-      </collision>
-
       <inertial>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <mass value="1.0"/>
-
+        <origin xyz="0 -0.0023 0" rpy="0 0 0"/>
+        <mass value="0.150"/>
         <inertia
-          ixx="${1.0 / 12.0 * (collector_width * collector_width + collector_height * collector_height)}"
-          ixy="0.0"
-          ixz="0.0"
-          iyy="${1.0 / 12.0 * (collector_length * collector_length + collector_height * collector_height)}"
-          iyz="0.0"
-          izz="${1.0 / 12.0 * (collector_length * collector_length + collector_width * collector_width)}"/>
+          ixx="1.24e-3"
+          ixy="0"
+          ixz="0"
+          iyy="6.41e-5"
+          iyz="0"
+          izz="1.24e-3"/>
       </inertial>
 
+      <visual name="collector_visual">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://scrobot_description/meshes/visual/collector.STL" scale="1 1 1"/>
+        </geometry>
+
+        <material name="plastic_blue"/>
+      </visual>
     </link>
 
     <joint name="collector_joint" type="fixed">
       <parent link="base_link"/>
       <child link="collector_link"/>
-      <!-- Put the collector directly in front of the chassis and close to the floor. -->
-      <origin
-        xyz="${base_length / 2.0 + collector_length / 2.0} 0 ${collector_height / 2.0 - base_link_z}"
-        rpy="0 0 0"/>
+      <origin xyz="${collector_x} ${collector_y} ${collector_z}" rpy="0 0 0"/>
     </joint>
 
-    <!--
-      Functional operating point used later for shuttle approach/alignment.
-      It is located at the front-centre edge of the collector on the floor.
-    -->
     <link name="pickup_link"/>
 
     <joint name="pickup_joint" type="fixed">
       <parent link="collector_link"/>
       <child link="pickup_link"/>
-      <origin xyz="${collector_length / 2.0} 0 ${-collector_height / 2.0}" rpy="0 0 0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
     </joint>
   </xacro:macro>
-
 </robot>
