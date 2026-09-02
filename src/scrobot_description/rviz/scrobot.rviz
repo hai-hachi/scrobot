@@ -6,10 +6,10 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /RobotModel1
         - /PointCloud21
         - /PointCloud21/Topic1
         - /Image1
-        - /Image1/Status1
         - /Image1/Topic1
       Splitter Ratio: 0.5
     Tree Height: 571
@@ -314,7 +314,7 @@ Visualization Manager:
       Channel Name: intensity
       Class: rviz_default_plugins/PointCloud2
       Color: 255; 255; 255
-      Color Transformer: RGB8
+      Color Transformer: Intensity
       Decay Time: 0
       Enabled: true
       Invert Rainbow: false
@@ -348,7 +348,7 @@ Visualization Manager:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /camera/color/image_raw
       Value: true
   Enabled: true
@@ -369,25 +369,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 7.973354339599609
+      Distance: 16.891521453857422
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.1439773589372635
-        Y: 0.1587725132703781
-        Z: 0.5498058199882507
+        X: 0.7052346467971802
+        Y: 0.44415542483329773
+        Z: 0.5663391351699829
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.60999995470047
+      Pitch: 0.669999897480011
       Target Frame: base_footprint
       Value: Orbit (rviz_default_plugins)
-      Yaw: 1.9300016164779663
+      Yaw: 1.9900015592575073
     Saved: ~
 Window Geometry:
   Displays:

@@ -49,6 +49,10 @@
             <far>20.0</far>
           </clip>
 
+          <camera_info_topic>
+            /camera/color/camera_info
+          </camera_info_topic>
+
           <optical_frame_id>
             camera_color_optical_frame
           </optical_frame_id>
@@ -77,8 +81,8 @@
           <horizontal_fov>1.11701072</horizontal_fov>
 
           <image>
-            <width>1280</width>
-            <height>720</height>
+            <width>424</width>
+            <height>240</height>
           </image>
 
           <clip>
@@ -86,8 +90,12 @@
             <far>3.0</far>
           </clip>
 
+          <camera_info_topic>
+            /camera/camera_info
+          </camera_info_topic>
+
           <optical_frame_id>
-            camera_depth_frame
+            camera_depth_optical_frame
           </optical_frame_id>
 
         </camera>

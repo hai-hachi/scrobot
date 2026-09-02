@@ -115,6 +115,5 @@ collision_monitor:
       # Reject very-close invalid/noisy depth readings.
       min_range: 0.30
 
-      source_timeout: 2.0
-
+      source_timeout: 0.5
       enabled: true

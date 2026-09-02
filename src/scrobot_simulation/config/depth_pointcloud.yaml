@@ -1,0 +1,11 @@
+depth_pointcloud:
+  ros__parameters:
+    use_sim_time: true
+
+    qos_overrides:
+      /camera/depth/points:
+        publisher:
+          reliability: best_effort
+          durability: volatile
+          history: keep_last
+          depth: 1

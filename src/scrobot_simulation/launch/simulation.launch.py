@@ -4,6 +4,9 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 
+from launch_ros.actions import Node
+
+
 from launch.actions import (
     IncludeLaunchDescription,
     TimerAction
@@ -47,7 +50,29 @@ def generate_launch_description():
         ]
     )
 
+    depth_pointcloud_config = os.path.join(
+        get_package_share_directory('scrobot_simulation'),
+        'config',
+        'depth_pointcloud.yaml'
+    )
+
+    depth_pointcloud_node = Node(
+        package='depth_image_proc',
+        executable='point_cloud_xyz_node',
+        name='depth_pointcloud',
+        output='screen',
+        parameters=[
+            depth_pointcloud_config
+        ],
+        remappings=[
+            ('image_rect', '/camera/depth/image_raw'),
+            ('camera_info', '/camera/depth/camera_info'),
+            ('points', '/camera/depth/points'),
+        ],
+    )
+
     return LaunchDescription([
         gazebo,
-        delayed_spawn
+        delayed_spawn,
+        depth_pointcloud_node
     ])
