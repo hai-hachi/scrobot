@@ -21,146 +21,43 @@
   qos_profile: SENSOR_DATA
   frame_id: "imu_link"
 
-# ============================================================
-# RGB image
-# ============================================================
+# =========================
+# Color camera
+# =========================
 
-- ros_topic_name: "/camera/color/image_raw"# ============================================================
-# RGB image
-# ============================================================
+- ros_topic_name: /camera/color/image_raw
+  gz_topic_name: /camera/color
+  ros_type_name: sensor_msgs/msg/Image
+  gz_type_name: gz.msgs.Image
+  direction: GZ_TO_ROS
 
-- ros_topic_name: "/camera/color/image_raw"
-  gz_topic_name: "/camera/image"
-  ros_type_name: "sensor_msgs/msg/Image"
-  gz_type_name: "gz.msgs.Image"
+- ros_topic_name: /camera/color/camera_info
+  gz_topic_name: /camera/color/camera_info
+  ros_type_name: sensor_msgs/msg/CameraInfo
+  gz_type_name: gz.msgs.CameraInfo
+  direction: GZ_TO_ROS
+
+
+# =========================
+# Depth camera
+# =========================
+
+- ros_topic_name: /camera/depth/image_raw
+  gz_topic_name: /camera/depth
+  ros_type_name: sensor_msgs/msg/Image
+  gz_type_name: gz.msgs.Image
+  direction: GZ_TO_ROS
+
+- ros_topic_name: /camera/depth/camera_info
+  gz_topic_name: /camera/depth/camera_info
+  ros_type_name: sensor_msgs/msg/CameraInfo
+  gz_type_name: gz.msgs.CameraInfo
+  direction: GZ_TO_ROS
+
+- ros_topic_name: /camera/depth/points
+  gz_topic_name: /camera/depth/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
   direction: GZ_TO_ROS
   qos_profile: SENSOR_DATA
-  lazy: true
-  frame_id: "camera_color_optical_frame"
 
-
-# ============================================================
-# RGB camera information
-# ============================================================
-
-- ros_topic_name: "/camera/color/camera_info"
-  gz_topic_name: "/camera/camera_info"
-  ros_type_name: "sensor_msgs/msg/CameraInfo"
-  gz_type_name: "gz.msgs.CameraInfo"
-  direction: GZ_TO_ROS
-  qos_profile: SENSOR_DATA
-  lazy: true
-  frame_id: "camera_color_optical_frame"
-
-
-# ============================================================
-# Registered depth image
-# ============================================================
-
-- ros_topic_name: "/camera/depth/image_raw"
-  gz_topic_name: "/camera/depth_image"
-  ros_type_name: "sensor_msgs/msg/Image"
-  gz_type_name: "gz.msgs.Image"
-  direction: GZ_TO_ROS
-  qos_profile: SENSOR_DATA
-  lazy: true
-  frame_id: "camera_depth_optical_frame"
-
-
-# ============================================================
-# Depth CameraInfo
-#
-# Gazebo's single RGB-D sensor has one CameraInfo topic.
-# Because our simulated RGB/depth are registered and use
-# identical intrinsics, reusing it for depth is valid.
-# ============================================================
-
-- ros_topic_name: "/camera/depth/camera_info"
-  gz_topic_name: "/camera/camera_info"
-  ros_type_name: "sensor_msgs/msg/CameraInfo"
-  gz_type_name: "gz.msgs.CameraInfo"
-  direction: GZ_TO_ROS
-  qos_profile: SENSOR_DATA
-  lazy: true
-  frame_id: "camera_depth_optical_frame"
-
-
-# ============================================================
-# Point cloud
-# ============================================================
-
-- ros_topic_name: "/camera/depth/points"
-  gz_topic_name: "/camera/points"
-  ros_type_name: "sensor_msgs/msg/PointCloud2"
-  gz_type_name: "gz.msgs.PointCloudPacked"
-  direction: GZ_TO_ROS
-  qos_profile: SENSOR_DATA
-  lazy: false
-  frame_id: "camera_link"
-  gz_topic_name: "/camera/image"
-  ros_type_name: "sensor_msgs/msg/Image"
-  gz_type_name: "gz.msgs.Image"
-  direction: GZ_TO_ROS
-  qos_profile: SENSOR_DATA
-  lazy: true
-  frame_id: "camera_color_optical_frame"
-
-
-# ============================================================
-# RGB camera information
-# ============================================================
-
-- ros_topic_name: "/camera/color/camera_info"
-  gz_topic_name: "/camera/camera_info"
-  ros_type_name: "sensor_msgs/msg/CameraInfo"
-  gz_type_name: "gz.msgs.CameraInfo"
-  direction: GZ_TO_ROS
-  qos_profile: SENSOR_DATA
-  lazy: true
-  frame_id: "camera_color_optical_frame"
-
-
-# ============================================================
-# Registered depth image
-# ============================================================
-
-- ros_topic_name: "/camera/depth/image_raw"
-  gz_topic_name: "/camera/depth_image"
-  ros_type_name: "sensor_msgs/msg/Image"
-  gz_type_name: "gz.msgs.Image"
-  direction: GZ_TO_ROS
-  qos_profile: SENSOR_DATA
-  lazy: true
-  frame_id: "camera_depth_optical_frame"
-
-
-# ============================================================
-# Depth CameraInfo
-#
-# Gazebo's single RGB-D sensor has one CameraInfo topic.
-# Because our simulated RGB/depth are registered and use
-# identical intrinsics, reusing it for depth is valid.
-# ============================================================
-
-- ros_topic_name: "/camera/depth/camera_info"
-  gz_topic_name: "/camera/camera_info"
-  ros_type_name: "sensor_msgs/msg/CameraInfo"
-  gz_type_name: "gz.msgs.CameraInfo"
-  direction: GZ_TO_ROS
-  qos_profile: SENSOR_DATA
-  lazy: true
-  frame_id: "camera_depth_optical_frame"
-
-
-# ============================================================
-# Point cloud
-# ============================================================
-
-- ros_topic_name: "/camera/depth/points"
-  gz_topic_name: "/camera/points"
-  ros_type_name: "sensor_msgs/msg/PointCloud2"
-  gz_type_name: "gz.msgs.PointCloudPacked"
-  direction: GZ_TO_ROS
-  qos_profile: SENSOR_DATA
-  lazy: true
-  frame_id: "camera_link"

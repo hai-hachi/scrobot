@@ -1,12 +1,18 @@
 Panels:
   - Class: rviz_common/Displays
-    Help Height: 70
+    Help Height: 148
     Name: Displays
     Property Tree Widget:
       Expanded:
+        - /Global Options1
         - /Status1
+        - /PointCloud21
+        - /PointCloud21/Topic1
+        - /Image1
+        - /Image1/Status1
+        - /Image1/Topic1
       Splitter Ratio: 0.5
-    Tree Height: 325
+    Tree Height: 571
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Views
@@ -62,6 +68,18 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        bmi160_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_accel_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_accel_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
         camera_bottom_screw_frame:
           Alpha: 1
           Show Axes: false
@@ -80,6 +98,22 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
         camera_depth_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_gyro_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_gyro_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_imu_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_imu_optical_frame:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -108,10 +142,6 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        imu_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
         left_caster_link:
           Alpha: 1
           Show Axes: false
@@ -169,6 +199,12 @@ Visualization Manager:
           Value: true
         base_link:
           Value: true
+        bmi160_link:
+          Value: true
+        camera_accel_frame:
+          Value: true
+        camera_accel_optical_frame:
+          Value: true
         camera_bottom_screw_frame:
           Value: true
         camera_color_frame:
@@ -178,6 +214,14 @@ Visualization Manager:
         camera_depth_frame:
           Value: true
         camera_depth_optical_frame:
+          Value: true
+        camera_gyro_frame:
+          Value: true
+        camera_gyro_optical_frame:
+          Value: true
+        camera_imu_frame:
+          Value: true
+        camera_imu_optical_frame:
           Value: true
         camera_infra1_frame:
           Value: true
@@ -191,8 +235,6 @@ Visualization Manager:
           Value: true
         collector_link:
           Value: true
-        imu_link:
-          Value: true
         left_caster_link:
           Value: true
         left_caster_wheel_link:
@@ -200,6 +242,8 @@ Visualization Manager:
         left_wheel_link:
           Value: true
         mag_link:
+          Value: true
+        odom:
           Value: true
         pickup_link:
           Value: true
@@ -215,40 +259,97 @@ Visualization Manager:
       Show Axes: true
       Show Names: false
       Tree:
-        base_footprint:
-          base_link:
-            camera_bottom_screw_frame:
-              camera_link:
-                camera_color_frame:
-                  camera_color_optical_frame:
-                    {}
-                camera_depth_frame:
-                  camera_depth_optical_frame:
-                    {}
-                camera_infra1_frame:
-                  camera_infra1_optical_frame:
-                    {}
-                camera_infra2_frame:
-                  camera_infra2_optical_frame:
-                    {}
-            collector_link:
-              pickup_link:
+        odom:
+          base_footprint:
+            base_link:
+              bmi160_link:
                 {}
-            imu_link:
-              {}
-            left_caster_link:
-              left_caster_wheel_link:
+              camera_bottom_screw_frame:
+                camera_link:
+                  camera_accel_frame:
+                    camera_accel_optical_frame:
+                      {}
+                  camera_color_frame:
+                    camera_color_optical_frame:
+                      {}
+                  camera_depth_frame:
+                    camera_depth_optical_frame:
+                      {}
+                  camera_gyro_frame:
+                    camera_gyro_optical_frame:
+                      {}
+                  camera_imu_frame:
+                    camera_imu_optical_frame:
+                      {}
+                  camera_infra1_frame:
+                    camera_infra1_optical_frame:
+                      {}
+                  camera_infra2_frame:
+                    camera_infra2_optical_frame:
+                      {}
+              collector_link:
+                pickup_link:
+                  {}
+              left_caster_link:
+                left_caster_wheel_link:
+                  {}
+              left_wheel_link:
                 {}
-            left_wheel_link:
-              {}
-            mag_link:
-              {}
-            right_caster_link:
-              right_caster_wheel_link:
+              mag_link:
                 {}
-            right_wheel_link:
-              {}
+              right_caster_link:
+                right_caster_wheel_link:
+                  {}
+              right_wheel_link:
+                {}
       Update Interval: 0
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: PointCloud2
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /camera/depth/points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /camera/color/image_raw
       Value: true
   Enabled: true
   Global Options:
@@ -268,25 +369,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.1318174600601196
+      Distance: 7.973354339599609
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.23186174035072327
-        Y: 0.1441206932067871
-        Z: 0.1182853952050209
+        X: -0.1439773589372635
+        Y: 0.1587725132703781
+        Z: 0.5498058199882507
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5450001955032349
+      Pitch: 0.60999995470047
       Target Frame: base_footprint
       Value: Orbit (rviz_default_plugins)
-      Yaw: 1.9750016927719116
+      Yaw: 1.9300016164779663
     Saved: ~
 Window Geometry:
   Displays:
@@ -294,7 +395,9 @@ Window Geometry:
   Height: 1089
   Hide Left Dock: false
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000001c9000003e3fc0200000003fb000000100044006900730070006c006100790073010000003f000001cb000000cc00fffffffb0000001200530065006c0065006300740069006f006e0100000210000000de0000005d00fffffffb0000000a0056006900650077007301000002f40000012e000000a900ffffff000005b1000003e300000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Image:
+    collapsed: false
+  QMainWindow State: 000000ff00000000fd0000000200000000000001c9000003e3fc0200000004fb000000100044006900730070006c006100790073010000003f0000030f000000cc00fffffffb0000000c00430061006d006500720061010000027a000001a80000000000000000fb0000000c00430061006d0065007200610100000354000000ce0000000000000000fb0000000a0049006d0061006700650100000354000000ce0000001700ffffff00000001000001c9000003e3fc0200000002fb0000000a00560069006500770073010000003f00000218000000a900fffffffb0000001200530065006c0065006300740069006f006e010000025d000001c50000005d00ffffff000003e2000003e300000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Views:

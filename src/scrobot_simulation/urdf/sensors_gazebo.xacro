@@ -21,26 +21,77 @@
       </sensor>
     </gazebo>
 
+    <!-- =============================== -->
+    <!-- D435i COLOR CAMERA              -->
+    <!-- =============================== -->
+
     <gazebo reference="camera_link">
-      <sensor name="d435i_rgbd" type="rgbd_camera">
+      <sensor name="d435i_color" type="camera">
+
         <always_on>true</always_on>
         <update_rate>30.0</update_rate>
         <visualize>true</visualize>
-        <topic>/camera</topic>
-        <gz_frame_id>camera_link</gz_frame_id>
+
+        <topic>/camera/color</topic>
+        <gz_frame_id>camera_color_frame</gz_frame_id>
+
         <camera>
-          <horizontal_fov>1.20427718</horizontal_fov>
+          <horizontal_fov>1.11701072</horizontal_fov>
+
           <image>
-            <width>640</width>
-            <height>360</height>
+            <width>1920</width>
+            <height>1080</height>
             <format>R8G8B8</format>
           </image>
+
           <clip>
-            <near>0.1</near>
-            <far>10</far>
+            <near>0.05</near>
+            <far>20.0</far>
           </clip>
-          <optical_frame_id>camera_color_optical_frame</optical_frame_id>
+
+          <optical_frame_id>
+            camera_color_optical_frame
+          </optical_frame_id>
+
         </camera>
+
+      </sensor>
+    </gazebo>
+
+
+    <!-- =============================== -->
+    <!-- D435i DEPTH CAMERA              -->
+    <!-- =============================== -->
+
+    <gazebo reference="camera_link">
+      <sensor name="d435i_depth" type="depth_camera">
+
+        <always_on>true</always_on>
+        <update_rate>15.0</update_rate>
+        <visualize>true</visualize>
+
+        <topic>/camera/depth</topic>
+        <gz_frame_id>camera_depth_frame</gz_frame_id>
+
+        <camera>
+          <horizontal_fov>1.11701072</horizontal_fov>
+
+          <image>
+            <width>1280</width>
+            <height>720</height>
+          </image>
+
+          <clip>
+            <near>0.3</near>
+            <far>3.0</far>
+          </clip>
+
+          <optical_frame_id>
+            camera_depth_frame
+          </optical_frame_id>
+
+        </camera>
+
       </sensor>
     </gazebo>
   </xacro:macro>

@@ -59,7 +59,7 @@ collision_monitor:
       # collector front ~= +0.55 m
       #
       # Therefore this extends beyond the collector.
-      points: "[[0.95, 0.40], [0.95, -0.40], [0.35, -0.40], [0.35, 0.40]]"
+      points: "[[0.95, 0.3], [0.95, -0.3], [0.35, -0.3], [0.35, 0.3]]"
 
       action_type: stop
 
@@ -113,8 +113,8 @@ collision_monitor:
       max_height: 1.50
 
       # Reject very-close invalid/noisy depth readings.
-      min_range: 0.20
+      min_range: 0.30
 
-      source_timeout: 0.3
+      source_timeout: 2.0
 
       enabled: true

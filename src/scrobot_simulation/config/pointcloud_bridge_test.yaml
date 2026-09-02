@@ -1,0 +1,15 @@
+# pointcloud_bridge_test.yaml
+
+- ros_topic_name: /camera/depth/points_test
+  gz_topic_name: /camera/depth/points
+
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+
+  direction: GZ_TO_ROS
+
+  qos_profile: SENSOR_DATA
+  publisher_queue: 1
+  subscriber_queue: 1
+
+  

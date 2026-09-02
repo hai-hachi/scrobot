@@ -44,9 +44,9 @@
   <xacro:property name="collector_y" value="0.0"/>
   <xacro:property name="collector_z" value="-0.020"/>
 
-  <xacro:property name="camera_x" value="0.130"/>
+  <xacro:property name="camera_x" value="0.12"/>
   <xacro:property name="camera_y" value="0.0"/>
-  <xacro:property name="camera_z" value="0.225"/>
+  <xacro:property name="camera_z" value="0.22"/>
   <xacro:property name="camera_roll" value="0.0"/>
   <xacro:property name="camera_pitch" value="${7.0 * pi / 180.0}"/>
   <xacro:property name="camera_yaw" value="0.0"/>

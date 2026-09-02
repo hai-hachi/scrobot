@@ -50,7 +50,7 @@ ros2 topic pub --rate 10 \
     },
     twist: {
       linear: {
-        x: 1.0,
+        x: .0,
         y: 0.0,
         z: 0.0
       },
