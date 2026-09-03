@@ -39,8 +39,8 @@
           <horizontal_fov>1.11701072</horizontal_fov>
 
           <image>
-            <width>1920</width>
-            <height>1080</height>
+            <width>1280</width>
+            <height>960</height>
             <format>R8G8B8</format>
           </image>
 
@@ -67,7 +67,7 @@
       <sensor name="d435i_depth" type="depth_camera">
 
         <always_on>true</always_on>
-        <update_rate>15.0</update_rate>
+        <update_rate>30.0</update_rate>
         <visualize>true</visualize>
 
         <topic>/camera/depth</topic>
@@ -77,8 +77,8 @@
           <horizontal_fov>1.11701072</horizontal_fov>
 
           <image>
-            <width>1280</width>
-            <height>720</height>
+            <width>640</width>
+            <height>480</height>
           </image>
 
           <clip>
@@ -87,7 +87,7 @@
           </clip>
 
           <optical_frame_id>
-            camera_depth_frame
+            camera_depth_optical_frame
           </optical_frame_id>
 
         </camera>

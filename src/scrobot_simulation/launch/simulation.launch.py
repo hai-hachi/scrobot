@@ -13,6 +13,8 @@ from launch.launch_description_sources import (
     PythonLaunchDescriptionSource
 )
 
+from launch_ros.actions import Node
+
 
 def generate_launch_description():
 
@@ -47,7 +49,21 @@ def generate_launch_description():
         ]
     )
 
+    camera_info_splitter = Node(
+        package='scrobot_simulation',
+        executable='camera_info_splitter',
+        name='camera_info_splitter',
+        output='screen',
+        parameters=[
+            {
+                'color_frame': 'camera_color_optical_frame',
+                'depth_frame': 'camera_depth_optical_frame',
+            }
+        ],
+    )
+
     return LaunchDescription([
         gazebo,
-        delayed_spawn
+        delayed_spawn,
+        camera_info_splitter
     ])

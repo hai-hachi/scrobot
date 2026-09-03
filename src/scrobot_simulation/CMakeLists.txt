@@ -11,6 +11,9 @@ find_package(ament_cmake REQUIRED)
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
@@ -23,6 +26,23 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+add_executable(
+  camera_info_splitter
+  src/camera_info_splitter.cpp
+)
+
+ament_target_dependencies(
+  camera_info_splitter
+  rclcpp
+  sensor_msgs
+)
+
+install(
+  TARGETS
+    camera_info_splitter
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(
   DIRECTORY
     worlds
@@ -32,5 +52,6 @@ install(
     launch
   DESTINATION share/${PROJECT_NAME}
 )
+
 
 ament_package()
