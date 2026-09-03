@@ -4,9 +4,9 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
+        - /RobotModel1
         - /Image1/Topic1
         - /MarkerArray1/Topic1
-        - /Polygon2
       Splitter Ratio: 0.5
     Tree Height: 836
   - Class: rviz_common/Selection
@@ -48,141 +48,20 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /robot_description
-      Enabled: true
+      Enabled: false
       Links:
         All Links Enabled: true
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        base_footprint:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        base_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        bmi160_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_accel_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_accel_optical_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_bottom_screw_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        camera_color_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_color_optical_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_depth_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_depth_optical_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_gyro_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_gyro_optical_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_imu_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_imu_optical_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_infra1_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_infra1_optical_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_infra2_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_infra2_optical_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        collector_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        left_caster_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        left_caster_wheel_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        left_wheel_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        mag_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        pickup_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        right_caster_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        right_caster_wheel_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        right_wheel_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
       Name: RobotModel
       TF Prefix: ""
       Update Interval: 0
-      Value: true
+      Value: false
       Visual Enabled: true
     - Class: rviz_default_plugins/TF
       Enabled: true
@@ -219,14 +98,6 @@ Visualization Manager:
           Value: false
         camera_imu_optical_frame:
           Value: false
-        camera_infra1_frame:
-          Value: false
-        camera_infra1_optical_frame:
-          Value: false
-        camera_infra2_frame:
-          Value: false
-        camera_infra2_optical_frame:
-          Value: false
         camera_link:
           Value: false
         collector_link:
@@ -261,7 +132,7 @@ Visualization Manager:
           Value: false
         right_wheel_link:
           Value: false
-      Marker Scale: 1
+      Marker Scale: 0.30000001192092896
       Name: TF
       Show Arrows: true
       Show Axes: true
@@ -298,12 +169,6 @@ Visualization Manager:
                         {}
                     camera_imu_frame:
                       camera_imu_optical_frame:
-                        {}
-                    camera_infra1_frame:
-                      camera_infra1_optical_frame:
-                        {}
-                    camera_infra2_frame:
-                      camera_infra2_optical_frame:
                         {}
                 collector_link:
                   pickup_link:
@@ -429,25 +294,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 3.484161853790283
+      Distance: 2.722764492034912
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.26634329557418823
-        Y: -0.11029765009880066
-        Z: 0.27608710527420044
+        X: -0.17519663274288177
+        Y: 0.07155219465494156
+        Z: 0.26788535714149475
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.969796895980835
+      Pitch: 0.6547972559928894
       Target Frame: base_footprint
       Value: Orbit (rviz_default_plugins)
-      Yaw: 5.877407073974609
+      Yaw: 5.357396125793457
     Saved: ~
 Window Geometry:
   Displays:
