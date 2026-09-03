@@ -504,11 +504,17 @@
 
         </visual>
 
-
       </link>
 
     </model>
 
+    <include>
+
+      <uri>
+        model://court_apriltags
+      </uri>
+
+    </include>
 
   </world>
 

@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>scrobot_localization</name>
+  <name>scrobot_perception</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="hai.hachi.154@gmail.com">sea</maintainer>
@@ -16,24 +16,16 @@
     <build_type>ament_cmake</build_type>
   </export>
 
-  <exec_depend>robot_localization</exec_depend>
-  <exec_depend>imu_filter_madgwick</exec_depend>
+  <exec_depend>apriltag_ros</exec_depend>
+  <exec_depend>apriltag_msgs</exec_depend>
 
-  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>image_proc</exec_depend>
+  <exec_depend>image_transport</exec_depend>
+
   <exec_depend>sensor_msgs</exec_depend>
 
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
-
   <exec_depend>ament_index_python</exec_depend>
-  <exec_depend>rclpy</exec_depend>
-
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>std_msgs</exec_depend>
-
-  <exec_depend>apriltag_msgs</exec_depend>
-
-  <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>tf_transformations</exec_depend>
   
 </package>

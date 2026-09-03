@@ -1,0 +1,33 @@
+court_visualizer:
+  ros__parameters:
+
+    frame_id: map
+
+    floor_length: 18.0
+    floor_width: 10.0
+    floor_thickness: 0.02
+
+    court_length: 13.40
+    court_width: 6.10
+    singles_width: 5.18
+
+    line_width: 0.04
+    line_thickness: 0.001
+
+    short_service_x: 1.98
+    long_service_x: 5.94
+
+    pole_x: 0.0
+    pole_y: 3.05
+    pole_diameter: 0.05
+    pole_height: 1.55
+
+    net_thickness: 0.005
+    net_width: 6.10
+    net_height: 0.76
+    net_center_z: 1.17
+
+    net_tape_thickness: 0.01
+    net_tape_width: 6.10
+    net_tape_height: 0.075
+    net_tape_center_z: 1.5125

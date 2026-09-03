@@ -14,6 +14,10 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
+find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
@@ -37,6 +41,20 @@ ament_target_dependencies(
   sensor_msgs
 )
 
+add_executable(
+  court_visualizer
+  src/court_visualizer.cpp
+)
+
+ament_target_dependencies(
+  court_visualizer
+
+  rclcpp
+  geometry_msgs
+  std_msgs
+  visualization_msgs
+)
+
 install(
   TARGETS
     camera_info_splitter
@@ -44,14 +62,22 @@ install(
 )
 
 install(
-  DIRECTORY
-    worlds
-    models
-    urdf
-    config
-    launch
-  DESTINATION share/${PROJECT_NAME}
+  TARGETS
+    court_visualizer
+
+  DESTINATION
+    lib/${PROJECT_NAME}
 )
 
+install(
+  DIRECTORY
+    launch
+    config
+    models
+    worlds
+    urdf
+
+  DESTINATION share/${PROJECT_NAME}
+)
 
 ament_package()

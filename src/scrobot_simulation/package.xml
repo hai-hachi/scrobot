@@ -34,5 +34,10 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>ros_gz_bridge</exec_depend>
 
-  <exec_depend>rclcpp</exec_depend>  
+  <depend>rclcpp</depend>
+
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>visualization_msgs</depend>
+  
 </package>

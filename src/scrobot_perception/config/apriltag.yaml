@@ -1,0 +1,86 @@
+apriltag:
+  ros__parameters:
+
+    # ========================================================
+    # Image input
+    # ========================================================
+
+    image_transport: raw
+
+    # Important because camera topics normally use SensorDataQoS
+    qos_profile: sensor_data
+
+
+    # ========================================================
+    # Tag family
+    # ========================================================
+
+    family: "16h5"
+
+    # Default active tag edge length [m]
+    size: 0.050
+
+    # Initially reject detections requiring bit correction.
+    # We prefer strong global-localization observations.
+    max_hamming: 0
+
+    profile: false
+
+
+    # ========================================================
+    # Detector
+    # ========================================================
+
+    detector:
+
+      # Good starting point for Pi 5 / desktop.
+      threads: 2
+
+      # Important for our SMALL 50 mm tags.
+      #
+      # Don't downsample during initial experiments.
+      decimate: 1.0
+
+      blur: 0.0
+
+      # Refine detected corners against image gradients.
+      refine: true
+
+      sharpening: 0.25
+
+      debug: false  
+
+
+    # ========================================================
+    # Pose estimation
+    # ========================================================
+
+    pose_estimation_method: "pnp"
+
+
+    # ========================================================
+    # Known tag IDs
+    #
+    # These are OBSERVATION frame names, not the global map
+    # landmark frames.
+    # ========================================================
+
+    tag:
+
+      ids:
+        - 0
+        - 1
+        - 2
+        - 3
+
+      frames:
+        - observed_tag_0
+        - observed_tag_1
+        - observed_tag_2
+        - observed_tag_3
+
+      sizes:
+        - 0.050
+        - 0.050
+        - 0.050
+        - 0.050

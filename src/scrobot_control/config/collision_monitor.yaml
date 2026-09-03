@@ -52,14 +52,7 @@ collision_monitor:
     stop_zone:
       type: polygon
 
-      # Coordinates are relative to base_footprint.
-      #
-      # Current robot:
-      # chassis front ~= +0.30 m
-      # collector front ~= +0.55 m
-      #
-      # Therefore this extends beyond the collector.
-      points: "[[0.95, 0.3], [0.95, -0.3], [0.35, -0.3], [0.35, 0.3]]"
+      points: "[[0.55, 0.30], [0.55, -0.30], [0.35, -0.30], [0.35, 0.30]]"
 
       action_type: stop
 
@@ -78,7 +71,7 @@ collision_monitor:
     slowdown_zone:
       type: polygon
 
-      points: "[[1.60, 0.60], [1.60, -0.60], [0.35, -0.60], [0.35, 0.60]]"
+      points: "[[0.75, 0.60], [0.75, -0.60], [0.35, -0.60], [0.35, 0.60]]"
 
       action_type: slowdown
 

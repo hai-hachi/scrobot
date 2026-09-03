@@ -4,13 +4,12 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import (
-    IncludeLaunchDescription,
     AppendEnvironmentVariable,
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
 )
-
-from launch.launch_description_sources import (
-    PythonLaunchDescriptionSource
-)
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 
 from launch_ros.actions import Node
 
@@ -29,41 +28,65 @@ def generate_launch_description():
         'ros_gz_sim'
     )
 
+    world = LaunchConfiguration('world')
+    gz_verbosity = LaunchConfiguration('gz_verbosity')
 
     # ==========================================================
     # Gazebo resource paths
     # ==========================================================
     #
-    # description_pkg:
+    # 1) package://scrobot_description/... is converted by
+    #    Gazebo / SDFormat into a resource lookup.  Gazebo must
+    #    therefore be able to find:
     #
-    #   .../share/scrobot_description
+    #      <prefix>/share/scrobot_description
     #
-    # Gazebo needs its parent:
+    #    so we add its parent:
     #
-    #   .../share
+    #      <prefix>/share
     #
-    # so model://scrobot_description/... can be resolved.
+    # 2) model://court_apriltags/... and any future custom Gazebo
+    #    models live under:
+    #
+    #      scrobot_simulation/models
+    #
+    # Keep BOTH paths.
     # ==========================================================
 
-    gazebo_resource_path = AppendEnvironmentVariable(
-        name='GZ_SIM_RESOURCE_PATH',
-        value=os.path.dirname(description_pkg)
+    description_share_parent = os.path.dirname(
+        description_pkg
     )
 
-
-    # ==========================================================
-    # World
-    # ==========================================================
-
-    world_file = os.path.join(
+    simulation_models = os.path.join(
         simulation_pkg,
-        'worlds',
-        'badminton_court.sdf'
+        'models'
     )
 
+    description_meshes = os.path.join(
+        description_pkg,
+        'meshes'
+    )
+
+    if not os.path.isdir(description_meshes):
+        raise RuntimeError(
+            'scrobot_description meshes are not installed at: '
+            f'{description_meshes}\n'
+            'Make sure scrobot_description/CMakeLists.txt installs '
+            'the meshes directory, then rebuild and source the workspace.'
+        )
+
+    add_description_resources = AppendEnvironmentVariable(
+        name='GZ_SIM_RESOURCE_PATH',
+        value=description_share_parent,
+    )
+
+    add_simulation_models = AppendEnvironmentVariable(
+        name='GZ_SIM_RESOURCE_PATH',
+        value=simulation_models,
+    )
 
     # ==========================================================
-    # ROS <-> Gazebo bridge
+    # Bridge
     # ==========================================================
 
     bridge_config = os.path.join(
@@ -72,58 +95,62 @@ def generate_launch_description():
         'bridge.yaml'
     )
 
+    bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        name='ros_gz_bridge',
+        output='screen',
+        parameters=[
+            {
+                'config_file': bridge_config,
+            }
+        ],
+    )
 
     # ==========================================================
     # Gazebo
     # ==========================================================
 
     gazebo = IncludeLaunchDescription(
-
         PythonLaunchDescriptionSource(
             os.path.join(
                 ros_gz_sim_pkg,
                 'launch',
-                'gz_sim.launch.py'
+                'gz_sim.launch.py',
             )
         ),
-
         launch_arguments={
             'gz_args': [
-                '-r -v 3 ',
-                world_file
+                '-r -v ',
+                gz_verbosity,
+                ' ',
+                world,
             ],
-
-            'on_exit_shutdown': 'true'
-
-        }.items()
+            'on_exit_shutdown': 'true',
+        }.items(),
     )
-
-
-    # ==========================================================
-    # Bridge
-    # ==========================================================
-
-    bridge = Node(
-        package='ros_gz_bridge',
-        executable='parameter_bridge',
-        name='ros_gz_bridge',
-
-        parameters=[
-            {
-                'config_file': bridge_config
-            }
-        ],
-
-        output='screen'
-    )
-
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'world',
+            default_value=os.path.join(
+                simulation_pkg,
+                'worlds',
+                'badminton_court.sdf',
+            ),
+            description='Absolute path to the Gazebo world file.',
+        ),
 
-        gazebo_resource_path,
+        DeclareLaunchArgument(
+            'gz_verbosity',
+            default_value='3',
+            description='Gazebo verbosity level.',
+        ),
+
+        # These MUST be set before Gazebo starts.
+        add_description_resources,
+        add_simulation_models,
 
         gazebo,
-
         bridge,
-
     ])
