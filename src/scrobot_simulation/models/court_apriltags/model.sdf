@@ -32,11 +32,11 @@
 
             <!--
               Full texture edge:
-              50 mm x (8 / 6)
-              = 66.67 mm
+              100 mm x (8 / 6)
+              = 133.33 mm
             -->
             <size>
-              0.066667 0.066667
+              0.133333 0.133333
             </size>
 
           </plane>
@@ -91,7 +91,7 @@
 
           <plane>
             <normal>1 0 0</normal>
-            <size>0.066667 0.066667</size>
+            <size>0.133333 0.133333</size>
           </plane>
 
         </geometry>
@@ -143,7 +143,7 @@
 
           <plane>
             <normal>-1 0 0</normal>
-            <size>0.066667 0.066667</size>
+            <size>0.133333 0.133333</size>
           </plane>
 
         </geometry>
@@ -195,7 +195,7 @@
 
           <plane>
             <normal>-1 0 0</normal>
-            <size>0.066667 0.066667</size>
+            <size>0.133333 0.133333</size>
           </plane>
 
         </geometry>

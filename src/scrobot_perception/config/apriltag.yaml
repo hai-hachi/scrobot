@@ -18,7 +18,7 @@ apriltag:
     family: "16h5"
 
     # Default active tag edge length [m]
-    size: 0.050
+    size: 0.100
 
     # Initially reject detections requiring bit correction.
     # We prefer strong global-localization observations.
@@ -80,7 +80,7 @@ apriltag:
         - observed_tag_3
 
       sizes:
-        - 0.050
-        - 0.050
-        - 0.050
-        - 0.050
+        - 0.100
+        - 0.100
+        - 0.100
+        - 0.100

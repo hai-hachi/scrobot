@@ -4,11 +4,11 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /RobotModel1
+        - /TF1/Frames1
         - /Image1/Topic1
         - /MarkerArray1/Topic1
       Splitter Ratio: 0.5
-    Tree Height: 836
+    Tree Height: 535
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Views
@@ -76,10 +76,6 @@ Visualization Manager:
           Value: true
         bmi160_link:
           Value: false
-        camera_accel_frame:
-          Value: false
-        camera_accel_optical_frame:
-          Value: false
         camera_bottom_screw_frame:
           Value: false
         camera_color_frame:
@@ -89,10 +85,6 @@ Visualization Manager:
         camera_depth_frame:
           Value: false
         camera_depth_optical_frame:
-          Value: false
-        camera_gyro_frame:
-          Value: false
-        camera_gyro_optical_frame:
           Value: false
         camera_imu_frame:
           Value: false
@@ -122,6 +114,8 @@ Visualization Manager:
           Value: true
         observed_tag_0:
           Value: true
+        observed_tag_1:
+          Value: true
         odom:
           Value: false
         pickup_link:
@@ -132,7 +126,7 @@ Visualization Manager:
           Value: false
         right_wheel_link:
           Value: false
-      Marker Scale: 0.30000001192092896
+      Marker Scale: 0.5
       Name: TF
       Show Arrows: true
       Show Axes: true
@@ -154,18 +148,12 @@ Visualization Manager:
                   {}
                 camera_bottom_screw_frame:
                   camera_link:
-                    camera_accel_frame:
-                      camera_accel_optical_frame:
-                        {}
                     camera_color_frame:
                       camera_color_optical_frame:
                         observed_tag_0:
                           {}
                     camera_depth_frame:
                       camera_depth_optical_frame:
-                        {}
-                    camera_gyro_frame:
-                      camera_gyro_optical_frame:
                         {}
                     camera_imu_frame:
                       camera_imu_optical_frame:
@@ -221,7 +209,7 @@ Visualization Manager:
       Use rainbow: true
       Value: false
     - Class: rviz_default_plugins/Image
-      Enabled: false
+      Enabled: true
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -233,7 +221,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /camera/color/image_raw
-      Value: false
+      Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: MarkerArray
@@ -293,26 +281,21 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Class: rviz_default_plugins/Orbit
-      Distance: 2.722764492034912
+      Angle: 0
+      Class: rviz_default_plugins/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
-      Focal Point:
-        X: -0.17519663274288177
-        Y: 0.07155219465494156
-        Z: 0.26788535714149475
-      Focal Shape Fixed Size: true
-      Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.6547972559928894
+      Scale: 148.91049194335938
       Target Frame: base_footprint
-      Value: Orbit (rviz_default_plugins)
-      Yaw: 5.357396125793457
+      Value: TopDownOrtho (rviz_default_plugins)
+      X: -0.894859254360199
+      Y: -1.3033957481384277
     Saved: ~
 Window Geometry:
   Displays:
@@ -322,7 +305,7 @@ Window Geometry:
   Hide Right Dock: false
   Image:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000200000000000001c9000003e3fc0200000004fb000000100044006900730070006c006100790073010000003f000003e3000000cc00fffffffb0000000c00430061006d006500720061010000027a000001a80000000000000000fb0000000c00430061006d0065007200610100000354000000ce0000000000000000fb0000000a0049006d0061006700650000000354000000ce0000001700ffffff00000001000001c9000003e3fc0200000002fb0000000a00560069006500770073010000003f00000218000000a900fffffffb0000001200530065006c0065006300740069006f006e010000025d000001c50000005d00ffffff000003e2000003e300000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000200000000000001c9000003e3fc0200000004fb000000100044006900730070006c006100790073010000003f000002b6000000cc00fffffffb0000000c00430061006d006500720061010000027a000001a80000000000000000fb0000000c00430061006d0065007200610100000354000000ce0000000000000000fb0000000a0049006d00610067006501000002fb000001270000001700ffffff00000001000001c9000003e3fc0200000002fb0000000a00560069006500770073010000003f00000218000000a900fffffffb0000001200530065006c0065006300740069006f006e010000025d000001c50000005d00ffffff000003e2000003e300000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Views:

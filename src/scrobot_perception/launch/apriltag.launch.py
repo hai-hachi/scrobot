@@ -25,40 +25,40 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
 
 
-    # # ==========================================================
-    # # Rectify RGB image
-    # # ==========================================================
+    # ==========================================================
+    # Rectify RGB image
+    # ==========================================================
 
-    # rectify_color = Node(
-    #     package='image_proc',
-    #     executable='rectify_node',
+    rectify_color = Node(
+        package='image_proc',
+        executable='rectify_node',
 
-    #     name='color_rectify',
+        name='color_rectify',
 
-    #     output='screen',
+        output='screen',
 
-    #     parameters=[
-    #         {
-    #             'use_sim_time': use_sim_time,
-    #             'queue_size': 5,
-    #         }
-    #     ],
+        parameters=[
+            {
+                'use_sim_time': use_sim_time,
+                'queue_size': 5,
+            }
+        ],
 
-    #     remappings=[
-    #         (
-    #             'image',
-    #             '/camera/color/image_raw'
-    #         ),
-    #         (
-    #             'camera_info',
-    #             '/camera/color/camera_info'
-    #         ),
-    #         (
-    #             'image_rect',
-    #             '/camera/color/image_rect'
-    #         ),
-    #     ],
-    # )
+        remappings=[
+            (
+                'image',
+                '/camera/color/image_raw'
+            ),
+            (
+                'camera_info',
+                '/camera/color/camera_info'
+            ),
+            (
+                'image_rect',
+                '/camera/color/image_rect'
+            ),
+        ],
+    )
 
 
     # ==========================================================
@@ -80,7 +80,7 @@ def generate_launch_description():
         remappings=[
             (
                 'image_rect',
-                '/camera/color/image_raw'
+                '/camera/color/image_rect'
             ),
             (
                 'camera_info',
@@ -101,7 +101,7 @@ def generate_launch_description():
             default_value='true'
         ),
 
-        # rectify_color,
+        rectify_color,
 
         apriltag,
 

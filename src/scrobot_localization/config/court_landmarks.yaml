@@ -9,7 +9,7 @@ tag_global_localizer:
     observed_tag_prefix: observed_tag_
 
     min_decision_margin: 20.0
-    max_tag_distance: 3.0
+    max_tag_distance: 6.0
     publish_rate: 30.0
 
 
