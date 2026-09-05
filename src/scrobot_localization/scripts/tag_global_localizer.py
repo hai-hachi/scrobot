@@ -69,31 +69,91 @@ def matrix_to_transform(matrix):
     return translation_from_matrix(matrix), quaternion_from_matrix(matrix)
 
 
+def make_transform(parent, child, matrix, stamp):
+    translation, quaternion = matrix_to_transform(matrix)
+
+    transform = TransformStamped()
+    transform.header.stamp = stamp
+    transform.header.frame_id = parent
+    transform.child_frame_id = child
+
+    transform.transform.translation.x = float(translation[0])
+    transform.transform.translation.y = float(translation[1])
+    transform.transform.translation.z = float(translation[2])
+
+    transform.transform.rotation.x = float(quaternion[0])
+    transform.transform.rotation.y = float(quaternion[1])
+    transform.transform.rotation.z = float(quaternion[2])
+    transform.transform.rotation.w = float(quaternion[3])
+
+    return transform
+
+
 class TagGlobalLocalizer(Node):
 
     def __init__(self):
         super().__init__('tag_global_localizer')
 
+        # ======================================================
+        # Frames / topics
+        # ======================================================
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_footprint')
         self.declare_parameter('detections_topic', '/apriltag/detections')
         self.declare_parameter('observed_tag_prefix', 'observed_tag_')
+        self.declare_parameter('mount_frame_prefix', 'tag_mount_')
+        self.declare_parameter('known_tag_prefix', 'court_tag_')
 
+        # ======================================================
+        # Physical court / tag geometry
+        # ======================================================
+        self.declare_parameter('pole_x', 0.0)
+        self.declare_parameter('left_pole_y', 3.05)
+        self.declare_parameter('right_pole_y', -3.05)
+        self.declare_parameter('tag_height', 0.150)
+        self.declare_parameter('tag_mount_radius', 0.075)
+        self.declare_parameter('inward_angle_deg', 20.0)
+
+        # These are also consumed by the Gazebo generator. They are
+        # declared here so this same YAML can be the single source.
+        self.declare_parameter('tag_edge_size', 0.100)
+        self.declare_parameter('active_grid_cells', 6)
+        self.declare_parameter('quiet_border_cells', 1)
+        self.declare_parameter('texture_pixels', 1024)
+
+        # ======================================================
+        # Observation gating
+        # ======================================================
         self.declare_parameter('min_decision_margin', 20.0)
         self.declare_parameter('max_tag_distance', 6.0)
-        self.declare_parameter('max_position_disagreement', 0.10)
-        self.declare_parameter('max_yaw_disagreement_deg', 5.0)
+        self.declare_parameter('max_position_disagreement', 0.15)
+        self.declare_parameter('max_yaw_disagreement_deg', 6.0)
 
+        # ======================================================
+        # Filtering / timing
+        # ======================================================
         self.declare_parameter('filter_tau', 0.25)
         self.declare_parameter('publish_rate', 30.0)
         self.declare_parameter('processing_rate', 100.0)
 
+        # ======================================================
+        # Read parameters
+        # ======================================================
         self.map_frame = self.get_parameter('map_frame').value
         self.odom_frame = self.get_parameter('odom_frame').value
         self.base_frame = self.get_parameter('base_frame').value
         self.detections_topic = self.get_parameter('detections_topic').value
         self.observed_tag_prefix = self.get_parameter('observed_tag_prefix').value
+        self.mount_frame_prefix = self.get_parameter('mount_frame_prefix').value
+        self.known_tag_prefix = self.get_parameter('known_tag_prefix').value
+
+        self.pole_x = float(self.get_parameter('pole_x').value)
+        self.left_pole_y = float(self.get_parameter('left_pole_y').value)
+        self.right_pole_y = float(self.get_parameter('right_pole_y').value)
+        self.tag_height = float(self.get_parameter('tag_height').value)
+        self.tag_mount_radius = float(self.get_parameter('tag_mount_radius').value)
+        self.inward_angle_deg = float(self.get_parameter('inward_angle_deg').value)
 
         self.min_decision_margin = float(
             self.get_parameter('min_decision_margin').value
@@ -111,29 +171,86 @@ class TagGlobalLocalizer(Node):
         publish_rate = float(self.get_parameter('publish_rate').value)
         processing_rate = float(self.get_parameter('processing_rate').value)
 
+        # ======================================================
+        # Tag geometry
+        # ======================================================
         self.tag_ids = [0, 1, 2, 3]
+
+        # Human-intuitive physical mount transforms:
+        #   tag_mount +X = visible-face outward normal
+        #   tag_mount +Y = left
+        #   tag_mount +Z = up
+        self.mount_map = {}
+
+        # Known frames matching christianrauch/apriltag_ros PnP output.
         self.tag_map = {}
 
+        # For pose_estimation_method=pnp, the tag frame used by
+        # christianrauch/apriltag_ros is:
+        #   +X = right on tag image
+        #   +Y = up on tag image
+        #   +Z = out of tag toward observer/camera
+        #
+        # For our REP-103 mount frame viewed from +X_mount:
+        #   image right = +Y_mount
+        #   image up    = +Z_mount
+        #   tag outward = +X_mount
+        #
+        # Therefore:
+        #   X_april = +Y_mount
+        #   Y_april = +Z_mount
+        #   Z_april = +X_mount
+        #
+        # Fixed mount -> detector-tag transform:
+        # RPY = [+90 deg, 0 deg, +90 deg]
+        self.T_mount_apriltag = xyz_rpy_to_matrix(
+            [0.0, 0.0, 0.0],
+            [-math.pi / 2.0, 0.0, -math.pi / 2.0],
+        )
+
+        headings = self.compute_tag_headings(self.inward_angle_deg)
+
         for tag_id in self.tag_ids:
-            xyz_name = f'tag_{tag_id}.xyz'
-            rpy_name = f'tag_{tag_id}.rpy'
+            heading = headings[tag_id]
+            pole_y = self.left_pole_y if tag_id in (0, 2) else self.right_pole_y
 
-            self.declare_parameter(xyz_name, [0.0, 0.0, 0.0])
-            self.declare_parameter(rpy_name, [0.0, 0.0, 0.0])
+            x = self.pole_x + self.tag_mount_radius * math.cos(heading)
+            y = pole_y + self.tag_mount_radius * math.sin(heading)
+            z = self.tag_height
 
-            xyz = list(self.get_parameter(xyz_name).value)
-            rpy = list(self.get_parameter(rpy_name).value)
-            self.tag_map[tag_id] = xyz_rpy_to_matrix(xyz, rpy)
+            T_map_mount = xyz_rpy_to_matrix(
+                [x, y, z],
+                [0.0, 0.0, heading],
+            )
 
+            T_map_apriltag = T_map_mount @ self.T_mount_apriltag
+
+            self.mount_map[tag_id] = T_map_mount
+            self.tag_map[tag_id] = T_map_apriltag
+
+            self.get_logger().info(
+                f'tag {tag_id}: mount xyz=({x:.4f}, {y:.4f}, {z:.4f}), '
+                f'heading={math.degrees(heading):.1f} deg'
+            )
+
+        # ======================================================
+        # TF
+        # ======================================================
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = TransformBroadcaster(self)
         self.static_tf_broadcaster = StaticTransformBroadcaster(self)
 
+        # ======================================================
+        # State
+        # ======================================================
         self.pending_detection = None
         self.filtered_map_to_odom = None  # [x, y, yaw]
         self.last_measurement_stamp = None
 
+        # ======================================================
+        # Debug publishers
+        # ======================================================
         self.raw_pose_pub = self.create_publisher(
             PoseStamped,
             '/global_localization/tag_pose_raw',
@@ -150,6 +267,9 @@ class TagGlobalLocalizer(Node):
             10,
         )
 
+        # ======================================================
+        # Detection subscriber
+        # ======================================================
         self.detection_sub = self.create_subscription(
             AprilTagDetectionArray,
             self.detections_topic,
@@ -157,6 +277,9 @@ class TagGlobalLocalizer(Node):
             10,
         )
 
+        # ======================================================
+        # Timers
+        # ======================================================
         self.processing_timer = self.create_timer(
             1.0 / processing_rate,
             self.process_pending_detection,
@@ -169,37 +292,67 @@ class TagGlobalLocalizer(Node):
         self.publish_known_tags()
 
         self.get_logger().info(
-            'Tag global localizer V2 started: multi-tag fusion + gating + filtering'
+            'Tag global localizer V3 started: '
+            'REP-103 tag mounts -> fixed AprilTag PnP frames -> multi-tag fusion'
         )
 
+    @staticmethod
+    def compute_tag_headings(inward_angle_deg):
+        """Return physical mount yaw for all four tags.
+
+        Court convention:
+          +X = longitudinal side A
+          +Y = left side
+
+        IDs:
+          0 = left pole,  +X half
+          1 = right pole, +X half
+          2 = left pole,  -X half
+          3 = right pole, -X half
+        """
+        a = math.radians(inward_angle_deg)
+        return {
+            0: -a,
+            1: +a,
+            2: -math.pi + a,
+            3: +math.pi - a,
+        }
+
     def publish_known_tags(self):
+        """Publish intuitive mount frames plus detector-compatible tag frames."""
         transforms = []
         now = self.get_clock().now().to_msg()
 
         for tag_id in self.tag_ids:
-            translation, quaternion = matrix_to_transform(self.tag_map[tag_id])
+            mount_frame = f'{self.mount_frame_prefix}{tag_id}'
+            known_tag_frame = f'{self.known_tag_prefix}{tag_id}'
 
-            transform = TransformStamped()
-            transform.header.stamp = now
-            transform.header.frame_id = self.map_frame
-            transform.child_frame_id = f'court_tag_{tag_id}'
+            # map -> tag_mount_N
+            transforms.append(
+                make_transform(
+                    self.map_frame,
+                    mount_frame,
+                    self.mount_map[tag_id],
+                    now,
+                )
+            )
 
-            transform.transform.translation.x = float(translation[0])
-            transform.transform.translation.y = float(translation[1])
-            transform.transform.translation.z = float(translation[2])
-
-            transform.transform.rotation.x = float(quaternion[0])
-            transform.transform.rotation.y = float(quaternion[1])
-            transform.transform.rotation.z = float(quaternion[2])
-            transform.transform.rotation.w = float(quaternion[3])
-
-            transforms.append(transform)
+            # tag_mount_N -> court_tag_N
+            # Same fixed conversion for every tag.
+            transforms.append(
+                make_transform(
+                    mount_frame,
+                    known_tag_frame,
+                    self.T_mount_apriltag,
+                    now,
+                )
+            )
 
         self.static_tf_broadcaster.sendTransform(transforms)
 
     def detection_callback(self, msg):
-        # Do not query TF here. apriltag_ros publishes the detection
-        # message before its corresponding tag TFs.
+        # apriltag_ros publishes detections before the matching tag TFs.
+        # Cache the message and process it from the timer after TF arrives.
         if msg.detections:
             self.pending_detection = msg
 
@@ -211,6 +364,7 @@ class TagGlobalLocalizer(Node):
         stamp = Time.from_msg(msg.header.stamp)
         camera_frame = msg.header.frame_id
 
+        # The following historical transforms must exist at the image stamp.
         if not self.tf_buffer.can_transform(
             camera_frame,
             self.base_frame,
@@ -289,8 +443,11 @@ class TagGlobalLocalizer(Node):
             T_camera_tag = transform_to_matrix(tf_camera_tag.transform)
             T_map_tag = self.tag_map[tag_id]
 
+            # Known tag pose + measured tag pose -> absolute camera pose.
             T_map_camera = T_map_tag @ inverse_matrix(T_camera_tag)
             T_map_base = T_map_camera @ T_camera_base
+
+            # Preserve smooth local odometry; correct only map -> odom.
             T_map_odom = T_map_base @ inverse_matrix(T_odom_base)
 
             translation, quaternion = matrix_to_transform(T_map_odom)
@@ -317,12 +474,13 @@ class TagGlobalLocalizer(Node):
         if not candidates:
             return
 
-        # This detection message was successfully processed.
+        # This detection message was successfully consumed.
         self.pending_detection = None
 
-        # Use the strongest candidate as the consistency reference.
+        # ======================================================
+        # Multi-tag consistency gating
+        # ======================================================
         reference = max(candidates, key=lambda candidate: candidate['weight'])
-
         accepted = []
 
         for candidate in candidates:
@@ -344,6 +502,9 @@ class TagGlobalLocalizer(Node):
         if not accepted:
             return
 
+        # ======================================================
+        # Weighted SE(2) fusion
+        # ======================================================
         weight_sum = sum(candidate['weight'] for candidate in accepted)
 
         fused_x = sum(
@@ -368,13 +529,16 @@ class TagGlobalLocalizer(Node):
 
         raw_state = [fused_x, fused_y, fused_yaw]
 
+        # Raw tag-derived robot pose for debugging.
         raw_map_to_odom = self.state_to_matrix(raw_state)
         raw_map_to_base = raw_map_to_odom @ T_odom_base
         self.publish_pose(self.raw_pose_pub, raw_map_to_base, stamp)
 
-        # First absolute fix should be immediate. Only subsequent
-        # corrections are filtered.
+        # ======================================================
+        # Temporal filter
+        # ======================================================
         if self.filtered_map_to_odom is None:
+            # First valid absolute fix initializes immediately.
             self.filtered_map_to_odom = raw_state
         else:
             if self.last_measurement_stamp is None:
@@ -421,7 +585,8 @@ class TagGlobalLocalizer(Node):
         active_tags.data = [candidate['id'] for candidate in accepted]
         self.active_tags_pub.publish(active_tags)
 
-    def state_to_matrix(self, state):
+    @staticmethod
+    def state_to_matrix(state):
         x, y, yaw = state
         quaternion = quaternion_from_euler(0.0, 0.0, yaw)
         return concatenate_matrices(
