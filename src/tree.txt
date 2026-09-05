@@ -1,0 +1,130 @@
+.
+├── scrobot_bringup
+│   ├── CMakeLists.txt
+│   ├── config
+│   ├── include
+│   │   └── scrobot_bringup
+│   ├── launch
+│   ├── LICENSE
+│   ├── package.xml
+│   └── src
+├── scrobot_control
+│   ├── CMakeLists.txt
+│   ├── config
+│   │   ├── collision_monitor.yaml
+│   │   ├── controllers.yaml
+│   │   ├── twist_mux.yaml
+│   │   └── velocity_smoother.yaml
+│   ├── debug_guide.md
+│   ├── include
+│   │   └── scrobot_control
+│   ├── launch
+│   │   ├── command_pipeline.launch.py
+│   │   ├── control.launch.py
+│   │   └── control_stack.launch.py
+│   ├── LICENSE
+│   ├── package.xml
+│   ├── scripts
+│   │   └── wasd_teleop.py
+│   └── src
+├── scrobot_description
+│   ├── CMakeLists.txt
+│   ├── launch
+│   │   └── display.launch.py
+│   ├── LICENSE
+│   ├── meshes
+│   │   ├── collision
+│   │   │   └── base_collision.STL
+│   │   └── visual
+│   │       ├── base.STL
+│   │       ├── caster_fork.STL
+│   │       ├── caster_wheel.STL
+│   │       ├── collector.STL
+│   │       ├── d435i.STL
+│   │       ├── left_wheel.STL
+│   │       └── right_wheel.STL
+│   ├── package.xml
+│   ├── rviz
+│   │   └── scrobot.rviz
+│   └── urdf
+│       ├── base.xacro
+│       ├── casters.xacro
+│       ├── collector.xacro
+│       ├── scrobot.urdf.xacro
+│       ├── sensors.xacro
+│       └── wheels.xacro
+├── scrobot_localization
+│   ├── CMakeLists.txt
+│   ├── config
+│   │   ├── court_landmarks.yaml
+│   │   ├── ekf.yaml
+│   │   └── imu_filter.yaml
+│   ├── include
+│   │   └── scrobot_localization
+│   ├── launch
+│   │   ├── global_localization.launch.py
+│   │   └── localization.launch.py
+│   ├── LICENSE
+│   ├── package.xml
+│   ├── scripts
+│   │   └── tag_global_localizer.py
+│   └── src
+├── scrobot_perception
+│   ├── CMakeLists.txt
+│   ├── config
+│   │   └── apriltag.yaml
+│   ├── include
+│   │   └── scrobot_perception
+│   ├── launch
+│   │   └── apriltag.launch.py
+│   ├── LICENSE
+│   ├── package.xml
+│   └── src
+├── scrobot_simulation
+│   ├── CMakeLists.txt
+│   ├── config
+│   │   ├── bridge.yaml
+│   │   ├── court_visualizer.yaml
+│   │   └── pointcloud_bridge_test.yaml
+│   ├── include
+│   │   └── scrobot_simulation
+│   ├── launch
+│   │   ├── gazebo.launch.py
+│   │   ├── rviz.launch.py
+│   │   ├── simulation.launch.py
+│   │   └── spawn_robot.launch.py
+│   ├── LICENSE
+│   ├── models
+│   │   └── court_apriltags
+│   │       ├── materials
+│   │       │   └── textures
+│   │       │       ├── tag_0.png
+│   │       │       ├── tag_1.png
+│   │       │       ├── tag_2.png
+│   │       │       └── tag_3.png
+│   │       ├── meshes
+│   │       │   ├── tag_0.mtl
+│   │       │   ├── tag_0.obj
+│   │       │   ├── tag_1.mtl
+│   │       │   ├── tag_1.obj
+│   │       │   ├── tag_2.mtl
+│   │       │   ├── tag_2.obj
+│   │       │   ├── tag_3.mtl
+│   │       │   └── tag_3.obj
+│   │       ├── model.config
+│   │       └── model.sdf
+│   ├── package.xml
+│   ├── scripts
+│   │   └── generate_court_apriltags.py
+│   ├── src
+│   │   ├── camera_info_splitter.cpp
+│   │   └── court_visualizer.cpp
+│   ├── urdf
+│   │   ├── physics_gazebo.xacro
+│   │   ├── scrobot_sim.urdf.xacro
+│   │   └── sensors_gazebo.xacro
+│   └── worlds
+│       └── badminton_court.sdf
+└── tree.txt
+
+48 directories, 80 files

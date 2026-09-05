@@ -1,190 +1,58 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:include
+    filename="$(find scrobot_description)/urdf/realsense_d435i.xacro"/>
+
   <xacro:macro name="tiny_sensor_inertial">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <mass value="0.0001"/>
-      <inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
+      <inertia
+        ixx="1e-8" ixy="0" ixz="0"
+        iyy="1e-8" iyz="0"
+        izz="1e-8"/>
     </inertial>
   </xacro:macro>
 
+  <!--
+    Robot-side sensor mounting.
+
+    D435i internal geometry is defined in realsense_d435i.xacro.
+
+    The 5883L magnetometer is a physically separate robot sensor,
+    so it remains directly attached to base_link using the existing
+    mag_x / mag_y / mag_z parameters.
+  -->
   <xacro:macro name="scrobot_sensors">
-    <link name="camera_bottom_screw_frame">
-      <xacro:tiny_sensor_inertial/>
-      <visual name="d435i_visual">
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-          <mesh filename="package://scrobot_description/meshes/visual/d435i.STL" scale="1 1 1"/>
-        </geometry>
 
-        <material name="sensor_blue"/>
-  
-      </visual>
-    </link>
+    <!-- ====================================================== -->
+    <!-- Intel RealSense D435i                                  -->
+    <!-- ====================================================== -->
 
-    <joint name="camera_mount_joint" type="fixed">
-      <parent link="base_link"/>
-      <child link="camera_bottom_screw_frame"/>
+    <xacro:scrobot_d435i parent="base_link" name="camera">
       <origin
         xyz="${camera_x} ${camera_y} ${camera_z}"
         rpy="${camera_roll} ${camera_pitch} ${camera_yaw}"/>
-    </joint>
-
-    <link name="camera_link"><xacro:tiny_sensor_inertial/></link>
-    <joint name="camera_link_joint" type="fixed">
-      <parent link="camera_bottom_screw_frame"/>
-      <child link="camera_link"/>
-      <origin xyz="0.0106 0.0175 0.0125" rpy="0 0 0"/>
-    </joint>
-
-    <link name="camera_depth_frame"/>
-    <joint name="camera_depth_joint" type="fixed">
-      <parent link="camera_link"/>
-      <child link="camera_depth_frame"/>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-    </joint>
-
-    <link name="camera_depth_optical_frame"/>
-    <joint name="camera_depth_optical_joint" type="fixed">
-      <parent link="camera_depth_frame"/>
-      <child link="camera_depth_optical_frame"/>
-      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
-    </joint>
-
-    <!-- <link name="camera_infra1_frame"/>
-    <joint name="camera_infra1_joint" type="fixed">
-      <parent link="camera_link"/>
-      <child link="camera_infra1_frame"/>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-    </joint>
-
-    <link name="camera_infra1_optical_frame"/>
-    <joint name="camera_infra1_optical_joint" type="fixed">
-      <parent link="camera_infra1_frame"/>
-      <child link="camera_infra1_optical_frame"/>
-      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
-    </joint>
-
-    <link name="camera_infra2_frame"/>
-    <joint name="camera_infra2_joint" type="fixed">
-      <parent link="camera_link"/>
-      <child link="camera_infra2_frame"/>
-      <origin xyz="0 -0.050 0" rpy="0 0 0"/>
-    </joint>
-
-    <link name="camera_infra2_optical_frame"/>
-    <joint name="camera_infra2_optical_joint" type="fixed">
-      <parent link="camera_infra2_frame"/>
-      <child link="camera_infra2_optical_frame"/>
-      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
-    </joint> -->
-
-    <link name="camera_color_frame"/>
-    <joint name="camera_color_joint" type="fixed">
-      <parent link="camera_link"/>
-      <child link="camera_color_frame"/>
-      <origin xyz="0 0.015 0" rpy="0 0 0"/>
-    </joint>
-
-    <link name="camera_color_optical_frame"/>
-    <joint name="camera_color_optical_joint" type="fixed">
-      <parent link="camera_color_frame"/>
-      <child link="camera_color_optical_frame"/>
-      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
-    </joint>
-
-    <!-- ========================================================= -->
-    <!-- RealSense D435i IMU                                       -->
-    <!-- Nominal extrinsics from official realsense2_description   -->
-    <!-- ========================================================= -->
-
-    <!-- <link name="camera_accel_frame"/>
-
-    <joint name="camera_accel_joint" type="fixed">
-      <parent link="camera_link"/>
-      <child link="camera_accel_frame"/>
-
-      <origin
-        xyz="-0.01174 -0.00552 0.00510"
-        rpy="0 0 0"/>
-    </joint>
+    </xacro:scrobot_d435i>
 
 
-    <link name="camera_accel_optical_frame"/>
+    <!-- ====================================================== -->
+    <!-- Separate 5883L magnetometer                            -->
+    <!-- ====================================================== -->
 
-    <joint name="camera_accel_optical_joint" type="fixed">
-      <parent link="camera_accel_frame"/>
-      <child link="camera_accel_optical_frame"/>
+    <link name="mag_link">
+      <xacro:tiny_sensor_inertial/>
+    </link>
 
-      <origin
-        xyz="0 0 0"
-        rpy="${-pi/2} 0 ${-pi/2}"/>
-    </joint>
-
-
-    <link name="camera_gyro_frame"/>
-
-    <joint name="camera_gyro_joint" type="fixed">
-      <parent link="camera_link"/>
-      <child link="camera_gyro_frame"/>
-
-      <origin
-        xyz="-0.01174 -0.00552 0.00510"
-        rpy="0 0 0"/>
-    </joint>
-
-
-    <link name="camera_gyro_optical_frame"/>
-
-    <joint name="camera_gyro_optical_joint" type="fixed">
-      <parent link="camera_gyro_frame"/>
-      <child link="camera_gyro_optical_frame"/>
-
-      <origin
-        xyz="0 0 0"
-        rpy="${-pi/2} 0 ${-pi/2}"/>
-    </joint> -->
-
-    <!-- ========================================================= -->
-    <!-- Combined RealSense IMU frame                              -->
-    <!-- Used by /camera/camera/imu when unite_imu_method > 0      -->
-    <!-- ========================================================= -->
-
-    <link name="camera_imu_frame"/>
-
-    <joint name="camera_imu_joint" type="fixed">
-      <parent link="camera_link"/>
-      <child link="camera_imu_frame"/>
-
-      <origin
-        xyz="-0.01174 -0.00552 0.00510"
-        rpy="0 0 0"/>
-    </joint>
-
-    <link name="camera_imu_optical_frame"/>
-
-    <joint name="camera_imu_optical_joint" type="fixed">
-      <parent link="camera_imu_frame"/>
-      <child link="camera_imu_optical_frame"/>
-
-      <origin
-        xyz="0 0 0"
-        rpy="${-pi/2} 0 ${-pi/2}"/>
-    </joint>
-
-    <link name="bmi160_link"><xacro:tiny_sensor_inertial/></link>
-    
-    <joint name="bmi160_joint" type="fixed">
-      <parent link="base_link"/>
-      <child link="bmi160_link"/>
-      <origin xyz="${imu_x} ${imu_y} ${imu_z}" rpy="0 0 0"/>
-    </joint>
-
-    <link name="mag_link"><xacro:tiny_sensor_inertial/></link>
     <joint name="mag_joint" type="fixed">
       <parent link="base_link"/>
       <child link="mag_link"/>
-      <origin xyz="${mag_x} ${mag_y} ${mag_z}" rpy="0 0 0"/>
+      <origin
+        xyz="${mag_x} ${mag_y} ${mag_z}"
+        rpy="0 0 0"/>
     </joint>
+
   </xacro:macro>
+
 </robot>

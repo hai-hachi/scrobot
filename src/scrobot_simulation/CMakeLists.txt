@@ -31,34 +31,16 @@ if(BUILD_TESTING)
 endif()
 
 add_executable(
-  camera_info_splitter
-  src/camera_info_splitter.cpp
-)
-
-ament_target_dependencies(
-  camera_info_splitter
-  rclcpp
-  sensor_msgs
-)
-
-add_executable(
   court_visualizer
   src/court_visualizer.cpp
 )
 
 ament_target_dependencies(
   court_visualizer
-
   rclcpp
   geometry_msgs
   std_msgs
   visualization_msgs
-)
-
-install(
-  TARGETS
-    camera_info_splitter
-  DESTINATION lib/${PROJECT_NAME}
 )
 
 install(

@@ -58,10 +58,6 @@ ekf_filter_node:
     odom0_relative: false
 
 
-    # ==========================================
-    # BMI160 IMU
-    # ==========================================
-
     imu0: /imu/data
 
     imu0_config:

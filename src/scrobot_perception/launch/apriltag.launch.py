@@ -47,15 +47,15 @@ def generate_launch_description():
         remappings=[
             (
                 'image',
-                '/camera/color/image_raw'
+                '/camera/camera/color/image_raw'
             ),
             (
                 'camera_info',
-                '/camera/color/camera_info'
+                '/camera/camera/color/camera_info'
             ),
             (
                 'image_rect',
-                '/camera/color/image_rect'
+                '/camera/camera/color/image_rect'
             ),
         ],
     )
@@ -80,11 +80,11 @@ def generate_launch_description():
         remappings=[
             (
                 'image_rect',
-                '/camera/color/image_rect'
+                '/camera/camera/color/image_raw'
             ),
             (
                 'camera_info',
-                '/camera/color/camera_info'
+                '/camera/camera/color/camera_info'
             ),
             (
                 'detections',

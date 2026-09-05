@@ -39,5 +39,8 @@
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
   <depend>visualization_msgs</depend>
+
+  <exec_depend>depth_image_proc</exec_depend>
+  <exec_depend>rclcpp_components</exec_depend>  
   
 </package>

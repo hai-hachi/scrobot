@@ -13,8 +13,6 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
-from launch_ros.actions import Node
-
 
 def generate_launch_description():
 
@@ -66,11 +64,6 @@ def generate_launch_description():
     # ==========================================================
     # Resource paths
     # ==========================================================
-    #
-    # Set them at the TOP LEVEL too.  This ensures that every
-    # process launched by nested launch files inherits the same
-    # Gazebo resource lookup paths.
-    # ==========================================================
 
     description_share_parent = os.path.dirname(
         description_pkg
@@ -110,7 +103,7 @@ def generate_launch_description():
     )
 
     # ==========================================================
-    # Robot spawn
+    # Robot spawn / robot_state_publisher
     # ==========================================================
 
     spawn_robot = IncludeLaunchDescription(
@@ -140,21 +133,29 @@ def generate_launch_description():
     )
 
     # ==========================================================
-    # CameraInfo splitter
+    # RealSense-like ROS processing
+    # ==========================================================
+    #
+    # Creates:
+    #   /camera/camera/aligned_depth_to_color/image_raw
+    #   /camera/camera/aligned_depth_to_color/camera_info
+    #   /camera/camera/depth/points
+    #
+    # The processing nodes may start before the camera topics exist;
+    # they will simply wait for publishers and TF.
     # ==========================================================
 
-    camera_info_splitter = Node(
-        package='scrobot_simulation',
-        executable='camera_info_splitter',
-        name='camera_info_splitter',
-        output='screen',
-        parameters=[
-            {
-                'use_sim_time': use_sim_time,
-                'color_frame': 'camera_color_optical_frame',
-                'depth_frame': 'camera_depth_optical_frame',
-            }
-        ],
+    realsense_processing = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                simulation_pkg,
+                'launch',
+                'depth_registration.launch.py',
+            )
+        ),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+        }.items(),
     )
 
     # ==========================================================
@@ -255,7 +256,7 @@ def generate_launch_description():
         ),
 
         # ------------------------------------------------------
-        # Environment MUST be configured before nested launches
+        # Environment
         # ------------------------------------------------------
 
         add_description_resources,
@@ -267,6 +268,6 @@ def generate_launch_description():
 
         gazebo,
         delayed_spawn_robot,
-        camera_info_splitter,
+        realsense_processing,
         rviz,
     ])

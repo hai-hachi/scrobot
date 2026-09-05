@@ -1,48 +1,74 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
   <xacro:macro name="scrobot_gazebo_sensors">
+
+    <!-- ====================================================== -->
+    <!-- D435i combined IMU                                     -->
+    <!-- ====================================================== -->
+
     <gazebo reference="camera_imu_frame">
-      <sensor name="imu_sensor" type="imu">
+      <sensor name="d435i_imu" type="imu">
         <always_on>true</always_on>
         <update_rate>100.0</update_rate>
         <visualize>false</visualize>
-        <topic>/imu/data</topic>
-        <gz_frame_id>imu_link</gz_frame_id>
+
+        <topic>/camera/imu</topic>
+        <gz_frame_id>camera_imu_frame</gz_frame_id>
+
+        <imu>
+          <!--
+            Match the real D435i behavior:
+            accel + gyro are available, but orientation is not
+            directly estimated by the camera.
+          -->
+          <orientation_enabled>false</orientation_enabled>
+        </imu>
       </sensor>
     </gazebo>
 
+
+    <!-- ====================================================== -->
+    <!-- Separate 5883L magnetometer                            -->
+    <!-- ====================================================== -->
+
     <gazebo reference="mag_link">
-      <sensor name="magnetometer_sensor" type="magnetometer">
+      <sensor name="magnetometer_5883l" type="magnetometer">
         <always_on>true</always_on>
+
+        <!-- Keep the previous project simulation rate. -->
         <update_rate>50.0</update_rate>
+
         <visualize>false</visualize>
+
         <topic>/imu/mag</topic>
         <gz_frame_id>mag_link</gz_frame_id>
       </sensor>
     </gazebo>
 
-    <!-- =============================== -->
-    <!-- D435i COLOR CAMERA              -->
-    <!-- =============================== -->
 
-    <gazebo reference="camera_link">
+    <!-- ====================================================== -->
+    <!-- D435i COLOR CAMERA                                     -->
+    <!-- ====================================================== -->
+
+    <gazebo reference="camera_color_frame">
       <sensor name="d435i_color" type="camera">
-      
-        <pose>0 0.015 0 0 0 0</pose>
-
         <always_on>true</always_on>
         <update_rate>30.0</update_rate>
         <visualize>true</visualize>
 
         <topic>/camera/color</topic>
-        <gz_frame_id>camera_color_frame</gz_frame_id>
+        <gz_frame_id>camera_color_optical_frame</gz_frame_id>
 
-        <camera>
-          <horizontal_fov>1.11701072</horizontal_fov>
+        <camera name="d435i_color_camera">
+          <!-- D435i RGB HFOV ~= 69.4 deg -->
+          <horizontal_fov>1.2112585008840648</horizontal_fov>
+
+          <camera_info_topic>/camera/color/camera_info</camera_info_topic>
 
           <image>
-            <width>1280</width>
-            <height>720</height>
+            <width>1920</width>
+            <height>1080</height>
             <format>R8G8B8</format>
           </image>
 
@@ -51,52 +77,47 @@
             <far>20.0</far>
           </clip>
 
-          <optical_frame_id>
-            camera_color_optical_frame
-          </optical_frame_id>
-
+          <optical_frame_id>camera_color_optical_frame</optical_frame_id>
         </camera>
-
       </sensor>
     </gazebo>
 
 
-    <!-- =============================== -->
-    <!-- D435i DEPTH CAMERA              -->
-    <!-- =============================== -->
+    <!-- ====================================================== -->
+    <!-- D435i RAW DEPTH CAMERA                                 -->
+    <!-- ====================================================== -->
 
-    <gazebo reference="camera_link">
+    <gazebo reference="camera_depth_frame">
       <sensor name="d435i_depth" type="depth_camera">
-
-        <pose>0 0 0 0 0 0</pose>
-
         <always_on>true</always_on>
         <update_rate>30.0</update_rate>
         <visualize>true</visualize>
 
         <topic>/camera/depth</topic>
-        <gz_frame_id>camera_depth_frame</gz_frame_id>
+        <gz_frame_id>camera_depth_optical_frame</gz_frame_id>
 
-        <camera>
-          <horizontal_fov>1.11701072</horizontal_fov>
+        <camera name="d435i_depth_camera">
+          <!-- D435i depth HFOV ~= 87 deg -->
+          <horizontal_fov>1.5184364492350666</horizontal_fov>
+
+          <camera_info_topic>/camera/depth/camera_info</camera_info_topic>
 
           <image>
             <width>480</width>
             <height>360</height>
+            <format>R_FLOAT32</format>
           </image>
 
           <clip>
-            <near>0.3</near>
-            <far>3.0</far>
+            <near>0.20</near>
+            <far>6.0</far>
           </clip>
 
-          <optical_frame_id>
-            camera_depth_optical_frame
-          </optical_frame_id>
-
+          <optical_frame_id>camera_depth_optical_frame</optical_frame_id>
         </camera>
-
       </sensor>
     </gazebo>
+
   </xacro:macro>
+
 </robot>

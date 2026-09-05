@@ -1,0 +1,151 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!--
+    Minimal Intel RealSense D435i description for SC Robot.
+
+    Coordinate conventions:
+      ROS camera frames:
+        +X forward, +Y left, +Z up
+
+      Optical frames:
+        +X right, +Y down, +Z forward
+
+    Nominal geometry is based on the RealSense ROS description:
+      bottom screw -> camera_link:
+        xyz = [0.0106, 0.0175, 0.0125] m
+
+      camera_link -> color frame:
+        xyz = [0.0, 0.015, 0.0] m
+
+      camera_link -> IMU:
+        xyz = [-0.01174, -0.00552, 0.00510] m
+
+    The real camera driver publishes calibrated sensor extrinsics.
+    For simulation we intentionally use the nominal RealSense geometry.
+  -->
+
+  <xacro:macro name="d435i_tiny_inertial">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0001"/>
+      <inertia
+        ixx="1e-8" ixy="0" ixz="0"
+        iyy="1e-8" iyz="0"
+        izz="1e-8"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro
+    name="scrobot_d435i"
+    params="parent name:=camera mesh_file:=package://scrobot_description/meshes/visual/d435i.STL *origin">
+
+    <!-- ====================================================== -->
+    <!-- Physical tripod screw / robot mounting reference       -->
+    <!-- ====================================================== -->
+
+    <link name="${name}_bottom_screw_frame">
+      <xacro:d435i_tiny_inertial/>
+
+      <!--
+        Keep the existing project mesh convention: the visual mesh
+        is located at the tripod screw frame.
+      -->
+      <visual name="${name}_d435i_visual">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="${mesh_file}" scale="1 1 1"/>
+        </geometry>
+        <material name="sensor_blue"/>
+      </visual>
+    </link>
+
+    <joint name="${name}_mount_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${name}_bottom_screw_frame"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+
+    <!-- ====================================================== -->
+    <!-- RealSense base frame: nominal depth / left-IR origin   -->
+    <!-- ====================================================== -->
+
+    <link name="${name}_link">
+      <xacro:d435i_tiny_inertial/>
+    </link>
+
+    <joint name="${name}_link_joint" type="fixed">
+      <parent link="${name}_bottom_screw_frame"/>
+      <child link="${name}_link"/>
+      <origin xyz="0.0106 0.0175 0.0125" rpy="0 0 0"/>
+    </joint>
+
+    <!-- ====================================================== -->
+    <!-- Depth                                                  -->
+    <!-- ====================================================== -->
+
+    <link name="${name}_depth_frame"/>
+
+    <joint name="${name}_depth_joint" type="fixed">
+      <parent link="${name}_link"/>
+      <child link="${name}_depth_frame"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <link name="${name}_depth_optical_frame"/>
+
+    <joint name="${name}_depth_optical_joint" type="fixed">
+      <parent link="${name}_depth_frame"/>
+      <child link="${name}_depth_optical_frame"/>
+      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+
+    <!-- ====================================================== -->
+    <!-- Color                                                  -->
+    <!-- ====================================================== -->
+
+    <link name="${name}_color_frame"/>
+
+    <joint name="${name}_color_joint" type="fixed">
+      <parent link="${name}_link"/>
+      <child link="${name}_color_frame"/>
+
+      <!--
+        Official RealSense nominal simulation extrinsic.
+        Replace with values measured from your exact camera only if
+        you intentionally want unit-specific calibration in Gazebo.
+      -->
+      <origin xyz="0 0.015 0" rpy="0 0 0"/>
+    </joint>
+
+    <link name="${name}_color_optical_frame"/>
+
+    <joint name="${name}_color_optical_joint" type="fixed">
+      <parent link="${name}_color_frame"/>
+      <child link="${name}_color_optical_frame"/>
+      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+
+    <!-- ====================================================== -->
+    <!-- Combined D435i IMU frame                               -->
+    <!-- ====================================================== -->
+
+    <link name="${name}_imu_frame"/>
+
+    <joint name="${name}_imu_joint" type="fixed">
+      <parent link="${name}_link"/>
+      <child link="${name}_imu_frame"/>
+      <origin xyz="-0.01174 -0.00552 0.00510" rpy="0 0 0"/>
+    </joint>
+
+    <link name="${name}_imu_optical_frame"/>
+
+    <joint name="${name}_imu_optical_joint" type="fixed">
+      <parent link="${name}_imu_frame"/>
+      <child link="${name}_imu_optical_frame"/>
+      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+
+  </xacro:macro>
+
+</robot>

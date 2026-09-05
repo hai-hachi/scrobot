@@ -1,3 +1,8 @@
+# ============================================================
+# Gazebo Harmonic -> ROS 2 Jazzy bridge
+# D435i-like simulation + separate 5883L magnetometer
+# ============================================================
+
 - ros_topic_name: "/clock"
   gz_topic_name: "/clock"
   ros_type_name: "rosgraph_msgs/msg/Clock"
@@ -5,13 +10,41 @@
   direction: GZ_TO_ROS
   qos_profile: CLOCK
 
-- ros_topic_name: "/imu/data_raw"
-  gz_topic_name: "/imu/data"
+
+# ============================================================
+# D435i combined IMU
+# ============================================================
+#
+# Preserve the RealSense-like camera topic:
+#   /camera/camera/imu
+#
+# AND expose the same Gazebo IMU stream at the robot-level topic:
+#   /imu/data_raw
+#
+# Both messages use camera_imu_optical_frame because the data
+# originate from the D435i IMU, regardless of ROS topic name.
+# ============================================================
+
+- ros_topic_name: "/camera/camera/imu"
+  gz_topic_name: "/camera/imu"
   ros_type_name: "sensor_msgs/msg/Imu"
   gz_type_name: "gz.msgs.IMU"
   direction: GZ_TO_ROS
   qos_profile: SENSOR_DATA
-  frame_id: "imu_link"
+  frame_id: "camera_imu_frame"
+
+- ros_topic_name: "/imu/data_raw"
+  gz_topic_name: "/camera/imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
+  direction: GZ_TO_ROS
+  qos_profile: SENSOR_DATA
+  frame_id: "camera_imu_frame"
+
+
+# ============================================================
+# Separate 5883L magnetometer
+# ============================================================
 
 - ros_topic_name: "/imu/mag"
   gz_topic_name: "/imu/mag"
@@ -19,58 +52,56 @@
   gz_type_name: "gz.msgs.Magnetometer"
   direction: GZ_TO_ROS
   qos_profile: SENSOR_DATA
-  frame_id: "imu_link"
+  frame_id: "mag_link"
 
-# =========================
+
+# ============================================================
 # Color camera
-# =========================
+# ============================================================
 
-- ros_topic_name: /camera/color/image_raw
-  gz_topic_name: /camera/color
-  ros_type_name: sensor_msgs/msg/Image
-  gz_type_name: gz.msgs.Image
+- ros_topic_name: "/camera/camera/color/image_raw"
+  gz_topic_name: "/camera/color"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
   direction: GZ_TO_ROS
   qos_profile: SENSOR_DATA
+  frame_id: "camera_color_optical_frame"
 
-# - ros_topic_name: /camera/color/camera_info
-#   gz_topic_name: /camera/camera_info
-#   ros_type_name: sensor_msgs/msg/CameraInfo
-#   gz_type_name: gz.msgs.CameraInfo
-#   direction: GZ_TO_ROS
-
-
-# =========================
-# Depth camera
-# =========================
-
-- ros_topic_name: /camera/depth/image_raw
-  gz_topic_name: /camera/depth
-  ros_type_name: sensor_msgs/msg/Image
-  gz_type_name: gz.msgs.Image
+- ros_topic_name: "/camera/camera/color/camera_info"
+  gz_topic_name: "/camera/color/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
   direction: GZ_TO_ROS
   qos_profile: SENSOR_DATA
+  frame_id: "camera_color_optical_frame"
 
-# - ros_topic_name: /camera/depth/camera_info
-#   gz_topic_name: /camera/camera_info
-#   ros_type_name: sensor_msgs/msg/CameraInfo
-#   gz_type_name: gz.msgs.CameraInfo
-#   direction: GZ_TO_ROS
 
-- ros_topic_name: /camera/depth/points
-  gz_topic_name: /camera/depth/points
-  ros_type_name: sensor_msgs/msg/PointCloud2
-  gz_type_name: gz.msgs.PointCloudPacked
+# ============================================================
+# Raw depth camera
+# ============================================================
+
+- ros_topic_name: "/camera/camera/depth/image_rect_raw"
+  gz_topic_name: "/camera/depth"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
   direction: GZ_TO_ROS
   qos_profile: SENSOR_DATA
-  frame_id: "camera_depth_frame"
+  frame_id: "camera_depth_optical_frame"
 
-# =========================
-# Info camera
-# =========================
-
-- ros_topic_name: /camera/camera_info_raw
-  gz_topic_name: /camera/camera_info
-  ros_type_name: sensor_msgs/msg/CameraInfo
-  gz_type_name: gz.msgs.CameraInfo
+- ros_topic_name: "/camera/camera/depth/camera_info"
+  gz_topic_name: "/camera/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
   direction: GZ_TO_ROS
   qos_profile: SENSOR_DATA
+  frame_id: "camera_depth_optical_frame"
+
+
+# ============================================================
+# Point cloud
+# ============================================================
+#
+# Do NOT bridge Gazebo's native depth point cloud here.
+# depth_registration.launch.py builds XYZ from the ROS depth image
+# and CameraInfo so it is correctly expressed in
+# camera_depth_optical_frame.

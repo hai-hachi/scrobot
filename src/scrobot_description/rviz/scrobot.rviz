@@ -1,15 +1,15 @@
 Panels:
   - Class: rviz_common/Displays
-    Help Height: 95
+    Help Height: 70
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /TF1
         - /TF1/Frames1
+        - /Image1
         - /Image1/Topic1
         - /MarkerArray1/Topic1
       Splitter Ratio: 0.5
-    Tree Height: 554
+    Tree Height: 425
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Views
@@ -72,17 +72,15 @@ Visualization Manager:
       Frames:
         All Enabled: false
         base_footprint:
-          Value: true
+          Value: false
         base_link:
-          Value: false
-        bmi160_link:
-          Value: false
+          Value: true
         camera_bottom_screw_frame:
           Value: false
         camera_color_frame:
           Value: false
         camera_color_optical_frame:
-          Value: true
+          Value: false
         camera_depth_frame:
           Value: false
         camera_depth_optical_frame:
@@ -115,14 +113,10 @@ Visualization Manager:
           Value: true
         observed_tag_0:
           Value: true
-        observed_tag_1:
-          Value: true
         observed_tag_2:
           Value: true
-        observed_tag_3:
-          Value: true
         odom:
-          Value: true
+          Value: false
         pickup_link:
           Value: false
         right_caster_link:
@@ -149,19 +143,13 @@ Visualization Manager:
           odom:
             base_footprint:
               base_link:
-                bmi160_link:
-                  {}
                 camera_bottom_screw_frame:
                   camera_link:
                     camera_color_frame:
                       camera_color_optical_frame:
                         observed_tag_0:
                           {}
-                        observed_tag_1:
-                          {}
                         observed_tag_2:
-                          {}
-                        observed_tag_3:
                           {}
                     camera_depth_frame:
                       camera_depth_optical_frame:
@@ -201,14 +189,14 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 10
-        Min Value: -10
+        Max Value: 0.904849648475647
+        Min Value: -4.231929779052734e-06
         Value: true
       Axis: Z
       Channel Name: intensity
       Class: rviz_default_plugins/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: RGB8
+      Color: 255; 0; 0
+      Color Transformer: FlatColor
       Decay Time: 0
       Enabled: false
       Invert Rainbow: false
@@ -219,15 +207,15 @@ Visualization Manager:
       Name: PointCloud2
       Position Transformer: XYZ
       Selectable: true
-      Size (Pixels): 3
+      Size (Pixels): 2
       Size (m): 0.009999999776482582
-      Style: Flat Squares
+      Style: Points
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /camera/depth/points
+        Value: /camera/camera/depth/points
       Use Fixed Frame: true
       Use rainbow: true
       Value: false
@@ -243,7 +231,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /camera/color/image_raw
+        Value: /camera/camera/color/image_raw
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
@@ -304,7 +292,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: -0.09499998390674591
+      Angle: 0
       Class: rviz_default_plugins/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
@@ -314,25 +302,25 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 256.4454040527344
+      Scale: 132.06201171875
       Target Frame: base_footprint
       Value: TopDownOrtho (rviz_default_plugins)
-      X: 0.0795588418841362
-      Y: 0.33027729392051697
+      X: 0.7793436050415039
+      Y: 0.2982737720012665
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 807
+  Height: 653
   Hide Left Dock: false
   Hide Right Dock: false
   Image:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000200000000000001c9000002c9fc0200000004fb000000100044006900730070006c006100790073010000003f000002c9000000cc00fffffffb0000000c00430061006d006500720061010000027a000001a80000000000000000fb0000000c00430061006d0065007200610100000354000000ce0000000000000000fb0000000a0049006d00610067006503000003d6000001da000003aa0000022b00000001000001c9000002c9fc0200000002fb0000000a00560069006500770073010000003f0000017f000000a900fffffffb0000001200530065006c0065006300740069006f006e01000001c4000001440000005d00ffffff00000202000002c900000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000200000000000001560000022ffc0200000004fb000000100044006900730070006c006100790073010000003f0000022f000000cc00fffffffb0000000a0049006d006100670065030000050d000002ed0000025100000165fb0000000c00430061006d006500720061010000027a000001a80000000000000000fb0000000c00430061006d0065007200610100000354000000ce000000000000000000000001000001000000022ffc0200000002fb0000000a00560069006500770073010000003f00000129000000a900fffffffb0000001200530065006c0065006300740069006f006e010000016e000001000000005d00ffffff0000028c0000022f00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Views:
     collapsed: false
-  Width: 1440
-  X: 21
-  Y: 160
+  Width: 1262
+  X: 31
+  Y: 444

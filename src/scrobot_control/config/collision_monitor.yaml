@@ -97,7 +97,7 @@ collision_monitor:
     depth_pointcloud:
       type: pointcloud
 
-      topic: /camera/depth/points
+      topic: /camera/camera/depth/points
 
       # Ignore floor / shuttlecock-level points.
       min_height: 0.08
