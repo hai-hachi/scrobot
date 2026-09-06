@@ -7,14 +7,14 @@
     <!-- D435i combined IMU                                     -->
     <!-- ====================================================== -->
 
-    <gazebo reference="camera_imu_frame">
+    <gazebo reference="camera_imu_optical_frame">
       <sensor name="d435i_imu" type="imu">
         <always_on>true</always_on>
         <update_rate>100.0</update_rate>
         <visualize>false</visualize>
 
         <topic>/camera/imu</topic>
-        <gz_frame_id>camera_imu_frame</gz_frame_id>
+        <gz_frame_id>camera_imu_optical_frame</gz_frame_id>
 
         <imu>
           <!--

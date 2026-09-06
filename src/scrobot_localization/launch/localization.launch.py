@@ -31,6 +31,61 @@ def generate_launch_description():
 
 
     # ==========================================
+    # RealSense IMU frame conversion
+    # ==========================================
+    #
+    # Input:
+    #   /camera/camera/imu
+    #   frame = camera_imu_optical_frame
+    #
+    # Output:
+    #   /imu/data_raw
+    #   frame = base_link
+    #
+    # This rotates both:
+    #   angular_velocity
+    #   linear_acceleration
+    #
+    # using the real TF chain:
+    #
+    # camera_imu_optical_frame
+    #        ->
+    # camera_imu_frame
+    #        ->
+    # camera_link
+    #        ->
+    # camera_bottom_screw_frame
+    #        ->
+    # base_link
+    #
+    imu_transformer = Node(
+        package='imu_transformer',
+        executable='imu_transformer_node',
+        name='imu_transformer',
+
+        output='screen',
+
+        parameters=[
+            {
+                'target_frame': 'base_link',
+                'use_sim_time': use_sim_time,
+            }
+        ],
+
+        remappings=[
+            (
+                'imu_in',
+                '/camera/camera/imu'
+            ),
+            (
+                'imu_out',
+                '/imu/data_raw'
+            ),
+        ],
+    )
+
+
+    # ==========================================
     # Madgwick IMU filter
     # ==========================================
 
@@ -99,6 +154,8 @@ def generate_launch_description():
             default_value='true'
         ),
 
+        # Order here is logical; ROS nodes can start asynchronously.
+        imu_transformer,
         imu_filter,
         ekf_node,
 
