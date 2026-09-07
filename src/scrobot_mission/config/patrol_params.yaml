@@ -1,0 +1,25 @@
+patrol_points:
+  ros__parameters:
+
+    frame_id: map
+
+    court_length: 13.40
+    court_width: 6.10
+
+    camera_range: 3.0
+    range_factor: 0.90
+
+    save_yaml: false
+    output_file: ""
+
+
+patrol_manager:
+  ros__parameters:
+
+    frame_id: map
+
+    autostart: true
+
+    # Wait after collection to see if YOLO
+    # immediately provides another target.
+    local_fov_wait_time: 0.5

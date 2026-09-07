@@ -1,15 +1,16 @@
 Panels:
   - Class: rviz_common/Displays
-    Help Height: 70
+    Help Height: 141
     Name: Displays
     Property Tree Widget:
       Expanded:
         - /TF1/Frames1
-        - /Image1
         - /Image1/Topic1
         - /MarkerArray1/Topic1
+        - /PoseArray1
+        - /PoseArray1/Topic1
       Splitter Ratio: 0.5
-    Tree Height: 425
+    Tree Height: 790
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Views
@@ -72,7 +73,7 @@ Visualization Manager:
       Frames:
         All Enabled: false
         base_footprint:
-          Value: false
+          Value: true
         base_link:
           Value: true
         camera_bottom_screw_frame:
@@ -113,10 +114,12 @@ Visualization Manager:
           Value: true
         observed_tag_0:
           Value: true
+        observed_tag_1:
+          Value: true
         observed_tag_2:
           Value: true
         odom:
-          Value: false
+          Value: true
         pickup_link:
           Value: false
         right_caster_link:
@@ -148,6 +151,8 @@ Visualization Manager:
                     camera_color_frame:
                       camera_color_optical_frame:
                         observed_tag_0:
+                          {}
+                        observed_tag_1:
                           {}
                         observed_tag_2:
                           {}
@@ -275,6 +280,27 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /collision_monitor/stop_zone
       Value: true
+    - Alpha: 1
+      Arrow Length: 0.20000000298023224
+      Axes Length: 0.30000001192092896
+      Axes Radius: 0.009999999776482582
+      Class: rviz_default_plugins/PoseArray
+      Color: 255; 25; 0
+      Enabled: true
+      Head Length: 1
+      Head Radius: 1
+      Name: PoseArray
+      Shaft Length: 1
+      Shaft Radius: 1
+      Shape: Arrow (Flat)
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /mission/patrol_points
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -302,25 +328,25 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 132.06201171875
+      Scale: 266.3843688964844
       Target Frame: base_footprint
       Value: TopDownOrtho (rviz_default_plugins)
-      X: 0.7793436050415039
-      Y: 0.2982737720012665
+      X: 0.5900805592536926
+      Y: -0.20352385938167572
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 653
+  Height: 1089
   Hide Left Dock: false
   Hide Right Dock: false
   Image:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000200000000000001560000022ffc0200000004fb000000100044006900730070006c006100790073010000003f0000022f000000cc00fffffffb0000000a0049006d006100670065030000050d000002ed0000025100000165fb0000000c00430061006d006500720061010000027a000001a80000000000000000fb0000000c00430061006d0065007200610100000354000000ce000000000000000000000001000001000000022ffc0200000002fb0000000a00560069006500770073010000003f00000129000000a900fffffffb0000001200530065006c0065006300740069006f006e010000016e000001000000005d00ffffff0000028c0000022f00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd000000020000000000000156000003e3fc0200000004fb000000100044006900730070006c006100790073010000003f000003e3000000cc00fffffffb0000000a0049006d006100670065030000050d000002ed0000025100000165fb0000000c00430061006d006500720061010000027a000001a80000000000000000fb0000000c00430061006d0065007200610100000354000000ce00000000000000000000000100000100000003e3fc0200000002fb0000000a00560069006500770073010000003f00000213000000a900fffffffb0000001200530065006c0065006300740069006f006e0100000258000001ca0000005d00ffffff0000051e000003e300000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Views:
     collapsed: false
-  Width: 1262
-  X: 31
-  Y: 444
+  Width: 1920
+  X: 0
+  Y: 32
