@@ -1,0 +1,22 @@
+int32 preferred_tag_id
+int32 sample_count
+float32 timeout_sec
+---
+bool success
+int32[] used_tag_ids
+float64 map_to_odom_x
+float64 map_to_odom_y
+float64 map_to_odom_yaw
+float64 delta_x
+float64 delta_y
+float64 delta_yaw
+float64 std_x
+float64 std_y
+float64 std_yaw
+string message
+---
+int32 samples_collected
+bool stationary
+int32[] visible_tag_ids
+float32 best_tag_distance
+float32 best_decision_margin

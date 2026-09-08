@@ -95,3 +95,11 @@
 # depth_registration.launch.py builds XYZ from the ROS depth image
 # and CameraInfo so it is correctly expressed in
 # camera_depth_optical_frame.
+
+# Gazebo world ground truth for evaluation only.
+- ros_topic_name: /evaluation/ground_truth_tf
+  gz_topic_name: /world/badminton_court/dynamic_pose/info
+  ros_type_name: tf2_msgs/msg/TFMessage
+  gz_type_name: gz.msgs.Pose_V
+  direction: GZ_TO_ROS
+  lazy: false

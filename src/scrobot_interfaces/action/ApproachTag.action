@@ -1,0 +1,14 @@
+int32 preferred_tag_id
+float32 target_distance
+float32 timeout_sec
+---
+bool success
+int32 tag_id
+float32 final_distance
+float32 final_bearing
+string message
+---
+int32 tag_id
+float32 distance
+float32 bearing
+string phase

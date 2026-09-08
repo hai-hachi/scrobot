@@ -46,17 +46,56 @@ tag_global_localizer:
     texture_pixels: 1024
 
     # ========================================================
-    # Observation gating
-    # ========================================================
-    min_decision_margin: 15.0
-    max_tag_distance: 3.0
-
-    max_position_disagreement: 0.5
-    max_yaw_disagreement_deg: 5.0
-
-    # ========================================================
     # Temporal map -> odom filtering
     # ========================================================
     filter_tau: 0.25
+
+    # ========================================================
+    # Observation gating
+    # ========================================================
+
+    min_decision_margin: 20.0
+    max_tag_distance: 9.0
+    relocalization_max_distance: 2.0
+    max_view_angle_deg: 35.0
+    max_position_disagreement: 0.15
+    max_yaw_disagreement_deg: 6.0
+    default_sample_count: 15
+    default_timeout: 5.0
+    batch_outlier_position: 0.10
+    batch_outlier_yaw_deg: 4.0
+    max_batch_position_std: 0.04
+    max_batch_yaw_std_deg: 1.5
+    minimum_batch_keep_ratio: 0.70
+    stationary_linear_threshold: 0.02
+    stationary_angular_threshold: 0.03
+    stationary_settle_time: 0.40
+
     processing_rate: 100.0
     publish_rate: 30.0
+
+tag_approach_controller:
+  ros__parameters:
+    odom_frame: odom
+    base_frame: base_footprint
+    detections_topic: /apriltag/detections
+    observed_tag_prefix: observed_tag_
+    cmd_vel_topic: /cmd_vel_relocalization
+    min_decision_margin: 10.0
+    max_detection_distance: 9.0
+    default_target_distance: 1.70
+    default_timeout: 60.0
+    tag_lost_timeout: 1.0
+    search_angular_velocity: 0.25
+    max_linear_velocity: 0.25
+    max_angular_velocity: 0.25
+    k_position: 0.80
+    k_heading: 1.20
+    k_final_yaw: 1.20
+    drive_heading_limit_deg: 35.0
+    position_tolerance: 0.08
+    yaw_tolerance_deg: 5.0
+    stable_time: 0.40
+    goal_filter_alpha: 0.30
+    control_rate: 20.0
+

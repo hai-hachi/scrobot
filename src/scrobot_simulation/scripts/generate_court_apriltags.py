@@ -72,7 +72,7 @@ def generate_texture(tag_id, params, output_path):
 
     dictionary = april_dictionary()
 
-    # OpenCV 4.7+ API.
+    # OpenCV 4.6 API.
     marker = cv2.aruco.drawMarker(
         dictionary,
         tag_id,

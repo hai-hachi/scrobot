@@ -1,25 +1,61 @@
 patrol_points:
   ros__parameters:
-
     frame_id: map
 
+    # Court area covered by the shuttle-search patrol grid.
     court_length: 13.40
     court_width: 6.10
 
+    # Effective shuttle detection range, not AprilTag range.
     camera_range: 3.0
     range_factor: 0.90
 
     save_yaml: false
     output_file: ""
 
-
 patrol_manager:
   ros__parameters:
-
     frame_id: map
-
     autostart: true
 
-    # Wait after collection to see if YOLO
-    # immediately provides another target.
+    # Local odometry used to measure travel since the last absolute fix.
+    odom_topic: /odometry/filtered
+    max_odom_step: 1.0
+
+    # Tags observed while stopped at a patrol checkpoint.
+    active_tags_topic: /global_localization/active_tags
+
+    # Startup absolute localization.
+    initial_global_localization: true
+    initial_tag_id: -1
+    initial_relocalization_retries: 3
+
+    # Move to a good tag observation pose before localization.
+    tag_approach_distance: 1.70
+    tag_approach_timeout: 45.0
+
+    # Multi-frame absolute pose acquisition.
+    relocalize_sample_count: 15
+    relocalize_timeout: 7.0
+
+    # Nav2 stays inactive until the first map -> odom exists.
+    nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
+    nav2_startup_timeout: 30.0
+    nav2_startup_retries: 3
+
+    # Soft uses a convenient tag; hard actively searches for one.
+    soft_relocalization_distance: 5.0
+    hard_relocalization_distance: 9.0
+    hard_relocalization_retries: 2
+
+    # Patrol timing and spin behavior.
     local_fov_wait_time: 0.5
+    action_retry_period: 0.5
+    spin_angle: 6.283185307179586
+    spin_time_allowance: 20.0
+
+    # Let Nav2 receive the new map -> odom TF before sending a goal.
+    nav2_tf_settle_time: 0.75
+
+    # Retry transient BT Navigator rejection before failing the mission.
+    navigation_goal_retries: 3

@@ -52,16 +52,83 @@
       filename="gz-sim-magnetometer-system"
       name="gz::sim::systems::Magnetometer"/>
 
-    <!-- Lighting -->
-    <light type="directional" name="sun">
+    <!-- Indoor fluorescent tube light array at reduced intensity -->
+    <light type="point" name="fluorescent_front_left">
       <cast_shadows>true</cast_shadows>
+      <pose>-4.5 -2.5 8 0 0 0</pose>
+      <diffuse>0.15 0.15 0.15 1</diffuse>
+      <specular>0.03 0.03 0.03 1</specular>
+      <attenuation>
+        <range>16</range>
+        <linear>0.01</linear>
+        <constant>1.0</constant>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
 
-      <pose>0 0 10 0 0 0</pose>
+    <light type="point" name="fluorescent_front_right">
+      <cast_shadows>true</cast_shadows>
+      <pose>4.5 -2.5 8 0 0 0</pose>
+      <diffuse>0.15 0.15 0.15 1</diffuse>
+      <specular>0.03 0.03 0.03 1</specular>
+      <attenuation>
+        <range>16</range>
+        <linear>0.01</linear>
+        <constant>1.0</constant>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
 
-      <diffuse>0.8 0.8 0.8 1</diffuse>
-      <specular>0.2 0.2 0.2 1</specular>
+    <light type="point" name="fluorescent_center_left">
+      <cast_shadows>true</cast_shadows>
+      <pose>-4.5 0 8 0 0 0</pose>
+      <diffuse>0.15 0.15 0.15 1</diffuse>
+      <specular>0.03 0.03 0.03 1</specular>
+      <attenuation>
+        <range>16</range>
+        <linear>0.01</linear>
+        <constant>1.0</constant>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
 
-      <direction>-0.5 0.1 -0.9</direction>
+    <light type="point" name="fluorescent_center_right">
+      <cast_shadows>true</cast_shadows>
+      <pose>4.5 0 8 0 0 0</pose>
+      <diffuse>0.15 0.15 0.15 1</diffuse>
+      <specular>0.03 0.03 0.03 1</specular>
+      <attenuation>
+        <range>16</range>
+        <linear>0.01</linear>
+        <constant>1.0</constant>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
+
+    <light type="point" name="fluorescent_rear_left">
+      <cast_shadows>true</cast_shadows>
+      <pose>-4.5 2.5 8 0 0 0</pose>
+      <diffuse>0.15 0.15 0.15 1</diffuse>
+      <specular>0.03 0.03 0.03 1</specular>
+      <attenuation>
+        <range>16</range>
+        <linear>0.01</linear>
+        <constant>1.0</constant>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
+
+    <light type="point" name="fluorescent_rear_right">
+      <cast_shadows>true</cast_shadows>
+      <pose>4.5 2.5 8 0 0 0</pose>
+      <diffuse>0.15 0.15 0.15 1</diffuse>
+      <specular>0.03 0.03 0.03 1</specular>
+      <attenuation>
+        <range>16</range>
+        <linear>0.01</linear>
+        <constant>1.0</constant>
+        <quadratic>0.001</quadratic>
+      </attenuation>
     </light>
 
     <!-- Floor -->
