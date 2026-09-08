@@ -153,3 +153,13 @@ Launch simulation
 → Check TF
 → Check collision zone
 ```
+
+cd scrobot_ws && ros2 topic hz /camera/camera/color/image_raw
+cd scrobot_ws && ros2 topic hz /camera/camera/depth/image_rect_raw
+cd scrobot_ws && ros2 topic hz /camera/camera/depth/points
+cd scrobot_ws && ros2 topic hz /apriltag/detections
+cd scrobot_ws && ros2 topic hz /diff_drive_controller/odom
+cd scrobot_ws && ros2 topic hz /imu/data
+cd scrobot_ws && ros2 topic hz /odometry/filtered
+cd scrobot_ws && ros2 topic hz /cmd_vel_nav
+cd scrobot_ws && ros2 topic hz /cmd_vel_smoothed

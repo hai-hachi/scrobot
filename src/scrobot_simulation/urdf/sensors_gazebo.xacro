@@ -54,7 +54,7 @@
     <gazebo reference="camera_color_frame">
       <sensor name="d435i_color" type="camera">
         <always_on>true</always_on>
-        <update_rate>30.0</update_rate>
+        <update_rate>15.0</update_rate>
         <visualize>true</visualize>
 
         <topic>/camera/color</topic>
@@ -67,8 +67,8 @@
           <camera_info_topic>/camera/color/camera_info</camera_info_topic>
 
           <image>
-            <width>1920</width>
-            <height>1080</height>
+            <width>960</width>
+            <height>540</height>
             <format>R8G8B8</format>
           </image>
 
@@ -90,7 +90,7 @@
     <gazebo reference="camera_depth_frame">
       <sensor name="d435i_depth" type="depth_camera">
         <always_on>true</always_on>
-        <update_rate>30.0</update_rate>
+        <update_rate>15.0</update_rate>
         <visualize>true</visualize>
 
         <topic>/camera/depth</topic>

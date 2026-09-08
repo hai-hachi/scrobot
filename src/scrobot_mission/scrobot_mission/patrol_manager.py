@@ -149,15 +149,30 @@ class PatrolManager(Node):
         self.active_navigation_request = None
         self.navigation_retry_count = 0
 
-        state_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        event_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.VOLATILE)
+        state_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        
+        current_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
+        event_qos = QoSProfile(
+            depth=5,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+        )
 
         self.patrol_points_sub = self.create_subscription(PoseArray, '/mission/patrol_points', self.patrol_points_callback, state_qos)
         self.odom_sub = self.create_subscription(Odometry, self.odom_topic, self.odom_callback, 20)
-        self.active_tags_sub = self.create_subscription(Int32MultiArray, self.active_tags_topic, self.active_tags_callback, event_qos)
+        self.active_tags_sub = self.create_subscription(Int32MultiArray, self.active_tags_topic, self.active_tags_callback, current_qos)
 
         # Temporary until shuttle perception and pickup feedback are connected.
-        self.target_detected_sub = self.create_subscription(PoseStamped, '/mission/test/target_detected', self.target_detected_callback, event_qos)
+        self.target_detected_sub = self.create_subscription(PoseStamped, '/mission/test/target_detected', self.target_detected_callback, current_qos)
         self.target_collected_sub = self.create_subscription(Bool, '/mission/test/target_collected', self.target_collected_callback, event_qos)
 
         self.state_pub = self.create_publisher(String, '/mission/state', state_qos)

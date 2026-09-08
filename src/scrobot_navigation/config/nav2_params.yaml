@@ -221,7 +221,7 @@ local_costmap:
         footprint_clearing_enabled: true
         observation_sources: depth_points
         depth_points:
-          topic: /camera/depth/points
+          topic: /camera/camera/depth/points
           data_type: PointCloud2
 
           # Use frame_id from PointCloud2 message.
@@ -303,7 +303,7 @@ global_costmap:
         enabled: true
         observation_sources: depth_points
         depth_points:
-          topic: /camera/depth/points
+          topic: /camera/camera/depth/points
           data_type: PointCloud2
           sensor_frame: ""
           marking: true

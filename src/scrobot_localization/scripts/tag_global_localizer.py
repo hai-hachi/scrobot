@@ -11,8 +11,10 @@ from nav_msgs.msg import Odometry
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.task import Future
 from rclpy.time import Time
 from scrobot_interfaces.action import Relocalize
 from std_msgs.msg import Int32MultiArray
@@ -106,7 +108,7 @@ class TagGlobalLocalizer(Node):
         self.declare_parameter('stationary_linear_threshold', 0.02)
         self.declare_parameter('stationary_angular_threshold', 0.03)
         self.declare_parameter('stationary_settle_time', 0.40)
-        self.declare_parameter('processing_rate', 100.0)
+        self.declare_parameter('processing_rate', 20.0)
         self.declare_parameter('publish_rate', 30.0)
 
         self.map_frame = str(self.get_parameter('map_frame').value)
@@ -151,7 +153,10 @@ class TagGlobalLocalizer(Node):
         self.tag_map = {}
 
         # This is the transform you experimentally validated in your TF setup.
-        self.T_mount_apriltag = xyz_rpy_to_matrix([0.0, 0.0, 0.0], [-math.pi / 2.0, 0.0, -math.pi / 2.0])
+        self.T_mount_apriltag = xyz_rpy_to_matrix(
+            [0.0, 0.0, 0.0],
+            [-math.pi / 2.0, 0.0, -math.pi / 2.0],
+        )
 
         headings = self.compute_tag_headings(self.inward_angle_deg)
         for tag_id in self.tag_ids:
@@ -181,19 +186,88 @@ class TagGlobalLocalizer(Node):
         self.last_best_distance = float('nan')
         self.last_best_margin = float('nan')
 
-        self.raw_pose_pub = self.create_publisher(PoseStamped, '/global_localization/tag_pose_raw', 10)
-        self.committed_pose_pub = self.create_publisher(PoseStamped, '/global_localization/tag_pose_committed', 10)
-        self.active_tags_pub = self.create_publisher(Int32MultiArray, '/global_localization/active_tags', 10)
+        # Non-blocking action state. The action callback awaits this Future while
+        # the normal ROS timers/subscriptions continue on a single executor thread.
+        self.acquisition_goal_handle = None
+        self.acquisition_future = None
+        self.acquisition_sample_count = 0
+        self.acquisition_deadline = None
+        self.acquisition_last_quality_message = 'waiting for stable samples'
 
-        self.detection_sub = self.create_subscription(AprilTagDetectionArray, self.detections_topic, self.detection_callback, 10, callback_group=self.cb_group)
-        self.odom_sub = self.create_subscription(Odometry, self.odom_topic, self.odom_callback, 20, callback_group=self.cb_group)
-        self.processing_timer = self.create_timer(1.0 / processing_rate, self.process_pending_detection, callback_group=self.cb_group)
-        self.broadcast_timer = self.create_timer(1.0 / publish_rate, self.broadcast_map_to_odom, callback_group=self.cb_group)
+        latest_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+        event_qos = QoSProfile(
+            depth=5,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+        state_qos = QoSProfile(
+            depth=5,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+        )
 
-        self.action_server = ActionServer(self, Relocalize, '/relocalize', execute_callback=self.execute_relocalize, goal_callback=self.goal_callback, cancel_callback=self.cancel_callback, callback_group=self.cb_group)
+        self.raw_pose_pub = self.create_publisher(
+            PoseStamped,
+            '/global_localization/tag_pose_raw',
+            latest_qos,
+        )
+        self.committed_pose_pub = self.create_publisher(
+            PoseStamped,
+            '/global_localization/tag_pose_committed',
+            event_qos,
+        )
+        self.active_tags_pub = self.create_publisher(
+            Int32MultiArray,
+            '/global_localization/active_tags',
+            latest_qos,
+        )
+
+        self.detection_sub = self.create_subscription(
+            AprilTagDetectionArray,
+            self.detections_topic,
+            self.detection_callback,
+            latest_qos,
+            callback_group=self.cb_group,
+        )
+        self.odom_sub = self.create_subscription(
+            Odometry,
+            self.odom_topic,
+            self.odom_callback,
+            state_qos,
+            callback_group=self.cb_group,
+        )
+        self.processing_timer = self.create_timer(
+            1.0 / processing_rate,
+            self.process_pending_detection,
+            callback_group=self.cb_group,
+        )
+        # Full localization work is only needed during an explicit /relocalize action.
+        self.processing_timer.cancel()
+        self.broadcast_timer = self.create_timer(
+            1.0 / publish_rate,
+            self.broadcast_map_to_odom,
+            callback_group=self.cb_group,
+        )
+
+        self.action_server = ActionServer(
+            self,
+            Relocalize,
+            '/relocalize',
+            execute_callback=self.execute_relocalize,
+            goal_callback=self.goal_callback,
+            cancel_callback=self.cancel_callback,
+            callback_group=self.cb_group,
+        )
 
         self.publish_known_tags()
-        self.get_logger().info('Tag global localizer V4 started: map->odom changes only after a successful /relocalize action.')
+        self.get_logger().info(
+            'Tag global localizer V6 started: on-demand localization, non-blocking /relocalize action, '
+            'single-threaded executor, map->odom commits only after successful acquisition.'
+        )
 
     @staticmethod
     def compute_tag_headings(inward_angle_deg):
@@ -206,15 +280,22 @@ class TagGlobalLocalizer(Node):
         for tag_id in self.tag_ids:
             mount_frame = f'{self.mount_frame_prefix}{tag_id}'
             known_tag_frame = f'{self.known_tag_prefix}{tag_id}'
-            transforms.append(make_transform(self.map_frame, mount_frame, self.mount_map[tag_id], now))
-            transforms.append(make_transform(mount_frame, known_tag_frame, self.T_mount_apriltag, now))
+            transforms.append(
+                make_transform(self.map_frame, mount_frame, self.mount_map[tag_id], now)
+            )
+            transforms.append(
+                make_transform(mount_frame, known_tag_frame, self.T_mount_apriltag, now)
+            )
         self.static_tf_broadcaster.sendTransform(transforms)
 
     def odom_callback(self, msg):
         vx = float(msg.twist.twist.linear.x)
         vy = float(msg.twist.twist.linear.y)
         wz = float(msg.twist.twist.angular.z)
-        stationary = math.hypot(vx, vy) <= self.stationary_linear_threshold and abs(wz) <= self.stationary_angular_threshold
+        stationary = (
+            math.hypot(vx, vy) <= self.stationary_linear_threshold
+            and abs(wz) <= self.stationary_angular_threshold
+        )
         if stationary:
             if self.stationary_since is None:
                 self.stationary_since = time.monotonic()
@@ -222,10 +303,45 @@ class TagGlobalLocalizer(Node):
             self.stationary_since = None
 
     def is_stationary(self):
-        return self.stationary_since is not None and time.monotonic() - self.stationary_since >= self.stationary_settle_time
+        return (
+            self.stationary_since is not None
+            and time.monotonic() - self.stationary_since >= self.stationary_settle_time
+        )
 
     def detection_callback(self, msg):
-        if msg.detections:
+        if not msg.detections:
+            return
+
+        # Cheap visibility path used while driving. Mission logic only needs to
+        # know which valid tags are visible; it does not need a full map pose.
+        visible_ids = []
+        best_margin = float('nan')
+        for detection in msg.detections:
+            tag_id = int(detection.id)
+            if tag_id not in self.tag_ids or detection.hamming != 0:
+                continue
+
+            margin = float(detection.decision_margin)
+            if margin < self.min_decision_margin:
+                continue
+
+            visible_ids.append(tag_id)
+            if not math.isfinite(best_margin) or margin > best_margin:
+                best_margin = margin
+
+        if visible_ids:
+            active_tags = Int32MultiArray()
+            active_tags.data = visible_ids
+            self.active_tags_pub.publish(active_tags)
+
+        with self.lock:
+            self.last_visible_tag_ids = visible_ids
+            self.last_best_margin = best_margin
+            acquisition_active = self.acquisition_active
+
+        # Expensive TF lookups, matrix inversions and fusion are only performed
+        # when an explicit relocalization acquisition is active.
+        if acquisition_active:
             self.pending_detection = msg
 
     def compute_view_angle(self, T_camera_tag):
@@ -234,11 +350,26 @@ class TagGlobalLocalizer(Node):
         if norm < 1e-6:
             return math.pi
         z_axis = T_camera_tag[:3, 2]
-        to_camera = [-float(p[0]) / norm, -float(p[1]) / norm, -float(p[2]) / norm]
-        dot = clamp(float(z_axis[0]) * to_camera[0] + float(z_axis[1]) * to_camera[1] + float(z_axis[2]) * to_camera[2], -1.0, 1.0)
+        to_camera = [
+            -float(p[0]) / norm,
+            -float(p[1]) / norm,
+            -float(p[2]) / norm,
+        ]
+        dot = clamp(
+            float(z_axis[0]) * to_camera[0]
+            + float(z_axis[1]) * to_camera[1]
+            + float(z_axis[2]) * to_camera[2],
+            -1.0,
+            1.0,
+        )
         return math.acos(dot)
 
     def process_pending_detection(self):
+        # This replaces the old sleeping loop inside execute_relocalize().
+        # It handles feedback, cancellation, completion and timeout even when
+        # there is no new AprilTag frame to process.
+        self.update_acquisition_action()
+
         if self.pending_detection is None:
             return
 
@@ -246,14 +377,34 @@ class TagGlobalLocalizer(Node):
         stamp = Time.from_msg(msg.header.stamp)
         camera_frame = msg.header.frame_id
 
-        if not self.tf_buffer.can_transform(camera_frame, self.base_frame, stamp, timeout=Duration(seconds=0.0)):
+        if not self.tf_buffer.can_transform(
+            camera_frame,
+            self.base_frame,
+            stamp,
+            timeout=Duration(seconds=0.0),
+        ):
             return
-        if not self.tf_buffer.can_transform(self.odom_frame, self.base_frame, stamp, timeout=Duration(seconds=0.0)):
+        if not self.tf_buffer.can_transform(
+            self.odom_frame,
+            self.base_frame,
+            stamp,
+            timeout=Duration(seconds=0.0),
+        ):
             return
 
         try:
-            tf_camera_base = self.tf_buffer.lookup_transform(camera_frame, self.base_frame, stamp, timeout=Duration(seconds=0.0))
-            tf_odom_base = self.tf_buffer.lookup_transform(self.odom_frame, self.base_frame, stamp, timeout=Duration(seconds=0.0))
+            tf_camera_base = self.tf_buffer.lookup_transform(
+                camera_frame,
+                self.base_frame,
+                stamp,
+                timeout=Duration(seconds=0.0),
+            )
+            tf_odom_base = self.tf_buffer.lookup_transform(
+                self.odom_frame,
+                self.base_frame,
+                stamp,
+                timeout=Duration(seconds=0.0),
+            )
         except TransformException:
             return
 
@@ -279,11 +430,21 @@ class TagGlobalLocalizer(Node):
                 continue
 
             observed_tag_frame = self.observed_tag_prefix + str(tag_id)
-            if not self.tf_buffer.can_transform(camera_frame, observed_tag_frame, stamp, timeout=Duration(seconds=0.0)):
+            if not self.tf_buffer.can_transform(
+                camera_frame,
+                observed_tag_frame,
+                stamp,
+                timeout=Duration(seconds=0.0),
+            ):
                 continue
 
             try:
-                tf_camera_tag = self.tf_buffer.lookup_transform(camera_frame, observed_tag_frame, stamp, timeout=Duration(seconds=0.0))
+                tf_camera_tag = self.tf_buffer.lookup_transform(
+                    camera_frame,
+                    observed_tag_frame,
+                    stamp,
+                    timeout=Duration(seconds=0.0),
+                )
             except TransformException:
                 continue
 
@@ -297,7 +458,10 @@ class TagGlobalLocalizer(Node):
             visible_ids.append(tag_id)
 
             if acquisition_active:
-                if distance > self.relocalization_max_distance or view_angle > self.max_view_angle:
+                if (
+                    distance > self.relocalization_max_distance
+                    or view_angle > self.max_view_angle
+                ):
                     continue
 
             T_map_camera = self.tag_map[tag_id] @ inverse_matrix(T_camera_tag)
@@ -306,10 +470,23 @@ class TagGlobalLocalizer(Node):
             translation, quaternion = matrix_to_transform(T_map_odom)
             _, _, yaw = euler_from_quaternion(quaternion)
 
-            effective_margin = max(margin - self.min_decision_margin + 1.0, 1.0)
+            effective_margin = max(
+                margin - self.min_decision_margin + 1.0,
+                1.0,
+            )
             effective_distance = max(distance, 0.25)
             weight = effective_margin / (effective_distance * effective_distance)
-            candidates.append({'id': tag_id, 'x': float(translation[0]), 'y': float(translation[1]), 'yaw': wrap_angle(yaw), 'distance': distance, 'margin': margin, 'weight': weight})
+            candidates.append(
+                {
+                    'id': tag_id,
+                    'x': float(translation[0]),
+                    'y': float(translation[1]),
+                    'yaw': wrap_angle(yaw),
+                    'distance': distance,
+                    'margin': margin,
+                    'weight': weight,
+                }
+            )
 
         self.pending_detection = None
 
@@ -321,9 +498,17 @@ class TagGlobalLocalizer(Node):
         reference = max(candidates, key=lambda c: c['weight'])
         accepted = []
         for candidate in candidates:
-            position_disagreement = math.hypot(candidate['x'] - reference['x'], candidate['y'] - reference['y'])
-            yaw_disagreement = abs(angle_difference(candidate['yaw'], reference['yaw']))
-            if position_disagreement <= self.max_position_disagreement and yaw_disagreement <= self.max_yaw_disagreement:
+            position_disagreement = math.hypot(
+                candidate['x'] - reference['x'],
+                candidate['y'] - reference['y'],
+            )
+            yaw_disagreement = abs(
+                angle_difference(candidate['yaw'], reference['yaw'])
+            )
+            if (
+                position_disagreement <= self.max_position_disagreement
+                and yaw_disagreement <= self.max_yaw_disagreement
+            ):
                 accepted.append(candidate)
 
         if not accepted:
@@ -332,15 +517,14 @@ class TagGlobalLocalizer(Node):
         weight_sum = sum(c['weight'] for c in accepted)
         fused_x = sum(c['weight'] * c['x'] for c in accepted) / weight_sum
         fused_y = sum(c['weight'] * c['y'] for c in accepted) / weight_sum
-        fused_yaw = math.atan2(sum(c['weight'] * math.sin(c['yaw']) for c in accepted), sum(c['weight'] * math.cos(c['yaw']) for c in accepted))
+        fused_yaw = math.atan2(
+            sum(c['weight'] * math.sin(c['yaw']) for c in accepted),
+            sum(c['weight'] * math.cos(c['yaw']) for c in accepted),
+        )
         raw_state = [fused_x, fused_y, fused_yaw]
 
         raw_map_to_base = self.state_to_matrix(raw_state) @ T_odom_base
         self.publish_pose(self.raw_pose_pub, raw_map_to_base, stamp)
-
-        active_tags = Int32MultiArray()
-        active_tags.data = [c['id'] for c in accepted]
-        self.active_tags_pub.publish(active_tags)
 
         best = max(accepted, key=lambda c: c['weight'])
         with self.lock:
@@ -348,9 +532,17 @@ class TagGlobalLocalizer(Node):
             self.last_best_distance = float(best['distance'])
             self.last_best_margin = float(best['margin'])
             if self.acquisition_active and self.is_stationary():
-                self.acquisition_samples.append({'state': raw_state, 'tag_ids': [c['id'] for c in accepted]})
+                self.acquisition_samples.append(
+                    {
+                        'state': raw_state,
+                        'tag_ids': [c['id'] for c in accepted],
+                    }
+                )
                 if len(self.acquisition_samples) > 100:
                     self.acquisition_samples = self.acquisition_samples[-100:]
+
+        # Allow a successful final sample to complete the action immediately.
+        self.update_acquisition_action()
 
     def goal_callback(self, goal_request):
         with self.lock:
@@ -363,137 +555,281 @@ class TagGlobalLocalizer(Node):
     def cancel_callback(self, goal_handle):
         return CancelResponse.ACCEPT
 
-    def execute_relocalize(self, goal_handle):
-        sample_count = int(goal_handle.request.sample_count) if goal_handle.request.sample_count > 0 else self.default_sample_count
-        timeout = float(goal_handle.request.timeout_sec) if goal_handle.request.timeout_sec > 0.0 else self.default_timeout
+    async def execute_relocalize(self, goal_handle):
+        sample_count = (
+            int(goal_handle.request.sample_count)
+            if goal_handle.request.sample_count > 0
+            else self.default_sample_count
+        )
+        timeout = (
+            float(goal_handle.request.timeout_sec)
+            if goal_handle.request.timeout_sec > 0.0
+            else self.default_timeout
+        )
+
+        future = Future()
 
         with self.lock:
             self.acquisition_active = True
             self.acquisition_preferred_tag = int(goal_handle.request.preferred_tag_id)
             self.acquisition_samples = []
 
-        self.get_logger().info(f'Relocalization acquisition started: tag={self.acquisition_preferred_tag}, samples={sample_count}, timeout={timeout:.1f}s')
-        start = time.monotonic()
-        last_quality_message = 'waiting for stable samples'
+            self.acquisition_goal_handle = goal_handle
+            self.acquisition_future = future
+            self.acquisition_sample_count = sample_count
+            self.acquisition_deadline = time.monotonic() + timeout
+            self.acquisition_last_quality_message = 'waiting for stable samples'
 
-        while rclpy.ok():
-            if goal_handle.is_cancel_requested:
-                self.finish_acquisition()
-                goal_handle.canceled()
-                result = Relocalize.Result()
-                result.success = False
-                result.message = 'Relocalization canceled.'
-                return result
+        self.pending_detection = None
+        self.processing_timer.reset()
 
-            with self.lock:
-                samples = list(self.acquisition_samples)
-                visible_ids = list(self.last_visible_tag_ids)
-                best_distance = self.last_best_distance
-                best_margin = self.last_best_margin
+        self.get_logger().info(
+            f'Relocalization acquisition started: '
+            f'tag={self.acquisition_preferred_tag}, '
+            f'samples={sample_count}, timeout={timeout:.1f}s'
+        )
 
-            feedback = Relocalize.Feedback()
-            feedback.samples_collected = len(samples)
-            feedback.stationary = self.is_stationary()
-            feedback.visible_tag_ids = visible_ids
-            feedback.best_tag_distance = float(best_distance if math.isfinite(best_distance) else -1.0)
-            feedback.best_decision_margin = float(best_margin if math.isfinite(best_margin) else -1.0)
-            goal_handle.publish_feedback(feedback)
-
-            if len(samples) >= sample_count:
-                quality = self.evaluate_batch(samples[-sample_count:])
-                last_quality_message = quality['message']
-                if quality['success']:
-                    old_state = self.map_to_odom_state
-                    new_state = quality['state']
-                    self.map_to_odom_state = new_state
-                    delta = [0.0, 0.0, 0.0] if old_state is None else [new_state[0] - old_state[0], new_state[1] - old_state[1], angle_difference(new_state[2], old_state[2])]
-
-                    try:
-                        tf_odom_base = self.tf_buffer.lookup_transform(self.odom_frame, self.base_frame, Time(), timeout=Duration(seconds=0.1))
-                        committed_map_to_base = self.state_to_matrix(new_state) @ transform_to_matrix(tf_odom_base.transform)
-                        self.publish_pose(self.committed_pose_pub, committed_map_to_base, self.get_clock().now())
-                    except TransformException:
-                        pass
-
-                    self.finish_acquisition()
-                    goal_handle.succeed()
-                    result = Relocalize.Result()
-                    result.success = True
-                    result.used_tag_ids = quality['used_tag_ids']
-                    result.map_to_odom_x = float(new_state[0])
-                    result.map_to_odom_y = float(new_state[1])
-                    result.map_to_odom_yaw = float(new_state[2])
-                    result.delta_x = float(delta[0])
-                    result.delta_y = float(delta[1])
-                    result.delta_yaw = float(delta[2])
-                    result.std_x = float(quality['std_x'])
-                    result.std_y = float(quality['std_y'])
-                    result.std_yaw = float(quality['std_yaw'])
-                    result.message = quality['message']
-                    self.get_logger().info(f'Relocalization committed: map->odom=({new_state[0]:.3f}, {new_state[1]:.3f}, {math.degrees(new_state[2]):.2f} deg)')
-                    return result
-
-            if time.monotonic() - start >= timeout:
-                self.finish_acquisition()
-                goal_handle.abort()
-                result = Relocalize.Result()
-                result.success = False
-                result.message = f'Relocalization timed out: {last_quality_message}.'
-                return result
-
-            time.sleep(0.05)
-
-        self.finish_acquisition()
-        result = Relocalize.Result()
-        result.success = False
-        result.message = 'ROS shutdown.'
+        result = await future
         return result
 
-    def finish_acquisition(self):
+    def update_acquisition_action(self):
         with self.lock:
+            if not self.acquisition_active:
+                return
+
+            goal_handle = self.acquisition_goal_handle
+            future = self.acquisition_future
+            sample_count = self.acquisition_sample_count
+            deadline = self.acquisition_deadline
+            last_quality_message = self.acquisition_last_quality_message
+
+            samples = list(self.acquisition_samples)
+            visible_ids = list(self.last_visible_tag_ids)
+            best_distance = self.last_best_distance
+            best_margin = self.last_best_margin
+
+        if goal_handle is None or future is None:
+            return
+
+        if goal_handle.is_cancel_requested:
+            result = Relocalize.Result()
+            result.success = False
+            result.message = 'Relocalization canceled.'
+            self.complete_acquisition(result, canceled=True)
+            return
+
+        feedback = Relocalize.Feedback()
+        feedback.samples_collected = len(samples)
+        feedback.stationary = self.is_stationary()
+        feedback.visible_tag_ids = visible_ids
+        feedback.best_tag_distance = float(
+            best_distance if math.isfinite(best_distance) else -1.0
+        )
+        feedback.best_decision_margin = float(
+            best_margin if math.isfinite(best_margin) else -1.0
+        )
+        goal_handle.publish_feedback(feedback)
+
+        if len(samples) >= sample_count:
+            quality = self.evaluate_batch(samples[-sample_count:])
+            last_quality_message = quality['message']
+            with self.lock:
+                self.acquisition_last_quality_message = last_quality_message
+
+            if quality['success']:
+                old_state = self.map_to_odom_state
+                new_state = quality['state']
+                self.map_to_odom_state = new_state
+
+                delta = (
+                    [0.0, 0.0, 0.0]
+                    if old_state is None
+                    else [
+                        new_state[0] - old_state[0],
+                        new_state[1] - old_state[1],
+                        angle_difference(new_state[2], old_state[2]),
+                    ]
+                )
+
+                try:
+                    tf_odom_base = self.tf_buffer.lookup_transform(
+                        self.odom_frame,
+                        self.base_frame,
+                        Time(),
+                        timeout=Duration(seconds=0.1),
+                    )
+                    committed_map_to_base = (
+                        self.state_to_matrix(new_state)
+                        @ transform_to_matrix(tf_odom_base.transform)
+                    )
+                    self.publish_pose(
+                        self.committed_pose_pub,
+                        committed_map_to_base,
+                        self.get_clock().now(),
+                    )
+                except TransformException:
+                    pass
+
+                result = Relocalize.Result()
+                result.success = True
+                result.used_tag_ids = quality['used_tag_ids']
+                result.map_to_odom_x = float(new_state[0])
+                result.map_to_odom_y = float(new_state[1])
+                result.map_to_odom_yaw = float(new_state[2])
+                result.delta_x = float(delta[0])
+                result.delta_y = float(delta[1])
+                result.delta_yaw = float(delta[2])
+                result.std_x = float(quality['std_x'])
+                result.std_y = float(quality['std_y'])
+                result.std_yaw = float(quality['std_yaw'])
+                result.message = quality['message']
+
+                self.get_logger().info(
+                    f'Relocalization committed: '
+                    f'map->odom=({new_state[0]:.3f}, {new_state[1]:.3f}, '
+                    f'{math.degrees(new_state[2]):.2f} deg)'
+                )
+
+                self.complete_acquisition(result, succeeded=True)
+                return
+
+        if deadline is not None and time.monotonic() >= deadline:
+            result = Relocalize.Result()
+            result.success = False
+            result.message = (
+                f'Relocalization timed out: {last_quality_message}.'
+            )
+            self.complete_acquisition(result)
+
+    def complete_acquisition(
+        self,
+        result,
+        succeeded=False,
+        canceled=False,
+    ):
+        with self.lock:
+            if not self.acquisition_active:
+                return
+
+            goal_handle = self.acquisition_goal_handle
+            future = self.acquisition_future
+
             self.acquisition_active = False
             self.acquisition_preferred_tag = -1
             self.acquisition_samples = []
+            self.acquisition_goal_handle = None
+            self.acquisition_future = None
+            self.acquisition_sample_count = 0
+            self.acquisition_deadline = None
+            self.acquisition_last_quality_message = 'waiting for stable samples'
+
+        self.processing_timer.cancel()
+        self.pending_detection = None
+
+        if goal_handle is not None:
+            if canceled:
+                goal_handle.canceled()
+            elif succeeded:
+                goal_handle.succeed()
+            else:
+                goal_handle.abort()
+
+        if future is not None and not future.done():
+            future.set_result(result)
 
     def evaluate_batch(self, batch):
         states = [sample['state'] for sample in batch]
         median_x = sorted(s[0] for s in states)[len(states) // 2]
         median_y = sorted(s[1] for s in states)[len(states) // 2]
-        initial_yaw = math.atan2(sum(math.sin(s[2]) for s in states), sum(math.cos(s[2]) for s in states))
+        initial_yaw = math.atan2(
+            sum(math.sin(s[2]) for s in states),
+            sum(math.cos(s[2]) for s in states),
+        )
 
         kept = []
         for sample in batch:
             state = sample['state']
-            if math.hypot(state[0] - median_x, state[1] - median_y) <= self.batch_outlier_position and abs(angle_difference(state[2], initial_yaw)) <= self.batch_outlier_yaw:
+            if (
+                math.hypot(
+                    state[0] - median_x,
+                    state[1] - median_y,
+                )
+                <= self.batch_outlier_position
+                and abs(angle_difference(state[2], initial_yaw))
+                <= self.batch_outlier_yaw
+            ):
                 kept.append(sample)
 
-        minimum_keep = max(3, math.ceil(len(batch) * self.minimum_batch_keep_ratio))
+        minimum_keep = max(
+            3,
+            math.ceil(len(batch) * self.minimum_batch_keep_ratio),
+        )
         if len(kept) < minimum_keep:
-            return {'success': False, 'message': f'only {len(kept)}/{len(batch)} samples survived outlier rejection'}
+            return {
+                'success': False,
+                'message': (
+                    f'only {len(kept)}/{len(batch)} samples survived '
+                    f'outlier rejection'
+                ),
+            }
 
         xs = [s['state'][0] for s in kept]
         ys = [s['state'][1] for s in kept]
         yaws = [s['state'][2] for s in kept]
         mean_x = sum(xs) / len(xs)
         mean_y = sum(ys) / len(ys)
-        mean_yaw = math.atan2(sum(math.sin(y) for y in yaws), sum(math.cos(y) for y in yaws))
+        mean_yaw = math.atan2(
+            sum(math.sin(y) for y in yaws),
+            sum(math.cos(y) for y in yaws),
+        )
         std_x = math.sqrt(sum((x - mean_x) ** 2 for x in xs) / len(xs))
         std_y = math.sqrt(sum((y - mean_y) ** 2 for y in ys) / len(ys))
-        std_yaw = math.sqrt(sum(angle_difference(y, mean_yaw) ** 2 for y in yaws) / len(yaws))
+        std_yaw = math.sqrt(
+            sum(angle_difference(y, mean_yaw) ** 2 for y in yaws) / len(yaws)
+        )
 
         if max(std_x, std_y) > self.max_batch_position_std:
-            return {'success': False, 'message': f'position batch std too high: sx={std_x:.3f}, sy={std_y:.3f}'}
+            return {
+                'success': False,
+                'message': (
+                    f'position batch std too high: '
+                    f'sx={std_x:.3f}, sy={std_y:.3f}'
+                ),
+            }
         if std_yaw > self.max_batch_yaw_std:
-            return {'success': False, 'message': f'yaw batch std too high: {math.degrees(std_yaw):.2f} deg'}
+            return {
+                'success': False,
+                'message': (
+                    f'yaw batch std too high: '
+                    f'{math.degrees(std_yaw):.2f} deg'
+                ),
+            }
 
-        used_tag_ids = sorted(set(tag_id for sample in kept for tag_id in sample['tag_ids']))
-        return {'success': True, 'state': [mean_x, mean_y, mean_yaw], 'std_x': std_x, 'std_y': std_y, 'std_yaw': std_yaw, 'used_tag_ids': used_tag_ids, 'message': f'accepted {len(kept)}/{len(batch)} samples'}
+        used_tag_ids = sorted(
+            set(
+                tag_id
+                for sample in kept
+                for tag_id in sample['tag_ids']
+            )
+        )
+        return {
+            'success': True,
+            'state': [mean_x, mean_y, mean_yaw],
+            'std_x': std_x,
+            'std_y': std_y,
+            'std_yaw': std_yaw,
+            'used_tag_ids': used_tag_ids,
+            'message': f'accepted {len(kept)}/{len(batch)} samples',
+        }
 
     @staticmethod
     def state_to_matrix(state):
         x, y, yaw = state
         quaternion = quaternion_from_euler(0.0, 0.0, yaw)
-        return concatenate_matrices(translation_matrix([x, y, 0.0]), quaternion_matrix(quaternion))
+        return concatenate_matrices(
+            translation_matrix([x, y, 0.0]),
+            quaternion_matrix(quaternion),
+        )
 
     def publish_pose(self, publisher, matrix, stamp):
         translation, quaternion = matrix_to_transform(matrix)
@@ -531,7 +867,7 @@ class TagGlobalLocalizer(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = TagGlobalLocalizer()
-    executor = MultiThreadedExecutor(num_threads=4)
+    executor = SingleThreadedExecutor()
     executor.add_node(node)
     try:
         executor.spin()

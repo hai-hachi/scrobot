@@ -35,7 +35,6 @@ collision_monitor:
     # after a stop is triggered.
     stop_pub_timeout: 2.0
 
-
     # -------------------------------------------------
     # Safety zones
     # -------------------------------------------------
@@ -44,25 +43,18 @@ collision_monitor:
       - stop_zone
       - slowdown_zone
 
-
     # =================================================
     # STOP ZONE
     # =================================================
 
     stop_zone:
       type: polygon
-
       points: "[[0.55, 0.30], [0.55, -0.30], [0.35, -0.30], [0.35, 0.30]]"
-
       action_type: stop
-
       min_points: 5
-
       visualize: true
       polygon_pub_topic: /collision_monitor/stop_zone
-
       enabled: true
-
 
     # =================================================
     # SLOWDOWN ZONE
@@ -70,21 +62,13 @@ collision_monitor:
 
     slowdown_zone:
       type: polygon
-
       points: "[[0.75, 0.60], [0.75, -0.60], [0.35, -0.60], [0.35, 0.60]]"
-
       action_type: slowdown
-
       min_points: 5
-
-      # Output speed = input speed × 0.3
       slowdown_ratio: 0.3
-
       visualize: true
       polygon_pub_topic: /collision_monitor/slowdown_zone
-
       enabled: true
-
 
     # -------------------------------------------------
     # Observation sources
@@ -93,21 +77,15 @@ collision_monitor:
     observation_sources:
       - depth_pointcloud
 
-
     depth_pointcloud:
       type: pointcloud
-
       topic: /camera/camera/depth/points
-
-      # Ignore floor / shuttlecock-level points.
       min_height: 0.08
-
-      # Detect legs, people, chairs, boxes, etc.
       max_height: 1.50
-
-      # Reject very-close invalid/noisy depth readings.
       min_range: 0.30
 
-      source_timeout: 2.0
+      # 15 Hz cloud = ~67 ms/frame. 0.3 s tolerates several missed
+      # samples but does not allow a multi-second stale safety cloud.
+      source_timeout: 0.3
 
       enabled: true

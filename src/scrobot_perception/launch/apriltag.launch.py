@@ -101,7 +101,7 @@ def generate_launch_description():
             default_value='true'
         ),
 
-        rectify_color,
+        # rectify_color,
 
         apriltag,
 

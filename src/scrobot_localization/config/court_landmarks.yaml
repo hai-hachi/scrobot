@@ -71,7 +71,7 @@ tag_global_localizer:
     stationary_angular_threshold: 0.03
     stationary_settle_time: 0.40
 
-    processing_rate: 100.0
+    processing_rate: 20.0
     publish_rate: 30.0
 
 tag_approach_controller:

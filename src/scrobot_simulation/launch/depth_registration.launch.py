@@ -23,25 +23,25 @@ def generate_launch_description():
     # These are fully resolved ROS topic names after remapping.
     # ==========================================================
 
-    register_qos = {
-        (
-            'qos_overrides.'
-            '/camera/camera/depth/image_rect_raw.'
-            'subscription.reliability'
-        ): 'best_effort',
+    # register_qos = {
+    #     (
+    #         'qos_overrides.'
+    #         '/camera/camera/depth/image_rect_raw.'
+    #         'subscription.reliability'
+    #     ): 'best_effort',
 
-        (
-            'qos_overrides.'
-            '/camera/camera/depth/camera_info.'
-            'subscription.reliability'
-        ): 'best_effort',
+    #     (
+    #         'qos_overrides.'
+    #         '/camera/camera/depth/camera_info.'
+    #         'subscription.reliability'
+    #     ): 'best_effort',
 
-        (
-            'qos_overrides.'
-            '/camera/camera/color/camera_info.'
-            'subscription.reliability'
-        ): 'best_effort',
-    }
+    #     (
+    #         'qos_overrides.'
+    #         '/camera/camera/color/camera_info.'
+    #         'subscription.reliability'
+    #     ): 'best_effort',
+    # }
 
     pointcloud_qos = {
         (
@@ -55,6 +55,24 @@ def generate_launch_description():
             '/camera/camera/depth/camera_info.'
             'subscription.reliability'
         ): 'best_effort',
+
+        (
+            'qos_overrides.'
+            '/camera/camera/depth/points.'
+            'publisher.reliability'
+        ): 'best_effort',
+
+        (
+            'qos_overrides.'
+            '/camera/camera/depth/points.'
+            'publisher.history'
+        ): 'keep_last',
+
+        (
+            'qos_overrides.'
+            '/camera/camera/depth/points.'
+            'publisher.depth'
+        ): 1,
     }
 
     realsense_processing = ComposableNodeContainer(
@@ -83,42 +101,42 @@ def generate_launch_description():
             #   /camera/camera/aligned_depth_to_color/image_raw
             #   /camera/camera/aligned_depth_to_color/camera_info
             #
-            ComposableNode(
-                package='depth_image_proc',
-                plugin='depth_image_proc::RegisterNode',
-                name='register_depth_to_color',
+            # ComposableNode(
+            #     package='depth_image_proc',
+            #     plugin='depth_image_proc::RegisterNode',
+            #     name='register_depth_to_color',
 
-                parameters=[
-                    {
-                        'use_sim_time': use_sim_time,
-                        'depth_image_transport': 'raw',
-                    },
-                    register_qos,
-                ],
+            #     parameters=[
+            #         {
+            #             'use_sim_time': use_sim_time,
+            #             'depth_image_transport': 'raw',
+            #         },
+            #         register_qos,
+            #     ],
 
-                remappings=[
-                    (
-                        'depth/image_rect',
-                        '/camera/camera/depth/image_rect_raw',
-                    ),
-                    (
-                        'depth/camera_info',
-                        '/camera/camera/depth/camera_info',
-                    ),
-                    (
-                        'rgb/camera_info',
-                        '/camera/camera/color/camera_info',
-                    ),
-                    (
-                        'depth_registered/image_rect',
-                        '/camera/camera/aligned_depth_to_color/image_raw',
-                    ),
-                    (
-                        'depth_registered/camera_info',
-                        '/camera/camera/aligned_depth_to_color/camera_info',
-                    ),
-                ],
-            ),
+            #     remappings=[
+            #         (
+            #             'depth/image_rect',
+            #             '/camera/camera/depth/image_rect_raw',
+            #         ),
+            #         (
+            #             'depth/camera_info',
+            #             '/camera/camera/depth/camera_info',
+            #         ),
+            #         (
+            #             'rgb/camera_info',
+            #             '/camera/camera/color/camera_info',
+            #         ),
+            #         (
+            #             'depth_registered/image_rect',
+            #             '/camera/camera/aligned_depth_to_color/image_raw',
+            #         ),
+            #         (
+            #             'depth_registered/camera_info',
+            #             '/camera/camera/aligned_depth_to_color/camera_info',
+            #         ),
+            #     ],
+            # ),
 
             # ==================================================
             # Raw depth -> XYZ PointCloud2
@@ -139,7 +157,7 @@ def generate_launch_description():
                     {
                         'use_sim_time': use_sim_time,
                         'depth_image_transport': 'raw',
-                        'queue_size': 5,
+                        'queue_size': 1,
                     },
                     pointcloud_qos,
                 ],

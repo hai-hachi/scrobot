@@ -107,6 +107,35 @@ def generate_launch_description():
         ],
     )
 
+    image_bridge = Node(
+        package='ros_gz_image',
+        executable='image_bridge',
+        name='ros_gz_image',
+        output='screen',
+
+        arguments=[
+            '/camera/color',
+            '/camera/depth',
+        ],
+
+        parameters=[
+            {
+                'qos': 'sensor_data',
+            }
+        ],
+
+        remappings=[
+            (
+                '/camera/color',
+                '/camera/camera/color/image_raw',
+            ),
+            (
+                '/camera/depth',
+                '/camera/camera/depth/image_rect_raw',
+            ),
+        ],
+    )
+
     # ==========================================================
     # Gazebo
     # ==========================================================
@@ -153,4 +182,5 @@ def generate_launch_description():
 
         gazebo,
         bridge,
+        image_bridge,
     ])
