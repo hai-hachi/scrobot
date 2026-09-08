@@ -102,6 +102,21 @@
 # and CameraInfo so it is correctly expressed in
 # camera_depth_optical_frame.
 
+# ============================================================
+# TEST: Gazebo native depth point cloud
+# ============================================================
+
+- ros_topic_name: "/camera/camera/depth/points_gz"
+  gz_topic_name: "/camera/depth/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
+  qos_profile: SENSOR_DATA
+  publisher_queue: 1
+
+  frame_id: "camera_depth_optical_frame"
+
 # Gazebo world ground truth for evaluation only.
 - ros_topic_name: /evaluation/ground_truth_tf
   gz_topic_name: /world/badminton_court/dynamic_pose/info

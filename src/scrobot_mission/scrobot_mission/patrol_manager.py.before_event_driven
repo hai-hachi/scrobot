@@ -115,6 +115,7 @@ class PatrolManager(Node):
         self.patrol_points = []
         self.current_patrol_index = 0
         self.current_target = None
+        self.local_look_start_time = None
 
         self.initial_localization_complete = False
         self.nav2_ready = False
@@ -184,18 +185,8 @@ class PatrolManager(Node):
         self.relocalize_client = ActionClient(self, Relocalize, '/relocalize')
         self.nav2_lifecycle_client = self.create_client(ManageLifecycleNodes, self.nav2_lifecycle_service)
 
-        # Event-driven timers: canceled whenever there is nothing to do.
-        self.local_look_timer = self.create_timer(
-            self.local_fov_wait_time,
-            self.finish_local_look,
-        )
-        self.local_look_timer.cancel()
-
-        self.action_retry_timer = self.create_timer(
-            self.action_retry_period,
-            self.process_pending_actions,
-        )
-        self.action_retry_timer.cancel()
+        self.update_timer = self.create_timer(0.05, self.update)
+        self.action_retry_timer = self.create_timer(self.action_retry_period, self.process_pending_actions)
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -299,7 +290,7 @@ class PatrolManager(Node):
         self.nav2_startup_begin_time = time.monotonic()
         self.set_state(MissionState.STARTING_NAV2)
         self.get_logger().info('Initial map->odom is ready. Starting Nav2 lifecycle.')
-        self.process_pending_actions()
+        self.process_nav2_startup()
 
     def process_nav2_startup(self):
         if not self.nav2_startup_pending:
@@ -371,22 +362,6 @@ class PatrolManager(Node):
     # Pending action dispatch
     # ============================================================
 
-    def has_pending_work(self):
-        return (
-            self.nav2_startup_pending
-            or self.pending_navigation is not None
-            or self.pending_spin
-            or self.pending_approach is not None
-            or self.pending_relocalize is not None
-        )
-
-    def update_action_retry_timer(self):
-        if self.has_pending_work():
-            # reset() also restarts a canceled timer.
-            self.action_retry_timer.reset()
-        else:
-            self.action_retry_timer.cancel()
-
     def process_pending_actions(self):
         self.process_nav2_startup()
 
@@ -414,8 +389,6 @@ class PatrolManager(Node):
                 context, preferred_tag = self.pending_relocalize
                 self.pending_relocalize = None
                 self.send_relocalize_goal_now(context, preferred_tag)
-
-        self.update_action_retry_timer()
 
     # ============================================================
     # Nav2 NavigateToPose
@@ -480,7 +453,6 @@ class PatrolManager(Node):
 
                 self.nav2_tf_ready_since = None
                 self.pending_navigation = (pose, purpose)
-                self.update_action_retry_timer()
                 return
 
             self.get_logger().error('NavigateToPose goal rejected after all retries.')
@@ -827,9 +799,6 @@ class PatrolManager(Node):
         if self.state not in valid_states:
             return
 
-        # A target may be detected during the LOCAL_LOOK dwell.
-        # Prevent that one-shot timer from firing after we leave the state.
-        self.local_look_timer.cancel()
         self.current_target = msg
         self.cancel_spin()
         self.send_target_goal()
@@ -840,16 +809,17 @@ class PatrolManager(Node):
 
         self.publish_collect_request(False)
         self.current_target = None
+        self.local_look_start_time = time.monotonic()
         self.set_state(MissionState.LOCAL_LOOK)
-        self.local_look_timer.reset()
 
-    def finish_local_look(self):
-        # Treat the ROS timer as a one-shot timer.
-        self.local_look_timer.cancel()
-
-        if self.state != MissionState.LOCAL_LOOK:
+    def update(self):
+        if self.state != MissionState.LOCAL_LOOK or self.local_look_start_time is None:
             return
 
+        if time.monotonic() - self.local_look_start_time < self.local_fov_wait_time:
+            return
+
+        self.local_look_start_time = None
         self.set_state(MissionState.LOCAL_SPIN)
         self.start_spin()
 
@@ -867,8 +837,6 @@ class PatrolManager(Node):
         self.send_current_patrol_goal()
 
     def finish_mission(self):
-        self.local_look_timer.cancel()
-        self.action_retry_timer.cancel()
         self.cancel_spin()
         self.publish_collect_request(False)
         self.set_state(MissionState.COMPLETE)
