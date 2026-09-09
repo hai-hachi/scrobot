@@ -4,36 +4,55 @@
   <xacro:macro name="scrobot_gazebo_physics">
 
     <!-- ============================================================ -->
-    <!-- Drive wheels                                                -->
+    <!-- Idealized drive-wheel contact for local-odometry evaluation  -->
     <!-- ============================================================ -->
+    <!--
+      The local-odometry evaluation assumes pure rolling between the
+      two drive wheels and the court. High wheel friction and zero
+      force-dependent slip make Gazebo approximate that assumption.
+
+      fdir1 follows the wheel rolling direction (link +X). Both
+      friction directions are kept high so the wheel contact does not
+      slide appreciably during straight, rotation, or arc tests.
+    -->
 
     <gazebo reference="left_wheel_link">
-      <mu1>1.0</mu1>
-      <mu2>1.0</mu2>
+      <mu1>20.0</mu1>
+      <mu2>20.0</mu2>
+      <fdir1>1 0 0</fdir1>
+      <slip1>0.0</slip1>
+      <slip2>0.0</slip2>
       <maxContacts>10</maxContacts>
     </gazebo>
 
     <gazebo reference="right_wheel_link">
-      <mu1>1.0</mu1>
-      <mu2>1.0</mu2>
+      <mu1>20.0</mu1>
+      <mu2>20.0</mu2>
+      <fdir1>1 0 0</fdir1>
+      <slip1>0.0</slip1>
+      <slip2>0.0</slip2>
       <maxContacts>10</maxContacts>
     </gazebo>
 
 
     <!-- ============================================================ -->
-    <!-- Passive caster wheels                                       -->
-    <!-- Lower friction than drive wheels initially                  -->
+    <!-- Passive casters                                             -->
     <!-- ============================================================ -->
+    <!--
+      Keep caster-ground friction very small so caster swivel / wheel
+      contact does not dominate the ideal differential-drive test.
+      The casters still support the robot physically in simulation.
+    -->
 
     <gazebo reference="left_caster_wheel_link">
-      <mu1>0.6</mu1>
-      <mu2>0.6</mu2>
+      <mu1>0.01</mu1>
+      <mu2>0.01</mu2>
       <maxContacts>10</maxContacts>
     </gazebo>
 
     <gazebo reference="right_caster_wheel_link">
-      <mu1>0.6</mu1>
-      <mu2>0.6</mu2>
+      <mu1>0.01</mu1>
+      <mu2>0.01</mu2>
       <maxContacts>10</maxContacts>
     </gazebo>
 
@@ -44,8 +63,8 @@
     <!-- ============================================================ -->
 
     <gazebo reference="base_link">
-      <mu1>0.4</mu1>
-      <mu2>0.4</mu2>
+      <mu1>0.0</mu1>
+      <mu2>0.0</mu2>
     </gazebo>
 
   </xacro:macro>
