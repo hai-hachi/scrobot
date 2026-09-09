@@ -122,9 +122,6 @@ class PatrolManager(Node):
         self.nav2_startup_future = None
         self.nav2_startup_attempts = 0
         self.nav2_startup_begin_time = None
-        # True after the lifecycle manager successfully completes STARTUP.
-        # Once true, do not resend STARTUP; just wait for the action servers.
-        self.nav2_startup_command_succeeded = False
 
         self.distance_since_relocalization = 0.0
         self.last_odom_xy = None
@@ -300,7 +297,6 @@ class PatrolManager(Node):
         self.nav2_startup_future = None
         self.nav2_startup_attempts = 0
         self.nav2_startup_begin_time = time.monotonic()
-        self.nav2_startup_command_succeeded = False
         self.set_state(MissionState.STARTING_NAV2)
         self.get_logger().info('Initial map->odom is ready. Starting Nav2 lifecycle.')
         self.process_pending_actions()
@@ -328,11 +324,6 @@ class PatrolManager(Node):
                 return
 
         if self.nav2_startup_future is not None:
-            return
-
-        # STARTUP already succeeded. Do not spam the lifecycle manager again;
-        # keep polling action-server readiness until the overall timeout.
-        if self.nav2_startup_command_succeeded:
             return
 
         if not self.nav2_lifecycle_client.service_is_ready():
@@ -371,16 +362,10 @@ class PatrolManager(Node):
 
         success = bool(getattr(response, 'success', True))
         if not success:
-            self.get_logger().warn(
-                'Nav2 lifecycle manager reported STARTUP failure; retrying.'
-            )
+            self.get_logger().warn('Nav2 lifecycle manager reported STARTUP failure; retrying.')
             return
 
-        self.nav2_startup_command_succeeded = True
-        self.get_logger().info(
-            'Nav2 lifecycle STARTUP succeeded; waiting for action servers '
-            f'for up to {self.nav2_startup_timeout:.1f} s.'
-        )
+        self.get_logger().info('Nav2 lifecycle STARTUP accepted; waiting for action servers.')
 
     # ============================================================
     # Pending action dispatch

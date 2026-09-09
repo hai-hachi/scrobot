@@ -1,0 +1,21 @@
+depth_pointcloud_to_scan:
+  ros__parameters:
+    use_sim_time: true
+
+    target_frame: base_footprint
+    transform_tolerance: 0.05
+
+    min_height: 0.08
+    max_height: 1.50
+
+    angle_min: -0.76
+    angle_max: 0.76
+    angle_increment: 0.00872664626
+
+    scan_time: 0.0666666667
+
+    range_min: 0.20
+    range_max: 3.00
+
+    queue_size: 1
+    use_inf: true

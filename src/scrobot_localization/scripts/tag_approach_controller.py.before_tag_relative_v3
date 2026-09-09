@@ -60,10 +60,6 @@ def xyz_rpy_to_matrix(xyz, rpy):
     )
 
 
-def matrix_yaw(matrix):
-    return wrap_angle(math.atan2(float(matrix[1, 0]), float(matrix[0, 0])))
-
-
 class TagApproachController(Node):
     VALID_TAG_IDS = (0, 1, 2, 3)
 
@@ -71,7 +67,6 @@ class TagApproachController(Node):
         super().__init__('tag_approach_controller')
         self.cb_group = ReentrantCallbackGroup()
 
-        self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_footprint')
         self.declare_parameter('detections_topic', '/apriltag/detections')
         self.declare_parameter('observed_tag_prefix', 'observed_tag_')
@@ -82,7 +77,7 @@ class TagApproachController(Node):
         self.declare_parameter('max_detection_distance', 9.0)
         self.declare_parameter('candidate_max_view_angle_deg', 65.0)
         self.declare_parameter('candidate_lock_frames', 3)
-        self.declare_parameter('candidate_lost_timeout', 0.50)
+        self.declare_parameter('candidate_lost_timeout', 0.30)
 
         self.declare_parameter('default_target_distance', 1.70)
         self.declare_parameter('ready_max_distance', 2.0)
@@ -92,12 +87,12 @@ class TagApproachController(Node):
         self.declare_parameter('final_bearing_tolerance_deg', 4.0)
         self.declare_parameter('stable_time', 0.40)
 
-        self.declare_parameter('default_timeout', 90.0)
+        self.declare_parameter('default_timeout', 60.0)
         self.declare_parameter('search_angular_velocity', 0.15)
-        self.declare_parameter('tag_lost_timeout', 0.75)
-        self.declare_parameter('unlock_timeout', 4.00)
-        self.declare_parameter('lost_stop_time', 0.20)
-        self.declare_parameter('reacquire_angular_velocity', 0.08)
+        self.declare_parameter('tag_lost_timeout', 0.30)
+        self.declare_parameter('unlock_timeout', 1.50)
+        self.declare_parameter('lost_stop_time', 0.15)
+        self.declare_parameter('reacquire_angular_velocity', 0.12)
 
         self.declare_parameter('max_linear_velocity', 0.25)
         self.declare_parameter('max_angular_velocity', 0.25)
@@ -106,25 +101,17 @@ class TagApproachController(Node):
         self.declare_parameter('drive_bearing_limit_deg', 25.0)
         self.declare_parameter('quality_creep_velocity', 0.05)
 
-        # COARSE VIEWPOINT is done BEFORE normal approach. The tag pose is
-        # frozen in local odom, then the robot follows a short circular arc
-        # around the tag at approximately constant radius to reduce the
-        # planar incidence angle. Losing the tag during this phase is allowed.
-        self.declare_parameter('coarse_viewpoint_trigger_deg', 20.0)
-        self.declare_parameter('coarse_viewpoint_goal_deg', 12.0)
-        self.declare_parameter('coarse_viewpoint_reentry_deg', 35.0)
-        self.declare_parameter('coarse_viewpoint_linear_velocity', 0.18)
-        self.declare_parameter('coarse_viewpoint_max_angular_velocity', 0.25)
-        self.declare_parameter('coarse_viewpoint_k_heading', 1.20)
-        self.declare_parameter('coarse_viewpoint_drive_heading_deg', 18.0)
-        self.declare_parameter('coarse_viewpoint_face_tolerance_deg', 7.0)
-        self.declare_parameter('coarse_viewpoint_timeout', 25.0)
-        self.declare_parameter('coarse_viewpoint_max_arc_distance', 3.00)
-        self.declare_parameter('coarse_face_wait_timeout', 4.0)
+        self.declare_parameter('viewpoint_max_linear_velocity', 0.15)
+        self.declare_parameter('viewpoint_max_angular_velocity', 0.20)
+        self.declare_parameter('viewpoint_position_tolerance', 0.12)
+        self.declare_parameter('viewpoint_drive_heading_limit_deg', 50.0)
+        self.declare_parameter('viewpoint_tag_bearing_limit_deg', 35.0)
+        self.declare_parameter('k_viewpoint_position', 0.70)
+        self.declare_parameter('k_viewpoint_heading', 1.00)
+        self.declare_parameter('k_viewpoint_bearing', 0.70)
 
         self.declare_parameter('control_rate', 20.0)
 
-        self.odom_frame = str(self.get_parameter('odom_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
         self.detections_topic = str(self.get_parameter('detections_topic').value)
         self.observed_tag_prefix = str(self.get_parameter('observed_tag_prefix').value)
@@ -159,39 +146,14 @@ class TagApproachController(Node):
         self.drive_bearing_limit = math.radians(float(self.get_parameter('drive_bearing_limit_deg').value))
         self.quality_creep_velocity = float(self.get_parameter('quality_creep_velocity').value)
 
-        self.coarse_viewpoint_trigger = math.radians(
-            float(self.get_parameter('coarse_viewpoint_trigger_deg').value)
-        )
-        self.coarse_viewpoint_goal = math.radians(
-            float(self.get_parameter('coarse_viewpoint_goal_deg').value)
-        )
-        self.coarse_viewpoint_reentry = math.radians(
-            float(self.get_parameter('coarse_viewpoint_reentry_deg').value)
-        )
-        self.coarse_viewpoint_linear_velocity = float(
-            self.get_parameter('coarse_viewpoint_linear_velocity').value
-        )
-        self.coarse_viewpoint_max_angular_velocity = float(
-            self.get_parameter('coarse_viewpoint_max_angular_velocity').value
-        )
-        self.coarse_viewpoint_k_heading = float(
-            self.get_parameter('coarse_viewpoint_k_heading').value
-        )
-        self.coarse_viewpoint_drive_heading = math.radians(
-            float(self.get_parameter('coarse_viewpoint_drive_heading_deg').value)
-        )
-        self.coarse_viewpoint_face_tolerance = math.radians(
-            float(self.get_parameter('coarse_viewpoint_face_tolerance_deg').value)
-        )
-        self.coarse_viewpoint_timeout = float(
-            self.get_parameter('coarse_viewpoint_timeout').value
-        )
-        self.coarse_viewpoint_max_arc_distance = float(
-            self.get_parameter('coarse_viewpoint_max_arc_distance').value
-        )
-        self.coarse_face_wait_timeout = float(
-            self.get_parameter('coarse_face_wait_timeout').value
-        )
+        self.viewpoint_max_linear_velocity = float(self.get_parameter('viewpoint_max_linear_velocity').value)
+        self.viewpoint_max_angular_velocity = float(self.get_parameter('viewpoint_max_angular_velocity').value)
+        self.viewpoint_position_tolerance = float(self.get_parameter('viewpoint_position_tolerance').value)
+        self.viewpoint_drive_heading_limit = math.radians(float(self.get_parameter('viewpoint_drive_heading_limit_deg').value))
+        self.viewpoint_tag_bearing_limit = math.radians(float(self.get_parameter('viewpoint_tag_bearing_limit_deg').value))
+        self.k_viewpoint_position = float(self.get_parameter('k_viewpoint_position').value)
+        self.k_viewpoint_heading = float(self.get_parameter('k_viewpoint_heading').value)
+        self.k_viewpoint_bearing = float(self.get_parameter('k_viewpoint_bearing').value)
 
         control_rate = float(self.get_parameter('control_rate').value)
 
@@ -227,23 +189,6 @@ class TagApproachController(Node):
 
         self.settle_since = None
         self.reacquire_started = None
-
-        # Frozen local-odom tag pose used only for the pre-approach coarse
-        # orbit. This is NOT a global pose and does not require map->odom.
-        self.coarse_tag_odom = None
-        self.coarse_start_time = None
-        self.coarse_arc_distance = 0.0
-        self.coarse_last_xy = None
-        self.coarse_face_wait_start = None
-
-        # Frozen coarse-orbit direction:
-        #   +1 = counter-clockwise (positive angular.z)
-        #   -1 = clockwise         (negative angular.z)
-        #
-        # It is selected ONCE from the initial signed angle between the
-        # physical tag face normal and the tag->robot radial vector.
-        self.coarse_orbit_direction = 0.0
-        self.coarse_initial_phi = float('nan')
 
         latest_qos = QoSProfile(
             depth=1,
@@ -283,8 +228,8 @@ class TagApproachController(Node):
         )
 
         self.get_logger().info(
-            'Tag approach controller V3.3 started: orientation selection, '
-            'deterministic signed-normal coarse orbit before approach.'
+            'Tag approach controller V3 started: tag-relative approach, '
+            'orientation-based selection, no odom/global target pose.'
         )
 
     def goal_callback(self, goal_request):
@@ -333,17 +278,10 @@ class TagApproachController(Node):
             self.last_T_base_mount = None
             self.settle_since = None
             self.reacquire_started = None
-            self.coarse_tag_odom = None
-            self.coarse_start_time = None
-            self.coarse_arc_distance = 0.0
-            self.coarse_last_xy = None
-            self.coarse_face_wait_start = None
-            self.coarse_orbit_direction = 0.0
-            self.coarse_initial_phi = float('nan')
 
         self.control_timer.reset()
         self.get_logger().info(
-            f'ApproachTag V3.2 started: preferred_tag={self.preferred_tag_id}, '
+            f'ApproachTag V3 started: preferred_tag={self.preferred_tag_id}, '
             f'target_distance={target_distance:.2f} m'
         )
         return await future
@@ -489,9 +427,7 @@ class TagApproachController(Node):
 
             if self.candidate_count >= self.candidate_lock_frames:
                 self.locked_tag_id = best['id']
-                # Control timer holds zero while we prepare either a coarse
-                # pre-approach orbit or the normal approach.
-                self.phase = 'coarse_prepare'
+                self.phase = 'approach'
                 self.candidate_tag_id = -1
                 self.candidate_count = 0
                 self.update_locked_measurement(best, now)
@@ -509,330 +445,6 @@ class TagApproachController(Node):
                 f'margin={best["margin"]:.1f}, '
                 f'distance={best["distance"]:.2f} m.'
             )
-
-            if (
-                best['view_angle'] > self.coarse_viewpoint_trigger
-                and self.initialize_coarse_viewpoint(best['T_base_mount'])
-            ):
-                with self.lock:
-                    self.phase = 'coarse_viewpoint'
-                self.get_logger().info(
-                    'Starting COARSE_VIEWPOINT before approach.'
-                )
-            else:
-                with self.lock:
-                    self.phase = 'approach'
-
-    def get_odom_base_matrix(self):
-        try:
-            tf_odom_base = self.tf_buffer.lookup_transform(
-                self.odom_frame,
-                self.base_frame,
-                Time(),
-                timeout=Duration(seconds=0.05),
-            )
-        except TransformException:
-            return None
-        return transform_to_matrix(tf_odom_base.transform)
-
-    @staticmethod
-    def signed_viewpoint_angle(T_odom_mount, T_odom_base):
-        """Signed planar angle from tag face normal to tag->robot radial vector.
-
-        Uses only the physical tag +X face normal and the radial vector in odom.
-        It does NOT depend on the tag local +Y axis convention.
-
-        Returns:
-          phi > 0: robot is CCW from the tag outward normal.
-          phi < 0: robot is CW  from the tag outward normal.
-          phi = 0: robot lies on the outward-normal line.
-        """
-        tx = float(T_odom_mount[0, 3])
-        ty = float(T_odom_mount[1, 3])
-        bx = float(T_odom_base[0, 3])
-        by = float(T_odom_base[1, 3])
-
-        rx = bx - tx
-        ry = by - ty
-        radius = math.hypot(rx, ry)
-        if radius < 1e-6:
-            return 0.0, radius, rx, ry
-
-        # Physical tag_mount +X is the outward normal of the visible face.
-        nx = float(T_odom_mount[0, 0])
-        ny = float(T_odom_mount[1, 0])
-        n_norm = math.hypot(nx, ny)
-        if n_norm < 1e-6:
-            return 0.0, radius, rx, ry
-
-        nx /= n_norm
-        ny /= n_norm
-        rnx = rx / radius
-        rny = ry / radius
-
-        cross_z = nx * rny - ny * rnx
-        dot = nx * rnx + ny * rny
-        phi = math.atan2(cross_z, dot)
-        return phi, radius, rx, ry
-
-    def initialize_coarse_viewpoint(self, T_base_mount):
-        """Freeze tag pose and choose ONE deterministic orbit direction."""
-        T_odom_base = self.get_odom_base_matrix()
-        if T_odom_base is None:
-            return False
-
-        T_odom_mount = T_odom_base @ T_base_mount
-        phi, radius, _, _ = self.signed_viewpoint_angle(
-            T_odom_mount,
-            T_odom_base,
-        )
-
-        if abs(phi) <= self.coarse_viewpoint_goal:
-            return False
-
-        # To reduce |phi|:
-        #   phi > 0 (robot CCW of normal) -> move CW  -> direction = -1
-        #   phi < 0 (robot CW  of normal) -> move CCW -> direction = +1
-        orbit_direction = -1.0 if phi > 0.0 else 1.0
-
-        bx = float(T_odom_base[0, 3])
-        by = float(T_odom_base[1, 3])
-
-        with self.lock:
-            self.coarse_tag_odom = T_odom_mount
-            self.coarse_start_time = time.monotonic()
-            self.coarse_arc_distance = 0.0
-            self.coarse_last_xy = (bx, by)
-            self.coarse_face_wait_start = None
-            self.coarse_orbit_direction = orbit_direction
-            self.coarse_initial_phi = phi
-
-        direction_name = 'CCW' if orbit_direction > 0.0 else 'CW'
-        self.get_logger().info(
-            'COARSE_VIEWPOINT snapshot: '
-            f'signed_view={math.degrees(phi):.1f} deg, '
-            f'orbit={direction_name}, radius={radius:.2f} m.'
-        )
-        return True
-
-    def clear_coarse_viewpoint(self):
-        with self.lock:
-            self.coarse_tag_odom = None
-            self.coarse_start_time = None
-            self.coarse_arc_distance = 0.0
-            self.coarse_last_xy = None
-            self.coarse_face_wait_start = None
-            self.coarse_orbit_direction = 0.0
-            self.coarse_initial_phi = float('nan')
-
-    def run_coarse_viewpoint(self, now):
-        """Follow a deterministic tangent/orbit segment around the frozen tag.
-
-        Orbit geometry is based directly on:
-          - the frozen physical tag face normal in odom, and
-          - the CURRENT tag->robot radial vector in odom.
-
-        The orbit direction is selected once at initialization and never flips.
-        """
-        with self.lock:
-            T_odom_mount = (
-                None
-                if self.coarse_tag_odom is None
-                else self.coarse_tag_odom.copy()
-            )
-            start_time = self.coarse_start_time
-            arc_distance = self.coarse_arc_distance
-            last_xy = self.coarse_last_xy
-            orbit_direction = self.coarse_orbit_direction
-            initial_phi = self.coarse_initial_phi
-
-        if (
-            T_odom_mount is None
-            or start_time is None
-            or orbit_direction == 0.0
-        ):
-            with self.lock:
-                self.phase = 'approach'
-            self.publish_cmd(0.0, 0.0)
-            return
-
-        T_odom_base = self.get_odom_base_matrix()
-        if T_odom_base is None:
-            self.publish_cmd(0.0, 0.0)
-            return
-
-        bx = float(T_odom_base[0, 3])
-        by = float(T_odom_base[1, 3])
-
-        if last_xy is not None:
-            arc_distance += math.hypot(
-                bx - last_xy[0],
-                by - last_xy[1],
-            )
-
-        with self.lock:
-            self.coarse_arc_distance = arc_distance
-            self.coarse_last_xy = (bx, by)
-
-        phi, radius_raw, rx, ry = self.signed_viewpoint_angle(
-            T_odom_mount,
-            T_odom_base,
-        )
-        radius = max(0.30, radius_raw)
-        elapsed = now - start_time
-
-        direction_name = 'CCW' if orbit_direction > 0.0 else 'CW'
-
-        # Coarse means coarse: stop once the physical incidence angle is good
-        # enough, or a safety limit is reached.
-        if (
-            abs(phi) <= self.coarse_viewpoint_goal
-            or elapsed >= self.coarse_viewpoint_timeout
-            or arc_distance >= self.coarse_viewpoint_max_arc_distance
-        ):
-            with self.lock:
-                self.phase = 'coarse_face_tag'
-                self.coarse_face_wait_start = None
-
-            self.publish_cmd(0.0, 0.0)
-            self.get_logger().info(
-                'COARSE_VIEWPOINT orbit finished: '
-                f'phi={math.degrees(phi):.1f} deg '
-                f'(start={math.degrees(initial_phi):.1f}), '
-                f'orbit={direction_name}, '
-                f'arc={arc_distance:.2f} m, time={elapsed:.1f} s.'
-            )
-            return
-
-        # Generate tangent directly from the CURRENT radial vector.
-        #
-        # orbit_direction = +1 (CCW):
-        #   tangent = (-ry, +rx)
-        #
-        # orbit_direction = -1 (CW):
-        #   tangent = (+ry, -rx)
-        #
-        # Unified:
-        #   tangent = (-d*ry, d*rx)
-        if radius_raw < 1e-6:
-            self.publish_cmd(0.0, 0.0)
-            return
-
-        tx_unit = -orbit_direction * (ry / radius_raw)
-        ty_unit = orbit_direction * (rx / radius_raw)
-        tangent_yaw_odom = math.atan2(ty_unit, tx_unit)
-
-        current_yaw = matrix_yaw(T_odom_base)
-        heading_error = wrap_angle(tangent_yaw_odom - current_yaw)
-
-        # Diagnostic: for a correct orbit |phi| should generally decrease.
-        self.get_logger().info(
-            'COARSE_VIEWPOINT: '
-            f'phi={math.degrees(phi):.1f} deg, '
-            f'orbit={direction_name}, '
-            f'r={radius_raw:.2f} m, '
-            f'tangent={math.degrees(tangent_yaw_odom):.1f} deg, '
-            f'heading_err={math.degrees(heading_error):.1f} deg, '
-            f'arc={arc_distance:.2f} m.',
-            throttle_duration_sec=1.0,
-        )
-
-        if abs(heading_error) > self.coarse_viewpoint_drive_heading:
-            linear = 0.0
-            angular = clamp(
-                self.coarse_viewpoint_k_heading * heading_error,
-                -self.coarse_viewpoint_max_angular_velocity,
-                self.coarse_viewpoint_max_angular_velocity,
-            )
-        else:
-            linear = self.coarse_viewpoint_linear_velocity
-
-            # Circular feed-forward:
-            #   omega = direction * v/r
-            # positive omega is CCW in ROS.
-            omega_ff = orbit_direction * linear / radius
-
-            angular = clamp(
-                omega_ff
-                + self.coarse_viewpoint_k_heading * heading_error,
-                -self.coarse_viewpoint_max_angular_velocity,
-                self.coarse_viewpoint_max_angular_velocity,
-            )
-
-        self.publish_cmd(linear, angular)
-
-    def run_coarse_face_tag(self, now):
-        """After the blind/tangent move, turn toward the frozen tag position."""
-        with self.lock:
-            T_odom_mount = (
-                None
-                if self.coarse_tag_odom is None
-                else self.coarse_tag_odom.copy()
-            )
-            last_seen = self.last_tag_seen
-            wait_start = self.coarse_face_wait_start
-
-        if T_odom_mount is None:
-            with self.lock:
-                self.phase = 'approach'
-            self.publish_cmd(0.0, 0.0)
-            return
-
-        T_odom_base = self.get_odom_base_matrix()
-        if T_odom_base is None:
-            self.publish_cmd(0.0, 0.0)
-            return
-
-        bx = float(T_odom_base[0, 3])
-        by = float(T_odom_base[1, 3])
-        tx = float(T_odom_mount[0, 3])
-        ty = float(T_odom_mount[1, 3])
-
-        desired_yaw = math.atan2(ty - by, tx - bx)
-        current_yaw = matrix_yaw(T_odom_base)
-        yaw_error = wrap_angle(desired_yaw - current_yaw)
-
-        if abs(yaw_error) > self.coarse_viewpoint_face_tolerance:
-            angular = clamp(
-                self.coarse_viewpoint_k_heading * yaw_error,
-                -self.coarse_viewpoint_max_angular_velocity,
-                self.coarse_viewpoint_max_angular_velocity,
-            )
-            self.publish_cmd(0.0, angular)
-            return
-
-        self.publish_cmd(0.0, 0.0)
-
-        recent = (
-            last_seen is not None
-            and now - last_seen <= self.tag_lost_timeout
-        )
-        if recent:
-            self.clear_coarse_viewpoint()
-            with self.lock:
-                self.phase = 'approach'
-                self.lock_lost_since = None
-                self.reacquire_started = None
-            self.get_logger().info(
-                'Locked tag visible again after COARSE_VIEWPOINT; starting APPROACH.'
-            )
-            return
-
-        if wait_start is None:
-            with self.lock:
-                self.coarse_face_wait_start = now
-            return
-
-        if now - wait_start >= self.coarse_face_wait_timeout:
-            self.get_logger().warn(
-                'Tag did not reappear after coarse viewpoint face-back; '
-                'entering REACQUIRE.'
-            )
-            self.clear_coarse_viewpoint()
-            with self.lock:
-                self.phase = 'reacquire'
-                self.lock_lost_since = now
-                self.reacquire_started = now
 
     def control_loop(self):
         with self.lock:
@@ -889,46 +501,24 @@ class TagApproachController(Node):
             self.publish_cmd(0.0, 0.0)
             return
 
-        # COARSE_VIEWPOINT intentionally does not require live AprilTag data.
-        # It uses only the frozen local-odom tag pose until the orbit segment
-        # finishes, then COARSE_FACE_TAG turns back toward the tag.
-        if phase == 'coarse_viewpoint':
-            self.run_coarse_viewpoint(now)
-            return
-        if phase == 'coarse_face_tag':
-            self.run_coarse_face_tag(now)
-            return
-        if phase == 'coarse_prepare':
-            self.publish_cmd(0.0, 0.0)
-            return
-
         recent = last_seen is not None and now - last_seen <= self.tag_lost_timeout
         if not recent or T_base_mount is None:
             self.handle_locked_tag_loss(now)
             return
 
         if phase == 'reacquire':
-            if (
-                view_angle > self.coarse_viewpoint_trigger
-                and self.initialize_coarse_viewpoint(T_base_mount)
-            ):
-                with self.lock:
-                    self.phase = 'coarse_viewpoint'
-            else:
-                with self.lock:
-                    self.phase = 'approach'
-                    self.reacquire_started = None
+            with self.lock:
+                self.phase = 'approach'
+                self.reacquire_started = None
             self.publish_cmd(0.0, 0.0)
             return
 
         if phase == 'approach':
-            self.run_center_approach(
-                distance, bearing, margin, view_angle, T_base_mount
-            )
+            self.run_center_approach(distance, bearing, margin, view_angle)
+        elif phase == 'viewpoint':
+            self.run_viewpoint_correction(distance, bearing, margin, view_angle, T_base_mount)
         elif phase == 'final_align':
-            self.run_final_align(
-                distance, bearing, margin, view_angle, T_base_mount
-            )
+            self.run_final_align(distance, bearing, margin, view_angle)
         elif phase == 'settle':
             self.run_settle(now, distance, bearing, margin, view_angle)
         else:
@@ -949,11 +539,6 @@ class TagApproachController(Node):
                 self.last_T_base_mount = None
                 self.reacquire_started = None
                 self.settle_since = None
-                self.coarse_tag_odom = None
-                self.coarse_start_time = None
-                self.coarse_arc_distance = 0.0
-                self.coarse_last_xy = None
-                self.coarse_face_wait_start = None
                 unlock = True
                 reacquire_started = None
             else:
@@ -979,34 +564,16 @@ class TagApproachController(Node):
             direction = 1.0 if bearing > 0.0 else -1.0
         self.publish_cmd(0.0, direction * self.reacquire_angular_velocity)
 
-    def run_center_approach(
-        self, distance, bearing, margin, view_angle, T_base_mount
-    ):
-        # Normally the coarse correction already happened before APPROACH.
-        # If geometry degrades substantially, do another coarse correction
-        # rather than approaching from a poor side angle.
-        if (
-            view_angle > self.coarse_viewpoint_reentry
-            and self.initialize_coarse_viewpoint(T_base_mount)
-        ):
-            with self.lock:
-                self.phase = 'coarse_viewpoint'
-                self.settle_since = None
-            self.publish_cmd(0.0, 0.0)
-            return
-
+    def run_center_approach(self, distance, bearing, margin, view_angle):
         target = self.target_distance
-        quality_ready = (
-            margin >= self.ready_decision_margin
-            and distance <= self.ready_max_distance
-        )
+        quality_ready = margin >= self.ready_decision_margin and distance <= self.ready_max_distance
         close_enough = distance <= target + self.distance_tolerance
 
         if quality_ready and close_enough:
+            self.publish_cmd(0.0, 0.0)
             with self.lock:
                 self.settle_since = None
-                self.phase = 'final_align'
-            self.publish_cmd(0.0, 0.0)
+                self.phase = 'final_align' if view_angle <= self.final_max_view_angle else 'viewpoint'
             return
 
         angular = clamp(
@@ -1031,25 +598,74 @@ class TagApproachController(Node):
                 and margin < self.ready_decision_margin
                 and distance > self.minimum_standoff_distance
             ):
-                linear = min(
-                    self.quality_creep_velocity,
-                    self.max_linear_velocity,
-                )
+                linear = min(self.quality_creep_velocity, self.max_linear_velocity)
 
         self.publish_cmd(linear, angular)
 
-    def run_final_align(
-        self, distance, bearing, margin, view_angle, T_base_mount
-    ):
+    def run_viewpoint_correction(self, distance, bearing, margin, view_angle, T_base_mount):
+        if (
+            view_angle <= self.final_max_view_angle
+            and distance <= self.ready_max_distance
+            and margin >= self.ready_decision_margin
+        ):
+            with self.lock:
+                self.phase = 'final_align'
+                self.settle_since = None
+            self.publish_cmd(0.0, 0.0)
+            return
+
+        # Desired base pose relative to the physical tag face:
+        # target_distance along tag +X normal, facing back toward tag.
+        T_mount_goal = xyz_rpy_to_matrix(
+            [self.target_distance, 0.0, 0.0],
+            [0.0, 0.0, math.pi],
+        )
+        T_base_goal = T_base_mount @ T_mount_goal
+
+        dx = float(T_base_goal[0, 3])
+        dy = float(T_base_goal[1, 3])
+        rho = math.hypot(dx, dy)
+        heading_error = math.atan2(dy, dx) if rho > 1e-6 else 0.0
+
+        if rho <= self.viewpoint_position_tolerance:
+            with self.lock:
+                self.phase = 'final_align'
+                self.settle_since = None
+            self.publish_cmd(0.0, 0.0)
+            return
+
+        # Arc-like correction: head toward the ideal standoff point while also
+        # keeping the locked tag near the forward camera center.
+        angular = (
+            self.k_viewpoint_heading * heading_error
+            + self.k_viewpoint_bearing * bearing
+        )
+        angular = clamp(
+            angular,
+            -self.viewpoint_max_angular_velocity,
+            self.viewpoint_max_angular_velocity,
+        )
+
+        if (
+            abs(heading_error) > self.viewpoint_drive_heading_limit
+            or abs(bearing) > self.viewpoint_tag_bearing_limit
+        ):
+            linear = 0.0
+        else:
+            linear = clamp(
+                self.k_viewpoint_position * rho,
+                0.0,
+                self.viewpoint_max_linear_velocity,
+            )
+            linear *= max(0.20, math.cos(heading_error))
+
+        self.publish_cmd(linear, angular)
+
+    def run_final_align(self, distance, bearing, margin, view_angle):
         if view_angle > self.final_max_view_angle:
-            if self.initialize_coarse_viewpoint(T_base_mount):
-                with self.lock:
-                    self.phase = 'coarse_viewpoint'
-                    self.settle_since = None
-            else:
-                with self.lock:
-                    self.phase = 'approach'
-                    self.settle_since = None
+            with self.lock:
+                self.phase = 'viewpoint'
+                self.settle_since = None
             self.publish_cmd(0.0, 0.0)
             return
 
@@ -1085,7 +701,7 @@ class TagApproachController(Node):
         if not good:
             with self.lock:
                 self.settle_since = None
-                self.phase = 'final_align'
+                self.phase = 'viewpoint' if view_angle > self.final_max_view_angle else 'final_align'
             self.publish_cmd(0.0, 0.0)
             return
 
@@ -1131,11 +747,6 @@ class TagApproachController(Node):
             self.last_T_base_mount = None
             self.settle_since = None
             self.reacquire_started = None
-            self.coarse_tag_odom = None
-            self.coarse_start_time = None
-            self.coarse_arc_distance = 0.0
-            self.coarse_last_xy = None
-            self.coarse_face_wait_start = None
 
         self.control_timer.cancel()
 

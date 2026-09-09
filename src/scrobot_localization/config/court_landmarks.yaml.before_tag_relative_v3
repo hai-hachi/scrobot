@@ -1,0 +1,134 @@
+tag_global_localizer:
+  ros__parameters:
+
+    # ========================================================
+    # Frames / topics
+    # ========================================================
+    map_frame: map
+    odom_frame: odom
+    base_frame: base_footprint
+
+    detections_topic: /apriltag/detections
+    observed_tag_prefix: observed_tag_
+    mount_frame_prefix: tag_mount_
+    known_tag_prefix: court_tag_
+
+    # ========================================================
+    # Physical court / tag geometry
+    # ========================================================
+    pole_x: 0.0
+    left_pole_y: 3.05
+    right_pole_y: -3.05
+
+    tag_height: 0.150
+    tag_mount_radius: 0.075
+
+    inward_angle_deg: 45.0
+
+    tag_edge_size: 0.100
+    active_grid_cells: 6
+    quiet_border_cells: 1
+    texture_pixels: 1024
+
+    # ========================================================
+    # Temporal map -> odom filtering
+    # ========================================================
+    filter_tau: 0.25
+
+    # ========================================================
+    # Observation gating
+    # ========================================================
+    min_decision_margin: 20.0
+    max_tag_distance: 9.0
+    relocalization_max_distance: 2.0
+    max_view_angle_deg: 35.0
+    max_position_disagreement: 0.15
+    max_yaw_disagreement_deg: 6.0
+
+    default_sample_count: 15
+    default_timeout: 5.0
+
+    batch_outlier_position: 0.10
+    batch_outlier_yaw_deg: 4.0
+    max_batch_position_std: 0.04
+    max_batch_yaw_std_deg: 1.5
+    minimum_batch_keep_ratio: 0.70
+
+    stationary_linear_threshold: 0.02
+    stationary_angular_threshold: 0.03
+    stationary_settle_time: 0.40
+
+    processing_rate: 20.0
+    publish_rate: 30.0
+
+
+tag_approach_controller:
+  ros__parameters:
+
+    # ========================================================
+    # Frames / topics
+    # ========================================================
+    base_frame: base_footprint
+    detections_topic: /apriltag/detections
+    observed_tag_prefix: observed_tag_
+    cmd_vel_topic: /cmd_vel_relocalization
+
+    # ========================================================
+    # Candidate detection / orientation-based selection
+    # ========================================================
+    min_decision_margin: 10.0
+    ready_decision_margin: 20.0
+    max_detection_distance: 9.0
+
+    candidate_max_view_angle_deg: 65.0
+    candidate_lock_frames: 3
+    candidate_lost_timeout: 0.30
+
+    # ========================================================
+    # Desired observation pose
+    # ========================================================
+    default_target_distance: 1.70
+    ready_max_distance: 2.0
+    minimum_standoff_distance: 1.30
+    distance_tolerance: 0.10
+
+    # Stricter than global localizer max_view_angle_deg=35.
+    final_max_view_angle_deg: 30.0
+    final_bearing_tolerance_deg: 4.0
+    stable_time: 0.40
+
+    # ========================================================
+    # Search / locked-tag loss handling
+    # ========================================================
+    default_timeout: 60.0
+    search_angular_velocity: 0.15
+
+    # At 15 Hz, 0.30 s is roughly 4-5 missed frames.
+    tag_lost_timeout: 0.30
+    unlock_timeout: 1.50
+    lost_stop_time: 0.15
+    reacquire_angular_velocity: 0.12
+
+    # ========================================================
+    # Center + approach controller
+    # ========================================================
+    max_linear_velocity: 0.25
+    max_angular_velocity: 0.25
+    k_distance: 0.80
+    k_bearing: 1.20
+    drive_bearing_limit_deg: 25.0
+    quality_creep_velocity: 0.05
+
+    # ========================================================
+    # Steep-angle viewpoint correction
+    # ========================================================
+    viewpoint_max_linear_velocity: 0.15
+    viewpoint_max_angular_velocity: 0.20
+    viewpoint_position_tolerance: 0.12
+    viewpoint_drive_heading_limit_deg: 50.0
+    viewpoint_tag_bearing_limit_deg: 35.0
+    k_viewpoint_position: 0.70
+    k_viewpoint_heading: 1.00
+    k_viewpoint_bearing: 0.70
+
+    control_rate: 20.0

@@ -21,6 +21,7 @@ WASD manual teleop
 W/S : forward/backward
 A/D : rotate left/right
 SPACE: stop
+1-9  : set linear and angular speed (0.1-0.9)
 Q    : quit
 
 ---------------------------
@@ -90,6 +91,13 @@ def main(args=None):
             elif key.lower() == 'd':
                 angular = -node.angular_speed
             elif key == ' ':
+                node.stop()
+                continue
+            elif key in '123456789':
+                speed = int(key) * 0.1
+                node.linear_speed = speed
+                node.angular_speed = speed
+                print(f' Speed set to {speed:.1f}')
                 node.stop()
                 continue
             elif key.lower() == 'q':

@@ -15,14 +15,6 @@ tag_global_localizer:
 
     # ========================================================
     # Physical court / tag geometry
-    #
-    # This is now the SINGLE geometry source of truth.
-    # The Gazebo model generator reads this same file.
-    #
-    # tag_mount_N is REP-103 intuitive:
-    #   +X = outward normal of visible tag face
-    #   +Y = left
-    #   +Z = up
     # ========================================================
     pole_x: 0.0
     left_pole_y: 3.05
@@ -31,16 +23,9 @@ tag_global_localizer:
     tag_height: 0.150
     tag_mount_radius: 0.075
 
-    # One experimental parameter controls all four tag headings.
-    # 0 deg  -> straight along +/-X court direction
-    # 45 deg -> diagonally inward
     inward_angle_deg: 45.0
 
-    # Detector edge size: distance between AprilTag detection corners.
     tag_edge_size: 0.100
-
-    # tag16h5 active marker = 6 cells across (4 data + black border)
-    # plus one white quiet-zone cell on each side for rendering.
     active_grid_cells: 6
     quiet_border_cells: 1
     texture_pixels: 1024
@@ -53,20 +38,22 @@ tag_global_localizer:
     # ========================================================
     # Observation gating
     # ========================================================
-
     min_decision_margin: 20.0
     max_tag_distance: 9.0
     relocalization_max_distance: 2.0
     max_view_angle_deg: 35.0
     max_position_disagreement: 0.15
     max_yaw_disagreement_deg: 6.0
+
     default_sample_count: 15
     default_timeout: 5.0
+
     batch_outlier_position: 0.10
     batch_outlier_yaw_deg: 4.0
     max_batch_position_std: 0.04
     max_batch_yaw_std_deg: 1.5
     minimum_batch_keep_ratio: 0.70
+
     stationary_linear_threshold: 0.02
     stationary_angular_threshold: 0.03
     stationary_settle_time: 0.40
@@ -74,28 +61,134 @@ tag_global_localizer:
     processing_rate: 20.0
     publish_rate: 30.0
 
+
 tag_approach_controller:
   ros__parameters:
+
+    # ========================================================
+    # Frames / topics
+    # ========================================================
     odom_frame: odom
     base_frame: base_footprint
     detections_topic: /apriltag/detections
     observed_tag_prefix: observed_tag_
     cmd_vel_topic: /cmd_vel_relocalization
+
+    # ========================================================
+    # Candidate detection / orientation-based selection
+    # ========================================================
     min_decision_margin: 10.0
+    ready_decision_margin: 20.0
     max_detection_distance: 9.0
+
+    # Reject extremely oblique candidate tags during SEARCH.
+    candidate_max_view_angle_deg: 65.0
+
+    # At 15 Hz: 3 frames ~= 0.20 s confirmation.
+    candidate_lock_frames: 3
+
+    # SELECT tolerates about 7-8 missing frames before returning
+    # to SEARCH. Increased from 0.30 s to reduce jitter.
+    candidate_lost_timeout: 0.50
+
+    # ========================================================
+    # Desired final relocalization observation geometry
+    # ========================================================
     default_target_distance: 1.70
-    default_timeout: 60.0
-    tag_lost_timeout: 1.0
-    search_angular_velocity: 0.25
+    ready_max_distance: 2.0
+    minimum_standoff_distance: 1.30
+    distance_tolerance: 0.10
+
+    # Slightly stricter than global localizer max_view_angle_deg=35.
+    final_max_view_angle_deg: 30.0
+    final_bearing_tolerance_deg: 4.0
+    stable_time: 0.40
+
+    # ========================================================
+    # Search / normal locked-tag loss handling
+    # ========================================================
+    default_timeout: 90.0
+    search_angular_velocity: 0.15
+
+    # Applies to APPROACH / FINAL_ALIGN, NOT coarse tangent motion.
+    # At 15 Hz, 0.75 s ~= 11 missed frames.
+    tag_lost_timeout: 0.75
+
+    # Once REACQUIRE begins, keep the same tag for this long before
+    # releasing the lock and selecting another tag.
+    unlock_timeout: 4.00
+
+    # Brief stop before REACQUIRE rotation starts.
+    lost_stop_time: 0.20
+    reacquire_angular_velocity: 0.08
+
+    # ========================================================
+    # COARSE VIEWPOINT -- BEFORE APPROACH
+    #
+    # If the selected tag face is too oblique, freeze its pose in
+    # LOCAL ODOM and drive tangentially around it at approximately
+    # constant radius. This reduces the planar tag incidence angle
+    # before the robot gets close. The tag may intentionally leave
+    # the camera during this phase; generic REACQUIRE is disabled.
+    # ========================================================
+
+    # Skip the coarse correction if the initially selected tag is
+    # already better than this angle.
+    coarse_viewpoint_trigger_deg: 20.0
+
+    # Desired rough angle after the tangent/orbit correction.
+    # It does NOT need to be perfect -- normal approach follows next.
+    coarse_viewpoint_goal_deg: 12.0
+
+    # If the geometry becomes very poor again during APPROACH, run
+    # another coarse correction. Keep this higher than the trigger
+    # to provide hysteresis and prevent phase bouncing.
+    coarse_viewpoint_reentry_deg: 35.0
+
+    # Tangential/orbit motion.
+    coarse_viewpoint_linear_velocity: 0.18
+    coarse_viewpoint_max_angular_velocity: 0.25
+    coarse_viewpoint_k_heading: 1.20
+
+    # Rotate toward the tangent first. Translation starts only when
+    # tangent-heading error is inside this threshold.
+    coarse_viewpoint_drive_heading_deg: 18.0
+
+    # After orbiting, rotate back toward the frozen tag position.
+    coarse_viewpoint_face_tolerance_deg: 7.0
+
+    # These are coarse-motion safety/effort limits, not tag-loss
+    # timers. Orbit stops when angle goal OR either limit is reached.
+    coarse_viewpoint_timeout: 25.0
+    coarse_viewpoint_max_arc_distance: 3.00
+
+    # Once facing the frozen tag position, wait this long for the
+    # camera to see the locked tag again before using REACQUIRE.
+    coarse_face_wait_timeout: 4.0
+
+    # ========================================================
+    # Center + approach controller -- AFTER coarse correction
+    # ========================================================
     max_linear_velocity: 0.25
     max_angular_velocity: 0.25
-    k_position: 0.80
-    k_heading: 1.20
-    k_final_yaw: 1.20
-    drive_heading_limit_deg: 35.0
-    position_tolerance: 0.08
-    yaw_tolerance_deg: 5.0
-    stable_time: 0.40
-    goal_filter_alpha: 0.30
+    k_distance: 0.80
+    k_bearing: 1.20
+
+    # If tag is farther from camera center than this, rotate first
+    # rather than translating toward it.
+    drive_bearing_limit_deg: 25.0
+
+    # If target distance is reached but margin is still weak, creep
+    # closer slowly down to minimum_standoff_distance.
+    quality_creep_velocity: 0.05
+
     control_rate: 20.0
 
+# v3.3 orbit geometry note:
+# The coarse orbit direction is NOT tuned by a YAML sign parameter.
+# It is computed once from:
+#   signed angle(tag outward normal, tag->robot radial vector)
+# Then frozen:
+#   positive signed angle -> CW orbit
+#   negative signed angle -> CCW orbit
+# Tangent and omega=v/r feed-forward are generated directly in odom.
