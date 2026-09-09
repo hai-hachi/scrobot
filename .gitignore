@@ -3,6 +3,9 @@ build/
 install/
 log/
 
+# Evaluation outputs (kept beside src/ locally, never tracked)
+/evaluation_results/
+
 # Python
 __pycache__/
 *.pyc
