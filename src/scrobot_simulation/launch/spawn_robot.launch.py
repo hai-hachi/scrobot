@@ -40,6 +40,10 @@ def generate_launch_description():
     #   - Gazebo sensors
     #   - ros2_control
     #   - gz_ros2_control
+    #
+    # Simulation uses a 1 mm wheel collision width to approximate
+    # the line contact assumed by ideal differential-drive odometry.
+    # The real/default description still uses the physical 30 mm tire.
     # ==========================================================
 
     xacro_file = PathJoinSubstitution([
@@ -53,6 +57,7 @@ def generate_launch_description():
             FindExecutable(name='xacro'),
             ' ',
             xacro_file,
+            ' wheel_collision_width:=0.001',
         ]),
         value_type=str,
     )
