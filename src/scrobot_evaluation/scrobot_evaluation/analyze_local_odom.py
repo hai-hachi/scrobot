@@ -155,18 +155,10 @@ def gt_velocity(t, x, y, yaw):
     return vx, wz
 
 
-
-
-def save_figure(path, dpi=170):
-    """Save a plot as raster plus vector formats.
-
-    PNG is convenient for reports/previews. SVG and PDF are vector outputs
-    that can be zoomed without raster pixelation.
-    """
+def save_figure(path):
+    """Save evaluation plots only as vector SVG files."""
     base = Path(path).with_suffix('')
-    plt.savefig(base.with_suffix('.png'), dpi=dpi, bbox_inches='tight')
     plt.savefig(base.with_suffix('.svg'), bbox_inches='tight')
-    plt.savefig(base.with_suffix('.pdf'), bbox_inches='tight')
 
 
 def plot_lines(path, title, xlabel, ylabel, x, series, equal=False):
@@ -175,7 +167,7 @@ def plot_lines(path, title, xlabel, ylabel, x, series, equal=False):
     for label, values in series:
         mask = np.isfinite(x) & np.isfinite(values)
         if np.any(mask):
-            plt.plot(x[mask], values[mask], label=label)
+            plt.plot(x[mask], values[mask], label=label, linewidth=0.8)
             plotted = True
     if not plotted:
         plt.close()
@@ -199,7 +191,7 @@ def plot_trajectory(path, series):
     for label, x, y in series:
         mask = np.isfinite(x) & np.isfinite(y)
         if np.any(mask):
-            plt.plot(x[mask], y[mask], label=label)
+            plt.plot(x[mask], y[mask], label=label, linewidth=0.8)
             plotted = True
     if not plotted:
         plt.close()
@@ -253,25 +245,19 @@ def main():
 
     gt = relative_pose(col(rows, 'gt_x'), col(rows, 'gt_y'), col(rows, 'gt_yaw'))
     wheel = relative_pose(
-        col(rows, 'wheel_x'),
-        col(rows, 'wheel_y'),
-        col(rows, 'wheel_yaw'),
+        col(rows, 'wheel_x'), col(rows, 'wheel_y'), col(rows, 'wheel_yaw')
     )
     ekf = relative_pose(col(rows, 'ekf_x'), col(rows, 'ekf_y'), col(rows, 'ekf_yaw'))
-    tf_pose = relative_pose(col(rows, 'tf_x'), col(rows, 'tf_y'), col(rows, 'tf_yaw'))
 
     imu_yaw = col(rows, 'imu_yaw')
     imu_yaw_rel = relative_pose(
-        np.zeros_like(imu_yaw),
-        np.zeros_like(imu_yaw),
-        imu_yaw,
+        np.zeros_like(imu_yaw), np.zeros_like(imu_yaw), imu_yaw
     )[2]
 
     wheel_pos_error, wheel_yaw_error = pose_error(gt, wheel)
     ekf_pos_error, ekf_yaw_error = pose_error(gt, ekf)
     imu_yaw_error = np.abs(wrap_angle_array(imu_yaw_rel - gt[2]))
 
-    # TF should represent the same odom -> base pose as /odometry/filtered.
     raw_ekf_x = col(rows, 'ekf_x')
     raw_ekf_y = col(rows, 'ekf_y')
     raw_ekf_yaw = col(rows, 'ekf_yaw')
@@ -279,9 +265,7 @@ def main():
     raw_tf_y = col(rows, 'tf_y')
     raw_tf_yaw = col(rows, 'tf_yaw')
     tf_pos_disagreement = np.hypot(raw_tf_x - raw_ekf_x, raw_tf_y - raw_ekf_y)
-    tf_yaw_disagreement = np.abs(
-        wrap_angle_array(raw_tf_yaw - raw_ekf_yaw)
-    )
+    tf_yaw_disagreement = np.abs(wrap_angle_array(raw_tf_yaw - raw_ekf_yaw))
 
     gt_vx, gt_wz = gt_velocity(t, gt[0], gt[1], gt[2])
     wheel_vx = col(rows, 'wheel_vx')
@@ -327,13 +311,10 @@ def main():
         'imu_filtered_wz_rmse_vs_gt_rps': rmse(imu_wz - gt_wz),
     }
 
-    # Static drift is especially useful for quantifying stationary jitter.
     static_mask = state == 'STATIC'
     if np.any(static_mask):
         for label, pose in [('gt', gt), ('wheel', wheel), ('ekf', ekf)]:
-            drift_m, drift_yaw = phase_delta(
-                pose[0], pose[1], pose[2], static_mask
-            )
+            drift_m, drift_yaw = phase_delta(pose[0], pose[1], pose[2], static_mask)
             metrics[f'static_{label}_drift_m'] = drift_m
             metrics[f'static_{label}_yaw_drift_deg'] = math.degrees(drift_yaw)
 
@@ -343,7 +324,6 @@ def main():
 
     write_metric_csv(run_dir / 'local_odom_summary.csv', metrics)
 
-    # Per-phase metrics make the suite useful without splitting it into runs.
     phase_rows = []
     excluded = {'UNKNOWN', 'START_DELAY', 'FINAL_SETTLE', 'DONE'}
     phases = []
@@ -379,7 +359,7 @@ def main():
             writer.writerows(phase_rows)
 
     plot_trajectory(
-        run_dir / 'local_odom_trajectory.png',
+        run_dir / 'local_odom_trajectory.svg',
         [
             ('Ground truth', gt[0], gt[1]),
             ('Wheel odom', wheel[0], wheel[1]),
@@ -388,23 +368,14 @@ def main():
     )
 
     plot_lines(
-        run_dir / 'local_odom_position_error.png',
-        'Local odometry position error',
-        'Time [s]',
-        'Position error [m]',
-        t,
-        [
-            ('Wheel odom', wheel_pos_error),
-            ('EKF', ekf_pos_error),
-        ],
+        run_dir / 'local_odom_position_error.svg',
+        'Local odometry position error', 'Time [s]', 'Position error [m]', t,
+        [('Wheel odom', wheel_pos_error), ('EKF', ekf_pos_error)],
     )
 
     plot_lines(
-        run_dir / 'local_odom_yaw_error.png',
-        'Local odometry yaw error',
-        'Time [s]',
-        'Yaw error [deg]',
-        t,
+        run_dir / 'local_odom_yaw_error.svg',
+        'Local odometry yaw error', 'Time [s]', 'Yaw error [deg]', t,
         [
             ('Wheel odom', np.degrees(wheel_yaw_error)),
             ('EKF', np.degrees(ekf_yaw_error)),
@@ -413,11 +384,8 @@ def main():
     )
 
     plot_lines(
-        run_dir / 'local_odom_yaw_sources.png',
-        'Relative yaw estimates',
-        'Time [s]',
-        'Yaw [deg]',
-        t,
+        run_dir / 'local_odom_yaw_sources.svg',
+        'Relative yaw estimates', 'Time [s]', 'Yaw [deg]', t,
         [
             ('Ground truth', np.degrees(gt[2])),
             ('Wheel odom', np.degrees(wheel[2])),
@@ -427,43 +395,27 @@ def main():
     )
 
     plot_lines(
-        run_dir / 'local_odom_linear_velocity.png',
-        'Forward velocity',
-        'Time [s]',
-        'Linear velocity [m/s]',
-        t,
+        run_dir / 'local_odom_linear_velocity.svg',
+        'Forward velocity', 'Time [s]', 'Linear velocity [m/s]', t,
         [
-            ('Requested', requested_vx),
-            ('Final command', final_vx),
-            ('Ground truth', gt_vx),
-            ('Wheel odom', wheel_vx),
-            ('EKF', ekf_vx),
+            ('Requested', requested_vx), ('Final command', final_vx),
+            ('Ground truth', gt_vx), ('Wheel odom', wheel_vx), ('EKF', ekf_vx),
         ],
     )
 
     plot_lines(
-        run_dir / 'local_odom_angular_velocity.png',
-        'Yaw rate',
-        'Time [s]',
-        'Angular velocity [rad/s]',
-        t,
+        run_dir / 'local_odom_angular_velocity.svg',
+        'Yaw rate', 'Time [s]', 'Angular velocity [rad/s]', t,
         [
-            ('Requested', requested_wz),
-            ('Final command', final_wz),
-            ('Ground truth', gt_wz),
-            ('Wheel odom', wheel_wz),
-            ('EKF', ekf_wz),
-            ('IMU raw', imu_raw_wz),
-            ('IMU filtered', imu_wz),
+            ('Requested', requested_wz), ('Final command', final_wz),
+            ('Ground truth', gt_wz), ('Wheel odom', wheel_wz), ('EKF', ekf_wz),
+            ('IMU raw', imu_raw_wz), ('IMU filtered', imu_wz),
         ],
     )
 
     plot_lines(
-        run_dir / 'local_odom_tf_consistency.png',
-        'EKF message vs odom-to-base TF consistency',
-        'Time [s]',
-        'Difference',
-        t,
+        run_dir / 'local_odom_tf_consistency.svg',
+        'EKF message vs odom-to-base TF consistency', 'Time [s]', 'Difference', t,
         [
             ('Position difference [m]', tf_pos_disagreement),
             ('Yaw difference [rad]', tf_yaw_disagreement),
@@ -473,15 +425,9 @@ def main():
     left_vel = col(rows, 'left_wheel_vel')
     right_vel = col(rows, 'right_wheel_vel')
     plot_lines(
-        run_dir / 'local_odom_wheel_velocity.png',
-        'Wheel joint velocity',
-        'Time [s]',
-        'Wheel angular velocity [rad/s]',
-        t,
-        [
-            ('Left wheel', left_vel),
-            ('Right wheel', right_vel),
-        ],
+        run_dir / 'local_odom_wheel_velocity.svg',
+        'Wheel joint velocity', 'Time [s]', 'Wheel angular velocity [rad/s]', t,
+        [('Left wheel', left_vel), ('Right wheel', right_vel)],
     )
 
     print(f'Analysis complete: {run_dir}')
