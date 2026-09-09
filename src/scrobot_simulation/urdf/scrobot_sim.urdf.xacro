@@ -1,14 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="scrobot">
 
-  <!--
-    Simulation-only override:
-    use a very narrow drive-wheel collision shape so Gazebo approximates
-    the line contact assumed by ideal differential-drive kinematics.
-    The visual / physical wheel width remains 30 mm.
-  -->
-  <xacro:arg name="wheel_collision_width" default="0.001"/>
-
   <!-- Real robot geometry -->
   <xacro:include
     filename="$(find scrobot_description)/urdf/scrobot.urdf.xacro"/>
