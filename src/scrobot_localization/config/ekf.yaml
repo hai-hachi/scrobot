@@ -36,17 +36,26 @@ ekf_filter_node:
     # ==========================================
     # Wheel encoder odometry
     # ==========================================
+    #
+    # Use encoder-integrated x/y pose directly for translation instead of
+    # re-integrating /diff_drive_controller/odom twist.linear.x in the EKF.
+    # Evaluation showed the wheel pose is accurate while the reported vx is
+    # biased/noisy enough to create significant EKF position drift.
+    #
+    # vy = 0 is retained as the non-holonomic differential-drive constraint.
+    # Wheel yaw / yaw-rate are deliberately NOT fused here; heading is owned
+    # by the IMU + magnetometer path below.
 
     odom0: /diff_drive_controller/odom
 
     odom0_config:
       [
-        false, false, false,   # x, y, z
+        true,  true,  false,   # x, y, z
         false, false, false,   # roll, pitch, yaw
 
-        true,  true,  false,   # vx, vy, vz
+        false, true,  false,   # vx, vy, vz
 
-        false, false, true,    # vroll, vpitch, vyaw
+        false, false, false,   # vroll, vpitch, vyaw
 
         false, false, false    # ax, ay, az
       ]
@@ -57,6 +66,10 @@ ekf_filter_node:
 
     odom0_relative: false
 
+
+    # ==========================================
+    # IMU + magnetometer orientation
+    # ==========================================
 
     imu0: /imu/data
 
