@@ -53,7 +53,7 @@ def generate_launch_description():
 
     # gazebo.launch.py provides:
     #   RGB image   -> ros_gz_image -> /camera/camera/color/image_raw
-    #   Depth image -> ros_gz_image -> /camera/camera/depth/image_rect_raw
+    #   Depth image -> ros_gz_image -> /camera/camera/depth/image_raw
     #   Native Gazebo point cloud
     #       -> ros_gz_bridge -> /camera/camera/depth/points
     #
@@ -95,6 +95,19 @@ def generate_launch_description():
     delayed_spawn_robot = TimerAction(
         period=spawn_delay,
         actions=[spawn_robot],
+    )
+
+    realsense_processing = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                simulation_pkg,
+                'launch',
+                'depth_registration.launch.py',
+            )
+        ),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+        }.items(),
     )
 
     rviz = IncludeLaunchDescription(
@@ -179,5 +192,6 @@ def generate_launch_description():
 
         gazebo,
         delayed_spawn_robot,
+        realsense_processing,
         rviz,
     ])

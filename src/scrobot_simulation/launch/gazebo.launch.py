@@ -131,7 +131,7 @@ def generate_launch_description():
             ),
             (
                 '/camera/depth',
-                '/camera/camera/depth/image_rect_raw',
+                '/camera/camera/depth/image_raw',
             ),
         ],
     )

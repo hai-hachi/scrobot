@@ -67,8 +67,8 @@
           <camera_info_topic>/camera/color/camera_info</camera_info_topic>
 
           <image>
-            <width>960</width>
-            <height>540</height>
+            <width>1280</width>
+            <height>720</height>
             <format>R8G8B8</format>
           </image>
 
@@ -103,8 +103,8 @@
           <camera_info_topic>/camera/depth/camera_info</camera_info_topic>
 
           <image>
-            <width>480</width>
-            <height>360</height>
+            <width>848</width>
+            <height>480</height>
             <format>R_FLOAT32</format>
           </image>
 
