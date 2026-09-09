@@ -22,6 +22,12 @@ def generate_launch_description():
         'apriltag.yaml'
     )
 
+    pointcloud_to_scan_config = os.path.join(
+        perception_pkg,
+        'config',
+        'pointcloud_to_scan.yaml'
+    )
+
     use_sim_time = LaunchConfiguration('use_sim_time')
 
 
@@ -94,6 +100,32 @@ def generate_launch_description():
     )
 
 
+    # ==========================================================
+    # Convert depth point cloud to LaserScan
+    # ==========================================================
+
+    pointcloud_to_scan = Node(
+        package='pointcloud_to_laserscan',
+        executable='pointcloud_to_laserscan_node',
+        name='depth_pointcloud_to_scan',
+        output='screen',
+        parameters=[
+            pointcloud_to_scan_config,
+            {'use_sim_time': use_sim_time},
+        ],
+        remappings=[
+            (
+                'cloud_in',
+                '/camera/camera/depth/points',
+            ),
+            (
+                'scan',
+                '/camera/camera/depth/scan',
+            ),
+        ],
+    )
+
+
     return LaunchDescription([
 
         DeclareLaunchArgument(
@@ -104,5 +136,6 @@ def generate_launch_description():
         # rectify_color,
 
         apriltag,
+        pointcloud_to_scan,
 
     ])
