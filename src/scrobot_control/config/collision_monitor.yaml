@@ -75,17 +75,10 @@ collision_monitor:
     # -------------------------------------------------
 
     observation_sources:
-      - depth_pointcloud
+      - depth_scan
 
-    depth_pointcloud:
-      type: pointcloud
-      topic: /camera/camera/depth/points
-      min_height: 0.08
-      max_height: 1.50
-      min_range: 0.30
-
-      # 15 Hz cloud = ~67 ms/frame. 0.3 s tolerates several missed
-      # samples but does not allow a multi-second stale safety cloud.
+    depth_scan:
+      type: scan
+      topic: /camera/camera/depth/scan
       source_timeout: 0.3
-
       enabled: true

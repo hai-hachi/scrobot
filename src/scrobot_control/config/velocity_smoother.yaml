@@ -3,7 +3,7 @@ velocity_smoother:
 
     use_sim_time: true
 
-    smoothing_frequency: 50.0
+    smoothing_frequency: 20.0
 
     scale_velocities: false
 

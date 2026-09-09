@@ -92,21 +92,19 @@
   qos_profile: SENSOR_DATA
   frame_id: "camera_depth_optical_frame"
 
-
 # ============================================================
-# Point cloud
+# Native Gazebo depth point cloud
 # ============================================================
 #
-# Do NOT bridge Gazebo's native depth point cloud here.
-# depth_registration.launch.py builds XYZ from the ROS depth image
-# and CameraInfo so it is correctly expressed in
-# camera_depth_optical_frame.
-
+# Simulation backend:
+#   /camera/points (Gazebo)
+#       -> ros_gz_bridge
+#       -> /camera/camera/depth/points (ROS)
+#
+# This replaces depth_image_proc::PointCloudXyzNode in simulation.
 # ============================================================
-# TEST: Gazebo native depth point cloud
-# ============================================================
 
-- ros_topic_name: "/camera/camera/depth/points_gz"
+- ros_topic_name: "/camera/camera/depth/points"
   gz_topic_name: "/camera/depth/points"
   ros_type_name: "sensor_msgs/msg/PointCloud2"
   gz_type_name: "gz.msgs.PointCloudPacked"
@@ -114,8 +112,9 @@
 
   qos_profile: SENSOR_DATA
   publisher_queue: 1
+  lazy: true
 
-  frame_id: "camera_depth_optical_frame"
+  frame_id: "camera_depth_frame"
 
 # Gazebo world ground truth for evaluation only.
 - ros_topic_name: /evaluation/ground_truth_tf
