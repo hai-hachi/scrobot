@@ -5,7 +5,11 @@ velocity_smoother:
 
     smoothing_frequency: 20.0
 
-    scale_velocities: false
+    # Preserve the commanded curvature when one velocity component is
+    # acceleration-limited. This is important for combined v + w motion:
+    # without proportional scaling, linear and angular ramps have different
+    # durations and an intended constant-radius arc is distorted.
+    scale_velocities: true
 
     feedback: "OPEN_LOOP"
 
