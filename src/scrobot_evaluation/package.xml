@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>scrobot_evaluation</name>
-  <version>0.0.0</version>
-  <description>Localization and path-tracking evaluation for SC Robot.</description>
+  <version>0.1.0</version>
+  <description>Evaluation tools for SC Robot localization, odometry, and navigation.</description>
   <maintainer email="user@example.com">scrobot</maintainer>
   <license>Apache-2.0</license>
 
@@ -11,9 +11,13 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>tf2_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>tf_transformations</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-matplotlib</exec_depend>
 

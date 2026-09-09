@@ -1,0 +1,53 @@
+local_odom_logger:
+  ros__parameters:
+    ground_truth_topic: /evaluation/ground_truth_odom
+
+    wheel_odom_topic: /diff_drive_controller/odom
+    ekf_odom_topic: /odometry/filtered
+    imu_raw_topic: /imu/data_raw
+    imu_topic: /imu/data
+    joint_states_topic: /joint_states
+
+    requested_cmd_topic: /cmd_vel_manual
+    final_cmd_topic: /diff_drive_controller/cmd_vel
+    test_state_topic: /evaluation/local_odom_test_state
+
+    odom_frame: odom
+    base_frame: base_footprint
+    left_wheel_joint: left_wheel_joint
+    right_wheel_joint: right_wheel_joint
+
+    sample_rate: 50.0
+    tf_timeout: 0.02
+
+    output_root: ~/scrobot_evaluation_runs/local_odom
+    run_name: ""
+    flush_every_samples: 50
+
+
+local_odom_test_runner:
+  ros__parameters:
+    test_type: suite
+    cmd_topic: /cmd_vel_manual
+    state_topic: /evaluation/local_odom_test_state
+    base_frame: base_footprint
+    publish_rate: 20.0
+
+    start_delay: 3.0
+    static_duration: 10.0
+    stop_duration: 2.0
+    final_settle_duration: 3.0
+
+    # Straight-line test
+    linear_speed: 0.25
+    straight_distance: 2.0
+
+    # In-place rotation test
+    angular_speed: 0.50
+    rotation_angle_deg: 360.0
+
+    # Combined linear + angular motion test
+    # radius = v / w = 1.0 m with these defaults.
+    arc_linear_speed: 0.25
+    arc_angular_speed: 0.25
+    arc_angle_deg: 180.0

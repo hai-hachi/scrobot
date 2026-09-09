@@ -70,4 +70,32 @@
   <xacro:scrobot_casters/>
   <xacro:scrobot_collector/>
   <xacro:scrobot_sensors/>
+
+
+  <!-- ====================================================== -->
+  <!-- Gazebo-only ground truth pose for evaluation           -->
+  <!-- ====================================================== -->
+
+
+  <!-- ====================================================== -->
+  <!-- Gazebo-only ground truth odometry for evaluation       -->
+  <!-- ====================================================== -->
+  <gazebo>
+    <plugin
+      filename="gz-sim-odometry-publisher-system"
+      name="gz::sim::systems::OdometryPublisher">
+
+      <odom_frame>world</odom_frame>
+      <robot_base_frame>base_footprint</robot_base_frame>
+
+      <odom_publish_frequency>50.0</odom_publish_frequency>
+      <odom_topic>/evaluation/scrobot/ground_truth_odom_gz</odom_topic>
+
+      <tf_topic>/evaluation/scrobot/ground_truth_tf_gz</tf_topic>
+
+      <dimensions>2</dimensions>
+      <gaussian_noise>0.0</gaussian_noise>
+    </plugin>
+  </gazebo>
+
 </robot>
