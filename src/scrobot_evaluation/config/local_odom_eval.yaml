@@ -20,7 +20,9 @@ local_odom_logger:
     sample_rate: 50.0
     tf_timeout: 0.02
 
-    output_root: ~/scrobot_evaluation_runs/local_odom
+    # Keep generated evaluation data beside /src in the workspace,
+    # outside the tracked repository tree.
+    output_root: /home/sea/scrobot_ws/evaluation_results/local_odom
     run_name: ""
     flush_every_samples: 50
 
