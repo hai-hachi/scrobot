@@ -14,16 +14,6 @@
 # ============================================================
 # D435i combined IMU
 # ============================================================
-#
-# Preserve the RealSense-like camera topic:
-#   /camera/camera/imu
-#
-# AND expose the same Gazebo IMU stream at the robot-level topic:
-#   /imu/data_raw
-#
-# Both messages use camera_imu_optical_frame because the data
-# originate from the D435i IMU, regardless of ROS topic name.
-# ============================================================
 
 - ros_topic_name: "/camera/camera/imu"
   gz_topic_name: "/camera/imu"
@@ -49,17 +39,6 @@
 # Color camera
 # ============================================================
 
-# - ros_topic_name: "/camera/camera/color/image_raw"
-#   gz_topic_name: "/camera/color"
-#   ros_type_name: "sensor_msgs/msg/Image"
-#   gz_type_name: "gz.msgs.Image"
-#   direction: GZ_TO_ROS
-
-#   qos_profile: SENSOR_DATA
-#   publisher_queue: 1
-
-#   frame_id: "camera_color_optical_frame"
-
 - ros_topic_name: "/camera/camera/color/camera_info"
   gz_topic_name: "/camera/color/camera_info"
   ros_type_name: "sensor_msgs/msg/CameraInfo"
@@ -73,17 +52,6 @@
 # Raw depth camera
 # ============================================================
 
-# - ros_topic_name: "/camera/camera/depth/image_rect_raw"
-#   gz_topic_name: "/camera/depth"
-#   ros_type_name: "sensor_msgs/msg/Image"
-#   gz_type_name: "gz.msgs.Image"
-#   direction: GZ_TO_ROS
-
-#   qos_profile: SENSOR_DATA
-#   publisher_queue: 1
-
-#   frame_id: "camera_depth_optical_frame"
-
 - ros_topic_name: "/camera/camera/depth/camera_info"
   gz_topic_name: "/camera/camera_info"
   ros_type_name: "sensor_msgs/msg/CameraInfo"
@@ -95,28 +63,24 @@
 # ============================================================
 # Native Gazebo depth point cloud
 # ============================================================
-#
-# Simulation backend:
-#   /camera/points (Gazebo)
-#       -> ros_gz_bridge
-#       -> /camera/camera/depth/points (ROS)
-#
-# This replaces depth_image_proc::PointCloudXyzNode in simulation.
-# ============================================================
 
 - ros_topic_name: "/camera/camera/depth/points"
   gz_topic_name: "/camera/depth/points"
   ros_type_name: "sensor_msgs/msg/PointCloud2"
   gz_type_name: "gz.msgs.PointCloudPacked"
   direction: GZ_TO_ROS
-
   qos_profile: SENSOR_DATA
   publisher_queue: 1
   lazy: true
-
   frame_id: "camera_depth_frame"
 
-# Gazebo world ground truth for evaluation only.
+# ============================================================
+# Evaluation ground truth
+# ============================================================
+
+# Full Gazebo world pose stream. Keep this for evaluation/debugging only.
+# Note: Pose_V -> TFMessage does not reliably preserve entity frame names in
+# ros_gz_bridge, so shuttle perception must NOT depend on this topic.
 - ros_topic_name: /evaluation/ground_truth_tf
   gz_topic_name: /world/badminton_court/dynamic_pose/info
   ros_type_name: tf2_msgs/msg/TFMessage
@@ -124,9 +88,19 @@
   direction: GZ_TO_ROS
   lazy: false
 
-# ============================================================
-# Dedicated Gazebo ground truth odometry for local evaluation
-# ============================================================
+# Dedicated shuttle-only ground truth produced by ShuttleActivitySystem.
+# Pose identity is intentionally unnecessary: the fake detector only needs the
+# current set of shuttle world poses. The future tracker assigns persistent IDs.
+- ros_topic_name: /evaluation/shuttle_ground_truth
+  gz_topic_name: /evaluation/shuttle_ground_truth_gz
+  ros_type_name: geometry_msgs/msg/PoseArray
+  gz_type_name: gz.msgs.Pose_V
+  direction: GZ_TO_ROS
+  qos_profile: SENSOR_DATA
+  publisher_queue: 1
+  lazy: false
+
+# Dedicated Gazebo ground truth odometry for local evaluation.
 - ros_topic_name: /evaluation/ground_truth_odom
   gz_topic_name: /evaluation/scrobot/ground_truth_odom_gz
   ros_type_name: nav_msgs/msg/Odometry
@@ -134,4 +108,3 @@
   direction: GZ_TO_ROS
   qos_profile: SENSOR_DATA
   publisher_queue: 1
-
