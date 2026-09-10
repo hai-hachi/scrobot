@@ -28,7 +28,11 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('config', default_value=default_config),
-        DeclareLaunchArgument('mode', default_value='single', choices=['single', 'random']),
+        DeclareLaunchArgument(
+            'mode',
+            default_value='single',
+            choices=['single', 'random', 'cluster', 'mixed'],
+        ),
         DeclareLaunchArgument('visual', default_value='detail', choices=['detail', 'fast']),
         DeclareLaunchArgument('batch', default_value='1'),
         spawn,
