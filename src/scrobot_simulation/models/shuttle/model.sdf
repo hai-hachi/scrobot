@@ -5,17 +5,16 @@
     <self_collide>false</self_collide>
     <allow_auto_disable>true</allow_auto_disable>
 
+    <plugin filename="libshuttle_activity_system.so"
+            name="scrobot_simulation::ShuttleActivitySystem">
+      <robot_model>scrobot</robot_model>
+      <update_rate>10.0</update_rate>
+      <activation_distance>1.2</activation_distance>
+      <freeze_distance>1.6</freeze_distance>
+      <settle_time>1.25</settle_time>
+    </plugin>
+
     <link name="shuttle_link">
-      <!--
-        Mesh convention:
-          - model origin is at the rounded cork tip
-          - +Z follows the shuttle axis toward the skirt
-          - total shuttle length is approximately 90 mm
-
-        Default spawner orientation is pitch = pi/2, so the shuttle lies on its side.
-      -->
-
-      <!-- User-tuned physical properties. -->
       <inertial>
         <pose>0 0 0.0296 0 0 0</pose>
         <mass>0.005</mass>
@@ -34,7 +33,6 @@
         <angular>0.55</angular>
       </velocity_decay>
 
-      <!-- Detailed visual variant: use for appearance / later YOLO camera tests. -->
       <visual name="shuttle_visual">
         <geometry>
           <mesh>
@@ -55,43 +53,15 @@
         </material>
       </visual>
 
-      <!--
-        Fast collision approximation using the measured dimensions:
-          cork diameter  = 28 mm
-          skirt diameter = 68 mm
-          total length   = 90 mm
-
-        Only two persistent contact shapes are used.  This is enough to define the
-        side-resting geometry while minimizing floor-contact work.
-
-        Collision filtering:
-          category 0x0002 = shuttle
-          mask     0xFFFD = collide with everything except other shuttles
-
-        The floor and robot keep their default masks, so they still collide with
-        shuttles.  Separate shuttle models should not generate shuttle-shuttle
-        contacts when the selected physics backend honors SDFormat contact masks.
-      -->
-
       <collision name="cork_collision">
         <pose>0 0 0.014 0 0 0</pose>
         <max_contacts>1</max_contacts>
         <geometry>
-          <sphere>
-            <radius>0.014</radius>
-          </sphere>
+          <sphere><radius>0.014</radius></sphere>
         </geometry>
         <surface>
-          <friction>
-            <ode>
-              <mu>0.7</mu>
-              <mu2>0.7</mu2>
-            </ode>
-          </friction>
-          <bounce>
-            <restitution_coefficient>0.0</restitution_coefficient>
-            <threshold>1000000.0</threshold>
-          </bounce>
+          <friction><ode><mu>0.7</mu><mu2>0.7</mu2></ode></friction>
+          <bounce><restitution_coefficient>0.0</restitution_coefficient><threshold>1000000.0</threshold></bounce>
           <contact>
             <collide_without_contact>false</collide_without_contact>
             <category_bitmask>0x0002</category_bitmask>
@@ -101,26 +71,14 @@
       </collision>
 
       <collision name="skirt_collision">
-        <!-- 8 mm thick rim ending at the measured 90 mm total length. -->
         <pose>0 0 0.086 0 0 0</pose>
         <max_contacts>1</max_contacts>
         <geometry>
-          <cylinder>
-            <radius>0.034</radius>
-            <length>0.008</length>
-          </cylinder>
+          <cylinder><radius>0.034</radius><length>0.008</length></cylinder>
         </geometry>
         <surface>
-          <friction>
-            <ode>
-              <mu>0.7</mu>
-              <mu2>0.7</mu2>
-            </ode>
-          </friction>
-          <bounce>
-            <restitution_coefficient>0.0</restitution_coefficient>
-            <threshold>1000000.0</threshold>
-          </bounce>
+          <friction><ode><mu>0.7</mu><mu2>0.7</mu2></ode></friction>
+          <bounce><restitution_coefficient>0.0</restitution_coefficient><threshold>1000000.0</threshold></bounce>
           <contact>
             <collide_without_contact>false</collide_without_contact>
             <category_bitmask>0x0002</category_bitmask>
