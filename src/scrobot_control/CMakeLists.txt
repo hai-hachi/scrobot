@@ -24,7 +24,6 @@ install(
 install(
   PROGRAMS
     scripts/wasd_teleop.py
-    scripts/collision_recovery.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
