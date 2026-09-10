@@ -21,7 +21,6 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'patrol_points = scrobot_mission.patrol_points:main',
             'patrol_manager = scrobot_mission.patrol_manager:main',
         ],
     },
