@@ -3,6 +3,15 @@
   <model name="court_apriltags">
     <static>true</static>
 
+    <plugin filename="libshuttle_activity_system.so"
+            name="scrobot_simulation::ShuttleActivitySystem">
+      <robot_model>scrobot</robot_model>
+      <update_rate>10.0</update_rate>
+      <activation_distance>1.2</activation_distance>
+      <freeze_distance>1.6</freeze_distance>
+      <settle_time>1.25</settle_time>
+    </plugin>
+
     <!-- ======================================================
          Tag 0
 
@@ -15,151 +24,74 @@
          ====================================================== -->
     <link name="tag_mount_0">
       <pose>0.053033009 2.996966991 0.150000000 0 0 -0.785398163</pose>
-
-      <!-- Thin opaque backing plate. It also prevents the marker from
-           being visible from the physical back side. -->
       <visual name="backing">
         <pose>-0.001750 0 0 0 0 0</pose>
-        <geometry>
-          <box>
-            <size>0.003000 0.133333333 0.133333333</size>
-          </box>
-        </geometry>
+        <geometry><box><size>0.003000 0.133333333 0.133333333</size></box></geometry>
         <material>
           <ambient>0.15 0.15 0.15 1</ambient>
           <diffuse>0.15 0.15 0.15 1</diffuse>
           <specular>0 0 0 1</specular>
         </material>
       </visual>
-
-      <!-- Explicitly UV-mapped front quad. No Gazebo plane-normal
-           texture rotation is involved. -->
       <visual name="tag_texture">
-        <geometry>
-          <mesh>
-            <uri>model://court_apriltags/meshes/tag_0.obj</uri>
-          </mesh>
-        </geometry>
+        <geometry><mesh><uri>model://court_apriltags/meshes/tag_0.obj</uri></mesh></geometry>
       </visual>
     </link>
 
     <!-- ======================================================
          Tag 1
-
-         Link frame IS the physical tag_mount_1 convention:
-           +X outward from printed face
-           +Y left (REP-103)
-           +Z up
-
-         Only yaw changes with inward angle.
          ====================================================== -->
     <link name="tag_mount_1">
       <pose>0.053033009 -2.996966991 0.150000000 0 0 0.785398163</pose>
-
-      <!-- Thin opaque backing plate. It also prevents the marker from
-           being visible from the physical back side. -->
       <visual name="backing">
         <pose>-0.001750 0 0 0 0 0</pose>
-        <geometry>
-          <box>
-            <size>0.003000 0.133333333 0.133333333</size>
-          </box>
-        </geometry>
+        <geometry><box><size>0.003000 0.133333333 0.133333333</size></box></geometry>
         <material>
           <ambient>0.15 0.15 0.15 1</ambient>
           <diffuse>0.15 0.15 0.15 1</diffuse>
           <specular>0 0 0 1</specular>
         </material>
       </visual>
-
-      <!-- Explicitly UV-mapped front quad. No Gazebo plane-normal
-           texture rotation is involved. -->
       <visual name="tag_texture">
-        <geometry>
-          <mesh>
-            <uri>model://court_apriltags/meshes/tag_1.obj</uri>
-          </mesh>
-        </geometry>
+        <geometry><mesh><uri>model://court_apriltags/meshes/tag_1.obj</uri></mesh></geometry>
       </visual>
     </link>
 
     <!-- ======================================================
          Tag 2
-
-         Link frame IS the physical tag_mount_2 convention:
-           +X outward from printed face
-           +Y left (REP-103)
-           +Z up
-
-         Only yaw changes with inward angle.
          ====================================================== -->
     <link name="tag_mount_2">
       <pose>-0.053033009 2.996966991 0.150000000 0 0 -2.356194490</pose>
-
-      <!-- Thin opaque backing plate. It also prevents the marker from
-           being visible from the physical back side. -->
       <visual name="backing">
         <pose>-0.001750 0 0 0 0 0</pose>
-        <geometry>
-          <box>
-            <size>0.003000 0.133333333 0.133333333</size>
-          </box>
-        </geometry>
+        <geometry><box><size>0.003000 0.133333333 0.133333333</size></box></geometry>
         <material>
           <ambient>0.15 0.15 0.15 1</ambient>
           <diffuse>0.15 0.15 0.15 1</diffuse>
           <specular>0 0 0 1</specular>
         </material>
       </visual>
-
-      <!-- Explicitly UV-mapped front quad. No Gazebo plane-normal
-           texture rotation is involved. -->
       <visual name="tag_texture">
-        <geometry>
-          <mesh>
-            <uri>model://court_apriltags/meshes/tag_2.obj</uri>
-          </mesh>
-        </geometry>
+        <geometry><mesh><uri>model://court_apriltags/meshes/tag_2.obj</uri></mesh></geometry>
       </visual>
     </link>
 
     <!-- ======================================================
          Tag 3
-
-         Link frame IS the physical tag_mount_3 convention:
-           +X outward from printed face
-           +Y left (REP-103)
-           +Z up
-
-         Only yaw changes with inward angle.
          ====================================================== -->
     <link name="tag_mount_3">
       <pose>-0.053033009 -2.996966991 0.150000000 0 0 2.356194490</pose>
-
-      <!-- Thin opaque backing plate. It also prevents the marker from
-           being visible from the physical back side. -->
       <visual name="backing">
         <pose>-0.001750 0 0 0 0 0</pose>
-        <geometry>
-          <box>
-            <size>0.003000 0.133333333 0.133333333</size>
-          </box>
-        </geometry>
+        <geometry><box><size>0.003000 0.133333333 0.133333333</size></box></geometry>
         <material>
           <ambient>0.15 0.15 0.15 1</ambient>
           <diffuse>0.15 0.15 0.15 1</diffuse>
           <specular>0 0 0 1</specular>
         </material>
       </visual>
-
-      <!-- Explicitly UV-mapped front quad. No Gazebo plane-normal
-           texture rotation is involved. -->
       <visual name="tag_texture">
-        <geometry>
-          <mesh>
-            <uri>model://court_apriltags/meshes/tag_3.obj</uri>
-          </mesh>
-        </geometry>
+        <geometry><mesh><uri>model://court_apriltags/meshes/tag_3.obj</uri></mesh></geometry>
       </visual>
     </link>
 
