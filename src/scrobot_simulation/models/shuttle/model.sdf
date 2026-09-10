@@ -8,12 +8,14 @@
     <link name="shuttle_link">
       <!--
         Mesh convention:
-          - mesh origin is at the rounded cork tip
-          - +Z follows the shuttle longitudinal axis toward the skirt
-        The spawner lays the shuttle on its side by default using pitch = pi/2.
+          - model origin is at the rounded cork tip
+          - +Z follows the shuttle axis toward the skirt
+          - total shuttle length is approximately 90 mm
+
+        Default spawner orientation is pitch = pi/2, so the shuttle lies on its side.
       -->
 
-      <!-- Keep the tuned mass, COM and inertia independent of collision simplification. -->
+      <!-- User-tuned physical properties. -->
       <inertial>
         <pose>0 0 0.0296 0 0 0</pose>
         <mass>0.005</mass>
@@ -27,13 +29,12 @@
         </inertia>
       </inertial>
 
-      <!-- Damping helps a dropped shuttle settle instead of jittering indefinitely. -->
       <velocity_decay>
         <linear>0.35</linear>
         <angular>0.55</angular>
       </velocity_decay>
 
-      <!-- Detailed mesh is visual only. -->
+      <!-- Detailed visual variant: use for appearance / later YOLO camera tests. -->
       <visual name="shuttle_visual">
         <geometry>
           <mesh>
@@ -55,34 +56,36 @@
       </visual>
 
       <!--
-        Fast collision approximation.
+        Fast collision approximation using the measured dimensions:
+          cork diameter  = 28 mm
+          skirt diameter = 68 mm
+          total length   = 90 mm
 
-        The original triangle mesh collision was expensive because every dynamic
-        shuttle rests against the floor continuously.  These three primitives keep
-        the useful behaviour for this project while dramatically reducing contact
-        complexity:
-          1. cork end   : sphere, ~26 mm diameter
-          2. body       : narrow cylinder along local +Z
-          3. skirt rim  : short wide cylinder, ~65 mm diameter
+        Only two persistent contact shapes are used.  This is enough to define the
+        side-resting geometry while minimizing floor-contact work.
 
-        Primitive dimensions are intentionally easy to tune after visual/contact
-        inspection.  They do not change the detailed rendered shuttle mesh.
+        Collision filtering:
+          category 0x0002 = shuttle
+          mask     0xFFFD = collide with everything except other shuttles
+
+        The floor and robot keep their default masks, so they still collide with
+        shuttles.  Separate shuttle models should not generate shuttle-shuttle
+        contacts when the selected physics backend honors SDFormat contact masks.
       -->
 
       <collision name="cork_collision">
-        <!-- Origin is at rounded tip; cork occupies roughly the first 25 mm. -->
-        <pose>0 0 0.013 0 0 0</pose>
-        <max_contacts>2</max_contacts>
+        <pose>0 0 0.014 0 0 0</pose>
+        <max_contacts>1</max_contacts>
         <geometry>
           <sphere>
-            <radius>0.013</radius>
+            <radius>0.014</radius>
           </sphere>
         </geometry>
         <surface>
           <friction>
             <ode>
-              <mu>0.9</mu>
-              <mu2>0.9</mu2>
+              <mu>0.7</mu>
+              <mu2>0.7</mu2>
             </ode>
           </friction>
           <bounce>
@@ -91,52 +94,27 @@
           </bounce>
           <contact>
             <collide_without_contact>false</collide_without_contact>
-          </contact>
-        </surface>
-      </collision>
-
-      <collision name="body_collision">
-        <!-- Cheap axial collision so the base cannot pass through the shuttle middle. -->
-        <pose>0 0 0.038 0 0 0</pose>
-        <max_contacts>2</max_contacts>
-        <geometry>
-          <cylinder>
-            <radius>0.006</radius>
-            <length>0.040</length>
-          </cylinder>
-        </geometry>
-        <surface>
-          <friction>
-            <ode>
-              <mu>0.9</mu>
-              <mu2>0.9</mu2>
-            </ode>
-          </friction>
-          <bounce>
-            <restitution_coefficient>0.0</restitution_coefficient>
-            <threshold>1000000.0</threshold>
-          </bounce>
-          <contact>
-            <collide_without_contact>false</collide_without_contact>
+            <category_bitmask>0x0002</category_bitmask>
+            <collide_bitmask>0xFFFD</collide_bitmask>
           </contact>
         </surface>
       </collision>
 
       <collision name="skirt_collision">
-        <!-- Wide rim provides the second stable floor contact when lying on its side. -->
-        <pose>0 0 0.064 0 0 0</pose>
-        <max_contacts>2</max_contacts>
+        <!-- 8 mm thick rim ending at the measured 90 mm total length. -->
+        <pose>0 0 0.086 0 0 0</pose>
+        <max_contacts>1</max_contacts>
         <geometry>
           <cylinder>
-            <radius>0.0325</radius>
+            <radius>0.034</radius>
             <length>0.008</length>
           </cylinder>
         </geometry>
         <surface>
           <friction>
             <ode>
-              <mu>0.9</mu>
-              <mu2>0.9</mu2>
+              <mu>0.7</mu>
+              <mu2>0.7</mu2>
             </ode>
           </friction>
           <bounce>
@@ -145,6 +123,8 @@
           </bounce>
           <contact>
             <collide_without_contact>false</collide_without_contact>
+            <category_bitmask>0x0002</category_bitmask>
+            <collide_bitmask>0xFFFD</collide_bitmask>
           </contact>
         </surface>
       </collision>
