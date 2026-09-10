@@ -13,6 +13,7 @@ find_package(std_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(gz-plugin2 REQUIRED COMPONENTS register)
 find_package(gz-sim8 REQUIRED)
+set(GZ_PLUGIN_VER ${gz-plugin2_VERSION_MAJOR})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -45,7 +46,7 @@ set_property(TARGET shuttle_activity_system PROPERTY CXX_STANDARD 17)
 target_link_libraries(
   shuttle_activity_system
   PRIVATE
-    gz-plugin2::gz-plugin2
+    gz-plugin${GZ_PLUGIN_VER}::gz-plugin${GZ_PLUGIN_VER}
     gz-sim8::gz-sim8
 )
 
