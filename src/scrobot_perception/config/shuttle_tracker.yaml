@@ -1,0 +1,16 @@
+shuttle_tracker:
+  ros__parameters:
+    use_sim_time: true
+
+    input_topic: /perception/shuttle_detections_3d
+    output_topic: /perception/tracked_shuttles
+
+    tracking_frame: map
+
+    publish_rate: 10.0
+    association_distance: 0.30
+    position_alpha: 0.50
+    stale_timeout: 1.50
+    tf_timeout: 0.05
+
+    default_class_id: shuttle
