@@ -48,6 +48,39 @@ def rmse(values):
     return float(np.sqrt(np.mean(values ** 2))) if values.size else float('nan')
 
 
+def cumulative_delta(rows, key):
+    values = finite(numeric(rows, key))
+    if values.size < 2:
+        return float('nan')
+    return float(values[-1] - values[0])
+
+
+def select_evaluation_window(samples):
+    """Keep only the actual patrol mission: first GO_TO_PATROL -> first COMPLETE."""
+    if not samples:
+        return [], 0, -1
+
+    start = next(
+        (
+            index
+            for index, row in enumerate(samples)
+            if row.get('mission_state') == 'GO_TO_PATROL'
+        ),
+        0,
+    )
+
+    end = next(
+        (
+            index
+            for index in range(start, len(samples))
+            if samples[index].get('mission_state') == 'COMPLETE'
+        ),
+        len(samples) - 1,
+    )
+
+    return samples[start:end + 1], start, end
+
+
 def save_summary(run_dir, metrics):
     path = run_dir / 'summary.csv'
     with open(path, 'w', newline='') as handle:
@@ -219,7 +252,9 @@ def main():
     if not trajectory_path.exists():
         raise SystemExit(f'Missing {trajectory_path}')
 
-    samples = load_csv(trajectory_path)
+    raw_samples = load_csv(trajectory_path)
+    samples, start_index, end_index = select_evaluation_window(raw_samples)
+
     checkpoints = (
         load_csv(run_dir / 'checkpoints.csv')
         if (run_dir / 'checkpoints.csv').exists()
@@ -258,25 +293,32 @@ def main():
     if valid_time.size >= 2:
         duration = float(valid_time[-1] - valid_time[0])
 
-    gt_total = numeric(samples, 'gt_distance_total')
-    est_total = numeric(samples, 'est_distance_total')
+    start_time = float('nan')
+    end_time = float('nan')
+    if valid_time.size:
+        start_time = float(valid_time[0])
+        end_time = float(valid_time[-1])
 
     loc_yaw_rmse = rmse(loc_yaw)
 
     metrics = {
+        'raw_samples_logged': len(raw_samples),
+        'evaluation_samples': len(samples),
+        'evaluation_start_row': start_index,
+        'evaluation_end_row': end_index,
+        'evaluation_start_ros_time_s': start_time,
+        'evaluation_end_ros_time_s': end_time,
         'mission_logged_duration_s': duration,
         'patrol_points_recorded': len(points),
         'checkpoints_completed': len(checkpoints),
         'spins_completed': len(spins),
-        'ground_truth_total_path_length_m': (
-            float(finite(gt_total)[-1])
-            if finite(gt_total).size
-            else float('nan')
+        'ground_truth_total_path_length_m': cumulative_delta(
+            samples,
+            'gt_distance_total',
         ),
-        'estimated_total_path_length_m': (
-            float(finite(est_total)[-1])
-            if finite(est_total).size
-            else float('nan')
+        'estimated_total_path_length_m': cumulative_delta(
+            samples,
+            'est_distance_total',
         ),
         'localization_position_rmse_m': rmse(loc_pos),
         'localization_yaw_rmse_deg': (
@@ -311,14 +353,22 @@ def main():
 
     print(f'Analysis complete: {run_dir}')
     print(f'Summary: {summary_path}')
+    print(
+        'Evaluation window: first GO_TO_PATROL -> first COMPLETE '
+        f'({start_time:.3f} s -> {end_time:.3f} s)'
+    )
     print(f'Checkpoints: {len(checkpoints)}')
     print(
         'Checkpoint mean position error: '
         f'{metrics["checkpoint_position_error_mean_m"]:.4f} m'
     )
     print(
-        f'Plan cross-track RMSE: '
+        'Plan cross-track RMSE: '
         f'{metrics["plan_cross_track_rmse_m"]:.4f} m'
+    )
+    print(
+        'Ground-truth patrol path length: '
+        f'{metrics["ground_truth_total_path_length_m"]:.3f} m'
     )
     print(
         f'Spin mean overshoot: '
