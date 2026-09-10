@@ -17,10 +17,11 @@ def generate_launch_description():
                 'target_frame': 'base_footprint',
                 'transform_tolerance': 0.05,
 
-                # Preserve the same useful vertical obstacle band used by
-                # Collision Monitor / Nav2 PointCloud2 sources.
+                # Only project obstacles within the robot-relevant vertical
+                # band. High objects such as the badminton net should remain
+                # visible in the raw PointCloud2 but not enter this LaserScan.
                 'min_height': 0.08,
-                'max_height': 0.70,
+                'max_height': 0.60,
 
                 # D435i depth horizontal FOV is about 87 deg.
                 'angle_min': -0.76,
