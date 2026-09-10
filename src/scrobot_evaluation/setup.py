@@ -17,13 +17,15 @@ setup(
     zip_safe=True,
     maintainer='scrobot',
     maintainer_email='user@example.com',
-    description='Evaluation tools for SC Robot localization, odometry, and navigation.',
+    description='Evaluation tools for SC Robot localization, odometry, navigation, and patrol trajectory.',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
             'local_odom_logger = scrobot_evaluation.local_odom_logger:main',
             'local_odom_test_runner = scrobot_evaluation.local_odom_test_runner:main',
             'analyze_local_odom = scrobot_evaluation.analyze_local_odom:main',
+            'patrol_trajectory_logger = scrobot_evaluation.patrol_trajectory_logger:main',
+            'analyze_patrol = scrobot_evaluation.analyze_patrol:main',
         ],
     },
 )
