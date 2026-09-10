@@ -2,6 +2,7 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 #include <gz/plugin/Register.hh>
 #include <gz/sim/Model.hh>
@@ -9,6 +10,7 @@
 #include <gz/sim/Util.hh>
 #include <gz/sim/components/Model.hh>
 #include <gz/sim/components/Name.hh>
+#include <gz/sim/components/World.hh>
 
 #include <sdf/Element.hh>
 
@@ -20,6 +22,14 @@ class ShuttleActivitySystem:
   public gz::sim::ISystemConfigure,
   public gz::sim::ISystemPreUpdate
 {
+private:
+  struct ShuttleState
+  {
+    std::chrono::steady_clock::duration lastProtectedTime{};
+    bool initialized{false};
+    bool requestedStatic{false};
+  };
+
 public:
   void Configure(
     const gz::sim::Entity &_entity,
@@ -27,9 +37,10 @@ public:
     gz::sim::EntityComponentManager &_ecm,
     gz::sim::EventManager & /*_eventMgr*/) override
   {
-    this->shuttleEntity_ = _entity;
-    this->shuttleModel_ = gz::sim::Model(_entity);
+    if (!_ecm.Component<gz::sim::components::World>(_entity))
+      return;
 
+    this->worldEntity_ = _entity;
     this->robotName_ = _sdf->Get<std::string>(
       "robot_model", this->robotName_).first;
     this->updateRate_ = _sdf->Get<double>(
@@ -57,8 +68,6 @@ public:
       std::chrono::steady_clock::duration>(
         std::chrono::duration<double>(this->settleTime_));
 
-    // Resolve immediately if the robot already exists. If not, PreUpdate will
-    // keep trying; this also supports shuttles spawned before the robot.
     this->ResolveRobot(_ecm);
   }
 
@@ -66,13 +75,12 @@ public:
     const gz::sim::UpdateInfo &_info,
     gz::sim::EntityComponentManager &_ecm) override
   {
-    if (_info.paused || this->shuttleEntity_ == gz::sim::kNullEntity)
+    if (_info.paused || this->worldEntity_ == gz::sim::kNullEntity)
       return;
 
     if (!this->timeInitialized_)
     {
       this->lastUpdate_ = _info.simTime;
-      this->lastProtectedTime_ = _info.simTime;
       this->timeInitialized_ = true;
       return;
     }
@@ -87,47 +95,62 @@ public:
       this->ResolveRobot(_ecm);
     }
 
-    double robotDistance = 1.0e9;
-    if (this->robotEntity_ != gz::sim::kNullEntity)
-    {
-      const auto shuttlePose = gz::sim::worldPose(this->shuttleEntity_, _ecm);
-      const auto robotPose = gz::sim::worldPose(this->robotEntity_, _ecm);
-      const double dx = shuttlePose.Pos().X() - robotPose.Pos().X();
-      const double dy = shuttlePose.Pos().Y() - robotPose.Pos().Y();
-      robotDistance = std::hypot(dx, dy);
-    }
+    if (this->robotEntity_ == gz::sim::kNullEntity)
+      return;
 
-    const bool staticNow = this->requestedStatic_ ||
-      this->shuttleModel_.Static(_ecm);
+    const auto robotPose = gz::sim::worldPose(this->robotEntity_, _ecm);
 
-    if (staticNow)
-    {
-      // Wake well before the robot can physically touch the shuttle.
-      if (robotDistance <= this->activationDistance_)
+    _ecm.Each<gz::sim::components::Model, gz::sim::components::Name>(
+      [&](const gz::sim::Entity &_entity,
+          const gz::sim::components::Model * /*_modelComp*/,
+          const gz::sim::components::Name * /*_nameComp*/) -> bool
       {
-        this->shuttleModel_.SetStatic(_ecm, false);
-        this->requestedStatic_ = false;
-        this->lastProtectedTime_ = _info.simTime;
-      }
-      return;
-    }
+        if (_entity == this->robotEntity_ || _entity == this->worldEntity_)
+          return true;
 
-    // While the robot is nearby, never freeze. This timestamp also creates a
-    // settle delay after the robot moves away following a push.
-    if (robotDistance <= this->freezeDistance_)
-    {
-      this->lastProtectedTime_ = _info.simTime;
-      return;
-    }
+        gz::sim::Model model(_entity);
+        if (model.LinkByName(_ecm, "shuttle_link") == gz::sim::kNullEntity)
+          return true;
 
-    // Far-away dynamic shuttles are allowed to settle, then converted to
-    // static bodies. Their visual and world pose are preserved, but physics no
-    // longer integrates them until the robot comes near again.
-    if (_info.simTime - this->lastProtectedTime_ >= this->settleDuration_)
-    {
-      this->shuttleModel_.SetStatic(_ecm, true);
-      this->requestedStatic_ = true;
-    }
+        auto &state = this->states_[_entity];
+        if (!state.initialized)
+        {
+          state.lastProtectedTime = _info.simTime;
+          state.initialized = true;
+        }
+
+        const auto shuttlePose = gz::sim::worldPose(_entity, _ecm);
+        const double dx = shuttlePose.Pos().X() - robotPose.Pos().X();
+        const double dy = shuttlePose.Pos().Y() - robotPose.Pos().Y();
+        const double distance = std::hypot(dx, dy);
+
+        const bool staticNow = state.requestedStatic || model.Static(_ecm);
+
+        if (staticNow)
+        {
+          if (distance <= this->activationDistance_)
+          {
+            model.SetStatic(_ecm, false);
+            state.requestedStatic = false;
+            state.lastProtectedTime = _info.simTime;
+          }
+          return true;
+        }
+
+        if (distance <= this->freezeDistance_)
+        {
+          state.lastProtectedTime = _info.simTime;
+          return true;
+        }
+
+        if (_info.simTime - state.lastProtectedTime >= this->settleDuration_)
+        {
+          model.SetStatic(_ecm, true);
+          state.requestedStatic = true;
+        }
+
+        return true;
+      });
   }
 
 private:
@@ -138,9 +161,9 @@ private:
       gz::sim::components::Name(this->robotName_));
   }
 
-  gz::sim::Entity shuttleEntity_{gz::sim::kNullEntity};
+  gz::sim::Entity worldEntity_{gz::sim::kNullEntity};
   gz::sim::Entity robotEntity_{gz::sim::kNullEntity};
-  gz::sim::Model shuttleModel_;
+  std::unordered_map<gz::sim::Entity, ShuttleState> states_;
 
   std::string robotName_{"scrobot"};
   double updateRate_{10.0};
@@ -151,10 +174,7 @@ private:
   std::chrono::steady_clock::duration updatePeriod_{};
   std::chrono::steady_clock::duration settleDuration_{};
   std::chrono::steady_clock::duration lastUpdate_{};
-  std::chrono::steady_clock::duration lastProtectedTime_{};
-
   bool timeInitialized_{false};
-  bool requestedStatic_{false};
 };
 
 }  // namespace scrobot_simulation
