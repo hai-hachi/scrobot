@@ -20,6 +20,11 @@
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>nav2_msgs</exec_depend>
 
+  <!-- Plugins selected in config/nav2_params.yaml. -->
+  <exec_depend>nav2_navfn_planner</exec_depend>
+  <exec_depend>nav2_regulated_pure_pursuit_controller</exec_depend>
+  <exec_depend>nav2_costmap_2d</exec_depend>
+
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>action_msgs</exec_depend>
