@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<sdf version="1.10">
+  <model name="shuttle">
+    <static>false</static>
+    <self_collide>false</self_collide>
+
+    <link name="body">
+      <gravity>true</gravity>
+
+      <!--
+        The STL frame is used directly.
+        Convention expected from both meshes:
+          origin: round cork tip
+          +Z:     along the shuttle longitudinal axis toward the skirt
+      -->
+
+      <!-- Slightly heavier than a real shuttle for stable Gazebo contact. -->
+      <inertial>
+        <pose>0 0 0.025 0 0 0</pose>
+        <mass>0.020</mass>
+        <inertia>
+          <ixx>1.5e-5</ixx>
+          <iyy>1.5e-5</iyy>
+          <izz>8.0e-6</izz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
+        </inertia>
+      </inertial>
+
+      <!-- Help a dropped shuttle settle instead of rolling forever. -->
+      <velocity_decay>
+        <linear>0.05</linear>
+        <angular>0.10</angular>
+      </velocity_decay>
+
+      <collision name="collision">
+        <geometry>
+          <mesh>
+            <uri>model://shuttle/meshes/shuttle_collision.stl</uri>
+          </mesh>
+        </geometry>
+
+        <surface>
+          <friction>
+            <ode>
+              <mu>0.70</mu>
+              <mu2>0.70</mu2>
+            </ode>
+          </friction>
+
+          <!-- No bounce when the shuttle is dropped onto the court. -->
+          <bounce>
+            <restitution_coefficient>0.0</restitution_coefficient>
+            <threshold>100000.0</threshold>
+          </bounce>
+        </surface>
+      </collision>
+
+      <visual name="visual">
+        <geometry>
+          <mesh>
+            <uri>model://shuttle/meshes/shuttle.stl</uri>
+          </mesh>
+        </geometry>
+
+        <!-- Matte white plastic / feather appearance. -->
+        <material>
+          <ambient>0.82 0.82 0.82 1</ambient>
+          <diffuse>0.95 0.95 0.95 1</diffuse>
+          <specular>0.02 0.02 0.02 1</specular>
+          <double_sided>true</double_sided>
+          <pbr>
+            <metal>
+              <roughness>0.90</roughness>
+              <metalness>0.00</metalness>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>
