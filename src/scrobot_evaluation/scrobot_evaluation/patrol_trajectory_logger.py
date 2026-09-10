@@ -8,13 +8,12 @@ from pathlib import Path
 
 import rclpy
 from geometry_msgs.msg import PoseArray, PoseStamped
-from nav_msgs.msg import Path as NavPath
+from nav_msgs.msg import Odometry, Path as NavPath
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from std_msgs.msg import String
-from tf2_msgs.msg import TFMessage
 from tf2_ros import Buffer, TransformException, TransformListener
 from tf_transformations import euler_from_quaternion
 
@@ -59,8 +58,10 @@ class PatrolTrajectoryLogger(Node):
 
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('base_frame', 'base_footprint')
-        self.declare_parameter('ground_truth_topic', '/evaluation/ground_truth_tf')
-        self.declare_parameter('ground_truth_child_contains', 'scrobot')
+        self.declare_parameter(
+            'ground_truth_topic',
+            '/evaluation/ground_truth_odom',
+        )
         self.declare_parameter('mission_state_topic', '/mission/state')
         self.declare_parameter('current_goal_topic', '/mission/current_goal')
         self.declare_parameter('patrol_points_topic', '/mission/patrol_points')
@@ -79,9 +80,6 @@ class PatrolTrajectoryLogger(Node):
         self.base_frame = str(self.get_parameter('base_frame').value)
         self.ground_truth_topic = str(
             self.get_parameter('ground_truth_topic').value
-        )
-        self.ground_truth_child_contains = str(
-            self.get_parameter('ground_truth_child_contains').value
         )
         self.mission_state_topic = str(
             self.get_parameter('mission_state_topic').value
@@ -140,7 +138,7 @@ class PatrolTrajectoryLogger(Node):
         self.plan_revision = 0
 
         self.latest_gt = None
-        self.latest_gt_child = ''
+        self.gt_received = False
         self.last_gt_xy = None
         self.last_est_xy = None
         self.gt_distance_total = 0.0
@@ -224,7 +222,7 @@ class PatrolTrajectoryLogger(Node):
         self.sample_count = 0
 
         self.create_subscription(
-            TFMessage,
+            Odometry,
             self.ground_truth_topic,
             self.ground_truth_callback,
             sensor_qos,
@@ -262,38 +260,25 @@ class PatrolTrajectoryLogger(Node):
         self.get_logger().info(
             f'Patrol trajectory logging to: {self.output_dir}'
         )
+        self.get_logger().info(
+            f'Waiting for dedicated Gazebo ground truth odometry on '
+            f'{self.ground_truth_topic}.'
+        )
 
     def now_seconds(self):
         return self.get_clock().now().nanoseconds / 1e9
 
     def ground_truth_callback(self, msg):
-        if not msg.transforms:
-            return
-
-        needle = self.ground_truth_child_contains.lower()
-        candidates = []
-        for transform in msg.transforms:
-            child = transform.child_frame_id or ''
-            if needle and needle not in child.lower():
-                continue
-            candidates.append(transform)
-
-        if not candidates:
-            return
-
-        transform = min(
-            candidates,
-            key=lambda item: len(item.child_frame_id or ''),
-        )
-        t = transform.transform.translation
-        q = transform.transform.rotation
-        pose = (float(t.x), float(t.y), yaw_from_quaternion(q))
+        # Same dedicated Gazebo OdometryPublisher path used by local_odom_logger.
+        p = msg.pose.pose.position
+        q = msg.pose.pose.orientation
+        pose = (float(p.x), float(p.y), yaw_from_quaternion(q))
         self.latest_gt = pose
 
-        if transform.child_frame_id != self.latest_gt_child:
-            self.latest_gt_child = transform.child_frame_id
+        if not self.gt_received:
+            self.gt_received = True
             self.get_logger().info(
-                f'Using ground-truth entity: {self.latest_gt_child}'
+                f'Receiving Gazebo ground truth from {self.ground_truth_topic}.'
             )
 
         if self.spin_active:
