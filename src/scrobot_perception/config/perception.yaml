@@ -1,0 +1,53 @@
+apriltag:
+  ros__parameters:
+    image_transport: raw
+    qos_profile: sensor_data
+
+    family: "16h5"
+    size: 0.100
+    max_hamming: 0
+    profile: false
+
+    detector:
+      threads: 2
+      decimate: 1.0
+      blur: 0.0
+      refine: true
+      sharpening: 0.25
+      debug: false
+
+    pose_estimation_method: "pnp"
+
+    tag:
+      ids: [0, 1, 2, 3]
+      frames:
+        - observed_tag_0
+        - observed_tag_1
+        - observed_tag_2
+        - observed_tag_3
+      sizes: [0.100, 0.100, 0.100, 0.100]
+
+
+depth_pointcloud_to_scan:
+  ros__parameters:
+    use_sim_time: true
+
+    target_frame: base_footprint
+    transform_tolerance: 0.05
+
+    # Robot-relevant vertical obstacle band.
+    min_height: 0.08
+    max_height: 0.70
+
+    # D435i horizontal field of view, approximately 87 deg.
+    angle_min: -0.76
+    angle_max: 0.76
+    angle_increment: 0.00872664626
+
+    scan_time: 0.06666666667
+
+    range_min: 0.20
+    range_max: 3.00
+
+    queue_size: 1
+    use_inf: true
