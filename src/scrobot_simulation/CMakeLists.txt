@@ -12,8 +12,12 @@ find_package(std_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(gz-plugin2 REQUIRED COMPONENTS register)
 find_package(gz-sim8 REQUIRED)
+find_package(gz-msgs10 REQUIRED)
+find_package(gz-transport13 REQUIRED)
 
 set(GZ_PLUGIN_VER ${gz-plugin2_VERSION_MAJOR})
+set(GZ_MSGS_VER ${gz-msgs10_VERSION_MAJOR})
+set(GZ_TRANSPORT_VER ${gz-transport13_VERSION_MAJOR})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -48,6 +52,8 @@ target_link_libraries(
   PRIVATE
     gz-plugin${GZ_PLUGIN_VER}::gz-plugin${GZ_PLUGIN_VER}
     gz-sim8::gz-sim8
+    gz-msgs${GZ_MSGS_VER}::gz-msgs${GZ_MSGS_VER}
+    gz-transport${GZ_TRANSPORT_VER}::gz-transport${GZ_TRANSPORT_VER}
 )
 
 install(
