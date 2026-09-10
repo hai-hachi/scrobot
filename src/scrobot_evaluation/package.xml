@@ -2,12 +2,13 @@
 <package format="3">
   <name>scrobot_evaluation</name>
   <version>0.1.0</version>
-  <description>Evaluation tools for SC Robot localization, odometry, and navigation.</description>
-  <maintainer email="user@example.com">scrobot</maintainer>
+  <description>Evaluation tools for SC Robot localization, odometry, navigation, and patrol trajectories.</description>
+  <maintainer email="hai.hachi.154@gmail.com">sea</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
 
+  <exec_depend>ament_index_python</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
