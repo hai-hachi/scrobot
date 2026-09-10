@@ -10,6 +10,7 @@
 #include <gz/sim/Util.hh>
 #include <gz/sim/components/Model.hh>
 #include <gz/sim/components/Name.hh>
+#include <gz/sim/components/Static.hh>
 
 #include <sdf/Element.hh>
 
@@ -129,7 +130,7 @@ public:
         {
           if (distance <= this->activationDistance_)
           {
-            model.SetStatic(_ecm, false);
+            this->SetModelStatic(_entity, false, _ecm);
             state.requestedStatic = false;
             state.lastProtectedTime = _info.simTime;
           }
@@ -144,7 +145,7 @@ public:
 
         if (_info.simTime - state.lastProtectedTime >= this->settleDuration_)
         {
-          model.SetStatic(_ecm, true);
+          this->SetModelStatic(_entity, true, _ecm);
           state.requestedStatic = true;
         }
 
@@ -153,6 +154,31 @@ public:
   }
 
 private:
+  void SetModelStatic(
+    const gz::sim::Entity &_entity,
+    const bool _static,
+    gz::sim::EntityComponentManager &_ecm)
+  {
+    auto staticComp =
+      _ecm.Component<gz::sim::components::Static>(_entity);
+
+    if (staticComp)
+    {
+      staticComp->SetData(
+        _static,
+        [](const bool &_oldValue, const bool &_newValue)
+        {
+          return _oldValue != _newValue;
+        });
+    }
+    else
+    {
+      _ecm.CreateComponent(
+        _entity,
+        gz::sim::components::Static(_static));
+    }
+  }
+
   void ResolveRobot(gz::sim::EntityComponentManager &_ecm)
   {
     this->robotEntity_ = _ecm.EntityByComponents(
