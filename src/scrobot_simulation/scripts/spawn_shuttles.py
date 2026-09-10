@@ -13,6 +13,17 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 
 
+CLUSTER_ROWS = [
+    ('side_a_singles_long', 'A singles long'),
+    ('side_a_doubles_long', 'A doubles long'),
+    ('side_a_short', 'A short'),
+    ('net', 'net'),
+    ('side_b_short', 'B short'),
+    ('side_b_doubles_long', 'B doubles long'),
+    ('side_b_singles_long', 'B singles long'),
+]
+
+
 def clamp(value, lower, upper):
     return max(lower, min(upper, value))
 
@@ -38,6 +49,141 @@ def sample_xy(rng, density, court_length, court_width, margin):
         return x, y
 
     raise ValueError(f'Unsupported density profile: {density}')
+
+
+def sample_truncated_gaussian(rng, mean, sigma, lower, upper):
+    if sigma <= 0.0:
+        return clamp(mean, lower, upper)
+
+    for _ in range(64):
+        value = rng.gauss(mean, sigma)
+        if lower <= value <= upper:
+            return value
+
+    return clamp(mean, lower, upper)
+
+
+def validate_cluster_config(config):
+    weights = get_nested(config, ['cluster', 'weights'], None)
+    if not isinstance(weights, list) or len(weights) != len(CLUSTER_ROWS):
+        raise ValueError(
+            'cluster.weights must be a 7x2 matrix: 7 marking rows x [left, right]'
+        )
+
+    parsed = []
+    for row_index, row in enumerate(weights):
+        if not isinstance(row, list) or len(row) != 2:
+            raise ValueError(
+                f'cluster.weights row {row_index} must contain exactly [left, right]'
+            )
+        parsed_row = [float(row[0]), float(row[1])]
+        if any(value < 0.0 for value in parsed_row):
+            raise ValueError('cluster weights must be non-negative')
+        parsed.append(parsed_row)
+
+    if sum(sum(row) for row in parsed) <= 0.0:
+        raise ValueError('cluster.weights must contain at least one positive weight')
+
+    line_x = get_nested(config, ['cluster', 'line_x'], {})
+    if not isinstance(line_x, dict):
+        raise ValueError('cluster.line_x must be a mapping')
+
+    missing = [key for key, _ in CLUSTER_ROWS if key not in line_x]
+    if missing:
+        raise ValueError(
+            'cluster.line_x is missing: ' + ', '.join(missing)
+        )
+
+    return parsed, {key: float(line_x[key]) for key, _ in CLUSTER_ROWS}
+
+
+def allocate_cluster_counts(total, weights, rng):
+    entries = []
+    total_weight = sum(sum(row) for row in weights)
+
+    for row_index, row in enumerate(weights):
+        for side_index, weight in enumerate(row):
+            exact = total * weight / total_weight
+            base = int(math.floor(exact))
+            entries.append({
+                'row': row_index,
+                'side': side_index,
+                'count': base,
+                'fraction': exact - base,
+                'tie': rng.random(),
+            })
+
+    remaining = total - sum(entry['count'] for entry in entries)
+    for entry in sorted(
+        entries,
+        key=lambda item: (-item['fraction'], item['tie']),
+    )[:remaining]:
+        entry['count'] += 1
+
+    return entries
+
+
+def build_cluster_points(
+    rng,
+    count,
+    config,
+    court_length,
+    court_width,
+):
+    weights, line_x = validate_cluster_config(config)
+    sigma_x = float(get_nested(config, ['cluster', 'sigma_x'], 0.10))
+    sigma_y = float(get_nested(config, ['cluster', 'sigma_y'], 0.90))
+    left_center_y = float(get_nested(config, ['cluster', 'left_center_y'], 1.525))
+    right_center_y = float(get_nested(config, ['cluster', 'right_center_y'], -1.525))
+
+    if sigma_x < 0.0 or sigma_y < 0.0:
+        raise ValueError('cluster sigma values must be non-negative')
+
+    half_l = court_length * 0.5
+    half_w = court_width * 0.5
+    allocations = allocate_cluster_counts(count, weights, rng)
+
+    points = []
+    zone_summary = []
+
+    for allocation in allocations:
+        zone_count = allocation['count']
+        if zone_count <= 0:
+            continue
+
+        row_index = allocation['row']
+        side_index = allocation['side']
+        line_key, row_label = CLUSTER_ROWS[row_index]
+        side_label = 'left' if side_index == 0 else 'right'
+
+        if side_index == 0:
+            y_mean = left_center_y
+            y_low, y_high = 0.0, half_w
+        else:
+            y_mean = right_center_y
+            y_low, y_high = -half_w, 0.0
+
+        for _ in range(zone_count):
+            x = sample_truncated_gaussian(
+                rng,
+                line_x[line_key],
+                sigma_x,
+                -half_l,
+                half_l,
+            )
+            y = sample_truncated_gaussian(
+                rng,
+                y_mean,
+                sigma_y,
+                y_low,
+                y_high,
+            )
+            points.append((x, y, f'{row_label} {side_label}'))
+
+        zone_summary.append((f'{row_label} {side_label}', zone_count))
+
+    rng.shuffle(points)
+    return points, zone_summary
 
 
 def spawn_entity(world, name, sdf_file, x, y, z, roll, pitch, yaw):
@@ -88,9 +234,7 @@ def get_nested(config, keys, default=None):
 
 def choose_seed(seed_arg, config_seed):
     if seed_arg is not None:
-        text = str(seed_arg).strip()
-        if text:
-            return int(text)
+        return int(seed_arg)
 
     if config_seed is not None:
         return int(config_seed)
@@ -104,7 +248,7 @@ def choose_batch(mode, batch_arg, seed):
         if text:
             return text
 
-    if mode == 'random':
+    if mode != 'single':
         return str(seed)
 
     return str(int(time.time()) % 10000)
@@ -112,11 +256,15 @@ def choose_batch(mode, batch_arg, seed):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description='Spawn dynamic badminton shuttles into an already running Gazebo world.'
+        description='Spawn badminton shuttles into an already running Gazebo world.'
     )
 
     parser.add_argument('--config', default='')
-    parser.add_argument('--mode', choices=['single', 'random'], default='single')
+    parser.add_argument(
+        '--mode',
+        choices=['single', 'random', 'cluster', 'mixed'],
+        default='single',
+    )
     parser.add_argument('--world', default=None)
     parser.add_argument('--visual', choices=['detail', 'fast'], default='detail')
 
@@ -135,7 +283,7 @@ def build_parser():
         '--seed',
         type=int,
         default=None,
-        help='Integer for a repeatable random layout; omit it for a new random seed.',
+        help='Integer for a repeatable layout; omit it for a new random seed.',
     )
     parser.add_argument('--density', choices=['uniform', 'center', 'net'], default=None)
     parser.add_argument('--court-length', type=float, default=None)
@@ -145,6 +293,10 @@ def build_parser():
     parser.add_argument('--parallel-workers', type=int, default=None)
 
     return parser
+
+
+def mode_config_value(config, mode, key, fallback=None):
+    return get_nested(config, [mode, key], fallback)
 
 
 def main():
@@ -181,16 +333,41 @@ def main():
     spitch = args.pitch if args.pitch is not None else float(get_nested(config, ['single', 'pitch'], math.pi / 2.0))
     syaw = args.yaw if args.yaw is not None else float(get_nested(config, ['single', 'yaw'], 0.0))
 
-    count = args.count if args.count is not None else int(get_nested(config, ['random', 'count'], 20))
-    density = args.density or str(get_nested(config, ['random', 'density'], 'uniform'))
-    config_seed = get_nested(config, ['random', 'seed'], None)
-    seed = choose_seed(args.seed, config_seed)
+    default_count = 20 if args.mode == 'single' else int(
+        mode_config_value(config, args.mode, 'count', 20)
+    )
+    count = args.count if args.count is not None else default_count
 
-    court_length = args.court_length if args.court_length is not None else float(get_nested(config, ['court', 'length'], 13.40))
-    court_width = args.court_width if args.court_width is not None else float(get_nested(config, ['court', 'width'], 6.10))
-    margin = args.margin if args.margin is not None else float(get_nested(config, ['court', 'margin'], 0.15))
-    spawn_height = args.spawn_height if args.spawn_height is not None else float(get_nested(config, ['spawn', 'height'], 0.08))
-    parallel_workers = args.parallel_workers if args.parallel_workers is not None else int(get_nested(config, ['spawn', 'parallel_workers'], 8))
+    config_seed = mode_config_value(config, args.mode, 'seed', None)
+    if args.mode == 'single':
+        seed = 0
+    else:
+        seed = choose_seed(args.seed, config_seed)
+
+    random_density = args.density or str(
+        mode_config_value(
+            config,
+            args.mode,
+            'density',
+            mode_config_value(config, args.mode, 'random_density', 'uniform'),
+        )
+    )
+
+    court_length = args.court_length if args.court_length is not None else float(
+        get_nested(config, ['court', 'length'], 13.40)
+    )
+    court_width = args.court_width if args.court_width is not None else float(
+        get_nested(config, ['court', 'width'], 6.10)
+    )
+    margin = args.margin if args.margin is not None else float(
+        get_nested(config, ['court', 'margin'], 0.15)
+    )
+    spawn_height = args.spawn_height if args.spawn_height is not None else float(
+        get_nested(config, ['spawn', 'height'], 0.08)
+    )
+    parallel_workers = args.parallel_workers if args.parallel_workers is not None else int(
+        get_nested(config, ['spawn', 'parallel_workers'], 8)
+    )
 
     if count < 1:
         raise ValueError('--count must be at least 1')
@@ -213,29 +390,91 @@ def main():
         return 0
 
     rng = random.Random(seed)
+    points = []
+    zone_summary = []
+
+    if args.mode == 'random':
+        for _ in range(count):
+            x, y = sample_xy(rng, random_density, court_length, court_width, margin)
+            points.append((x, y, 'random'))
+
+    elif args.mode == 'cluster':
+        points, zone_summary = build_cluster_points(
+            rng,
+            count,
+            config,
+            court_length,
+            court_width,
+        )
+
+    elif args.mode == 'mixed':
+        random_fraction = float(get_nested(config, ['mixed', 'random_fraction'], 0.30))
+        if not 0.0 <= random_fraction <= 1.0:
+            raise ValueError('mixed.random_fraction must be between 0 and 1')
+
+        random_count = int(round(count * random_fraction))
+        cluster_count = count - random_count
+
+        for _ in range(random_count):
+            x, y = sample_xy(rng, random_density, court_length, court_width, margin)
+            points.append((x, y, 'random'))
+
+        if cluster_count > 0:
+            cluster_points, zone_summary = build_cluster_points(
+                rng,
+                cluster_count,
+                config,
+                court_length,
+                court_width,
+            )
+            points.extend(cluster_points)
+
+        rng.shuffle(points)
+
     specs = []
-    for index in range(1, count + 1):
-        x, y = sample_xy(rng, density, court_length, court_width, margin)
+    for index, (x, y, zone_name) in enumerate(points, start=1):
         yaw = rng.uniform(-math.pi, math.pi)
-        name = f'random{batch}-{index:02d}'
-        specs.append((world, name, sdf_file, x, y, spawn_height, 0.0, math.pi / 2.0, yaw))
+        name = f'{args.mode}{batch}-{index:02d}'
+        specs.append((
+            world,
+            name,
+            sdf_file,
+            x,
+            y,
+            spawn_height,
+            0.0,
+            math.pi / 2.0,
+            yaw,
+            zone_name,
+        ))
 
     print(
-        f'Spawning {count} shuttles: density={density}, seed={seed}, batch={batch}, '
+        f'Spawning {count} shuttles: mode={args.mode}, seed={seed}, batch={batch}, '
         f'visual={args.visual}, workers={min(parallel_workers, count)}, '
         f'court={court_length:.2f}x{court_width:.2f} m'
     )
 
+    if args.mode in ('random', 'mixed'):
+        print(f'  random density: {random_density}')
+    if zone_summary:
+        print('  cluster allocation:')
+        for zone_name, zone_count in zone_summary:
+            print(f'    {zone_name}: {zone_count}')
+
     workers = min(parallel_workers, count)
     failures = []
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(spawn_entity, *spec): spec for spec in specs}
+        futures = {
+            executor.submit(spawn_entity, *spec[:9]): spec
+            for spec in specs
+        }
         for future in as_completed(futures):
             spec = futures[future]
             name = spec[1]
+            zone_name = spec[9]
             try:
                 future.result()
-                print(f'  spawned {name}')
+                print(f'  spawned {name} [{zone_name}]')
             except Exception as exc:
                 failures.append((name, str(exc)))
                 print(f'  FAILED {name}: {exc}', file=sys.stderr)
@@ -244,7 +483,7 @@ def main():
         print(f'{len(failures)} of {count} shuttle spawns failed.', file=sys.stderr)
         return 1
 
-    print(f'Finished random batch {batch}; seed={seed}.')
+    print(f'Finished {args.mode} batch {batch}; seed={seed}.')
     return 0
 
 
