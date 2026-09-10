@@ -54,7 +54,13 @@ def spawn_entity(world, name, sdf_file, x, y, z, roll, pitch, yaw):
         '-Y', f'{yaw:.6f}',
     ]
 
-    result = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    result = subprocess.run(
+        cmd,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
     if result.returncode != 0:
         raise RuntimeError(
             f'Failed to spawn {name}; ros_gz_sim create returned {result.returncode}:\n'
@@ -82,8 +88,8 @@ def get_nested(config, keys, default=None):
 
 def choose_seed(seed_arg, config_seed):
     if seed_arg is not None:
-        text = str(seed_arg).strip().lower()
-        if text not in ('', 'r', 'random', 'none'):
+        text = str(seed_arg).strip()
+        if text:
             return int(text)
 
     if config_seed is not None:
@@ -127,8 +133,9 @@ def build_parser():
     parser.add_argument('--count', type=int, default=None)
     parser.add_argument(
         '--seed',
+        type=int,
         default=None,
-        help='Integer for repeatable random layout; blank/r/random gives a new random seed.',
+        help='Integer for a repeatable random layout; omit it for a new random seed.',
     )
     parser.add_argument('--density', choices=['uniform', 'center', 'net'], default=None)
     parser.add_argument('--court-length', type=float, default=None)
