@@ -1,0 +1,154 @@
+twist_mux:
+  ros__parameters:
+    use_stamped: true
+
+    topics:
+      navigation:
+        topic: /cmd_vel_nav
+        timeout: 0.5
+        priority: 10
+
+      final_approach:
+        topic: /cmd_vel_approach
+        timeout: 0.25
+        priority: 50
+
+      relocalization:
+        topic: /cmd_vel_relocalization
+        timeout: 0.5
+        priority: 60
+
+      manual:
+        topic: /cmd_vel_manual
+        timeout: 0.25
+        priority: 100
+
+
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: true
+
+    smoothing_frequency: 20.0
+
+    # Preserve commanded curvature when one velocity component is limited.
+    scale_velocities: true
+
+    feedback: "OPEN_LOOP"
+    enable_stamped_cmd_vel: true
+
+    max_velocity: [1.0, 0.0, 2.0]
+    min_velocity: [-1.0, 0.0, -2.0]
+
+    max_accel: [1.0, 0.0, 2.0]
+    max_decel: [-1.5, 0.0, -2.5]
+
+    deadband_velocity: [0.0, 0.0, 0.0]
+
+    velocity_timeout: 0.5
+    odom_topic: /diff_drive_controller/odom
+    odom_duration: 0.1
+
+
+collision_monitor:
+  ros__parameters:
+    use_sim_time: true
+
+    # Frames
+    base_frame_id: base_footprint
+    odom_frame_id: odom
+    transform_tolerance: 0.2
+    base_shift_correction: true
+
+    # Velocity pipeline
+    cmd_vel_in_topic: /cmd_vel_smoothed
+    cmd_vel_out_topic: /diff_drive_controller/cmd_vel
+    enable_stamped_cmd_vel: true
+
+    state_topic: /collision_monitor_state
+    source_timeout: 0.3
+    stop_pub_timeout: 2.0
+
+    # Direction-aware safety zones.
+    # Forward motion uses the front zones. Manual reverse switches to the rear
+    # zones, so a front obstacle does not permanently trap the robot in STOP.
+    polygons:
+      - stop_zone
+      - slowdown_zone
+
+    stop_zone:
+      type: velocity_polygon
+      action_type: stop
+      min_points: 5
+      visualize: true
+      polygon_pub_topic: /collision_monitor/stop_zone
+      enabled: true
+      holonomic: false
+      velocity_polygons:
+        - forward
+        - backward
+        - stopped
+
+      forward:
+        points: "[[0.55, 0.30], [0.55, -0.30], [0.35, -0.30], [0.35, 0.30]]"
+        linear_min: 0.001
+        linear_max: 1.10
+        theta_min: -2.50
+        theta_max: 2.50
+
+      backward:
+        points: "[[-0.35, 0.30], [-0.35, -0.30], [-0.55, -0.30], [-0.55, 0.30]]"
+        linear_min: -1.10
+        linear_max: -0.001
+        theta_min: -2.50
+        theta_max: 2.50
+
+      stopped:
+        points: "[[0.34, 0.27], [0.34, -0.27], [-0.46, -0.27], [-0.46, 0.27]]"
+        linear_min: -1.10
+        linear_max: 1.10
+        theta_min: -2.50
+        theta_max: 2.50
+
+    slowdown_zone:
+      type: velocity_polygon
+      action_type: slowdown
+      min_points: 5
+      slowdown_ratio: 0.3
+      visualize: true
+      polygon_pub_topic: /collision_monitor/slowdown_zone
+      enabled: true
+      holonomic: false
+      velocity_polygons:
+        - forward
+        - backward
+        - stopped
+
+      forward:
+        points: "[[0.75, 0.60], [0.75, -0.60], [0.35, -0.60], [0.35, 0.60]]"
+        linear_min: 0.001
+        linear_max: 1.10
+        theta_min: -2.50
+        theta_max: 2.50
+
+      backward:
+        points: "[[-0.35, 0.60], [-0.35, -0.60], [-0.75, -0.60], [-0.75, 0.60]]"
+        linear_min: -1.10
+        linear_max: -0.001
+        theta_min: -2.50
+        theta_max: 2.50
+
+      stopped:
+        points: "[[0.34, 0.27], [0.34, -0.27], [-0.46, -0.27], [-0.46, 0.27]]"
+        linear_min: -1.10
+        linear_max: 1.10
+        theta_min: -2.50
+        theta_max: 2.50
+
+    observation_sources:
+      - depth_scan
+
+    depth_scan:
+      type: scan
+      topic: /camera/camera/depth/scan
+      source_timeout: 0.3
+      enabled: true
