@@ -1,0 +1,23 @@
+patrol_trajectory_logger:
+  ros__parameters:
+    map_frame: map
+    base_frame: base_footprint
+
+    # Gazebo world pose bridged from /world/badminton_court/dynamic_pose/info.
+    ground_truth_topic: /evaluation/ground_truth_tf
+    ground_truth_child_contains: scrobot
+
+    mission_state_topic: /mission/state
+    current_goal_topic: /mission/current_goal
+    patrol_points_topic: /mission/patrol_points
+    global_plan_topic: /plan
+
+    # Must match patrol_manager spin_angle for overshoot calculation.
+    spin_target_angle: 6.283185307179586
+
+    sample_rate: 20.0
+    tf_timeout: 0.02
+
+    output_root: /home/sea/scrobot_ws/evaluation_results/patrol
+    run_name: ""
+    flush_every_samples: 20
