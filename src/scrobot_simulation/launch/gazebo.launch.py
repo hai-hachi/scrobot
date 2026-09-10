@@ -1,6 +1,9 @@
 import os
 
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import (
+    get_package_prefix,
+    get_package_share_directory,
+)
 
 from launch import LaunchDescription
 from launch.actions import (
@@ -20,6 +23,10 @@ def generate_launch_description():
         'scrobot_simulation'
     )
 
+    simulation_prefix = get_package_prefix(
+        'scrobot_simulation'
+    )
+
     description_pkg = get_package_share_directory(
         'scrobot_description'
     )
@@ -31,28 +38,6 @@ def generate_launch_description():
     world = LaunchConfiguration('world')
     gz_verbosity = LaunchConfiguration('gz_verbosity')
 
-    # ==========================================================
-    # Gazebo resource paths
-    # ==========================================================
-    #
-    # 1) package://scrobot_description/... is converted by
-    #    Gazebo / SDFormat into a resource lookup.  Gazebo must
-    #    therefore be able to find:
-    #
-    #      <prefix>/share/scrobot_description
-    #
-    #    so we add its parent:
-    #
-    #      <prefix>/share
-    #
-    # 2) model://court_apriltags/... and any future custom Gazebo
-    #    models live under:
-    #
-    #      scrobot_simulation/models
-    #
-    # Keep BOTH paths.
-    # ==========================================================
-
     description_share_parent = os.path.dirname(
         description_pkg
     )
@@ -60,6 +45,11 @@ def generate_launch_description():
     simulation_models = os.path.join(
         simulation_pkg,
         'models'
+    )
+
+    simulation_plugins = os.path.join(
+        simulation_prefix,
+        'lib'
     )
 
     description_meshes = os.path.join(
@@ -85,9 +75,10 @@ def generate_launch_description():
         value=simulation_models,
     )
 
-    # ==========================================================
-    # Bridge
-    # ==========================================================
+    add_simulation_plugins = AppendEnvironmentVariable(
+        name='GZ_SIM_SYSTEM_PLUGIN_PATH',
+        value=simulation_plugins,
+    )
 
     bridge_config = os.path.join(
         simulation_pkg,
@@ -112,18 +103,15 @@ def generate_launch_description():
         executable='image_bridge',
         name='ros_gz_image',
         output='screen',
-
         arguments=[
             '/camera/color',
             '/camera/depth',
         ],
-
         parameters=[
             {
                 'qos': 'sensor_data',
             }
         ],
-
         remappings=[
             (
                 '/camera/color',
@@ -135,10 +123,6 @@ def generate_launch_description():
             ),
         ],
     )
-
-    # ==========================================================
-    # Gazebo
-    # ==========================================================
 
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -176,9 +160,9 @@ def generate_launch_description():
             description='Gazebo verbosity level.',
         ),
 
-        # These MUST be set before Gazebo starts.
         add_description_resources,
         add_simulation_models,
+        add_simulation_plugins,
 
         gazebo,
         bridge,
