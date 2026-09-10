@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <model name="shuttle">
+    <static>false</static>
+    <self_collide>false</self_collide>
+    <allow_auto_disable>true</allow_auto_disable>
+
+    <link name="shuttle_link">
+      <inertial>
+        <pose>0 0 0.0296 0 0 0</pose>
+        <mass>0.005</mass>
+        <inertia>
+          <ixx>1.02123536e-5</ixx>
+          <iyy>1.02123536e-5</iyy>
+          <izz>7.36831510e-6</izz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
+        </inertia>
+      </inertial>
+
+      <velocity_decay>
+        <linear>0.35</linear>
+        <angular>0.55</angular>
+      </velocity_decay>
+
+      <!-- Low-detail visual for large simulation populations. -->
+      <visual name="shuttle_visual_fast">
+        <geometry>
+          <mesh>
+            <uri>model://shuttle/meshes/shuttle_collision.STL</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>0.78 0.78 0.78 1.0</ambient>
+          <diffuse>0.92 0.92 0.92 1.0</diffuse>
+          <specular>0.02 0.02 0.02 1.0</specular>
+          <emissive>0.0 0.0 0.0 1.0</emissive>
+          <pbr>
+            <metal>
+              <metalness>0.0</metalness>
+              <roughness>0.92</roughness>
+            </metal>
+          </pbr>
+        </material>
+      </visual>
+
+      <collision name="cork_collision">
+        <pose>0 0 0.014 0 0 0</pose>
+        <max_contacts>1</max_contacts>
+        <geometry>
+          <sphere><radius>0.014</radius></sphere>
+        </geometry>
+        <surface>
+          <friction><ode><mu>0.7</mu><mu2>0.7</mu2></ode></friction>
+          <bounce><restitution_coefficient>0.0</restitution_coefficient><threshold>1000000.0</threshold></bounce>
+          <contact>
+            <collide_without_contact>false</collide_without_contact>
+            <category_bitmask>0x0002</category_bitmask>
+            <collide_bitmask>0xFFFD</collide_bitmask>
+          </contact>
+        </surface>
+      </collision>
+
+      <collision name="skirt_collision">
+        <pose>0 0 0.086 0 0 0</pose>
+        <max_contacts>1</max_contacts>
+        <geometry>
+          <cylinder><radius>0.034</radius><length>0.008</length></cylinder>
+        </geometry>
+        <surface>
+          <friction><ode><mu>0.7</mu><mu2>0.7</mu2></ode></friction>
+          <bounce><restitution_coefficient>0.0</restitution_coefficient><threshold>1000000.0</threshold></bounce>
+          <contact>
+            <collide_without_contact>false</collide_without_contact>
+            <category_bitmask>0x0002</category_bitmask>
+            <collide_bitmask>0xFFFD</collide_bitmask>
+          </contact>
+        </surface>
+      </collision>
+    </link>
+  </model>
+</sdf>
