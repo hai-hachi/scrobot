@@ -20,7 +20,7 @@ def generate_launch_description():
                 # Preserve the same useful vertical obstacle band used by
                 # Collision Monitor / Nav2 PointCloud2 sources.
                 'min_height': 0.08,
-                'max_height': 1.50,
+                'max_height': 0.70,
 
                 # D435i depth horizontal FOV is about 87 deg.
                 'angle_min': -0.76,

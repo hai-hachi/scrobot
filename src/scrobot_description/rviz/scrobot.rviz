@@ -7,8 +7,9 @@ Panels:
         - /TF1/Frames1
         - /Image1/Topic1
         - /MarkerArray1/Topic1
-        - /PoseArray1
         - /PoseArray1/Topic1
+        - /LaserScan1
+        - /LaserScan1/Topic1
       Splitter Ratio: 0.5
     Tree Height: 790
   - Class: rviz_common/Selection
@@ -112,12 +113,6 @@ Visualization Manager:
           Value: false
         map:
           Value: true
-        observed_tag_0:
-          Value: true
-        observed_tag_1:
-          Value: true
-        observed_tag_2:
-          Value: true
         odom:
           Value: true
         pickup_link:
@@ -150,12 +145,7 @@ Visualization Manager:
                   camera_link:
                     camera_color_frame:
                       camera_color_optical_frame:
-                        observed_tag_0:
-                          {}
-                        observed_tag_1:
-                          {}
-                        observed_tag_2:
-                          {}
+                        {}
                     camera_depth_frame:
                       camera_depth_optical_frame:
                         {}
@@ -203,7 +193,7 @@ Visualization Manager:
       Color: 255; 0; 0
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -223,7 +213,7 @@ Visualization Manager:
         Value: /camera/camera/depth/points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
       Max Value: 1
@@ -301,6 +291,40 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /mission/patrol_points
       Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/LaserScan
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: LaserScan
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /camera/camera/depth/scan
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -318,21 +342,26 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: 0
-      Class: rviz_default_plugins/TopDownOrtho
+      Class: rviz_default_plugins/Orbit
+      Distance: 14.285093307495117
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
+      Focal Point:
+        X: 6.189367294311523
+        Y: 3.1565918922424316
+        Z: -1.0854688882827759
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 266.3843688964844
+      Pitch: 0.4047974646091461
       Target Frame: base_footprint
-      Value: TopDownOrtho (rviz_default_plugins)
-      X: 0.5900805592536926
-      Y: -0.20352385938167572
+      Value: Orbit (rviz_default_plugins)
+      Yaw: 4.222382545471191
     Saved: ~
 Window Geometry:
   Displays:
