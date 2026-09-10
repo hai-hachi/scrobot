@@ -2,14 +2,34 @@
 
 ## Launch
 
+Simulation:
+
 ```bash
 ros2 launch scrobot_simulation simulation.launch.py
 ```
 
+Control stack:
+
 ```bash
-ros2 launch scrobot_control control.launch.py
-ros2 launch scrobot_control command_pipeline.launch.py
+ros2 launch scrobot_control control_stack.launch.py
+```
+
+Localization:
+
+```bash
 ros2 launch scrobot_localization localization.launch.py use_sim_time:=true
+```
+
+Perception:
+
+```bash
+ros2 launch scrobot_perception perception.launch.py
+```
+
+Optional scan-height override:
+
+```bash
+ros2 launch scrobot_perception perception.launch.py max_height:=0.70
 ```
 
 ## Velocity Topics
@@ -17,53 +37,43 @@ ros2 launch scrobot_localization localization.launch.py use_sim_time:=true
 Priority:
 
 ```text
-/cmd_vel_manual      High
-/cmd_vel_approach    Medium
-/cmd_vel_nav         Low
+/cmd_vel_manual           highest
+/cmd_vel_relocalization
+/cmd_vel_approach
+/cmd_vel_nav              lowest
 ```
 
 Pipeline:
 
 ```text
 /cmd_vel_manual
+/cmd_vel_relocalization
 /cmd_vel_approach
 /cmd_vel_nav
        ↓
+    twist_mux
+       ↓
 /cmd_vel_muxed
+       ↓
+velocity_smoother
        ↓
 /cmd_vel_smoothed
        ↓
-/diff_drive_controller/cmd_vel
+collision_monitor
        ↓
-Gazebo / STM32
+/diff_drive_controller/cmd_vel
 ```
 
-Test navigation command:
+Test manual command:
 
 ```bash
 ros2 topic pub --rate 10 \
   /cmd_vel_manual \
   geometry_msgs/msg/TwistStamped \
-  "{
-    header: {
-      frame_id: base_footprint
-    },
-    twist: {
-      linear: {
-        x: 0.0,
-        y: 0.0,
-        z: 0.0
-      },
-      angular: {
-        x: 0.0,
-        y: 0.0,
-        z: 0.5
-      }
-    }
-  }"
+  "{header: {frame_id: base_footprint}, twist: {linear: {x: 0.0}, angular: {z: 0.5}}}"
 ```
 
-Check the pipeline:
+Check command pipeline:
 
 ```bash
 ros2 topic echo /cmd_vel_muxed
@@ -89,77 +99,78 @@ ros2 topic hz /cmd_vel_smoothed
 ros2 topic hz /diff_drive_controller/cmd_vel
 ```
 
-## Camera and RViz
+## Perception
 
-View RGB/depth images:
-
-```bash
-ros2 run rqt_image_view rqt_image_view
-```
-
-Open RViz:
+Check the point cloud and generated LaserScan:
 
 ```bash
-ros2 launch scrobot_simulation riv2.launch.py
+ros2 topic hz /camera/camera/depth/points
+ros2 topic hz /camera/camera/depth/scan
+ros2 topic info /camera/camera/depth/points -v
+ros2 topic info /camera/camera/depth/scan -v
 ```
 
-Use RViz to check:
+Check the live scan-height filter:
 
-* `PointCloud2` → `/camera/depth/points`
-* `TF`
-* collision monitor zone
-* robot model
+```bash
+ros2 param get /depth_pointcloud_to_scan min_height
+ros2 param get /depth_pointcloud_to_scan max_height
+```
 
-For `/camera/depth/points`, use:
+Expected defaults:
 
 ```text
-Reliability Policy: Best Effort
+min_height = 0.08 m
+max_height = 0.70 m
 ```
 
-if `Reliable` does not display the point cloud.
+Check AprilTag detections:
 
-Typical RViz fixed frame:
+```bash
+ros2 topic hz /apriltag/detections
+```
+
+## RViz
+
+Launch RViz through the simulation launch when desired:
+
+```bash
+ros2 launch scrobot_simulation simulation.launch.py rviz:=true
+```
+
+Useful displays:
+
+- `PointCloud2` -> `/camera/camera/depth/points`
+- `LaserScan` -> `/camera/camera/depth/scan`
+- `TF`
+- collision-monitor polygons
+- robot model
+
+Use `Best Effort` QoS for high-rate sensor displays such as the point cloud and LaserScan.
+
+Typical fixed frame:
 
 ```text
 odom
 ```
 
-or when navigation/localization is running:
+or, after global localization:
 
 ```text
 map
 ```
 
-Useful quick checks:
+## Useful rate checks
 
 ```bash
-ros2 topic list | grep cmd_vel
-ros2 topic list | grep camera
-ros2 topic info /camera/depth/points -v
-ros2 topic hz /camera/depth/points
+ros2 topic hz /camera/camera/color/image_raw
+ros2 topic hz /camera/camera/depth/image_raw
+ros2 topic hz /camera/camera/depth/points
+ros2 topic hz /camera/camera/depth/scan
+ros2 topic hz /apriltag/detections
+ros2 topic hz /diff_drive_controller/odom
+ros2 topic hz /imu/data
+ros2 topic hz /odometry/filtered
+ros2 topic hz /cmd_vel_nav
+ros2 topic hz /cmd_vel_smoothed
 ```
-
-Debug order:
-
-```text
-Launch simulation
-→ Launch command pipeline
-→ Publish cmd_vel
-→ Check muxed
-→ Check smoothed
-→ Check diff_drive_controller/cmd_vel
-→ Check camera
-→ Check point cloud
-→ Check TF
-→ Check collision zone
-```
-
-cd scrobot_ws && ros2 topic hz /camera/camera/color/image_raw
-cd scrobot_ws && ros2 topic hz /camera/camera/depth/image_rect_raw
-cd scrobot_ws && ros2 topic hz /camera/camera/depth/points
-cd scrobot_ws && ros2 topic hz /apriltag/detections
-cd scrobot_ws && ros2 topic hz /diff_drive_controller/odom
-cd scrobot_ws && ros2 topic hz /imu/data
-cd scrobot_ws && ros2 topic hz /odometry/filtered
-cd scrobot_ws && ros2 topic hz /cmd_vel_nav
-cd scrobot_ws && ros2 topic hz /cmd_vel_smoothed
