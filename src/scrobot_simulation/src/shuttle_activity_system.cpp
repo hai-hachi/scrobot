@@ -10,7 +10,6 @@
 #include <gz/sim/Util.hh>
 #include <gz/sim/components/Model.hh>
 #include <gz/sim/components/Name.hh>
-#include <gz/sim/components/World.hh>
 
 #include <sdf/Element.hh>
 
@@ -37,10 +36,10 @@ public:
     gz::sim::EntityComponentManager &_ecm,
     gz::sim::EventManager & /*_eventMgr*/) override
   {
-    if (!_ecm.Component<gz::sim::components::World>(_entity))
-      return;
+    this->worldEntity_ = gz::sim::worldEntity(_entity, _ecm);
+    if (this->worldEntity_ == gz::sim::kNullEntity)
+      this->worldEntity_ = _entity;
 
-    this->worldEntity_ = _entity;
     this->robotName_ = _sdf->Get<std::string>(
       "robot_model", this->robotName_).first;
     this->updateRate_ = _sdf->Get<double>(
