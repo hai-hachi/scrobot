@@ -9,11 +9,7 @@ collision_monitor:
 
     base_frame_id: base_footprint
     odom_frame_id: odom
-
     transform_tolerance: 0.2
-
-    # Correct obstacle positions for robot motion between
-    # point cloud timestamp and current control cycle.
     base_shift_correction: true
 
     # -------------------------------------------------
@@ -22,56 +18,98 @@ collision_monitor:
 
     cmd_vel_in_topic: /cmd_vel_smoothed
     cmd_vel_out_topic: /diff_drive_controller/cmd_vel
-
     enable_stamped_cmd_vel: true
 
-    # Publish active collision state for debugging.
     state_topic: /collision_monitor_state
-
-    # If sensor data disappears, fail safe.
     source_timeout: 0.3
-
-    # Continue publishing zero velocity temporarily
-    # after a stop is triggered.
     stop_pub_timeout: 2.0
 
     # -------------------------------------------------
-    # Safety zones
+    # Direction-aware safety zones
+    #
+    # A static front STOP polygon would also block a reverse recovery
+    # command while the same obstacle remains in front. Velocity polygons
+    # instead protect the direction in which the robot is actually moving.
     # -------------------------------------------------
 
     polygons:
       - stop_zone
       - slowdown_zone
 
-    # =================================================
-    # STOP ZONE
-    # =================================================
-
     stop_zone:
-      type: polygon
-      points: "[[0.55, 0.30], [0.55, -0.30], [0.35, -0.30], [0.35, 0.30]]"
+      type: velocity_polygon
       action_type: stop
       min_points: 5
       visualize: true
       polygon_pub_topic: /collision_monitor/stop_zone
       enabled: true
+      holonomic: false
+      velocity_polygons:
+        - forward
+        - backward
+        - stopped
 
-    # =================================================
-    # SLOWDOWN ZONE
-    # =================================================
+      forward:
+        points: "[[0.55, 0.30], [0.55, -0.30], [0.35, -0.30], [0.35, 0.30]]"
+        linear_min: 0.001
+        linear_max: 1.10
+        theta_min: -2.50
+        theta_max: 2.50
+
+      backward:
+        points: "[[-0.35, 0.30], [-0.35, -0.30], [-0.55, -0.30], [-0.55, 0.30]]"
+        linear_min: -1.10
+        linear_max: -0.001
+        theta_min: -2.50
+        theta_max: 2.50
+
+      # At zero linear speed / pure rotation, only protect the immediate
+      # robot body. This lets a front obstacle at x > 0.35 release STOP so
+      # the recovery command can transition into reverse.
+      stopped:
+        points: "[[0.34, 0.27], [0.34, -0.27], [-0.46, -0.27], [-0.46, 0.27]]"
+        linear_min: -1.10
+        linear_max: 1.10
+        theta_min: -2.50
+        theta_max: 2.50
 
     slowdown_zone:
-      type: polygon
-      points: "[[0.75, 0.60], [0.75, -0.60], [0.35, -0.60], [0.35, 0.60]]"
+      type: velocity_polygon
       action_type: slowdown
       min_points: 5
       slowdown_ratio: 0.3
       visualize: true
       polygon_pub_topic: /collision_monitor/slowdown_zone
       enabled: true
+      holonomic: false
+      velocity_polygons:
+        - forward
+        - backward
+        - stopped
+
+      forward:
+        points: "[[0.75, 0.60], [0.75, -0.60], [0.35, -0.60], [0.35, 0.60]]"
+        linear_min: 0.001
+        linear_max: 1.10
+        theta_min: -2.50
+        theta_max: 2.50
+
+      backward:
+        points: "[[-0.35, 0.60], [-0.35, -0.60], [-0.75, -0.60], [-0.75, 0.60]]"
+        linear_min: -1.10
+        linear_max: -0.001
+        theta_min: -2.50
+        theta_max: 2.50
+
+      stopped:
+        points: "[[0.34, 0.27], [0.34, -0.27], [-0.46, -0.27], [-0.46, 0.27]]"
+        linear_min: -1.10
+        linear_max: 1.10
+        theta_min: -2.50
+        theta_max: 2.50
 
     # -------------------------------------------------
-    # Observation sources
+    # Observation source
     # -------------------------------------------------
 
     observation_sources:
