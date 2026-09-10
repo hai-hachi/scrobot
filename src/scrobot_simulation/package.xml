@@ -16,8 +16,12 @@
 
   <build_depend>gz-plugin2</build_depend>
   <build_depend>gz-sim8</build_depend>
+  <build_depend>gz-msgs10</build_depend>
+  <build_depend>gz-transport13</build_depend>
   <exec_depend>gz-plugin2</exec_depend>
   <exec_depend>gz-sim8</exec_depend>
+  <exec_depend>gz-msgs10</exec_depend>
+  <exec_depend>gz-transport13</exec_depend>
 
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch</exec_depend>
