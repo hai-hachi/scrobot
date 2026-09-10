@@ -1,0 +1,27 @@
+fake_shuttle_detector:
+  ros__parameters:
+    use_sim_time: true
+
+    update_rate: 15.0
+    min_range: 0.20
+    max_range: 3.00
+
+    class_id: shuttle
+    shuttle_name_prefixes:
+      - single
+      - random
+      - cluster
+      - mixed
+
+    bbox_size_x: 0.08
+    bbox_size_y: 0.08
+    bbox_size_z: 0.10
+
+    ground_truth_tf_topic: /evaluation/ground_truth_tf
+    ground_truth_odom_topic: /evaluation/ground_truth_odom
+    camera_info_topic: /camera/camera/color/camera_info
+    output_topic: /perception/shuttle_detections_3d
+
+    base_frame: base_footprint
+    color_frame: camera_color_optical_frame
+    depth_frame: camera_depth_optical_frame
