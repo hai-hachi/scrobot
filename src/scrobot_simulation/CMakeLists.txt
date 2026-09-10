@@ -10,6 +10,10 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(gz-plugin2 REQUIRED COMPONENTS register)
+find_package(gz-sim8 REQUIRED)
+
+set(GZ_PLUGIN_VER ${gz-plugin2_VERSION_MAJOR})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -31,6 +35,21 @@ ament_target_dependencies(
   visualization_msgs
 )
 
+add_library(
+  shuttle_activity_system
+  SHARED
+  src/shuttle_activity_system.cpp
+)
+
+set_property(TARGET shuttle_activity_system PROPERTY CXX_STANDARD 17)
+
+target_link_libraries(
+  shuttle_activity_system
+  PRIVATE
+    gz-plugin${GZ_PLUGIN_VER}::gz-plugin${GZ_PLUGIN_VER}
+    gz-sim8::gz-sim8
+)
+
 install(
   TARGETS
     court_visualizer
@@ -38,9 +57,22 @@ install(
 )
 
 install(
+  TARGETS
+    shuttle_activity_system
+  LIBRARY DESTINATION lib
+)
+
+install(
   PROGRAMS
     scripts/generate_court_apriltags.py
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(
+  PROGRAMS
+    scripts/spawn_shuttles.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME spawn_shuttles
 )
 
 install(

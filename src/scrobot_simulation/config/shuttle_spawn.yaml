@@ -1,0 +1,88 @@
+world: badminton_court
+
+# Coordinate convention used by the shuttle distribution:
+#   Side A = +X half of the court
+#   Side B = -X half of the court
+#   Left   = +Y half of the court
+#   Right  = -Y half of the court
+
+single:
+  x: 0.0
+  y: 0.0
+  z: 0.08
+  roll: 0.0
+  pitch: 1.57079632679
+  yaw: 0.0
+
+random:
+  count: 20
+  # null = generate a new random seed each run.
+  # integer = reproducible layout.
+  seed: null
+  density: uniform
+
+cluster:
+  count: 50
+  seed: null
+
+  # Gaussian spread around each transverse court marking.
+  # X is intentionally tight so shuttles stay close to the marking.
+  # Y is intentionally broad so they spread along the marking.
+  sigma_x: 0.10
+  sigma_y: 0.90
+
+  # Center of the left / right half-court distributions.
+  left_center_y: 1.525
+  right_center_y: -1.525
+
+  # X locations of the 7 transverse marking groups, ordered from
+  # Side A back line -> net -> Side B back line.
+  line_x:
+    side_a_singles_long: 6.70
+    side_a_doubles_long: 5.94
+    side_a_short: 1.98
+    net: 0.00
+    side_b_short: -1.98
+    side_b_doubles_long: -5.94
+    side_b_singles_long: -6.70
+
+  # 14-zone density matrix.
+  # Columns: [left (+Y), right (-Y)]
+  # Rows:
+  #   0: Side A singles long service line
+  #   1: Side A doubles long service line
+  #   2: Side A short service line
+  #   3: Net
+  #   4: Side B short service line
+  #   5: Side B doubles long service line
+  #   6: Side B singles long service line
+  #
+  # A weight of 0 disables a zone. Relative values control how many
+  # shuttles are assigned to each zone. Example: 2 receives about twice
+  # as many shuttles as 1.
+  weights:
+    - [1.0, 0.0]  # A singles long:  left, right
+    - [0.0, 1.0]  # A doubles long:  left, right
+    - [0.2, 0.8]  # A short:         left, right
+    - [1.0, 0.3]  # net:             left, right
+    - [0.7, 0.3]  # B short:         left, right
+    - [0.0, 1.0]  # B doubles long:  left, right
+    - [1.0, 0.0]  # B singles long:  left, right
+
+mixed:
+  count: 50
+  seed: null
+
+  # Fraction spawned uniformly/randomly over the court.
+  # The remainder uses the cluster matrix above.
+  random_fraction: 0.30
+  random_density: uniform
+
+court:
+  length: 13.40
+  width: 6.10
+  margin: 0.15
+
+spawn:
+  height: 0.08
+  parallel_workers: 8

@@ -3,47 +3,45 @@
 <package format="3">
   <name>scrobot_simulation</name>
   <version>0.0.0</version>
-  <description>Gazebo Harmonic simulation package for SC Robot, including the court world, sensor bridges, robot spawning, visualization, and simulation utilities.</description>
+  <description>Gazebo Harmonic simulation package for SC Robot, including the court world, shuttle simulation, sensor bridges, robot spawning, visualization, and simulation utilities.</description>
   <maintainer email="hai.hachi.154@gmail.com">sea</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <!-- court_visualizer C++ node -->
   <depend>rclcpp</depend>
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
   <depend>visualization_msgs</depend>
 
-  <!-- Launch infrastructure -->
+  <build_depend>gz-plugin2</build_depend>
+  <build_depend>gz-sim8</build_depend>
+  <exec_depend>gz-plugin2</exec_depend>
+  <exec_depend>gz-sim8</exec_depend>
+
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 
-  <!-- Robot description/control used by simulation Xacro and launch files -->
   <exec_depend>scrobot_description</exec_depend>
   <exec_depend>scrobot_control</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
 
-  <!-- Gazebo / ROS integration -->
   <exec_depend>ros_gz_sim</exec_depend>
   <exec_depend>ros_gz_bridge</exec_depend>
   <exec_depend>ros_gz_image</exec_depend>
   <exec_depend>gz_ros2_control</exec_depend>
 
-  <!-- Message packages referenced by config/bridge.yaml -->
   <exec_depend>rosgraph_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>tf2_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
 
-  <!-- Depth processing and visualization -->
   <exec_depend>depth_image_proc</exec_depend>
   <exec_depend>rclcpp_components</exec_depend>
   <exec_depend>rviz2</exec_depend>
 
-  <!-- scripts/generate_court_apriltags.py -->
   <exec_depend>python3-opencv</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
