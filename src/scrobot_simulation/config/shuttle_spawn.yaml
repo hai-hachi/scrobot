@@ -1,0 +1,32 @@
+world: badminton_court
+
+single:
+  x: 0.0
+  y: 0.0
+  z: 0.08
+  roll: 0.0
+  pitch: 1.57079632679
+  yaw: 0.0
+
+random:
+  count: 20
+  seed: null
+  density: uniform
+
+court:
+  length: 13.40
+  width: 6.10
+  margin: 0.15
+
+spawn:
+  height: 0.08
+  parallel_workers: 8
+
+cluster:
+  enabled: false
+  random_fraction: 0.30
+  clusters:
+    - name: net_center
+      center: [0.0, 0.0]
+      sigma: [0.8, 1.2]
+      weight: 1.0
