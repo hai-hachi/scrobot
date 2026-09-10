@@ -40,16 +40,6 @@ def generate_launch_description():
         ],
     )
 
-    collision_recovery = Node(
-        package='scrobot_control',
-        executable='collision_recovery.py',
-        name='collision_recovery',
-        output='screen',
-        parameters=[
-            {'use_sim_time': use_sim_time},
-        ],
-    )
-
     velocity_smoother = Node(
         package='nav2_velocity_smoother',
         executable='velocity_smoother',
@@ -101,7 +91,6 @@ def generate_launch_description():
         ),
 
         twist_mux,
-        collision_recovery,
         velocity_smoother,
         collision_monitor,
         lifecycle_manager,
