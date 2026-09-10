@@ -4,6 +4,7 @@
 #include <string>
 #include <unordered_map>
 
+#include <gz/msgs/pose_v.pb.h>
 #include <gz/plugin/Register.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/System.hh>
@@ -11,6 +12,7 @@
 #include <gz/sim/components/Model.hh>
 #include <gz/sim/components/Name.hh>
 #include <gz/sim/components/Static.hh>
+#include <gz/transport/Node.hh>
 
 #include <sdf/Element.hh>
 
@@ -51,6 +53,8 @@ public:
       "freeze_distance", this->freezeDistance_).first;
     this->settleTime_ = _sdf->Get<double>(
       "settle_time", this->settleTime_).first;
+    this->groundTruthTopic_ = _sdf->Get<std::string>(
+      "ground_truth_topic", this->groundTruthTopic_).first;
 
     if (this->updateRate_ <= 0.0)
       this->updateRate_ = 10.0;
@@ -67,6 +71,9 @@ public:
     this->settleDuration_ = std::chrono::duration_cast<
       std::chrono::steady_clock::duration>(
         std::chrono::duration<double>(this->settleTime_));
+
+    this->groundTruthPublisher_ =
+      this->transportNode_.Advertise<gz::msgs::Pose_V>(this->groundTruthTopic_);
 
     this->ResolveRobot(_ecm);
   }
@@ -99,11 +106,12 @@ public:
       return;
 
     const auto robotPose = gz::sim::worldPose(this->robotEntity_, _ecm);
+    gz::msgs::Pose_V shuttleGroundTruthMsg;
 
     _ecm.Each<gz::sim::components::Model, gz::sim::components::Name>(
       [&](const gz::sim::Entity &_entity,
           const gz::sim::components::Model * /*_modelComp*/,
-          const gz::sim::components::Name * /*_nameComp*/) -> bool
+          const gz::sim::components::Name *_nameComp) -> bool
       {
         if (_entity == this->robotEntity_ || _entity == this->worldEntity_)
           return true;
@@ -120,6 +128,21 @@ public:
         }
 
         const auto shuttlePose = gz::sim::worldPose(_entity, _ecm);
+
+        // Dedicated shuttle-only ground truth. The Gazebo pose name is useful
+        // for Gazebo-side debugging, but the ROS bridge converts this Pose_V to
+        // a PoseArray, where identity is intentionally not required.
+        auto *poseMsg = shuttleGroundTruthMsg.add_pose();
+        poseMsg->set_name(_nameComp->Data());
+        poseMsg->set_id(static_cast<uint64_t>(_entity));
+        poseMsg->mutable_position()->set_x(shuttlePose.Pos().X());
+        poseMsg->mutable_position()->set_y(shuttlePose.Pos().Y());
+        poseMsg->mutable_position()->set_z(shuttlePose.Pos().Z());
+        poseMsg->mutable_orientation()->set_x(shuttlePose.Rot().X());
+        poseMsg->mutable_orientation()->set_y(shuttlePose.Rot().Y());
+        poseMsg->mutable_orientation()->set_z(shuttlePose.Rot().Z());
+        poseMsg->mutable_orientation()->set_w(shuttlePose.Rot().W());
+
         const double dx = shuttlePose.Pos().X() - robotPose.Pos().X();
         const double dy = shuttlePose.Pos().Y() - robotPose.Pos().Y();
         const double distance = std::hypot(dx, dy);
@@ -151,6 +174,11 @@ public:
 
         return true;
       });
+
+    // Publish even when no shuttles exist. An empty PoseArray on the ROS side
+    // is a valid "zero shuttles" state and lets consumers distinguish that
+    // from a missing ground-truth stream.
+    this->groundTruthPublisher_.Publish(shuttleGroundTruthMsg);
   }
 
 private:
@@ -190,7 +218,11 @@ private:
   gz::sim::Entity robotEntity_{gz::sim::kNullEntity};
   std::unordered_map<gz::sim::Entity, ShuttleState> states_;
 
+  gz::transport::Node transportNode_;
+  gz::transport::Node::Publisher groundTruthPublisher_;
+
   std::string robotName_{"scrobot"};
+  std::string groundTruthTopic_{"/evaluation/shuttle_ground_truth_gz"};
   double updateRate_{10.0};
   double activationDistance_{1.2};
   double freezeDistance_{1.6};
