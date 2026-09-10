@@ -15,12 +15,17 @@ twist_mux:
         timeout: 0.25
         priority: 50
 
-      manual:
-        topic: /cmd_vel_manual
-        timeout: 0.25
-        priority: 100
-
       relocalization:
         topic: /cmd_vel_relocalization
         timeout: 0.5
         priority: 60
+
+      collision_recovery:
+        topic: /cmd_vel_collision_recovery
+        timeout: 0.25
+        priority: 90
+
+      manual:
+        topic: /cmd_vel_manual
+        timeout: 0.25
+        priority: 100
