@@ -9,6 +9,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+LINE_WIDTH = 0.8
+GRID_LINE_WIDTH = 0.4
+POINT_SIZE = 18
+
+
 def load_csv(path):
     with open(path, newline='') as handle:
         return list(csv.DictReader(handle))
@@ -53,6 +58,12 @@ def save_summary(run_dir, metrics):
     return path
 
 
+def save_svg(path):
+    plt.tight_layout()
+    plt.savefig(path, format='svg')
+    plt.close()
+
+
 def plot_trajectory(run_dir, samples, points):
     gt_x = numeric(samples, 'gt_x')
     gt_y = numeric(samples, 'gt_y')
@@ -64,19 +75,39 @@ def plot_trajectory(run_dir, samples, points):
     est_mask = np.isfinite(est_x) & np.isfinite(est_y)
 
     if np.any(gt_mask):
-        plt.plot(gt_x[gt_mask], gt_y[gt_mask], label='Ground truth')
+        plt.plot(
+            gt_x[gt_mask],
+            gt_y[gt_mask],
+            linewidth=LINE_WIDTH,
+            label='Ground truth',
+        )
     if np.any(est_mask):
-        plt.plot(est_x[est_mask], est_y[est_mask], label='Estimated')
+        plt.plot(
+            est_x[est_mask],
+            est_y[est_mask],
+            linewidth=LINE_WIDTH,
+            label='Estimated',
+        )
 
     if points:
         px = numeric(points, 'x')
         py = numeric(points, 'y')
         mask = np.isfinite(px) & np.isfinite(py)
         if np.any(mask):
-            plt.scatter(px[mask], py[mask], label='Patrol points')
+            plt.scatter(
+                px[mask],
+                py[mask],
+                s=POINT_SIZE,
+                label='Patrol points',
+            )
             for row in points:
                 try:
-                    plt.text(float(row['x']), float(row['y']), f"P{row['index']}")
+                    plt.text(
+                        float(row['x']),
+                        float(row['y']),
+                        f"P{row['index']}",
+                        fontsize=8,
+                    )
                 except (ValueError, KeyError):
                     pass
 
@@ -84,16 +115,15 @@ def plot_trajectory(run_dir, samples, points):
     plt.ylabel('Y [m]')
     plt.title('Patrol trajectory')
     plt.axis('equal')
-    plt.grid(True)
+    plt.grid(True, linewidth=GRID_LINE_WIDTH)
     plt.legend()
-    plt.tight_layout()
-    plt.savefig(run_dir / 'trajectory.png', dpi=180)
-    plt.close()
+    save_svg(run_dir / 'trajectory.svg')
 
 
 def plot_checkpoint_errors(run_dir, checkpoints):
     if not checkpoints:
         return
+
     idx = numeric(checkpoints, 'index')
     pos = numeric(checkpoints, 'gt_position_error_m')
     yaw = numeric(checkpoints, 'gt_yaw_error_deg')
@@ -101,31 +131,28 @@ def plot_checkpoint_errors(run_dir, checkpoints):
     mask = np.isfinite(idx) & np.isfinite(pos)
     if np.any(mask):
         plt.figure()
-        plt.bar(idx[mask], pos[mask])
+        plt.bar(idx[mask], pos[mask], linewidth=0.4)
         plt.xlabel('Patrol point')
         plt.ylabel('Position error [m]')
         plt.title('Actual checkpoint position error')
-        plt.grid(True, axis='y')
-        plt.tight_layout()
-        plt.savefig(run_dir / 'checkpoint_position_error.png', dpi=180)
-        plt.close()
+        plt.grid(True, axis='y', linewidth=GRID_LINE_WIDTH)
+        save_svg(run_dir / 'checkpoint_position_error.svg')
 
     mask = np.isfinite(idx) & np.isfinite(yaw)
     if np.any(mask):
         plt.figure()
-        plt.bar(idx[mask], yaw[mask])
+        plt.bar(idx[mask], yaw[mask], linewidth=0.4)
         plt.xlabel('Patrol point')
         plt.ylabel('Yaw error [deg]')
         plt.title('Actual checkpoint yaw error')
-        plt.grid(True, axis='y')
-        plt.tight_layout()
-        plt.savefig(run_dir / 'checkpoint_yaw_error.png', dpi=180)
-        plt.close()
+        plt.grid(True, axis='y', linewidth=GRID_LINE_WIDTH)
+        save_svg(run_dir / 'checkpoint_yaw_error.svg')
 
 
 def plot_spin_metrics(run_dir, spins):
     if not spins:
         return
+
     idx = numeric(spins, 'index')
     overshoot = numeric(spins, 'overshoot_deg')
     correction = numeric(spins, 'correction_after_peak_deg')
@@ -137,16 +164,26 @@ def plot_spin_metrics(run_dir, spins):
     x = idx[mask]
     width = 0.35
     plt.figure()
-    plt.bar(x - width / 2.0, overshoot[mask], width=width, label='Overshoot')
-    plt.bar(x + width / 2.0, correction[mask], width=width, label='Correction')
+    plt.bar(
+        x - width / 2.0,
+        overshoot[mask],
+        width=width,
+        linewidth=0.4,
+        label='Overshoot',
+    )
+    plt.bar(
+        x + width / 2.0,
+        correction[mask],
+        width=width,
+        linewidth=0.4,
+        label='Correction',
+    )
     plt.xlabel('Patrol point')
     plt.ylabel('Angle [deg]')
     plt.title('360-degree scan overshoot and correction')
-    plt.grid(True, axis='y')
+    plt.grid(True, axis='y', linewidth=GRID_LINE_WIDTH)
     plt.legend()
-    plt.tight_layout()
-    plt.savefig(run_dir / 'spin_overshoot.png', dpi=180)
-    plt.close()
+    save_svg(run_dir / 'spin_overshoot.svg')
 
 
 def plot_cross_track(run_dir, samples):
@@ -155,16 +192,19 @@ def plot_cross_track(run_dir, samples):
     mask = np.isfinite(t) & np.isfinite(cte)
     if not np.any(mask):
         return
+
     t = t - t[mask][0]
     plt.figure()
-    plt.plot(t[mask], cte[mask])
+    plt.plot(
+        t[mask],
+        cte[mask],
+        linewidth=LINE_WIDTH,
+    )
     plt.xlabel('Time [s]')
     plt.ylabel('Cross-track error [m]')
     plt.title('Ground-truth tracking error to active Nav2 plan')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(run_dir / 'path_tracking_error.png', dpi=180)
-    plt.close()
+    plt.grid(True, linewidth=GRID_LINE_WIDTH)
+    save_svg(run_dir / 'path_tracking_error.svg')
 
 
 def main():
@@ -180,9 +220,21 @@ def main():
         raise SystemExit(f'Missing {trajectory_path}')
 
     samples = load_csv(trajectory_path)
-    checkpoints = load_csv(run_dir / 'checkpoints.csv') if (run_dir / 'checkpoints.csv').exists() else []
-    spins = load_csv(run_dir / 'spins.csv') if (run_dir / 'spins.csv').exists() else []
-    points = load_csv(run_dir / 'patrol_points.csv') if (run_dir / 'patrol_points.csv').exists() else []
+    checkpoints = (
+        load_csv(run_dir / 'checkpoints.csv')
+        if (run_dir / 'checkpoints.csv').exists()
+        else []
+    )
+    spins = (
+        load_csv(run_dir / 'spins.csv')
+        if (run_dir / 'spins.csv').exists()
+        else []
+    )
+    points = (
+        load_csv(run_dir / 'patrol_points.csv')
+        if (run_dir / 'patrol_points.csv').exists()
+        else []
+    )
 
     ros_time = numeric(samples, 'ros_time')
     loc_pos = numeric(samples, 'localization_position_error')
@@ -209,15 +261,29 @@ def main():
     gt_total = numeric(samples, 'gt_distance_total')
     est_total = numeric(samples, 'est_distance_total')
 
+    loc_yaw_rmse = rmse(loc_yaw)
+
     metrics = {
         'mission_logged_duration_s': duration,
         'patrol_points_recorded': len(points),
         'checkpoints_completed': len(checkpoints),
         'spins_completed': len(spins),
-        'ground_truth_total_path_length_m': float(finite(gt_total)[-1]) if finite(gt_total).size else float('nan'),
-        'estimated_total_path_length_m': float(finite(est_total)[-1]) if finite(est_total).size else float('nan'),
+        'ground_truth_total_path_length_m': (
+            float(finite(gt_total)[-1])
+            if finite(gt_total).size
+            else float('nan')
+        ),
+        'estimated_total_path_length_m': (
+            float(finite(est_total)[-1])
+            if finite(est_total).size
+            else float('nan')
+        ),
         'localization_position_rmse_m': rmse(loc_pos),
-        'localization_yaw_rmse_deg': math.degrees(rmse(loc_yaw)) if math.isfinite(rmse(loc_yaw)) else float('nan'),
+        'localization_yaw_rmse_deg': (
+            math.degrees(loc_yaw_rmse)
+            if math.isfinite(loc_yaw_rmse)
+            else float('nan')
+        ),
         'plan_cross_track_rmse_m': rmse(gt_cte),
         'plan_cross_track_max_m': maximum(gt_cte),
         'checkpoint_position_error_mean_m': mean(checkpoint_pos),
@@ -246,11 +312,26 @@ def main():
     print(f'Analysis complete: {run_dir}')
     print(f'Summary: {summary_path}')
     print(f'Checkpoints: {len(checkpoints)}')
-    print(f'Checkpoint mean position error: {metrics["checkpoint_position_error_mean_m"]:.4f} m')
-    print(f'Plan cross-track RMSE: {metrics["plan_cross_track_rmse_m"]:.4f} m')
-    print(f'Spin mean overshoot: {metrics["spin_overshoot_mean_deg"]:.3f} deg')
-    print(f'Spin max overshoot: {metrics["spin_overshoot_max_deg"]:.3f} deg')
-    print(f'Spin mean correction: {metrics["spin_correction_mean_deg"]:.3f} deg')
+    print(
+        'Checkpoint mean position error: '
+        f'{metrics["checkpoint_position_error_mean_m"]:.4f} m'
+    )
+    print(
+        f'Plan cross-track RMSE: '
+        f'{metrics["plan_cross_track_rmse_m"]:.4f} m'
+    )
+    print(
+        f'Spin mean overshoot: '
+        f'{metrics["spin_overshoot_mean_deg"]:.3f} deg'
+    )
+    print(
+        f'Spin max overshoot: '
+        f'{metrics["spin_overshoot_max_deg"]:.3f} deg'
+    )
+    print(
+        f'Spin mean correction: '
+        f'{metrics["spin_correction_mean_deg"]:.3f} deg'
+    )
 
 
 if __name__ == '__main__':
