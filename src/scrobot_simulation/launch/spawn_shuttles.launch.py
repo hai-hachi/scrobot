@@ -1,9 +1,15 @@
+import os
+
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.substitutions import LaunchConfiguration
 
 
 def generate_launch_description():
+    simulation_share = get_package_share_directory('scrobot_simulation')
+    default_config = os.path.join(simulation_share, 'config', 'shuttle_spawn.yaml')
+
     config = LaunchConfiguration('config')
     mode = LaunchConfiguration('mode')
     visual = LaunchConfiguration('visual')
@@ -33,14 +39,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument(
-            'config',
-            default_value='/dev/null',
-            description=(
-                'Optional YAML config path. Leave default to use the package '
-                'config/shuttle_spawn.yaml through the direct ros2-run interface.'
-            ),
-        ),
+        DeclareLaunchArgument('config', default_value=default_config),
         DeclareLaunchArgument('mode', default_value='single', choices=['single', 'random']),
         DeclareLaunchArgument('visual', default_value='detail', choices=['detail', 'fast']),
         DeclareLaunchArgument('batch', default_value='1'),
