@@ -57,3 +57,14 @@ chmod +x \
   ~/scrobot_ws/src/scrobot_localization/scripts/tag_global_localizer.py \
   ~/scrobot_ws/src/scrobot_localization/scripts/tag_approach_controller.py \
   ~/scrobot_ws/src/scrobot_control/scripts/wasd_teleop.py
+
+# Terminal 1
+ros2 launch scrobot_simulation simulation.launch.py
+# Terminal 2
+ros2 launch scrobot_localization localization.launch.py
+# Terminal 3
+ros2 launch scrobot_perception perception.launch.py
+# Terminal 4
+ros2 launch scrobot_control control_stack.launch.py
+# Terminal 5
+ros2 launch scrobot_mission patrol_mission.launch.py

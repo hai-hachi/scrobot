@@ -15,11 +15,12 @@
 
       <!-- Slightly heavier than a real shuttle for stable simulation contact. -->
       <inertial>
-        <mass>0.025</mass>
+        <pose>0 0 0.0296 0 0 0</pose>
+        <mass>0.005</mass>
         <inertia>
-          <ixx>2.2e-5</ixx>
-          <iyy>2.2e-5</iyy>
-          <izz>1.2e-5</izz>
+          <ixx>1.02123536e-5</ixx>
+          <iyy>1.02123536e-5</iyy>
+          <izz>7.36831510e-6</izz>
           <ixy>0.0</ixy>
           <ixz>0.0</ixz>
           <iyz>0.0</iyz>
