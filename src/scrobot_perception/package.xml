@@ -21,9 +21,9 @@
   <exec_depend>image_transport</exec_depend>
   <exec_depend>pointcloud_to_laserscan</exec_depend>
 
+  <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
-  <exec_depend>tf2_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>vision_msgs</exec_depend>
 
