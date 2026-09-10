@@ -5,15 +5,6 @@
     <self_collide>false</self_collide>
     <allow_auto_disable>true</allow_auto_disable>
 
-    <plugin filename="libshuttle_activity_system.so"
-            name="scrobot_simulation::ShuttleActivitySystem">
-      <robot_model>scrobot</robot_model>
-      <update_rate>10.0</update_rate>
-      <activation_distance>1.2</activation_distance>
-      <freeze_distance>1.6</freeze_distance>
-      <settle_time>1.25</settle_time>
-    </plugin>
-
     <link name="shuttle_link">
       <inertial>
         <pose>0 0 0.0296 0 0 0</pose>
