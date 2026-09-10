@@ -17,6 +17,7 @@ endif()
 install(
   PROGRAMS
     scripts/fake_shuttle_detector.py
+    scripts/shuttle_tracker.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
