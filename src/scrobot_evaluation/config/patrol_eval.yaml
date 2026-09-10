@@ -3,9 +3,9 @@ patrol_trajectory_logger:
     map_frame: map
     base_frame: base_footprint
 
-    # Gazebo world pose bridged from /world/badminton_court/dynamic_pose/info.
-    ground_truth_topic: /evaluation/ground_truth_tf
-    ground_truth_child_contains: scrobot
+    # Dedicated Gazebo OdometryPublisher ground truth.
+    # This is the same source used by the local-odometry evaluation.
+    ground_truth_topic: /evaluation/ground_truth_odom
 
     mission_state_topic: /mission/state
     current_goal_topic: /mission/current_goal
