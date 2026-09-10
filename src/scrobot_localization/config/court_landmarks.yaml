@@ -81,11 +81,24 @@ tag_approach_controller:
     detections_topic: /apriltag/detections
     observed_tag_prefix: observed_tag_
     cmd_vel_topic: /cmd_vel_relocalization
+
     min_decision_margin: 10.0
     max_detection_distance: 9.0
     default_target_distance: 1.70
     default_timeout: 60.0
     tag_lost_timeout: 1.0
+
+    # V3 initial tag acquisition:
+    #   search -> stop -> settle -> observe -> choose best-facing tag -> lock.
+    # At 15 Hz, 0.50 s is about 7-8 camera frames.
+    selection_settle_time: 0.30
+    selection_window: 0.50
+    selection_min_samples: 4
+
+    # Detection messages are processed from the 20 Hz control timer so the
+    # matching AprilTag TF has time to reach tf2. Do not retain stale frames.
+    pending_detection_max_age: 0.25
+
     search_angular_velocity: 0.25
     max_linear_velocity: 0.25
     max_angular_velocity: 0.25
