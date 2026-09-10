@@ -1,19 +1,16 @@
-patrol_points:
-  ros__parameters:
-    frame_id: map
-
-    # Court area covered by the patrol grid.
-    court_length: 13.40
-    court_width: 6.10
-
-    # Patrol-grid coverage assumption.
-    camera_range: 3.0
-    range_factor: 0.90
-
 patrol_manager:
   ros__parameters:
     frame_id: map
     autostart: true
+
+    # ========================================================
+    # Patrol grid generation
+    # ========================================================
+    court_length: 13.40
+    court_width: 6.10
+    camera_range: 3.0
+    range_factor: 0.90
+    max_grid_size: 20
 
     # ========================================================
     # Initial absolute localization only
@@ -34,11 +31,7 @@ patrol_manager:
     nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
     nav2_startup_timeout: 30.0
     nav2_startup_retries: 3
-
-    # Wait after the initial map -> odom commit before sending the first goal.
     nav2_tf_settle_time: 0.75
-
-    # Retry transient NavigateToPose rejection before failing the mission.
     navigation_goal_retries: 3
 
     # ========================================================
