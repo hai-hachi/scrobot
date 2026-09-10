@@ -7,17 +7,12 @@ fake_shuttle_detector:
     max_range: 3.00
 
     class_id: shuttle
-    shuttle_name_prefixes:
-      - single
-      - random
-      - cluster
-      - mixed
 
     bbox_size_x: 0.08
     bbox_size_y: 0.08
     bbox_size_z: 0.10
 
-    ground_truth_tf_topic: /evaluation/ground_truth_tf
+    shuttle_ground_truth_topic: /evaluation/shuttle_ground_truth
     ground_truth_odom_topic: /evaluation/ground_truth_odom
     camera_info_topic: /camera/camera/color/camera_info
     output_topic: /perception/shuttle_detections_3d
