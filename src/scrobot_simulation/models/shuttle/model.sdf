@@ -13,7 +13,7 @@
         The spawner lays the shuttle on its side by default using pitch = pi/2.
       -->
 
-      <!-- Slightly heavier than a real shuttle for stable simulation contact. -->
+      <!-- Keep the tuned mass, COM and inertia independent of collision simplification. -->
       <inertial>
         <pose>0 0 0.0296 0 0 0</pose>
         <mass>0.005</mass>
@@ -33,6 +33,7 @@
         <angular>0.55</angular>
       </velocity_decay>
 
+      <!-- Detailed mesh is visual only. -->
       <visual name="shuttle_visual">
         <geometry>
           <mesh>
@@ -53,11 +54,83 @@
         </material>
       </visual>
 
-      <collision name="shuttle_collision">
+      <!--
+        Fast collision approximation.
+
+        The original triangle mesh collision was expensive because every dynamic
+        shuttle rests against the floor continuously.  These three primitives keep
+        the useful behaviour for this project while dramatically reducing contact
+        complexity:
+          1. cork end   : sphere, ~26 mm diameter
+          2. body       : narrow cylinder along local +Z
+          3. skirt rim  : short wide cylinder, ~65 mm diameter
+
+        Primitive dimensions are intentionally easy to tune after visual/contact
+        inspection.  They do not change the detailed rendered shuttle mesh.
+      -->
+
+      <collision name="cork_collision">
+        <!-- Origin is at rounded tip; cork occupies roughly the first 25 mm. -->
+        <pose>0 0 0.013 0 0 0</pose>
+        <max_contacts>2</max_contacts>
         <geometry>
-          <mesh>
-            <uri>model://shuttle/meshes/shuttle_collision.STL</uri>
-          </mesh>
+          <sphere>
+            <radius>0.013</radius>
+          </sphere>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>0.9</mu>
+              <mu2>0.9</mu2>
+            </ode>
+          </friction>
+          <bounce>
+            <restitution_coefficient>0.0</restitution_coefficient>
+            <threshold>1000000.0</threshold>
+          </bounce>
+          <contact>
+            <collide_without_contact>false</collide_without_contact>
+          </contact>
+        </surface>
+      </collision>
+
+      <collision name="body_collision">
+        <!-- Cheap axial collision so the base cannot pass through the shuttle middle. -->
+        <pose>0 0 0.038 0 0 0</pose>
+        <max_contacts>2</max_contacts>
+        <geometry>
+          <cylinder>
+            <radius>0.006</radius>
+            <length>0.040</length>
+          </cylinder>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>0.9</mu>
+              <mu2>0.9</mu2>
+            </ode>
+          </friction>
+          <bounce>
+            <restitution_coefficient>0.0</restitution_coefficient>
+            <threshold>1000000.0</threshold>
+          </bounce>
+          <contact>
+            <collide_without_contact>false</collide_without_contact>
+          </contact>
+        </surface>
+      </collision>
+
+      <collision name="skirt_collision">
+        <!-- Wide rim provides the second stable floor contact when lying on its side. -->
+        <pose>0 0 0.064 0 0 0</pose>
+        <max_contacts>2</max_contacts>
+        <geometry>
+          <cylinder>
+            <radius>0.0325</radius>
+            <length>0.008</length>
+          </cylinder>
         </geometry>
         <surface>
           <friction>
