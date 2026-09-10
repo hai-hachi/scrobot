@@ -106,7 +106,7 @@ controller_server:
 
     goal_checker:
       plugin: "nav2_controller::PositionGoalChecker"
-      xy_goal_tolerance: 0.15
+      xy_goal_tolerance: 0.05
       stateful: true
 
 
