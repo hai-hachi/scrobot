@@ -15,18 +15,20 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-# Install the importable Python package. This keeps imports such as
-# `from scrobot_mission.patrol_points import ...` working in both normal and
-# --symlink-install builds.
 ament_python_install_package(${PROJECT_NAME})
 
-# Install the ROS executable explicitly instead of relying on setup.py
-# console_scripts/data_files behavior under --symlink-install.
 install(
   PROGRAMS
     scrobot_mission/patrol_manager.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME patrol_manager
+)
+
+install(
+  PROGRAMS
+    scrobot_mission/target_selector.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME target_selector
 )
 
 install(
