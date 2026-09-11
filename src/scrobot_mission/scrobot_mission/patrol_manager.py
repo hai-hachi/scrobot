@@ -444,23 +444,77 @@ class PatrolManager(Node):
 
     def start_nav2_then_patrol(self):
         self.navigation_allowed_time = time.monotonic() + self.nav2_tf_settle_time
-        if self.navigate_client.server_is_ready() and self.spin_client.server_is_ready():
-            self.queue_current_patrol_goal()
-            return
         self.nav2_startup_pending = True
         self.nav2_startup_begin_time = time.monotonic()
+        self.nav2_startup_attempts = 0
+        self.nav2_startup_future = None
         self.set_state(MissionState.STARTING_NAV2)
         self.process_pending_actions()
 
     def process_nav2_startup(self):
         if not self.nav2_startup_pending:
             return
+
+        elapsed = time.monotonic() - self.nav2_startup_begin_time
+        if elapsed > self.nav2_startup_timeout:
+            self.enter_error('Nav2 startup timed out.')
+            return
+
+        # If a lifecycle request is in flight, wait for it to complete.
+        if self.nav2_startup_future is not None:
+            if not self.nav2_startup_future.done():
+                return
+
+            future = self.nav2_startup_future
+            self.nav2_startup_future = None
+            try:
+                response = future.result()
+            except Exception as exc:  # noqa: BLE001
+                response = None
+                self.get_logger().warn(f'Nav2 lifecycle startup call failed: {exc}')
+
+            if response is None or not response.success:
+                if self.nav2_startup_attempts >= self.nav2_startup_retries:
+                    self.enter_error('Nav2 lifecycle STARTUP failed.')
+                    return
+                self.get_logger().warn(
+                    f'Nav2 lifecycle STARTUP attempt {self.nav2_startup_attempts} '
+                    'failed; retrying.'
+                )
+                return
+
+            self.get_logger().info('Nav2 lifecycle STARTUP succeeded.')
+
+        # After a successful STARTUP, both actions should become ready shortly.
         if self.navigate_client.server_is_ready() and self.spin_client.server_is_ready():
             self.nav2_startup_pending = False
+            self.navigation_retry_count = 0
             self.queue_current_patrol_goal()
             return
-        if time.monotonic() - self.nav2_startup_begin_time > self.nav2_startup_timeout:
-            self.enter_error('Nav2 startup timed out.')
+
+        # Before asking lifecycle manager to start, wait until its service exists.
+        if not self.nav2_lifecycle_client.service_is_ready():
+            return
+
+        # Respect a small post-localization settle time before Nav2 activation.
+        if self.navigation_allowed_time is not None:
+            if time.monotonic() < self.navigation_allowed_time:
+                return
+            self.navigation_allowed_time = None
+
+        if self.nav2_startup_attempts >= self.nav2_startup_retries:
+            # STARTUP may have succeeded but action servers can take a little longer.
+            # Keep waiting for action readiness until nav2_startup_timeout expires.
+            return
+
+        request = ManageLifecycleNodes.Request()
+        request.command = ManageLifecycleNodes.Request.STARTUP
+        self.nav2_startup_attempts += 1
+        self.get_logger().info(
+            f'Starting Nav2 lifecycle '
+            f'(attempt {self.nav2_startup_attempts}/{self.nav2_startup_retries}).'
+        )
+        self.nav2_startup_future = self.nav2_lifecycle_client.call_async(request)
 
     def has_pending_work(self):
         return (
@@ -487,6 +541,9 @@ class PatrolManager(Node):
         if self.pending_relocalize_tag is not None and self.relocalize_client.server_is_ready():
             self.send_relocalize_goal_now(self.pending_relocalize_tag)
         if self.pending_navigation is not None and self.navigate_goal_handle is None:
+            if not self.navigate_client.server_is_ready():
+                self.update_action_retry_timer()
+                return
             pose = self.pending_navigation
             purpose = self.pending_navigation_purpose
             self.pending_navigation = None
@@ -499,7 +556,9 @@ class PatrolManager(Node):
             self.try_dispatch_selected_target()
         self.update_action_retry_timer()
 
-    def queue_navigation(self, pose, purpose):
+    def queue_navigation(self, pose, purpose, reset_retry=True):
+        if reset_retry:
+            self.navigation_retry_count = 0
         self.pending_navigation = copy.deepcopy(pose)
         self.pending_navigation_purpose = purpose
         self.process_pending_actions()
@@ -510,6 +569,30 @@ class PatrolManager(Node):
             return
         self.active_patrol_pose = copy.deepcopy(self.patrol_points[self.current_patrol_index])
         self.queue_navigation(self.active_patrol_pose, 'patrol')
+
+    def retry_active_navigation(self, reason):
+        if self.active_navigation_pose is None or self.active_navigation_purpose is None:
+            self.enter_error(f'Navigation failed with no retryable goal: {reason}')
+            return
+
+        if self.navigation_retry_count >= self.navigation_goal_retries:
+            self.enter_error(
+                f'Navigation purpose={self.active_navigation_purpose} failed after '
+                f'{self.navigation_goal_retries} retries: {reason}'
+            )
+            return
+
+        self.navigation_retry_count += 1
+        pose = copy.deepcopy(self.active_navigation_pose)
+        purpose = self.active_navigation_purpose
+        self.navigate_goal_handle = None
+        self.get_logger().warn(
+            f'Navigation purpose={purpose} failed/rejected: {reason}; '
+            f'retrying {self.navigation_retry_count}/{self.navigation_goal_retries}.'
+        )
+        self.pending_navigation = pose
+        self.pending_navigation_purpose = purpose
+        self.update_action_retry_timer()
 
     def send_navigation_goal_now(self, pose, purpose):
         self.active_navigation_pose = copy.deepcopy(pose)
@@ -535,22 +618,38 @@ class PatrolManager(Node):
         )
 
     def navigation_goal_response_callback(self, future):
-        goal_handle = future.result()
-        if not goal_handle.accepted:
-            self.enter_error('NavigateToPose rejected.')
+        try:
+            goal_handle = future.result()
+        except Exception as exc:  # noqa: BLE001
+            self.retry_active_navigation(f'action send exception: {exc}')
             return
+
+        if not goal_handle.accepted:
+            self.retry_active_navigation('NavigateToPose goal rejected')
+            return
+
         self.navigate_goal_handle = goal_handle
         goal_handle.get_result_async().add_done_callback(self.navigation_result_callback)
 
     def navigation_result_callback(self, future):
-        wrapped = future.result()
+        try:
+            wrapped = future.result()
+        except Exception as exc:  # noqa: BLE001
+            self.retry_active_navigation(f'action result exception: {exc}')
+            return
+
         purpose = self.active_navigation_purpose
+        if wrapped.status != GoalStatus.STATUS_SUCCEEDED:
+            self.retry_active_navigation(
+                f'NavigateToPose returned status={wrapped.status}'
+            )
+            return
+
         self.navigate_goal_handle = None
         self.active_navigation_pose = None
         self.active_navigation_purpose = None
-        if wrapped.status != GoalStatus.STATUS_SUCCEEDED:
-            self.enter_error(f'Navigation purpose={purpose} failed.')
-            return
+        self.navigation_retry_count = 0
+
         if purpose == 'patrol':
             self.start_scan(MissionState.PATROL_SCAN)
         elif purpose == 'staging':
