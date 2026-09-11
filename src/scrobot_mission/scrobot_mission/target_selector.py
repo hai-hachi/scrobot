@@ -29,17 +29,7 @@ def detection_position(detection):
 
 
 class ShuttleTargetSelector(Node):
-    """Select one tracked shuttle and generate a staging pose for it.
-
-    V1 policy:
-      - choose the nearest tracked shuttle in the map frame;
-      - keep the selected ID while it remains in the tracker;
-      - place the staging pose `staging_distance` before the shuttle along the
-        robot-to-shuttle line at the instant the target is selected;
-      - orient the staging pose toward the shuttle;
-      - optionally obey /mission/target_selection_enabled so the patrol manager
-        only allows target acquisition during patrol/local scans.
-    """
+    """Select one tracked shuttle and generate a fixed staging pose for it."""
 
     def __init__(self):
         super().__init__('shuttle_target_selector')
@@ -52,7 +42,10 @@ class ShuttleTargetSelector(Node):
             'selection_enabled_topic',
             '/mission/target_selection_enabled',
         )
-
+        self.declare_parameter(
+            'collection_complete_topic',
+            '/mission/collection_complete',
+        )
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('base_frame', 'base_footprint')
         self.declare_parameter('staging_distance', 0.75)
@@ -68,6 +61,9 @@ class ShuttleTargetSelector(Node):
         self.staging_pose_topic = str(self.get_parameter('staging_pose_topic').value)
         self.selection_enabled_topic = str(
             self.get_parameter('selection_enabled_topic').value
+        )
+        self.collection_complete_topic = str(
+            self.get_parameter('collection_complete_topic').value
         )
         self.map_frame = str(self.get_parameter('map_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
@@ -99,6 +95,7 @@ class ShuttleTargetSelector(Node):
         self.selected_detection = None
         self.staging_pose = None
         self.last_tf_warning_ns = 0
+        self.completed_ids = set()
 
         reliable_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -124,6 +121,12 @@ class ShuttleTargetSelector(Node):
             self.selection_enabled_topic,
             self._selection_enabled_callback,
             control_qos,
+        )
+        self.create_subscription(
+            String,
+            self.collection_complete_topic,
+            self._collection_complete_callback,
+            reliable_qos,
         )
 
         self.selected_pub = self.create_publisher(
@@ -151,11 +154,18 @@ class ShuttleTargetSelector(Node):
             f'enabled={self.selection_enabled}, input={self.tracked_topic}'
         )
 
+    def _collection_complete_callback(self, msg):
+        track_id = msg.data.strip()
+        if not track_id:
+            return
+        self.completed_ids.add(track_id)
+        if track_id == self.selected_id:
+            self._clear_target('collection complete')
+
     def _selection_enabled_callback(self, msg):
         enabled = bool(msg.data)
         if enabled == self.selection_enabled:
             return
-
         self.selection_enabled = enabled
         self.get_logger().info(
             f'Target selection {"enabled" if enabled else "disabled"}.'
@@ -183,7 +193,6 @@ class ShuttleTargetSelector(Node):
         except TransformException as exc:
             self._warn_tf_throttled(exc)
             return None
-
         t = transform.transform.translation
         q = transform.transform.rotation
         return float(t.x), float(t.y), yaw_from_quaternion(q)
@@ -198,20 +207,18 @@ class ShuttleTargetSelector(Node):
     def _choose_nearest(self, robot_pose):
         rx, ry, _ = robot_pose
         candidates = []
-
         for track_id, detection in self.latest_tracks.items():
+            if track_id in self.completed_ids:
+                continue
             tx, ty, _ = detection_position(detection)
             distance = math.hypot(tx - rx, ty - ry)
-            if self.max_target_distance > 0.0:
-                if distance > self.max_target_distance:
-                    continue
+            if self.max_target_distance > 0.0 and distance > self.max_target_distance:
+                continue
             candidates.append(
                 (distance, self._id_sort_key(track_id), track_id, detection)
             )
-
         if not candidates:
             return None
-
         candidates.sort(key=lambda item: (item[0], item[1]))
         _, _, track_id, detection = candidates[0]
         return track_id, detection
@@ -219,7 +226,6 @@ class ShuttleTargetSelector(Node):
     def _make_staging_pose(self, robot_pose, detection):
         rx, ry, robot_yaw = robot_pose
         tx, ty, _ = detection_position(detection)
-
         dx = tx - rx
         dy = ty - ry
         distance = math.hypot(dx, dy)
@@ -250,7 +256,6 @@ class ShuttleTargetSelector(Node):
         self.selected_id = track_id
         self.selected_detection = copy.deepcopy(detection)
         self.staging_pose = self._make_staging_pose(robot_pose, detection)
-
         tx, ty, _ = detection_position(detection)
         sx = self.staging_pose.pose.position.x
         sy = self.staging_pose.pose.position.y
@@ -279,7 +284,7 @@ class ShuttleTargetSelector(Node):
         self.latest_tracks = {
             detection.id: detection
             for detection in msg.detections
-            if detection.id
+            if detection.id and detection.id not in self.completed_ids
         }
 
         if not self.selection_enabled:
@@ -314,7 +319,6 @@ class ShuttleTargetSelector(Node):
         id_msg = String()
         id_msg.data = self.selected_id if self.selection_enabled else ''
         self.selected_id_pub.publish(id_msg)
-
         if not self.selection_enabled:
             return
         if not self.selected_id:
@@ -322,9 +326,7 @@ class ShuttleTargetSelector(Node):
         if self.selected_detection is None or self.staging_pose is None:
             return
 
-        selected = copy.deepcopy(self.selected_detection)
-        self.selected_pub.publish(selected)
-
+        self.selected_pub.publish(copy.deepcopy(self.selected_detection))
         staging = copy.deepcopy(self.staging_pose)
         staging.header.stamp = self.get_clock().now().to_msg()
         self.staging_pub.publish(staging)
