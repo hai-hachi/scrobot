@@ -1,122 +1,128 @@
-# Mission, Navigation, and Control Commands
+# Mission / Navigation / Control Debug Commands
 
-## Manual teleoperation
-
-```bash
-ros2 run scrobot_control wasd_teleop.py
-```
-
-Manual command topic:
-
-```text
-/cmd_vel_manual
-```
-
-Check it:
+## Build
 
 ```bash
-ros2 topic hz /cmd_vel_manual
-ros2 topic echo /cmd_vel_manual --once
+cd ~/scrobot_ws
+colcon build --symlink-install --packages-select scrobot_mission
+source install/setup.bash
 ```
 
-## Patrol mission
+## Start full patrol mission
 
 ```bash
 ros2 launch scrobot_mission patrol_mission.launch.py
 ```
 
-This launch includes:
+This launches:
+
+- `scrobot_localization/global_localization.launch.py`
+- `scrobot_navigation/navigation.launch.py`
+- `shuttle_target_selector`
+- `patrol_manager`
+
+## Mission state
+
+```bash
+ros2 topic echo /mission/state
+```
+
+Important states:
 
 ```text
-scrobot_localization/global_localization.launch.py
-scrobot_navigation/navigation.launch.py
-scrobot_mission/patrol_manager
+GO_TO_PATROL
+PATROL_SCAN
+SELECT_SHUTTLE
+GO_TO_STAGING
+WAIT_COLLECTION
+CHECK_VISIBLE_SHUTTLES
+LOCAL_SCAN
+RETURN_TO_PATROL
+FINAL_PATROL_SCAN
+COMPLETE
+ERROR
 ```
 
-Current mission sequence:
+## Patrol sequence
 
 ```text
-initial tag approach
- -> initial relocalization
- -> Nav2 startup
- -> navigate to patrol point
- -> 360 degree spin
- -> next patrol point
+Pi
+ -> 360 deg patrol scan
+ -> shuttle found?
+    -> staging pose
+    -> collection request
+    -> collection complete
+    -> another shuttle currently visible?
+       YES -> collect next immediately
+       NO  -> local 360 deg scan
+              -> shuttle found? collect again
+              -> none found? return to Pi
+ -> final 360 deg scan at Pi
+ -> no shuttle found -> Pi+1
 ```
 
-## Check mission executable after build
+`Pi` remains the anchor for the entire collection excursion.
+
+## Patrol points / current Nav2 goal
 
 ```bash
-ros2 pkg executables scrobot_mission
+ros2 topic echo /mission/patrol_points --once
+ros2 topic echo /mission/current_goal
 ```
 
-Expected:
-
-```text
-scrobot_mission patrol_manager
-```
-
-Check installed launch file:
+## Target selector outputs
 
 ```bash
-ls $(ros2 pkg prefix scrobot_mission)/share/scrobot_mission/launch
+ros2 topic echo /mission/selected_shuttle_id
+ros2 topic echo /mission/selected_shuttle
+ros2 topic echo /mission/shuttle_staging_pose
 ```
 
-## Navigation
-
-Launch Nav2 by itself:
+## Target-selection control
 
 ```bash
-ros2 launch scrobot_navigation navigation.launch.py
+ros2 topic echo /mission/target_selection_enabled
 ```
 
-Inspect available launch arguments:
+The patrol manager owns this topic during an integrated mission.
+
+## Collection handoff
+
+When the robot reaches the shuttle staging pose, the patrol manager publishes:
 
 ```bash
-ros2 launch scrobot_navigation navigation.launch.py --show-args
+ros2 topic echo /mission/collection_request
 ```
 
-Check Nav2 action servers:
+Until the final-approach / collector node exists, simulate successful collection by publishing the same shuttle ID:
 
 ```bash
-ros2 action list | grep -E 'navigate|spin'
+ros2 topic pub --once /mission/collection_complete std_msgs/msg/String "{data: '1'}"
 ```
 
-Check lifecycle manager:
+Replace `1` with the ID shown on `/mission/collection_request`.
+
+The mission will then:
+
+1. ignore that completed track ID;
+2. check for another shuttle currently in view;
+3. collect it immediately if available;
+4. otherwise perform a local 360 deg scan;
+5. return to the original patrol point if the local scan is clear;
+6. perform the final patrol-point scan.
+
+## Nav2 actions
 
 ```bash
-ros2 service list | grep lifecycle_manager_navigation
+ros2 action list | grep -E 'navigate_to_pose|spin'
+ros2 action info /navigate_to_pose
+ros2 action info /spin
 ```
 
-## Control / odometry
+## Teleop
 
 ```bash
-ros2 topic hz /diff_drive_controller/odom
-ros2 topic hz /joint_states
-ros2 topic info -v /diff_drive_controller/cmd_vel
+ros2 run scrobot_control wasd_teleop.py
 ```
 
-Check TF:
-
-```bash
-ros2 run tf2_ros tf2_echo odom base_footprint
-```
-
-## Build mission safely
-
-`scrobot_mission` supports symlink install:
-
-```bash
-cd ~/scrobot_ws
-colcon build --symlink-install --packages-select scrobot_mission
-source install/setup.bash
-```
-
-If an old non-symlink install is interfering:
-
-```bash
-cd ~/scrobot_ws
-rm -rf build/scrobot_mission install/scrobot_mission
-colcon build --symlink-install --packages-select scrobot_mission
-source install/setup.bash
-```
+Do not run teleop while the autonomous patrol mission is actively commanding Nav2 unless intentionally testing command arbitration.
