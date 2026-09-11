@@ -13,7 +13,8 @@ def generate_launch_description():
     localization_pkg = get_package_share_directory('scrobot_localization')
     navigation_pkg = get_package_share_directory('scrobot_navigation')
 
-    params = os.path.join(mission_pkg, 'config', 'patrol_params.yaml')
+    patrol_params = os.path.join(mission_pkg, 'config', 'patrol_params.yaml')
+    target_params = os.path.join(mission_pkg, 'config', 'target_selector.yaml')
     use_sim_time = LaunchConfiguration('use_sim_time')
 
     global_localization = IncludeLaunchDescription(
@@ -42,12 +43,27 @@ def generate_launch_description():
         }.items(),
     )
 
+    target_selector = Node(
+        package='scrobot_mission',
+        executable='target_selector',
+        name='shuttle_target_selector',
+        output='screen',
+        parameters=[
+            target_params,
+            {
+                'use_sim_time': use_sim_time,
+                # Patrol manager controls when acquisition is allowed.
+                'enabled_at_start': False,
+            },
+        ],
+    )
+
     patrol_manager = Node(
         package='scrobot_mission',
         executable='patrol_manager',
         name='patrol_manager',
         output='screen',
-        parameters=[params, {'use_sim_time': use_sim_time}],
+        parameters=[patrol_params, {'use_sim_time': use_sim_time}],
     )
 
     return LaunchDescription([
@@ -58,5 +74,6 @@ def generate_launch_description():
         ),
         global_localization,
         navigation,
+        target_selector,
         patrol_manager,
     ])
