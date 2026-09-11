@@ -14,6 +14,8 @@ def generate_launch_description():
     mode = LaunchConfiguration('mode')
     visual = LaunchConfiguration('visual')
     batch = LaunchConfiguration('batch')
+    x = LaunchConfiguration('x')
+    y = LaunchConfiguration('y')
 
     spawn = ExecuteProcess(
         cmd=[
@@ -22,6 +24,8 @@ def generate_launch_description():
             '--mode', mode,
             '--visual', visual,
             '--batch', batch,
+            '--x', x,
+            '--y', y,
         ],
         output='screen',
     )
@@ -33,7 +37,21 @@ def generate_launch_description():
             default_value='single',
             choices=['single', 'random', 'cluster', 'mixed'],
         ),
-        DeclareLaunchArgument('visual', default_value='detail', choices=['detail', 'fast']),
+        DeclareLaunchArgument(
+            'visual',
+            default_value='detail',
+            choices=['detail', 'fast'],
+        ),
         DeclareLaunchArgument('batch', default_value='1'),
+        DeclareLaunchArgument(
+            'x',
+            default_value='0.0',
+            description='Single-shuttle X position in the Gazebo world/map frame.',
+        ),
+        DeclareLaunchArgument(
+            'y',
+            default_value='0.0',
+            description='Single-shuttle Y position in the Gazebo world/map frame.',
+        ),
         spawn,
     ])
