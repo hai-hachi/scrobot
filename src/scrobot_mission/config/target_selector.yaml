@@ -1,0 +1,24 @@
+shuttle_target_selector:
+  ros__parameters:
+    use_sim_time: true
+
+    tracked_topic: /perception/tracked_shuttles
+    selected_topic: /mission/selected_shuttle
+    selected_id_topic: /mission/selected_shuttle_id
+    staging_pose_topic: /mission/shuttle_staging_pose
+
+    map_frame: map
+    base_frame: base_footprint
+
+    # Stop Nav2 this far before the shuttle. Final approach handles the rest.
+    staging_distance: 0.75
+
+    # Keep pursuing the same track while it exists instead of re-picking the
+    # nearest shuttle every tracker update.
+    sticky_target: true
+
+    # 0.0 disables target-range limiting.
+    max_target_distance: 0.0
+
+    publish_rate: 5.0
+    tf_timeout: 0.05
