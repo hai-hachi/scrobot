@@ -12,5 +12,6 @@ shuttle_tracker:
     position_alpha: 0.50
     stale_timeout: 1.50
     tf_timeout: 0.05
+    fallback_to_latest_tf: true
 
     default_class_id: shuttle
