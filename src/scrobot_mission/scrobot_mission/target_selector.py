@@ -9,7 +9,7 @@ from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 from tf2_ros import Buffer, TransformException, TransformListener
 from vision_msgs.msg import Detection3D, Detection3DArray
 
@@ -29,19 +29,16 @@ def detection_position(detection):
 
 
 class ShuttleTargetSelector(Node):
-    """Select one tracked shuttle and generate a fixed staging pose for it.
+    """Select one tracked shuttle and generate a staging pose for it.
 
     V1 policy:
       - choose the nearest tracked shuttle in the map frame;
       - keep the selected ID while it remains in the tracker;
       - place the staging pose `staging_distance` before the shuttle along the
         robot-to-shuttle line at the instant the target is selected;
-      - orient the staging pose toward the shuttle.
-
-    The staging pose is intentionally held fixed while the same target remains
-    selected. This prevents a Nav2 goal from moving continuously as the robot
-    approaches it. A new staging pose is generated when the selected target
-    changes.
+      - orient the staging pose toward the shuttle;
+      - optionally obey /mission/target_selection_enabled so the patrol manager
+        only allows target acquisition during patrol/local scans.
     """
 
     def __init__(self):
@@ -51,6 +48,10 @@ class ShuttleTargetSelector(Node):
         self.declare_parameter('selected_topic', '/mission/selected_shuttle')
         self.declare_parameter('selected_id_topic', '/mission/selected_shuttle_id')
         self.declare_parameter('staging_pose_topic', '/mission/shuttle_staging_pose')
+        self.declare_parameter(
+            'selection_enabled_topic',
+            '/mission/target_selection_enabled',
+        )
 
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('base_frame', 'base_footprint')
@@ -59,11 +60,15 @@ class ShuttleTargetSelector(Node):
         self.declare_parameter('max_target_distance', 0.0)
         self.declare_parameter('publish_rate', 5.0)
         self.declare_parameter('tf_timeout', 0.05)
+        self.declare_parameter('enabled_at_start', True)
 
         self.tracked_topic = str(self.get_parameter('tracked_topic').value)
         self.selected_topic = str(self.get_parameter('selected_topic').value)
         self.selected_id_topic = str(self.get_parameter('selected_id_topic').value)
         self.staging_pose_topic = str(self.get_parameter('staging_pose_topic').value)
+        self.selection_enabled_topic = str(
+            self.get_parameter('selection_enabled_topic').value
+        )
         self.map_frame = str(self.get_parameter('map_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
         self.staging_distance = float(self.get_parameter('staging_distance').value)
@@ -73,6 +78,9 @@ class ShuttleTargetSelector(Node):
         )
         self.publish_rate = float(self.get_parameter('publish_rate').value)
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
+        self.selection_enabled = bool(
+            self.get_parameter('enabled_at_start').value
+        )
 
         if self.staging_distance < 0.0:
             raise ValueError('staging_distance must be >= 0')
@@ -98,12 +106,24 @@ class ShuttleTargetSelector(Node):
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE,
         )
+        control_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
 
         self.create_subscription(
             Detection3DArray,
             self.tracked_topic,
             self._tracks_callback,
             reliable_qos,
+        )
+        self.create_subscription(
+            Bool,
+            self.selection_enabled_topic,
+            self._selection_enabled_callback,
+            control_qos,
         )
 
         self.selected_pub = self.create_publisher(
@@ -128,8 +148,20 @@ class ShuttleTargetSelector(Node):
             'Shuttle target selector started: '
             f'staging_distance={self.staging_distance:.2f} m, '
             f'sticky_target={self.sticky_target}, '
-            f'input={self.tracked_topic}'
+            f'enabled={self.selection_enabled}, input={self.tracked_topic}'
         )
+
+    def _selection_enabled_callback(self, msg):
+        enabled = bool(msg.data)
+        if enabled == self.selection_enabled:
+            return
+
+        self.selection_enabled = enabled
+        self.get_logger().info(
+            f'Target selection {"enabled" if enabled else "disabled"}.'
+        )
+        if not enabled:
+            self._clear_target('selection disabled')
 
     def _warn_tf_throttled(self, error):
         now_ns = self.get_clock().now().nanoseconds
@@ -195,10 +227,6 @@ class ShuttleTargetSelector(Node):
         if distance > 1e-6:
             ux = dx / distance
             uy = dy / distance
-
-            # If the shuttle is already within the requested staging distance,
-            # do not command Nav2 to drive past/away from it. The current robot
-            # position becomes the staging pose and only the heading is changed.
             travel = max(0.0, distance - self.staging_distance)
             sx = rx + travel * ux
             sy = ry + travel * uy
@@ -231,10 +259,10 @@ class ShuttleTargetSelector(Node):
             f'staging=({sx:.2f}, {sy:.2f})'
         )
 
-    def _clear_target(self):
+    def _clear_target(self, reason='track no longer available'):
         if self.selected_id:
             self.get_logger().info(
-                f'Cleared shuttle target {self.selected_id}: track no longer available'
+                f'Cleared shuttle target {self.selected_id}: {reason}'
             )
         self.selected_id = ''
         self.selected_detection = None
@@ -254,7 +282,9 @@ class ShuttleTargetSelector(Node):
             if detection.id
         }
 
-        # Sticky mode keeps the current target as long as its track exists.
+        if not self.selection_enabled:
+            return
+
         if self.sticky_target and self.selected_id in self.latest_tracks:
             self.selected_detection = copy.deepcopy(
                 self.latest_tracks[self.selected_id]
@@ -271,7 +301,7 @@ class ShuttleTargetSelector(Node):
 
         choice = self._choose_nearest(robot_pose)
         if choice is None:
-            self._clear_target()
+            self._clear_target('no track satisfies selection limits')
             return
 
         track_id, detection = choice
@@ -282,9 +312,11 @@ class ShuttleTargetSelector(Node):
 
     def _publish(self):
         id_msg = String()
-        id_msg.data = self.selected_id
+        id_msg.data = self.selected_id if self.selection_enabled else ''
         self.selected_id_pub.publish(id_msg)
 
+        if not self.selection_enabled:
+            return
         if not self.selected_id:
             return
         if self.selected_detection is None or self.staging_pose is None:
