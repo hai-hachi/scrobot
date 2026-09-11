@@ -6,6 +6,7 @@ shuttle_target_selector:
     selected_topic: /mission/selected_shuttle
     selected_id_topic: /mission/selected_shuttle_id
     staging_pose_topic: /mission/shuttle_staging_pose
+    selection_enabled_topic: /mission/target_selection_enabled
 
     map_frame: map
     base_frame: base_footprint
@@ -22,3 +23,6 @@ shuttle_target_selector:
 
     publish_rate: 5.0
     tf_timeout: 0.05
+
+    # Patrol manager enables selection only while a patrol-point scan is active.
+    enabled_at_start: false
