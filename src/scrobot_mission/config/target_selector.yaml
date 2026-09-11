@@ -24,5 +24,7 @@ shuttle_target_selector:
     publish_rate: 5.0
     tf_timeout: 0.05
 
-    # Patrol manager enables selection only while a patrol-point scan is active.
-    enabled_at_start: false
+    # Standalone target-selection tests remain usable. During patrol integration
+    # the patrol manager publishes /mission/target_selection_enabled and takes
+    # control of when acquisition is allowed.
+    enabled_at_start: true
