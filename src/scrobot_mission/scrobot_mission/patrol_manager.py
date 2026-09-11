@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import copy
 import math
 import time
 from enum import Enum, auto
@@ -13,12 +14,10 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from scrobot_interfaces.action import ApproachTag, Relocalize
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
+from vision_msgs.msg import Detection3DArray
 
-from scrobot_mission.patrol_points import (
-    find_minimum_grid,
-    generate_patrol_points,
-)
+from scrobot_mission.patrol_points import find_minimum_grid, generate_patrol_points
 
 
 class MissionState(Enum):
@@ -28,21 +27,33 @@ class MissionState(Enum):
     STARTING_NAV2 = auto()
     GO_TO_PATROL = auto()
     PATROL_SCAN = auto()
+    SELECT_SHUTTLE = auto()
+    GO_TO_STAGING = auto()
+    WAIT_COLLECTION = auto()
+    CHECK_VISIBLE_SHUTTLES = auto()
+    LOCAL_SCAN = auto()
+    RETURN_TO_PATROL = auto()
+    FINAL_PATROL_SCAN = auto()
     COMPLETE = auto()
     ERROR = auto()
 
 
 class PatrolManager(Node):
-    """Bare-bones patrol mission.
+    """Patrol mission with Pi-anchored shuttle collection excursions.
 
-    Flow:
-      generate patrol points
-        -> initial tag approach
-        -> one initial relocalization
-        -> start Nav2
-        -> P0 -> 360 deg spin -> P1 -> ... -> COMPLETE
+    Per patrol point Pi:
+      1. Navigate to Pi.
+      2. Spin 360 deg and remember any visible shuttle IDs.
+      3. If a shuttle was found, navigate to its staging pose and request collection.
+      4. After collection, immediately collect another currently-visible shuttle.
+      5. If none is visible, spin 360 deg at the current collection location.
+      6. If that local spin finds no shuttle, return to the original Pi.
+      7. Spin 360 deg once more at Pi.
+      8. Only if that final Pi scan finds nothing, advance to Pi+1.
 
-    Runtime relocalization and shuttle handling are intentionally excluded.
+    Final approach / pickup is intentionally a handoff boundary for now:
+      publish /mission/collection_request (String shuttle ID)
+      wait for /mission/collection_complete (String same shuttle ID)
     """
 
     def __init__(self):
@@ -50,15 +61,12 @@ class PatrolManager(Node):
 
         self.declare_parameter('frame_id', 'map')
         self.declare_parameter('autostart', True)
-
-        # Patrol grid.
         self.declare_parameter('court_length', 13.40)
         self.declare_parameter('court_width', 6.10)
         self.declare_parameter('camera_range', 3.0)
         self.declare_parameter('range_factor', 0.90)
         self.declare_parameter('max_grid_size', 20)
 
-        # Initial localization only.
         self.declare_parameter('initial_global_localization', True)
         self.declare_parameter('initial_tag_id', -1)
         self.declare_parameter('initial_relocalization_retries', 3)
@@ -67,7 +75,6 @@ class PatrolManager(Node):
         self.declare_parameter('relocalize_sample_count', 15)
         self.declare_parameter('relocalize_timeout', 7.0)
 
-        # Nav2 startup.
         self.declare_parameter(
             'nav2_lifecycle_service',
             '/lifecycle_manager_navigation/manage_nodes',
@@ -77,14 +84,38 @@ class PatrolManager(Node):
         self.declare_parameter('nav2_tf_settle_time', 0.75)
         self.declare_parameter('navigation_goal_retries', 3)
 
-        # Patrol behavior.
         self.declare_parameter('action_retry_period', 0.5)
         self.declare_parameter('spin_angle', 2.0 * math.pi)
         self.declare_parameter('spin_time_allowance', 20.0)
+        self.declare_parameter('selection_wait_timeout', 2.0)
+
+        self.declare_parameter(
+            'visible_tracks_topic',
+            '/perception/visible_tracked_shuttles',
+        )
+        self.declare_parameter(
+            'selected_id_topic',
+            '/mission/selected_shuttle_id',
+        )
+        self.declare_parameter(
+            'staging_pose_topic',
+            '/mission/shuttle_staging_pose',
+        )
+        self.declare_parameter(
+            'selection_enabled_topic',
+            '/mission/target_selection_enabled',
+        )
+        self.declare_parameter(
+            'collection_request_topic',
+            '/mission/collection_request',
+        )
+        self.declare_parameter(
+            'collection_complete_topic',
+            '/mission/collection_complete',
+        )
 
         self.frame_id = str(self.get_parameter('frame_id').value)
         self.autostart = bool(self.get_parameter('autostart').value)
-
         self.court_length = float(self.get_parameter('court_length').value)
         self.court_width = float(self.get_parameter('court_width').value)
         self.camera_range = float(self.get_parameter('camera_range').value)
@@ -126,7 +157,6 @@ class PatrolManager(Node):
         self.navigation_goal_retries = int(
             self.get_parameter('navigation_goal_retries').value
         )
-
         self.action_retry_period = float(
             self.get_parameter('action_retry_period').value
         )
@@ -134,137 +164,139 @@ class PatrolManager(Node):
         self.spin_time_allowance = float(
             self.get_parameter('spin_time_allowance').value
         )
+        self.selection_wait_timeout = float(
+            self.get_parameter('selection_wait_timeout').value
+        )
+
+        self.visible_tracks_topic = str(
+            self.get_parameter('visible_tracks_topic').value
+        )
+        self.selected_id_topic = str(self.get_parameter('selected_id_topic').value)
+        self.staging_pose_topic = str(self.get_parameter('staging_pose_topic').value)
+        self.selection_enabled_topic = str(
+            self.get_parameter('selection_enabled_topic').value
+        )
+        self.collection_request_topic = str(
+            self.get_parameter('collection_request_topic').value
+        )
+        self.collection_complete_topic = str(
+            self.get_parameter('collection_complete_topic').value
+        )
 
         if self.court_length <= 0.0 or self.court_width <= 0.0:
             raise ValueError('Court dimensions must be > 0.')
         if self.camera_range <= 0.0 or self.range_factor <= 0.0:
             raise ValueError('camera_range and range_factor must be > 0.')
+        if self.selection_wait_timeout <= 0.0:
+            raise ValueError('selection_wait_timeout must be > 0.')
 
         self.state = MissionState.IDLE
         self.patrol_points = []
         self.current_patrol_index = 0
+        self.active_patrol_pose = None
 
-        # Initial localization action state.
         self.initial_retry_count = 0
         self.pending_approach = False
         self.pending_relocalize_tag = None
         self.approach_goal_handle = None
         self.relocalize_goal_handle = None
 
-        # Nav2 lifecycle state.
         self.nav2_startup_pending = False
         self.nav2_startup_future = None
         self.nav2_startup_attempts = 0
         self.nav2_startup_begin_time = None
         self.navigation_allowed_time = None
 
-        # Nav2 action state.
         self.pending_navigation = None
-        self.pending_spin = False
-        self.navigate_goal_handle = None
-        self.spin_goal_handle = None
+        self.pending_navigation_purpose = None
         self.active_navigation_pose = None
+        self.active_navigation_purpose = None
+        self.navigate_goal_handle = None
         self.navigation_retry_count = 0
+
+        self.pending_spin = False
+        self.spin_goal_handle = None
+        self.scan_seen_ids = set()
+
+        self.visible_ids = set()
+        self.latest_selected_id = ''
+        self.latest_staging_pose = None
+        self.selection_wait_begin = None
+        self.waiting_collection_id = ''
+        self.completed_collection_ids = set()
 
         state_qos = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
-
-        self.state_pub = self.create_publisher(
-            String,
-            '/mission/state',
-            state_qos,
+        reliable_qos = QoSProfile(
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
         )
+
+        self.state_pub = self.create_publisher(String, '/mission/state', state_qos)
         self.goal_pub = self.create_publisher(
-            PoseStamped,
-            '/mission/current_goal',
-            state_qos,
+            PoseStamped, '/mission/current_goal', state_qos
         )
         self.patrol_points_pub = self.create_publisher(
-            PoseArray,
-            '/mission/patrol_points',
-            state_qos,
+            PoseArray, '/mission/patrol_points', state_qos
+        )
+        self.selection_enabled_pub = self.create_publisher(
+            Bool, self.selection_enabled_topic, state_qos
+        )
+        self.collection_request_pub = self.create_publisher(
+            String, self.collection_request_topic, reliable_qos
+        )
+
+        self.create_subscription(
+            Detection3DArray,
+            self.visible_tracks_topic,
+            self.visible_tracks_callback,
+            reliable_qos,
+        )
+        self.create_subscription(
+            String,
+            self.selected_id_topic,
+            self.selected_id_callback,
+            reliable_qos,
+        )
+        self.create_subscription(
+            PoseStamped,
+            self.staging_pose_topic,
+            self.staging_pose_callback,
+            reliable_qos,
+        )
+        self.create_subscription(
+            String,
+            self.collection_complete_topic,
+            self.collection_complete_callback,
+            reliable_qos,
         )
 
         self.navigate_client = ActionClient(
-            self,
-            NavigateToPose,
-            '/navigate_to_pose',
+            self, NavigateToPose, '/navigate_to_pose'
         )
         self.spin_client = ActionClient(self, Spin, '/spin')
-        self.approach_client = ActionClient(
-            self,
-            ApproachTag,
-            '/approach_tag',
-        )
-        self.relocalize_client = ActionClient(
-            self,
-            Relocalize,
-            '/relocalize',
-        )
+        self.approach_client = ActionClient(self, ApproachTag, '/approach_tag')
+        self.relocalize_client = ActionClient(self, Relocalize, '/relocalize')
         self.nav2_lifecycle_client = self.create_client(
-            ManageLifecycleNodes,
-            self.nav2_lifecycle_service,
+            ManageLifecycleNodes, self.nav2_lifecycle_service
         )
 
-        # Only active while waiting for servers, retry delays or TF-settle delay.
         self.action_retry_timer = self.create_timer(
-            self.action_retry_period,
-            self.process_pending_actions,
+            self.action_retry_period, self.process_pending_actions
         )
         self.action_retry_timer.cancel()
-
-        # One-shot deferred mission start. Avoid dispatching actions from __init__.
         self.start_timer = self.create_timer(0.10, self.start_once)
 
         self.generate_and_publish_patrol_points()
+        self.set_target_selection(False)
         self.publish_state()
 
         self.get_logger().info(
-            'Patrol manager V1-refactor started: integrated patrol-point '
-            'generation, initial localization once, event-driven Nav2 patrol.'
-        )
-
-    # ============================================================
-    # Patrol point generation / outputs
-    # ============================================================
-
-    def generate_and_publish_patrol_points(self):
-        effective_range = self.camera_range * self.range_factor
-        nx, ny, dx, dy, worst = find_minimum_grid(
-            self.court_length,
-            self.court_width,
-            effective_range,
-            self.max_grid_size,
-        )
-        xyz_yaw = generate_patrol_points(
-            self.court_length,
-            self.court_width,
-            nx,
-            ny,
-        )
-
-        msg = PoseArray()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = self.frame_id
-
-        for x, y, yaw in xyz_yaw:
-            pose = Pose()
-            pose.position.x = float(x)
-            pose.position.y = float(y)
-            pose.orientation.z = math.sin(yaw / 2.0)
-            pose.orientation.w = math.cos(yaw / 2.0)
-            msg.poses.append(pose)
-
-        self.patrol_points = list(msg.poses)
-        self.patrol_points_pub.publish(msg)
-
-        self.get_logger().info(
-            f'Generated patrol grid {nx}x{ny}: {len(self.patrol_points)} points; '
-            f'cell={dx:.2f}x{dy:.2f} m, worst-case range={worst:.2f} m, '
-            f'effective range={effective_range:.2f} m.'
+            'Patrol manager started with Pi-anchored shuttle excursion sequence.'
         )
 
     def set_state(self, new_state):
@@ -278,6 +310,92 @@ class PatrolManager(Node):
         msg.data = self.state.name
         self.state_pub.publish(msg)
 
+    def set_target_selection(self, enabled):
+        msg = Bool()
+        msg.data = bool(enabled)
+        self.selection_enabled_pub.publish(msg)
+        if not enabled:
+            self.latest_selected_id = ''
+            self.latest_staging_pose = None
+            self.selection_wait_begin = None
+
+    def visible_tracks_callback(self, msg):
+        self.visible_ids = {
+            detection.id
+            for detection in msg.detections
+            if detection.id and detection.id not in self.completed_collection_ids
+        }
+        if self.state in [
+            MissionState.PATROL_SCAN,
+            MissionState.LOCAL_SCAN,
+            MissionState.FINAL_PATROL_SCAN,
+        ]:
+            self.scan_seen_ids.update(self.visible_ids)
+
+    def selected_id_callback(self, msg):
+        selected_id = msg.data.strip()
+        if selected_id in self.completed_collection_ids:
+            return
+        self.latest_selected_id = selected_id
+        self.try_dispatch_selected_target()
+
+    def staging_pose_callback(self, msg):
+        if msg.header.frame_id and msg.header.frame_id != self.frame_id:
+            self.get_logger().warn(
+                f'Ignoring staging pose in {msg.header.frame_id}; expected {self.frame_id}.'
+            )
+            return
+        self.latest_staging_pose = copy.deepcopy(msg)
+        self.try_dispatch_selected_target()
+
+    def collection_complete_callback(self, msg):
+        completed_id = msg.data.strip()
+        if self.state != MissionState.WAIT_COLLECTION:
+            return
+        if not completed_id or completed_id != self.waiting_collection_id:
+            self.get_logger().warn(
+                f'Ignoring collection_complete={completed_id!r}; '
+                f'waiting for {self.waiting_collection_id!r}.'
+            )
+            return
+
+        self.get_logger().info(f'Shuttle {completed_id} collection complete.')
+        self.completed_collection_ids.add(completed_id)
+        self.waiting_collection_id = ''
+        self.set_target_selection(False)
+        self.set_state(MissionState.CHECK_VISIBLE_SHUTTLES)
+        self.evaluate_after_collection()
+
+    def generate_and_publish_patrol_points(self):
+        effective_range = self.camera_range * self.range_factor
+        nx, ny, dx, dy, worst = find_minimum_grid(
+            self.court_length,
+            self.court_width,
+            effective_range,
+            self.max_grid_size,
+        )
+        xyz_yaw = generate_patrol_points(
+            self.court_length, self.court_width, nx, ny
+        )
+
+        msg = PoseArray()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = self.frame_id
+        for x, y, yaw in xyz_yaw:
+            pose = Pose()
+            pose.position.x = float(x)
+            pose.position.y = float(y)
+            pose.orientation.z = math.sin(yaw / 2.0)
+            pose.orientation.w = math.cos(yaw / 2.0)
+            msg.poses.append(pose)
+
+        self.patrol_points = list(msg.poses)
+        self.patrol_points_pub.publish(msg)
+        self.get_logger().info(
+            f'Generated patrol grid {nx}x{ny}: {len(self.patrol_points)} points; '
+            f'cell={dx:.2f}x{dy:.2f} m, worst-case={worst:.2f} m.'
+        )
+
     def publish_current_goal(self, pose):
         msg = PoseStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -287,11 +405,9 @@ class PatrolManager(Node):
 
     def start_once(self):
         self.start_timer.cancel()
-
         if not self.autostart:
             self.get_logger().info('Autostart disabled; patrol remains IDLE.')
             return
-
         if not self.patrol_points:
             self.enter_error('No patrol points were generated.')
             return
@@ -305,10 +421,6 @@ class PatrolManager(Node):
             )
             self.start_nav2_then_patrol()
 
-    # ============================================================
-    # Initial localization
-    # ============================================================
-
     def start_initial_global_localization(self):
         self.set_state(MissionState.INITIAL_TAG_APPROACH)
         self.pending_approach = True
@@ -317,12 +429,10 @@ class PatrolManager(Node):
 
     def send_approach_goal_now(self):
         self.pending_approach = False
-
         goal = ApproachTag.Goal()
         goal.preferred_tag_id = int(self.initial_tag_id)
         goal.target_distance = float(self.tag_approach_distance)
         goal.timeout_sec = float(self.tag_approach_timeout)
-
         future = self.approach_client.send_goal_async(goal)
         future.add_done_callback(self.approach_goal_response_callback)
 
@@ -330,59 +440,38 @@ class PatrolManager(Node):
         try:
             goal_handle = future.result()
         except Exception as exc:
-            self.handle_initial_localization_failure(
-                f'ApproachTag send failed: {exc}'
-            )
+            self.handle_initial_localization_failure(f'ApproachTag send failed: {exc}')
             return
-
         if not goal_handle.accepted:
             self.handle_initial_localization_failure('ApproachTag rejected.')
             return
-
         self.approach_goal_handle = goal_handle
-        goal_handle.get_result_async().add_done_callback(
-            self.approach_result_callback
-        )
+        goal_handle.get_result_async().add_done_callback(self.approach_result_callback)
 
     def approach_result_callback(self, future):
         try:
             wrapped = future.result()
         except Exception as exc:
             self.approach_goal_handle = None
-            self.handle_initial_localization_failure(
-                f'ApproachTag result failed: {exc}'
-            )
+            self.handle_initial_localization_failure(f'ApproachTag result failed: {exc}')
             return
-
         self.approach_goal_handle = None
-
-        if (
-            wrapped.status != GoalStatus.STATUS_SUCCEEDED
-            or not wrapped.result.success
-        ):
+        if wrapped.status != GoalStatus.STATUS_SUCCEEDED or not wrapped.result.success:
             self.handle_initial_localization_failure(
                 f'ApproachTag failed: {wrapped.result.message}'
             )
             return
-
         tag_id = int(wrapped.result.tag_id)
-        self.get_logger().info(
-            f'Initial observation pose reached using tag {tag_id}; '
-            f'distance={wrapped.result.final_distance:.2f} m.'
-        )
-
         self.set_state(MissionState.INITIAL_RELOCALIZATION)
         self.pending_relocalize_tag = tag_id
         self.process_pending_actions()
 
     def send_relocalize_goal_now(self, tag_id):
         self.pending_relocalize_tag = None
-
         goal = Relocalize.Goal()
         goal.preferred_tag_id = int(tag_id)
         goal.sample_count = int(self.relocalize_sample_count)
         goal.timeout_sec = float(self.relocalize_timeout)
-
         future = self.relocalize_client.send_goal_async(goal)
         future.add_done_callback(self.relocalize_goal_response_callback)
 
@@ -390,48 +479,29 @@ class PatrolManager(Node):
         try:
             goal_handle = future.result()
         except Exception as exc:
-            self.handle_initial_localization_failure(
-                f'Relocalize send failed: {exc}'
-            )
+            self.handle_initial_localization_failure(f'Relocalize send failed: {exc}')
             return
-
         if not goal_handle.accepted:
             self.handle_initial_localization_failure('Relocalize rejected.')
             return
-
         self.relocalize_goal_handle = goal_handle
-        goal_handle.get_result_async().add_done_callback(
-            self.relocalize_result_callback
-        )
+        goal_handle.get_result_async().add_done_callback(self.relocalize_result_callback)
 
     def relocalize_result_callback(self, future):
         try:
             wrapped = future.result()
         except Exception as exc:
             self.relocalize_goal_handle = None
-            self.handle_initial_localization_failure(
-                f'Relocalize result failed: {exc}'
-            )
+            self.handle_initial_localization_failure(f'Relocalize result failed: {exc}')
             return
-
         self.relocalize_goal_handle = None
-
-        if (
-            wrapped.status != GoalStatus.STATUS_SUCCEEDED
-            or not wrapped.result.success
-        ):
+        if wrapped.status != GoalStatus.STATUS_SUCCEEDED or not wrapped.result.success:
             self.handle_initial_localization_failure(
                 f'Relocalize failed: {wrapped.result.message}'
             )
             return
-
         self.initial_retry_count = 0
-        self.get_logger().info(
-            f'Initial localization succeeded; tags='
-            f'{list(wrapped.result.used_tag_ids)}, '
-            f'std=({wrapped.result.std_x:.3f}, {wrapped.result.std_y:.3f}, '
-            f'{math.degrees(wrapped.result.std_yaw):.2f} deg).'
-        )
+        self.get_logger().info('Initial localization succeeded.')
         self.start_nav2_then_patrol()
 
     def handle_initial_localization_failure(self, reason):
@@ -440,33 +510,22 @@ class PatrolManager(Node):
         self.pending_approach = False
         self.pending_relocalize_tag = None
         self.initial_retry_count += 1
-
         if self.initial_retry_count <= self.initial_relocalization_retries:
             self.get_logger().warn(
-                f'Initial localization failed: {reason} Retry '
-                f'{self.initial_retry_count}/{self.initial_relocalization_retries}.'
+                f'{reason} Retry {self.initial_retry_count}/'
+                f'{self.initial_relocalization_retries}.'
             )
             self.set_state(MissionState.INITIAL_TAG_APPROACH)
             self.pending_approach = True
             self.process_pending_actions()
             return
-
         self.enter_error(f'Initial localization failed permanently: {reason}')
-
-    # ============================================================
-    # Nav2 startup / event-driven pending work
-    # ============================================================
 
     def start_nav2_then_patrol(self):
         self.navigation_allowed_time = time.monotonic() + self.nav2_tf_settle_time
-
-        if (
-            self.navigate_client.server_is_ready()
-            and self.spin_client.server_is_ready()
-        ):
+        if self.navigate_client.server_is_ready() and self.spin_client.server_is_ready():
             self.queue_current_patrol_goal()
             return
-
         self.nav2_startup_pending = True
         self.nav2_startup_future = None
         self.nav2_startup_attempts = 0
@@ -477,22 +536,16 @@ class PatrolManager(Node):
     def process_nav2_startup(self):
         if not self.nav2_startup_pending:
             return
-
-        if (
-            self.navigate_client.server_is_ready()
-            and self.spin_client.server_is_ready()
-        ):
+        if self.navigate_client.server_is_ready() and self.spin_client.server_is_ready():
             self.nav2_startup_pending = False
             self.navigation_allowed_time = time.monotonic() + self.nav2_tf_settle_time
             self.queue_current_patrol_goal()
             return
-
         elapsed = time.monotonic() - self.nav2_startup_begin_time
         if elapsed > self.nav2_startup_timeout:
             self.nav2_startup_pending = False
             self.enter_error(f'Nav2 startup timed out after {elapsed:.1f} s.')
             return
-
         if self.nav2_startup_future is not None:
             return
         if not self.nav2_lifecycle_client.service_is_ready():
@@ -501,14 +554,11 @@ class PatrolManager(Node):
             self.nav2_startup_pending = False
             self.enter_error('Nav2 lifecycle startup retries exhausted.')
             return
-
         request = ManageLifecycleNodes.Request()
         request.command = ManageLifecycleNodes.Request().STARTUP
         self.nav2_startup_attempts += 1
         self.nav2_startup_future = self.nav2_lifecycle_client.call_async(request)
-        self.nav2_startup_future.add_done_callback(
-            self.nav2_startup_response_callback
-        )
+        self.nav2_startup_future.add_done_callback(self.nav2_startup_response_callback)
 
     def nav2_startup_response_callback(self, future):
         self.nav2_startup_future = None
@@ -518,7 +568,6 @@ class PatrolManager(Node):
             self.get_logger().warn(f'Nav2 startup service failed: {exc}')
             self.update_action_retry_timer()
             return
-
         if response is None or not bool(getattr(response, 'success', True)):
             self.get_logger().warn('Nav2 lifecycle STARTUP not yet successful.')
         self.update_action_retry_timer()
@@ -530,6 +579,7 @@ class PatrolManager(Node):
             or self.pending_relocalize_tag is not None
             or self.pending_navigation is not None
             or self.pending_spin
+            or self.state == MissionState.SELECT_SHUTTLE
         )
 
     def update_action_retry_timer(self):
@@ -563,42 +613,66 @@ class PatrolManager(Node):
             )
             if self.navigate_client.server_is_ready() and time_ready:
                 pose = self.pending_navigation
+                purpose = self.pending_navigation_purpose
                 self.pending_navigation = None
-                self.send_navigation_goal_now(pose)
+                self.pending_navigation_purpose = None
+                self.send_navigation_goal_now(pose, purpose)
 
         if self.pending_spin and self.spin_goal_handle is None:
             if self.spin_client.server_is_ready():
                 self.pending_spin = False
                 self.send_spin_goal_now()
 
+        if self.state == MissionState.SELECT_SHUTTLE:
+            self.try_dispatch_selected_target()
+            if (
+                self.selection_wait_begin is not None
+                and time.monotonic() - self.selection_wait_begin
+                > self.selection_wait_timeout
+            ):
+                self.set_target_selection(False)
+                self.get_logger().warn(
+                    'Target selector did not provide a usable staging pose in time.'
+                )
+                self.handle_no_target_after_selection()
+
         self.update_action_retry_timer()
 
-    # ============================================================
-    # Patrol navigation / scanning
-    # ============================================================
+    def queue_navigation(self, pose, purpose):
+        self.pending_navigation = copy.deepcopy(pose)
+        self.pending_navigation_purpose = purpose
+        self.process_pending_actions()
 
     def queue_current_patrol_goal(self):
         if self.current_patrol_index >= len(self.patrol_points):
             self.finish_mission()
             return
-        self.pending_navigation = self.patrol_points[self.current_patrol_index]
-        self.process_pending_actions()
-
-    def send_navigation_goal_now(self, pose):
-        self.active_navigation_pose = pose
-        self.publish_current_goal(pose)
-        self.set_state(MissionState.GO_TO_PATROL)
-
-        self.get_logger().info(
-            f'Going to P{self.current_patrol_index}/'
-            f'{len(self.patrol_points) - 1}.'
+        self.active_patrol_pose = copy.deepcopy(
+            self.patrol_points[self.current_patrol_index]
         )
+        self.queue_navigation(self.active_patrol_pose, 'patrol')
+
+    def send_navigation_goal_now(self, pose, purpose):
+        self.active_navigation_pose = copy.deepcopy(pose)
+        self.active_navigation_purpose = purpose
+        self.publish_current_goal(pose)
+
+        if purpose == 'patrol':
+            self.set_state(MissionState.GO_TO_PATROL)
+            self.get_logger().info(f'Going to P{self.current_patrol_index}.')
+        elif purpose == 'staging':
+            self.set_state(MissionState.GO_TO_STAGING)
+            self.get_logger().info(
+                f'Going to staging pose for shuttle {self.latest_selected_id}.'
+            )
+        elif purpose == 'return_patrol':
+            self.set_state(MissionState.RETURN_TO_PATROL)
+            self.get_logger().info(f'Returning to P{self.current_patrol_index}.')
 
         goal = NavigateToPose.Goal()
         goal.pose.header.stamp = self.get_clock().now().to_msg()
         goal.pose.header.frame_id = self.frame_id
         goal.pose.pose = pose
-
         future = self.navigate_client.send_goal_async(goal)
         future.add_done_callback(self.navigation_goal_response_callback)
 
@@ -608,7 +682,6 @@ class PatrolManager(Node):
         except Exception as exc:
             self.enter_error(f'NavigateToPose send failed: {exc}')
             return
-
         if not goal_handle.accepted:
             self.navigation_retry_count += 1
             if (
@@ -616,15 +689,15 @@ class PatrolManager(Node):
                 and self.navigation_retry_count <= self.navigation_goal_retries
             ):
                 self.get_logger().warn(
-                    f'NavigateToPose rejected; retry '
-                    f'{self.navigation_retry_count}/{self.navigation_goal_retries}.'
+                    f'NavigateToPose rejected; retry {self.navigation_retry_count}/'
+                    f'{self.navigation_goal_retries}.'
                 )
-                self.pending_navigation = self.active_navigation_pose
+                self.pending_navigation = copy.deepcopy(self.active_navigation_pose)
+                self.pending_navigation_purpose = self.active_navigation_purpose
                 self.update_action_retry_timer()
                 return
             self.enter_error('NavigateToPose rejected after all retries.')
             return
-
         self.navigate_goal_handle = goal_handle
         self.navigation_retry_count = 0
         goal_handle.get_result_async().add_done_callback(
@@ -639,39 +712,46 @@ class PatrolManager(Node):
             self.enter_error(f'NavigateToPose result failed: {exc}')
             return
 
+        purpose = self.active_navigation_purpose
         self.navigate_goal_handle = None
         self.active_navigation_pose = None
+        self.active_navigation_purpose = None
 
         if wrapped.status != GoalStatus.STATUS_SUCCEEDED:
             self.enter_error(
-                f'Navigation to P{self.current_patrol_index} failed with '
-                f'status {wrapped.status}.'
+                f'Navigation purpose={purpose} failed with status {wrapped.status}.'
             )
             return
 
-        self.get_logger().info(f'Reached P{self.current_patrol_index}.')
-        self.start_patrol_scan()
+        if purpose == 'patrol':
+            self.get_logger().info(f'Reached P{self.current_patrol_index}.')
+            self.start_scan(MissionState.PATROL_SCAN)
+        elif purpose == 'staging':
+            self.request_collection()
+        elif purpose == 'return_patrol':
+            self.get_logger().info(
+                f'Returned to P{self.current_patrol_index}; starting final confirmation scan.'
+            )
+            self.start_scan(MissionState.FINAL_PATROL_SCAN)
 
-    def start_patrol_scan(self):
-        self.set_state(MissionState.PATROL_SCAN)
+    def start_scan(self, scan_state):
+        self.set_target_selection(False)
+        self.scan_seen_ids.clear()
+        self.set_state(scan_state)
         self.pending_spin = True
         self.process_pending_actions()
 
     def send_spin_goal_now(self):
         goal = Spin.Goal()
         goal.target_yaw = float(self.spin_angle)
-
         sec = int(self.spin_time_allowance)
         goal.time_allowance.sec = sec
         goal.time_allowance.nanosec = int(
             (self.spin_time_allowance - sec) * 1e9
         )
-
         self.get_logger().info(
-            f'Scanning P{self.current_patrol_index}: '
-            f'{math.degrees(self.spin_angle):.1f} deg.'
+            f'{self.state.name}: spinning {math.degrees(self.spin_angle):.1f} deg.'
         )
-
         future = self.spin_client.send_goal_async(goal)
         future.add_done_callback(self.spin_goal_response_callback)
 
@@ -681,15 +761,11 @@ class PatrolManager(Node):
         except Exception as exc:
             self.enter_error(f'Spin send failed: {exc}')
             return
-
         if not goal_handle.accepted:
             self.enter_error('Spin goal rejected.')
             return
-
         self.spin_goal_handle = goal_handle
-        goal_handle.get_result_async().add_done_callback(
-            self.spin_result_callback
-        )
+        goal_handle.get_result_async().add_done_callback(self.spin_result_callback)
 
     def spin_result_callback(self, future):
         try:
@@ -698,37 +774,120 @@ class PatrolManager(Node):
             self.spin_goal_handle = None
             self.enter_error(f'Spin result failed: {exc}')
             return
-
         self.spin_goal_handle = None
-
         if wrapped.status != GoalStatus.STATUS_SUCCEEDED:
-            self.enter_error(
-                f'Spin at P{self.current_patrol_index} failed with '
-                f'status {wrapped.status}.'
-            )
+            self.enter_error(f'Spin failed with status {wrapped.status}.')
             return
 
-        self.get_logger().info(f'Completed scan at P{self.current_patrol_index}.')
-        self.current_patrol_index += 1
+        scan_state = self.state
+        found = sorted(self.scan_seen_ids)
+        self.get_logger().info(
+            f'{scan_state.name} complete; shuttle IDs seen={found}.'
+        )
 
+        if found:
+            self.begin_target_selection()
+            return
+
+        if scan_state == MissionState.PATROL_SCAN:
+            self.advance_patrol_point()
+        elif scan_state == MissionState.LOCAL_SCAN:
+            self.return_to_active_patrol_point()
+        elif scan_state == MissionState.FINAL_PATROL_SCAN:
+            self.advance_patrol_point()
+        else:
+            self.enter_error(f'Unexpected state after scan: {scan_state.name}')
+
+    def begin_target_selection(self):
+        self.latest_selected_id = ''
+        self.latest_staging_pose = None
+        self.selection_wait_begin = time.monotonic()
+        self.set_state(MissionState.SELECT_SHUTTLE)
+        self.set_target_selection(True)
+        self.update_action_retry_timer()
+
+    def try_dispatch_selected_target(self):
+        if self.state != MissionState.SELECT_SHUTTLE:
+            return
+        if not self.latest_selected_id or self.latest_staging_pose is None:
+            return
+        if self.latest_selected_id in self.completed_collection_ids:
+            return
+
+        self.selection_wait_begin = None
+        selected_id = self.latest_selected_id
+        staging_pose = copy.deepcopy(self.latest_staging_pose.pose)
+        self.set_target_selection(False)
+        self.latest_selected_id = selected_id
+        self.queue_navigation(staging_pose, 'staging')
+
+    def handle_no_target_after_selection(self):
+        if self.visible_ids:
+            self.start_scan(MissionState.LOCAL_SCAN)
+            return
+        self.return_to_active_patrol_point()
+
+    def request_collection(self):
+        target_id = self.latest_selected_id
+        if not target_id:
+            self.enter_error('Reached staging pose without selected shuttle ID.')
+            return
+        self.waiting_collection_id = target_id
+        self.set_state(MissionState.WAIT_COLLECTION)
+        request = String()
+        request.data = target_id
+        self.collection_request_pub.publish(request)
+        self.get_logger().info(
+            f'Collection requested for shuttle {target_id}. '
+            f'Publish the same ID on {self.collection_complete_topic} when pickup finishes.'
+        )
+
+    def evaluate_after_collection(self):
+        remaining_visible = sorted(
+            shuttle_id
+            for shuttle_id in self.visible_ids
+            if shuttle_id not in self.completed_collection_ids
+        )
+        if remaining_visible:
+            self.get_logger().info(
+                f'Another shuttle is currently visible: {remaining_visible}. '
+                'Selecting next target without spinning.'
+            )
+            self.begin_target_selection()
+            return
+
+        self.get_logger().info(
+            'No shuttle currently visible after collection; starting local 360 deg scan.'
+        )
+        self.start_scan(MissionState.LOCAL_SCAN)
+
+    def return_to_active_patrol_point(self):
+        if self.active_patrol_pose is None:
+            self.enter_error('No active patrol anchor pose is stored.')
+            return
+        self.set_target_selection(False)
+        self.queue_navigation(self.active_patrol_pose, 'return_patrol')
+
+    def advance_patrol_point(self):
+        self.set_target_selection(False)
+        self.scan_seen_ids.clear()
+        self.current_patrol_index += 1
         if self.current_patrol_index >= len(self.patrol_points):
             self.finish_mission()
         else:
             self.queue_current_patrol_goal()
 
-    # ============================================================
-    # Terminal states
-    # ============================================================
-
     def finish_mission(self):
         self.action_retry_timer.cancel()
         self.pending_navigation = None
+        self.pending_navigation_purpose = None
         self.pending_spin = False
         self.pending_approach = False
         self.pending_relocalize_tag = None
+        self.set_target_selection(False)
         self.set_state(MissionState.COMPLETE)
         self.get_logger().info(
-            f'Patrol complete: {len(self.patrol_points)} points visited/scanned.'
+            f'Patrol complete: {len(self.patrol_points)} patrol points confirmed clear.'
         )
 
     def enter_error(self, reason):
@@ -736,10 +895,11 @@ class PatrolManager(Node):
         self.action_retry_timer.cancel()
         self.nav2_startup_pending = False
         self.pending_navigation = None
+        self.pending_navigation_purpose = None
         self.pending_spin = False
         self.pending_approach = False
         self.pending_relocalize_tag = None
-
+        self.set_target_selection(False)
         for handle in [
             self.navigate_goal_handle,
             self.spin_goal_handle,
@@ -748,7 +908,6 @@ class PatrolManager(Node):
         ]:
             if handle is not None:
                 handle.cancel_goal_async()
-
         self.navigate_goal_handle = None
         self.spin_goal_handle = None
         self.approach_goal_handle = None
