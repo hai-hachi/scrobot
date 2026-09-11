@@ -4,6 +4,7 @@ shuttle_tracker:
 
     input_topic: /perception/shuttle_detections_3d
     output_topic: /perception/tracked_shuttles
+    visible_output_topic: /perception/visible_tracked_shuttles
 
     tracking_frame: map
 
@@ -11,6 +12,10 @@ shuttle_tracker:
     association_distance: 0.30
     position_alpha: 0.50
     stale_timeout: 1.50
+
+    # A track counts as currently visible only if it was refreshed very recently.
+    visible_timeout: 0.35
+
     tf_timeout: 0.05
     fallback_to_latest_tf: true
 
