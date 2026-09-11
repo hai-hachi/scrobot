@@ -41,10 +41,8 @@ def quat_multiply(a, b):
 def quat_rotate(q, v):
     qn = quat_normalize(q)
     vx, vy, vz = v
-    rotated = quat_multiply(
-        quat_multiply(qn, (vx, vy, vz, 0.0)),
-        quat_conjugate(qn),
-    )
+    vq = (vx, vy, vz, 0.0)
+    rotated = quat_multiply(quat_multiply(qn, vq), quat_conjugate(qn))
     return (rotated[0], rotated[1], rotated[2])
 
 
@@ -57,17 +55,16 @@ def vec_sub(a, b):
 
 
 def compose_pose(parent_t, parent_q, child_t, child_q):
+    """Compose world_T_parent * parent_T_child -> world_T_child."""
     out_t = vec_add(parent_t, quat_rotate(parent_q, child_t))
     out_q = quat_normalize(quat_multiply(parent_q, child_q))
     return out_t, out_q
 
 
 def transform_point_inverse(frame_t, frame_q, point_world):
+    """Transform a world point into a frame whose pose is world_T_frame."""
     relative = vec_sub(point_world, frame_t)
-    return quat_rotate(
-        quat_conjugate(quat_normalize(frame_q)),
-        relative,
-    )
+    return quat_rotate(quat_conjugate(quat_normalize(frame_q)), relative)
 
 
 def transform_to_tuple(transform):
@@ -89,6 +86,14 @@ def pose_to_tuple(pose):
 
 
 class FakeShuttleDetector(Node):
+    """Camera-limited shuttle detector driven by Gazebo ground truth.
+
+    The node publishes the same Detection3DArray contract planned for the real
+    RGB-D pipeline. Gazebo truth is used only inside this simulation adapter.
+    Visibility is decided in the color optical frame using CameraInfo, then the
+    accepted 3D measurement is expressed in the depth optical frame.
+    """
+
     def __init__(self):
         super().__init__('fake_shuttle_detector')
 
@@ -157,6 +162,7 @@ class FakeShuttleDetector(Node):
 
         self._camera_info = None
         self._robot_pose_world = None
+        self._robot_stamp = None
         self._shuttle_positions_world = []
         self._received_shuttle_gt = False
 
@@ -217,6 +223,7 @@ class FakeShuttleDetector(Node):
 
     def _ground_truth_odom_callback(self, msg):
         self._robot_pose_world = pose_to_tuple(msg.pose.pose)
+        self._robot_stamp = msg.header.stamp
 
     def _camera_info_callback(self, msg):
         if msg.width <= 0 or msg.height <= 0:
@@ -252,9 +259,9 @@ class FakeShuttleDetector(Node):
 
     def _inputs_ready(self):
         return (
-            self._received_shuttle_gt
-            and self._camera_info is not None
+            self._camera_info is not None
             and self._robot_pose_world is not None
+            and self._received_shuttle_gt
             and self._lookup_static_camera_transforms()
         )
 
@@ -265,12 +272,12 @@ class FakeShuttleDetector(Node):
             return
 
         missing = []
-        if not self._received_shuttle_gt:
-            missing.append('shuttle ground-truth PoseArray')
         if self._camera_info is None:
             missing.append('CameraInfo')
         if self._robot_pose_world is None:
             missing.append('ground-truth odometry')
+        if not self._received_shuttle_gt:
+            missing.append('shuttle ground truth')
         if self._base_to_color is None or self._base_to_depth is None:
             missing.append('base->camera TF')
 
@@ -294,10 +301,7 @@ class FakeShuttleDetector(Node):
         u = fx * x / z + cx
         v = fy * y / z + cy
 
-        return (
-            0.0 <= u < float(info.width)
-            and 0.0 <= v < float(info.height)
-        )
+        return 0.0 <= u < float(info.width) and 0.0 <= v < float(info.height)
 
     def _make_detection(self, point_depth, stamp):
         detection = Detection3D()
@@ -324,6 +328,15 @@ class FakeShuttleDetector(Node):
         detection.results.append(hypothesis)
 
         return detection
+
+    def _measurement_stamp(self):
+        # Geometry is computed from the latest Gazebo ground-truth odometry, so
+        # stamp the synthetic detection with that same simulation timestamp.
+        # This avoids mixing UNIX wall time with Gazebo /clock / TF history.
+        if self._robot_stamp is not None:
+            if self._robot_stamp.sec != 0 or self._robot_stamp.nanosec != 0:
+                return self._robot_stamp
+        return self.get_clock().now().to_msg()
 
     def _timer_callback(self):
         if not self._inputs_ready():
@@ -353,7 +366,7 @@ class FakeShuttleDetector(Node):
             base_to_depth_q,
         )
 
-        stamp = self.get_clock().now().to_msg()
+        stamp = self._measurement_stamp()
         output = Detection3DArray()
         output.header.stamp = stamp
         output.header.frame_id = self.depth_frame
