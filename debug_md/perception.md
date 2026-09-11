@@ -1,128 +1,142 @@
-# Perception and Tracking Commands
+# Perception Debug Commands
 
-## Launch fake shuttle detector
+## Build
+
+```bash
+cd ~/scrobot_ws
+colcon build --symlink-install --packages-select scrobot_perception
+source install/setup.bash
+```
+
+## Start fake shuttle detector
 
 ```bash
 ros2 launch scrobot_perception shuttle_perception_sim.launch.py
 ```
 
-Node:
-
-```text
-/fake_shuttle_detector
-```
-
-Inputs:
-
-```text
-/evaluation/shuttle_ground_truth
-/evaluation/ground_truth_odom
-/camera/camera/color/camera_info
-TF: base_footprint -> camera optical frames
-```
-
-Output:
+Publishes:
 
 ```text
 /perception/shuttle_detections_3d
 ```
 
-## Launch shuttle tracker
-
-```bash
-ros2 launch scrobot_perception shuttle_tracking.launch.py
-```
-
-Node:
+Type:
 
 ```text
-/shuttle_tracker
+vision_msgs/msg/Detection3DArray
 ```
 
-Input:
-
-```text
-/perception/shuttle_detections_3d
-```
-
-Output:
-
-```text
-/perception/tracked_shuttles
-```
-
-The tracker requires a transform from the detection frame to `map`. Run `/relocalize` first when `map -> odom` does not yet exist.
-
-## Check detection stream
-
-```bash
-ros2 topic info /perception/shuttle_detections_3d
-ros2 topic hz /perception/shuttle_detections_3d
-ros2 topic echo /perception/shuttle_detections_3d --once
-```
-
-Expected frame:
+Frame:
 
 ```text
 camera_depth_optical_frame
 ```
 
-## Check tracked shuttles
+## Start shuttle tracker
 
 ```bash
-ros2 topic info /perception/tracked_shuttles
-ros2 topic hz /perception/tracked_shuttles
+ros2 launch scrobot_perception shuttle_tracking.launch.py
+```
+
+Publishes persistent tracks:
+
+```text
+/perception/tracked_shuttles
+```
+
+and the currently-visible subset:
+
+```text
+/perception/visible_tracked_shuttles
+```
+
+Both use:
+
+```text
+vision_msgs/msg/Detection3DArray
+frame_id: map
+```
+
+`/perception/tracked_shuttles` keeps a shuttle for `stale_timeout` after it disappears.
+
+`/perception/visible_tracked_shuttles` only includes tracks refreshed within `visible_timeout`, so mission logic can distinguish:
+
+```text
+known track != currently in camera view
+```
+
+## Inspect detections
+
+```bash
+ros2 topic echo /perception/shuttle_detections_3d --once
+```
+
+```bash
 ros2 topic echo /perception/tracked_shuttles --once
 ```
 
-Expected frame:
-
-```text
-map
+```bash
+ros2 topic echo /perception/visible_tracked_shuttles --once
 ```
 
-Each active track should have a stable `Detection3D.id` such as `1`, `2`, `3`.
-
-## Check simulation-time consistency
+## Rates
 
 ```bash
-ros2 param get /fake_shuttle_detector use_sim_time
-ros2 param get /shuttle_tracker use_sim_time
-ros2 topic echo /clock --once
-ros2 topic echo /evaluation/ground_truth_odom --once --field header.stamp
-ros2 topic echo /perception/shuttle_detections_3d --once --field header.stamp
+ros2 topic hz /perception/shuttle_detections_3d
+ros2 topic hz /perception/tracked_shuttles
+ros2 topic hz /perception/visible_tracked_shuttles
 ```
 
-The two stamps should be in the same Gazebo simulation-time domain.
-
-If a warning says something like:
+Typical configuration:
 
 ```text
-Requested time 1789... but latest data is at time 1547...
+fake detector: 15 Hz
+tracker output: 10 Hz
+visible_timeout: 0.35 s
+stale_timeout: 1.50 s
 ```
 
-then a wall-clock timestamp has entered the simulation graph. `tf2_echo` may still work because it asks for the latest transform.
-
-## Verify TF used by tracker
-
-```bash
-ros2 run tf2_ros tf2_echo map camera_depth_optical_frame
-```
-
-## Inspect tracker parameters
+## Tracker parameters
 
 ```bash
 ros2 param get /shuttle_tracker association_distance
 ros2 param get /shuttle_tracker position_alpha
 ros2 param get /shuttle_tracker stale_timeout
+ros2 param get /shuttle_tracker visible_timeout
 ros2 param get /shuttle_tracker fallback_to_latest_tf
+ros2 param get /shuttle_tracker use_sim_time
 ```
 
-Current defaults:
+## TF
 
-```text
-association_distance = 0.30 m
-position_alpha       = 0.50
-stale_timeout        = 1.50 s
-fallback_to_latest_tf = true
+```bash
+ros2 run tf2_ros tf2_echo map camera_depth_optical_frame
 ```
+
+If exact-time TF is occasionally unavailable but the tracker successfully falls back to the latest transform, a throttled warning may appear. Persistent wall-time versus simulation-time differences are not acceptable; all simulation nodes should use `/clock`.
+
+Check detection timestamp:
+
+```bash
+ros2 topic echo /perception/shuttle_detections_3d --once --field header.stamp
+```
+
+Check simulation clock:
+
+```bash
+ros2 topic echo /clock --once
+```
+
+They should be in the same simulation-time range.
+
+## Ground-truth adapter
+
+```bash
+gz topic -e -t /evaluation/shuttle_ground_truth_gz
+```
+
+```bash
+ros2 topic echo /evaluation/shuttle_ground_truth --once
+```
+
+The dedicated shuttle truth path exists only for simulated perception. Evaluation ground truth remains independent.
