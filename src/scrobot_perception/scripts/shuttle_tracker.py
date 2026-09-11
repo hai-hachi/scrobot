@@ -88,24 +88,37 @@ class ShuttleTracker(Node):
 
         self.declare_parameter('input_topic', '/perception/shuttle_detections_3d')
         self.declare_parameter('output_topic', '/perception/tracked_shuttles')
+        self.declare_parameter(
+            'visible_output_topic',
+            '/perception/visible_tracked_shuttles',
+        )
         self.declare_parameter('tracking_frame', 'map')
         self.declare_parameter('publish_rate', 10.0)
         self.declare_parameter('association_distance', 0.30)
         self.declare_parameter('position_alpha', 0.50)
         self.declare_parameter('stale_timeout', 1.50)
+        self.declare_parameter('visible_timeout', 0.35)
         self.declare_parameter('tf_timeout', 0.05)
         self.declare_parameter('fallback_to_latest_tf', True)
         self.declare_parameter('default_class_id', 'shuttle')
 
         self.input_topic = str(self.get_parameter('input_topic').value)
         self.output_topic = str(self.get_parameter('output_topic').value)
+        self.visible_output_topic = str(
+            self.get_parameter('visible_output_topic').value
+        )
         self.tracking_frame = str(self.get_parameter('tracking_frame').value)
         self.publish_rate = float(self.get_parameter('publish_rate').value)
-        self.association_distance = float(self.get_parameter('association_distance').value)
+        self.association_distance = float(
+            self.get_parameter('association_distance').value
+        )
         self.position_alpha = float(self.get_parameter('position_alpha').value)
         self.stale_timeout = float(self.get_parameter('stale_timeout').value)
+        self.visible_timeout = float(self.get_parameter('visible_timeout').value)
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
-        self.fallback_to_latest_tf = bool(self.get_parameter('fallback_to_latest_tf').value)
+        self.fallback_to_latest_tf = bool(
+            self.get_parameter('fallback_to_latest_tf').value
+        )
         self.default_class_id = str(self.get_parameter('default_class_id').value)
 
         if self.publish_rate <= 0.0:
@@ -116,6 +129,10 @@ class ShuttleTracker(Node):
             raise ValueError('position_alpha must be in (0, 1]')
         if self.stale_timeout <= 0.0:
             raise ValueError('stale_timeout must be > 0')
+        if self.visible_timeout <= 0.0:
+            raise ValueError('visible_timeout must be > 0')
+        if self.visible_timeout > self.stale_timeout:
+            raise ValueError('visible_timeout must be <= stale_timeout')
         if self.tf_timeout < 0.0:
             raise ValueError('tf_timeout must be >= 0')
 
@@ -145,12 +162,18 @@ class ShuttleTracker(Node):
             self.output_topic,
             output_qos,
         )
+        self.visible_publisher = self.create_publisher(
+            Detection3DArray,
+            self.visible_output_topic,
+            output_qos,
+        )
         self.timer = self.create_timer(1.0 / self.publish_rate, self._publish_tracks)
 
         self.get_logger().info(
             'Shuttle tracker started: '
             f'frame={self.tracking_frame}, gate={self.association_distance:.2f} m, '
-            f'stale={self.stale_timeout:.2f} s, output={self.output_topic}'
+            f'stale={self.stale_timeout:.2f} s, visible={self.visible_timeout:.2f} s, '
+            f'output={self.output_topic}'
         )
 
     def _measurement_time(self, msg):
@@ -275,7 +298,11 @@ class ShuttleTracker(Node):
         for _, track_id, measurement_index in candidates:
             if track_id in assigned_tracks or measurement_index in assigned_measurements:
                 continue
-            self._update_track(self.tracks[track_id], measurements[measurement_index], now_ns)
+            self._update_track(
+                self.tracks[track_id],
+                measurements[measurement_index],
+                now_ns,
+            )
             assigned_tracks.add(track_id)
             assigned_measurements.add(measurement_index)
 
@@ -306,11 +333,15 @@ class ShuttleTracker(Node):
         self.next_track_id += 1
         self.tracks[track_id] = Track(
             track_id=track_id,
-            x=point[0], y=point[1], z=point[2],
+            x=point[0],
+            y=point[1],
+            z=point[2],
             last_seen_ns=now_ns,
             class_id=class_id or self.default_class_id,
             score=score,
-            bbox_x=bx, bbox_y=by, bbox_z=bz,
+            bbox_x=bx,
+            bbox_y=by,
+            bbox_z=bz,
         )
         self.get_logger().info(
             f'Created shuttle track {track_id} at '
@@ -320,7 +351,8 @@ class ShuttleTracker(Node):
     def _remove_stale_tracks(self, now_ns):
         timeout_ns = int(self.stale_timeout * 1.0e9)
         stale_ids = [
-            track_id for track_id, track in self.tracks.items()
+            track_id
+            for track_id, track in self.tracks.items()
             if now_ns - track.last_seen_ns > timeout_ns
         ]
         for track_id in stale_ids:
@@ -358,9 +390,21 @@ class ShuttleTracker(Node):
         msg = Detection3DArray()
         msg.header.stamp = now.to_msg()
         msg.header.frame_id = self.tracking_frame
+
+        visible_msg = Detection3DArray()
+        visible_msg.header.stamp = msg.header.stamp
+        visible_msg.header.frame_id = self.tracking_frame
+        visible_timeout_ns = int(self.visible_timeout * 1.0e9)
+
         for track_id in sorted(self.tracks):
-            msg.detections.append(self._track_to_detection(self.tracks[track_id], msg.header.stamp))
+            track = self.tracks[track_id]
+            detection = self._track_to_detection(track, msg.header.stamp)
+            msg.detections.append(detection)
+            if now_ns - track.last_seen_ns <= visible_timeout_ns:
+                visible_msg.detections.append(detection)
+
         self.publisher.publish(msg)
+        self.visible_publisher.publish(visible_msg)
 
 
 def main(args=None):
