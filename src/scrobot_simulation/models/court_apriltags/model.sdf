@@ -7,21 +7,19 @@
             name="scrobot_simulation::ShuttleActivitySystem">
       <robot_model>scrobot</robot_model>
       <update_rate>10.0</update_rate>
-      <!-- Keep resting shuttles frozen while Nav2 moves to the 0.75 m staging pose. -->
       <activation_distance>0.35</activation_distance>
       <freeze_distance>0.55</freeze_distance>
       <settle_time>0.75</settle_time>
+      <ground_truth_topic>/evaluation/shuttle_ground_truth_gz</ground_truth_topic>
+      <collected_topic>/evaluation/shuttle_collected_gz</collected_topic>
+      <!-- pickup_link is at collector_x=0.165 m, centered laterally. -->
+      <pickup_offset_x>0.165</pickup_offset_x>
+      <pickup_half_length>0.08</pickup_half_length>
+      <pickup_half_width>0.17</pickup_half_width>
     </plugin>
 
     <!-- ======================================================
          Tag 0
-
-         Link frame IS the physical tag_mount_0 convention:
-           +X outward from printed face
-           +Y left (REP-103)
-           +Z up
-
-         Only yaw changes with inward angle.
          ====================================================== -->
     <link name="tag_mount_0">
       <pose>0.053033009 2.996966991 0.150000000 0 0 -0.785398163</pose>
