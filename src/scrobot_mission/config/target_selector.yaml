@@ -3,28 +3,23 @@ shuttle_target_selector:
     use_sim_time: true
 
     tracked_topic: /perception/tracked_shuttles
+    target_request_topic: /mission/target_request_id
     selected_topic: /mission/selected_shuttle
     selected_id_topic: /mission/selected_shuttle_id
     staging_pose_topic: /mission/shuttle_staging_pose
     selection_enabled_topic: /mission/target_selection_enabled
+    collection_complete_topic: /mission/collection_complete
 
     map_frame: map
     base_frame: base_footprint
 
-    # Stop Nav2 this far before the shuttle. Final approach handles the rest.
+    # Stop Nav2 this far before the requested shuttle. Final approach handles
+    # the remaining distance into the collector.
     staging_distance: 0.75
-
-    # Keep pursuing the same track while it exists instead of re-picking the
-    # nearest shuttle every tracker update.
-    sticky_target: true
-
-    # 0.0 disables target-range limiting.
-    max_target_distance: 0.0
 
     publish_rate: 5.0
     tf_timeout: 0.05
 
-    # Standalone target-selection tests remain usable. During patrol integration
-    # the patrol manager publishes /mission/target_selection_enabled and takes
-    # control of when acquisition is allowed.
+    # patrol_mission.launch.py overrides this to false; patrol_manager then
+    # enables staging only after it has latched the first visible shuttle ID.
     enabled_at_start: true
