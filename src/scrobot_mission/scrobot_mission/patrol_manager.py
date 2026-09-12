@@ -38,8 +38,15 @@ class MissionState(Enum):
     ERROR = auto()
 
 
+SCAN_STATES = {
+    MissionState.PATROL_SCAN,
+    MissionState.LOCAL_SCAN,
+    MissionState.FINAL_PATROL_SCAN,
+}
+
+
 class PatrolManager(Node):
-    """Patrol mission with Pi-anchored shuttle collection excursions."""
+    """Patrol mission using first-confirmed-visible shuttle acquisition."""
 
     def __init__(self):
         super().__init__('patrol_manager')
@@ -77,6 +84,10 @@ class PatrolManager(Node):
         self.declare_parameter(
             'visible_tracks_topic',
             '/perception/visible_tracked_shuttles',
+        )
+        self.declare_parameter(
+            'target_request_topic',
+            '/mission/target_request_id',
         )
         self.declare_parameter(
             'selected_id_topic',
@@ -156,6 +167,9 @@ class PatrolManager(Node):
         self.visible_tracks_topic = str(
             self.get_parameter('visible_tracks_topic').value
         )
+        self.target_request_topic = str(
+            self.get_parameter('target_request_topic').value
+        )
         self.selected_id_topic = str(self.get_parameter('selected_id_topic').value)
         self.staging_pose_topic = str(self.get_parameter('staging_pose_topic').value)
         self.selection_enabled_topic = str(
@@ -173,7 +187,6 @@ class PatrolManager(Node):
         self.current_patrol_index = 0
         self.active_patrol_pose = None
 
-        self.initial_retry_count = 0
         self.pending_approach = False
         self.pending_relocalize_tag = None
         self.approach_goal_handle = None
@@ -193,10 +206,13 @@ class PatrolManager(Node):
         self.navigation_retry_count = 0
 
         self.pending_spin = False
+        self.spin_goal_request_pending = False
         self.spin_goal_handle = None
-        self.scan_seen_ids = set()
+        self.spin_cancel_requested = False
 
         self.visible_ids = set()
+        self.visible_ordered_ids = []
+        self.requested_target_id = ''
         self.latest_selected_id = ''
         self.latest_staging_pose = None
         self.active_target_id = ''
@@ -224,6 +240,9 @@ class PatrolManager(Node):
         )
         self.selection_enabled_pub = self.create_publisher(
             Bool, self.selection_enabled_topic, state_qos
+        )
+        self.target_request_pub = self.create_publisher(
+            String, self.target_request_topic, state_qos
         )
         self.collection_request_pub = self.create_publisher(
             String, self.collection_request_topic, reliable_qos
@@ -273,7 +292,7 @@ class PatrolManager(Node):
         self.publish_state()
 
         self.get_logger().info(
-            'Patrol manager started with Pi-anchored shuttle excursion sequence.'
+            'Patrol manager started with first-seen shuttle acquisition.'
         )
 
     def set_state(self, new_state):
@@ -287,31 +306,67 @@ class PatrolManager(Node):
         msg.data = self.state.name
         self.state_pub.publish(msg)
 
+    def publish_target_request(self, target_id):
+        msg = String()
+        msg.data = target_id
+        self.target_request_pub.publish(msg)
+
     def set_target_selection(self, enabled):
         msg = Bool()
         msg.data = bool(enabled)
         self.selection_enabled_pub.publish(msg)
         if not enabled:
+            self.publish_target_request('')
+            self.requested_target_id = ''
             self.latest_selected_id = ''
             self.latest_staging_pose = None
             self.selection_wait_begin = None
 
     def visible_tracks_callback(self, msg):
-        self.visible_ids = {
-            detection.id
-            for detection in msg.detections
-            if detection.id and detection.id not in self.completed_collection_ids
-        }
-        if self.state in [
-            MissionState.PATROL_SCAN,
-            MissionState.LOCAL_SCAN,
-            MissionState.FINAL_PATROL_SCAN,
-        ]:
-            self.scan_seen_ids.update(self.visible_ids)
+        ordered = []
+        seen = set()
+        for detection in msg.detections:
+            track_id = detection.id.strip()
+            if not track_id:
+                continue
+            if track_id in self.completed_collection_ids or track_id in seen:
+                continue
+            seen.add(track_id)
+            ordered.append(track_id)
+
+        self.visible_ordered_ids = ordered
+        self.visible_ids = set(ordered)
+
+        if self.state in SCAN_STATES and not self.requested_target_id and ordered:
+            self.acquire_first_visible_target(ordered[0])
+
+    def acquire_first_visible_target(self, target_id):
+        if not target_id or target_id in self.completed_collection_ids:
+            return
+        if self.requested_target_id:
+            return
+
+        self.get_logger().info(
+            f'{self.state.name}: first confirmed visible shuttle is {target_id}; '
+            'stopping scan early.'
+        )
+        self.spin_cancel_requested = True
+
+        if self.pending_spin:
+            self.pending_spin = False
+
+        if self.spin_goal_handle is not None:
+            self.spin_goal_handle.cancel_goal_async()
+
+        self.begin_target_selection(target_id)
 
     def selected_id_callback(self, msg):
         selected_id = msg.data.strip()
+        if not selected_id:
+            return
         if selected_id in self.completed_collection_ids:
+            return
+        if selected_id != self.requested_target_id:
             return
         self.latest_selected_id = selected_id
         self.try_dispatch_selected_target()
@@ -460,11 +515,9 @@ class PatrolManager(Node):
             self.enter_error('Nav2 startup timed out.')
             return
 
-        # If a lifecycle request is in flight, wait for it to complete.
         if self.nav2_startup_future is not None:
             if not self.nav2_startup_future.done():
                 return
-
             future = self.nav2_startup_future
             self.nav2_startup_future = None
             try:
@@ -485,26 +538,21 @@ class PatrolManager(Node):
 
             self.get_logger().info('Nav2 lifecycle STARTUP succeeded.')
 
-        # After a successful STARTUP, both actions should become ready shortly.
         if self.navigate_client.server_is_ready() and self.spin_client.server_is_ready():
             self.nav2_startup_pending = False
             self.navigation_retry_count = 0
             self.queue_current_patrol_goal()
             return
 
-        # Before asking lifecycle manager to start, wait until its service exists.
         if not self.nav2_lifecycle_client.service_is_ready():
             return
 
-        # Respect a small post-localization settle time before Nav2 activation.
         if self.navigation_allowed_time is not None:
             if time.monotonic() < self.navigation_allowed_time:
                 return
             self.navigation_allowed_time = None
 
         if self.nav2_startup_attempts >= self.nav2_startup_retries:
-            # STARTUP may have succeeded but action servers can take a little longer.
-            # Keep waiting for action readiness until nav2_startup_timeout expires.
             return
 
         request = ManageLifecycleNodes.Request()
@@ -523,6 +571,7 @@ class PatrolManager(Node):
             or self.pending_relocalize_tag is not None
             or self.pending_navigation is not None
             or self.pending_spin
+            or self.spin_goal_request_pending
             or self.state == MissionState.SELECT_SHUTTLE
         )
 
@@ -535,11 +584,15 @@ class PatrolManager(Node):
     def process_pending_actions(self):
         if self.state in [MissionState.ERROR, MissionState.COMPLETE]:
             return
+
         self.process_nav2_startup()
+
         if self.pending_approach and self.approach_client.server_is_ready():
             self.send_approach_goal_now()
+
         if self.pending_relocalize_tag is not None and self.relocalize_client.server_is_ready():
             self.send_relocalize_goal_now(self.pending_relocalize_tag)
+
         if self.pending_navigation is not None and self.navigate_goal_handle is None:
             if not self.navigate_client.server_is_ready():
                 self.update_action_retry_timer()
@@ -549,11 +602,28 @@ class PatrolManager(Node):
             self.pending_navigation = None
             self.pending_navigation_purpose = None
             self.send_navigation_goal_now(pose, purpose)
-        if self.pending_spin and self.spin_goal_handle is None and self.spin_client.server_is_ready():
+
+        if (
+            self.pending_spin
+            and not self.spin_goal_request_pending
+            and self.spin_goal_handle is None
+            and self.spin_client.server_is_ready()
+        ):
             self.pending_spin = False
             self.send_spin_goal_now()
+
         if self.state == MissionState.SELECT_SHUTTLE:
+            if (
+                self.selection_wait_begin is not None
+                and time.monotonic() - self.selection_wait_begin > self.selection_wait_timeout
+            ):
+                self.enter_error(
+                    f'Timed out waiting for staging pose for shuttle '
+                    f'{self.requested_target_id}.'
+                )
+                return
             self.try_dispatch_selected_target()
+
         self.update_action_retry_timer()
 
     def queue_navigation(self, pose, purpose, reset_retry=True):
@@ -567,7 +637,9 @@ class PatrolManager(Node):
         if self.current_patrol_index >= len(self.patrol_points):
             self.finish_mission()
             return
-        self.active_patrol_pose = copy.deepcopy(self.patrol_points[self.current_patrol_index])
+        self.active_patrol_pose = copy.deepcopy(
+            self.patrol_points[self.current_patrol_index]
+        )
         self.queue_navigation(self.active_patrol_pose, 'patrol')
 
     def retry_active_navigation(self, reason):
@@ -598,6 +670,7 @@ class PatrolManager(Node):
         self.active_navigation_pose = copy.deepcopy(pose)
         self.active_navigation_purpose = purpose
         self.publish_current_goal(pose)
+
         if purpose == 'patrol':
             self.set_state(MissionState.GO_TO_PATROL)
             self.get_logger().info(f'Going to P{self.current_patrol_index}.')
@@ -659,7 +732,7 @@ class PatrolManager(Node):
 
     def start_scan(self, scan_state):
         self.set_target_selection(False)
-        self.scan_seen_ids.clear()
+        self.spin_cancel_requested = False
         self.set_state(scan_state)
         self.pending_spin = True
         self.process_pending_actions()
@@ -671,32 +744,64 @@ class PatrolManager(Node):
         goal.time_allowance.sec = sec
         goal.time_allowance.nanosec = int((self.spin_time_allowance - sec) * 1e9)
         self.get_logger().info(
-            f'{self.state.name}: spinning {math.degrees(self.spin_angle):.1f} deg.'
+            f'{self.state.name}: scanning until first shuttle or '
+            f'{math.degrees(self.spin_angle):.1f} deg complete.'
         )
+        self.spin_goal_request_pending = True
         self.spin_client.send_goal_async(goal).add_done_callback(
             self.spin_goal_response_callback
         )
 
     def spin_goal_response_callback(self, future):
-        goal_handle = future.result()
+        self.spin_goal_request_pending = False
+        try:
+            goal_handle = future.result()
+        except Exception as exc:  # noqa: BLE001
+            self.enter_error(f'Spin goal send failed: {exc}')
+            return
+
         if not goal_handle.accepted:
+            if self.requested_target_id:
+                self.try_dispatch_selected_target()
+                return
             self.enter_error('Spin rejected.')
             return
+
         self.spin_goal_handle = goal_handle
         goal_handle.get_result_async().add_done_callback(self.spin_result_callback)
 
+        if self.spin_cancel_requested or self.state == MissionState.SELECT_SHUTTLE:
+            goal_handle.cancel_goal_async()
+
     def spin_result_callback(self, future):
-        wrapped = future.result()
+        try:
+            wrapped = future.result()
+        except Exception as exc:  # noqa: BLE001
+            self.spin_goal_handle = None
+            self.enter_error(f'Spin result failed: {exc}')
+            return
+
         self.spin_goal_handle = None
+
+        # A cancellation is expected when the first shuttle is detected.
+        if self.requested_target_id and self.state == MissionState.SELECT_SHUTTLE:
+            self.spin_cancel_requested = False
+            self.get_logger().info(
+                f'Scan stopped early for shuttle {self.requested_target_id}.'
+            )
+            self.try_dispatch_selected_target()
+            self.update_action_retry_timer()
+            return
+
         if wrapped.status != GoalStatus.STATUS_SUCCEEDED:
-            self.enter_error('Spin failed.')
+            self.enter_error(f'Spin failed with status={wrapped.status}.')
             return
+
         scan_state = self.state
-        found = sorted(self.scan_seen_ids)
-        self.get_logger().info(f'{scan_state.name} complete; shuttle IDs seen={found}.')
-        if found:
-            self.begin_target_selection()
-            return
+        self.get_logger().info(
+            f'{scan_state.name} completed full scan with no shuttle found.'
+        )
+
         if scan_state == MissionState.PATROL_SCAN:
             self.advance_patrol_point()
         elif scan_state == MissionState.LOCAL_SCAN:
@@ -704,23 +809,44 @@ class PatrolManager(Node):
         elif scan_state == MissionState.FINAL_PATROL_SCAN:
             self.advance_patrol_point()
 
-    def begin_target_selection(self):
+    def begin_target_selection(self, target_id):
+        if not target_id or target_id in self.completed_collection_ids:
+            return
+
+        self.requested_target_id = target_id
         self.latest_selected_id = ''
         self.latest_staging_pose = None
         self.selection_wait_begin = time.monotonic()
         self.set_state(MissionState.SELECT_SHUTTLE)
-        self.set_target_selection(True)
+
+        enabled_msg = Bool()
+        enabled_msg.data = True
+        self.selection_enabled_pub.publish(enabled_msg)
+        self.publish_target_request(target_id)
+
+        self.get_logger().info(
+            f'Latched first-seen shuttle {target_id}; requesting staging pose.'
+        )
         self.update_action_retry_timer()
 
     def try_dispatch_selected_target(self):
         if self.state != MissionState.SELECT_SHUTTLE:
             return
-        if not self.latest_selected_id or self.latest_staging_pose is None:
+        if not self.requested_target_id:
             return
-        if self.latest_selected_id in self.completed_collection_ids:
+        if self.latest_selected_id != self.requested_target_id:
+            return
+        if self.latest_staging_pose is None:
+            return
+        if self.requested_target_id in self.completed_collection_ids:
             return
 
-        self.active_target_id = self.latest_selected_id
+        # Do not start NavigateToPose until the canceled Spin action has fully
+        # released the behavior server.
+        if self.spin_goal_request_pending or self.spin_goal_handle is not None:
+            return
+
+        self.active_target_id = self.requested_target_id
         staging_pose = copy.deepcopy(self.latest_staging_pose.pose)
         self.set_target_selection(False)
         self.queue_navigation(staging_pose, 'staging')
@@ -730,6 +856,7 @@ class PatrolManager(Node):
         if not target_id:
             self.enter_error('Reached staging pose without active target ID.')
             return
+
         self.waiting_collection_id = target_id
         self.set_state(MissionState.WAIT_COLLECTION)
         msg = String()
@@ -738,14 +865,11 @@ class PatrolManager(Node):
         self.get_logger().info(f'Collection requested for shuttle {target_id}.')
 
     def evaluate_after_collection(self):
-        remaining_visible = sorted(
-            sid for sid in self.visible_ids
-            if sid not in self.completed_collection_ids
-        )
-        if remaining_visible:
-            self.begin_target_selection()
-        else:
-            self.start_scan(MissionState.LOCAL_SCAN)
+        for target_id in self.visible_ordered_ids:
+            if target_id not in self.completed_collection_ids:
+                self.begin_target_selection(target_id)
+                return
+        self.start_scan(MissionState.LOCAL_SCAN)
 
     def return_to_active_patrol_point(self):
         if self.active_patrol_pose is None:
@@ -761,10 +885,12 @@ class PatrolManager(Node):
             self.queue_current_patrol_goal()
 
     def finish_mission(self):
+        self.set_target_selection(False)
         self.set_state(MissionState.COMPLETE)
 
     def enter_error(self, reason):
         self.get_logger().error(reason)
+        self.set_target_selection(False)
         self.set_state(MissionState.ERROR)
 
 
