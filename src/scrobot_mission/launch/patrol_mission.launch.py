@@ -15,6 +15,11 @@ def generate_launch_description():
 
     patrol_params = os.path.join(mission_pkg, 'config', 'patrol_params.yaml')
     target_params = os.path.join(mission_pkg, 'config', 'target_selector.yaml')
+    final_approach_params = os.path.join(
+        mission_pkg,
+        'config',
+        'final_approach.yaml',
+    )
     use_sim_time = LaunchConfiguration('use_sim_time')
 
     global_localization = IncludeLaunchDescription(
@@ -25,9 +30,7 @@ def generate_launch_description():
                 'global_localization.launch.py',
             )
         ),
-        launch_arguments={
-            'use_sim_time': use_sim_time,
-        }.items(),
+        launch_arguments={'use_sim_time': use_sim_time}.items(),
     )
 
     navigation = IncludeLaunchDescription(
@@ -38,9 +41,7 @@ def generate_launch_description():
                 'navigation.launch.py',
             )
         ),
-        launch_arguments={
-            'use_sim_time': use_sim_time,
-        }.items(),
+        launch_arguments={'use_sim_time': use_sim_time}.items(),
     )
 
     target_selector = Node(
@@ -52,9 +53,19 @@ def generate_launch_description():
             target_params,
             {
                 'use_sim_time': use_sim_time,
-                # Patrol manager controls when acquisition is allowed.
                 'enabled_at_start': False,
             },
+        ],
+    )
+
+    final_approach = Node(
+        package='scrobot_mission',
+        executable='final_approach_controller',
+        name='final_approach_controller',
+        output='screen',
+        parameters=[
+            final_approach_params,
+            {'use_sim_time': use_sim_time},
         ],
     )
 
@@ -75,5 +86,6 @@ def generate_launch_description():
         global_localization,
         navigation,
         target_selector,
+        final_approach,
         patrol_manager,
     ])
