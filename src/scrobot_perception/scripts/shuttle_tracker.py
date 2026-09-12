@@ -78,10 +78,17 @@ class Track:
     bbox_y: float = 0.08
     bbox_z: float = 0.10
     hit_count: int = 1
+    confirmed: bool = False
 
 
 class ShuttleTracker(Node):
-    """Associate camera-frame shuttle detections into persistent map-frame tracks."""
+    """Build persistent map-frame shuttle tracks from 3D detections.
+
+    New detections first create tentative tracks. A tentative track must receive
+    repeated spatially-consistent detections before it becomes confirmed.
+    Confirmed tracks are persistent by default so turning the camera away does
+    not erase a known shuttle from the court map.
+    """
 
     def __init__(self):
         super().__init__('shuttle_tracker')
@@ -94,9 +101,11 @@ class ShuttleTracker(Node):
         )
         self.declare_parameter('tracking_frame', 'map')
         self.declare_parameter('publish_rate', 10.0)
-        self.declare_parameter('association_distance', 0.30)
-        self.declare_parameter('position_alpha', 0.50)
-        self.declare_parameter('stale_timeout', 1.50)
+        self.declare_parameter('association_distance', 0.40)
+        self.declare_parameter('position_alpha', 0.40)
+        self.declare_parameter('min_confirmations', 2)
+        self.declare_parameter('tentative_timeout', 0.75)
+        self.declare_parameter('confirmed_retention_timeout', 0.0)
         self.declare_parameter('visible_timeout', 0.35)
         self.declare_parameter('tf_timeout', 0.05)
         self.declare_parameter('fallback_to_latest_tf', True)
@@ -113,7 +122,13 @@ class ShuttleTracker(Node):
             self.get_parameter('association_distance').value
         )
         self.position_alpha = float(self.get_parameter('position_alpha').value)
-        self.stale_timeout = float(self.get_parameter('stale_timeout').value)
+        self.min_confirmations = int(self.get_parameter('min_confirmations').value)
+        self.tentative_timeout = float(
+            self.get_parameter('tentative_timeout').value
+        )
+        self.confirmed_retention_timeout = float(
+            self.get_parameter('confirmed_retention_timeout').value
+        )
         self.visible_timeout = float(self.get_parameter('visible_timeout').value)
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
         self.fallback_to_latest_tf = bool(
@@ -127,12 +142,14 @@ class ShuttleTracker(Node):
             raise ValueError('association_distance must be > 0')
         if not 0.0 < self.position_alpha <= 1.0:
             raise ValueError('position_alpha must be in (0, 1]')
-        if self.stale_timeout <= 0.0:
-            raise ValueError('stale_timeout must be > 0')
+        if self.min_confirmations <= 0:
+            raise ValueError('min_confirmations must be >= 1')
+        if self.tentative_timeout <= 0.0:
+            raise ValueError('tentative_timeout must be > 0')
+        if self.confirmed_retention_timeout < 0.0:
+            raise ValueError('confirmed_retention_timeout must be >= 0')
         if self.visible_timeout <= 0.0:
             raise ValueError('visible_timeout must be > 0')
-        if self.visible_timeout > self.stale_timeout:
-            raise ValueError('visible_timeout must be <= stale_timeout')
         if self.tf_timeout < 0.0:
             raise ValueError('tf_timeout must be >= 0')
 
@@ -169,11 +186,18 @@ class ShuttleTracker(Node):
         )
         self.timer = self.create_timer(1.0 / self.publish_rate, self._publish_tracks)
 
+        retention_text = (
+            'infinite'
+            if self.confirmed_retention_timeout <= 0.0
+            else f'{self.confirmed_retention_timeout:.2f} s'
+        )
         self.get_logger().info(
             'Shuttle tracker started: '
             f'frame={self.tracking_frame}, gate={self.association_distance:.2f} m, '
-            f'stale={self.stale_timeout:.2f} s, visible={self.visible_timeout:.2f} s, '
-            f'output={self.output_topic}'
+            f'confirmations={self.min_confirmations}, '
+            f'tentative_timeout={self.tentative_timeout:.2f} s, '
+            f'confirmed_retention={retention_text}, '
+            f'visible={self.visible_timeout:.2f} s'
         )
 
     def _measurement_time(self, msg):
@@ -276,8 +300,8 @@ class ShuttleTracker(Node):
         measurements = self._transform_measurements(msg)
         now_ns = self.get_clock().now().nanoseconds
 
+        self._remove_expired_tracks(now_ns)
         if not measurements:
-            self._remove_stale_tracks(now_ns)
             return
 
         candidates = []
@@ -291,6 +315,8 @@ class ShuttleTracker(Node):
                 if distance <= self.association_distance:
                     candidates.append((distance, track_id, measurement_index))
 
+        # Greedy nearest-neighbour assignment. Each track and measurement can
+        # only be used once in a detector update.
         candidates.sort(key=lambda item: item[0])
         assigned_tracks = set()
         assigned_measurements = set()
@@ -310,8 +336,6 @@ class ShuttleTracker(Node):
             if measurement_index not in assigned_measurements:
                 self._create_track(measurement, now_ns)
 
-        self._remove_stale_tracks(now_ns)
-
     def _update_track(self, track, measurement, now_ns):
         point, class_id, score, bx, by, bz = measurement
         alpha = self.position_alpha
@@ -327,10 +351,19 @@ class ShuttleTracker(Node):
         track.bbox_z = bz
         track.hit_count += 1
 
+        if not track.confirmed and track.hit_count >= self.min_confirmations:
+            track.confirmed = True
+            self.get_logger().info(
+                f'Confirmed shuttle track {track.track_id} after '
+                f'{track.hit_count} detections at '
+                f'({track.x:.2f}, {track.y:.2f}, {track.z:.2f})'
+            )
+
     def _create_track(self, measurement, now_ns):
         point, class_id, score, bx, by, bz = measurement
         track_id = self.next_track_id
         self.next_track_id += 1
+        confirmed = self.min_confirmations <= 1
         self.tracks[track_id] = Track(
             track_id=track_id,
             x=point[0],
@@ -342,22 +375,35 @@ class ShuttleTracker(Node):
             bbox_x=bx,
             bbox_y=by,
             bbox_z=bz,
+            confirmed=confirmed,
         )
+        state = 'confirmed' if confirmed else 'tentative'
         self.get_logger().info(
-            f'Created shuttle track {track_id} at '
+            f'Created {state} shuttle track {track_id} at '
             f'({point[0]:.2f}, {point[1]:.2f}, {point[2]:.2f})'
         )
 
-    def _remove_stale_tracks(self, now_ns):
-        timeout_ns = int(self.stale_timeout * 1.0e9)
-        stale_ids = [
-            track_id
-            for track_id, track in self.tracks.items()
-            if now_ns - track.last_seen_ns > timeout_ns
-        ]
-        for track_id in stale_ids:
+    def _remove_expired_tracks(self, now_ns):
+        tentative_timeout_ns = int(self.tentative_timeout * 1.0e9)
+        confirmed_timeout_ns = int(self.confirmed_retention_timeout * 1.0e9)
+
+        remove_ids = []
+        for track_id, track in self.tracks.items():
+            age_ns = now_ns - track.last_seen_ns
+            if not track.confirmed:
+                if age_ns > tentative_timeout_ns:
+                    remove_ids.append((track_id, 'tentative timeout'))
+                continue
+
+            # 0.0 means confirmed tracks never expire automatically.
+            if self.confirmed_retention_timeout > 0.0 and age_ns > confirmed_timeout_ns:
+                remove_ids.append((track_id, 'confirmed retention timeout'))
+
+        for track_id, reason in remove_ids:
             del self.tracks[track_id]
-            self.get_logger().info(f'Removed stale shuttle track {track_id}')
+            self.get_logger().info(
+                f'Removed shuttle track {track_id}: {reason}'
+            )
 
     def _track_to_detection(self, track, stamp):
         detection = Detection3D()
@@ -385,7 +431,7 @@ class ShuttleTracker(Node):
     def _publish_tracks(self):
         now = self.get_clock().now()
         now_ns = now.nanoseconds
-        self._remove_stale_tracks(now_ns)
+        self._remove_expired_tracks(now_ns)
 
         msg = Detection3DArray()
         msg.header.stamp = now.to_msg()
@@ -398,6 +444,12 @@ class ShuttleTracker(Node):
 
         for track_id in sorted(self.tracks):
             track = self.tracks[track_id]
+
+            # Mission logic only receives confirmed objects. Tentative tracks
+            # stay internal until they have enough consistent observations.
+            if not track.confirmed:
+                continue
+
             detection = self._track_to_detection(track, msg.header.stamp)
             msg.detections.append(detection)
             if now_ns - track.last_seen_ns <= visible_timeout_ns:
