@@ -9,11 +9,26 @@ shuttle_tracker:
     tracking_frame: map
 
     publish_rate: 10.0
-    association_distance: 0.30
-    position_alpha: 0.50
-    stale_timeout: 1.50
 
-    # A track counts as currently visible only if it was refreshed very recently.
+    # Match detections to an existing map track when they stay reasonably close.
+    # Keep this modest: making it too large can merge two nearby shuttles.
+    association_distance: 0.40
+
+    # EMA smoothing of confirmed/tentative track position.
+    position_alpha: 0.40
+
+    # A new object must be observed consistently before mission logic sees it.
+    min_confirmations: 2
+
+    # Tentative false/one-frame detections may expire quickly.
+    tentative_timeout: 0.75
+
+    # 0.0 = confirmed tracks never expire automatically. A confirmed shuttle
+    # remains in the court map when the camera turns away and should eventually
+    # be removed explicitly after collection.
+    confirmed_retention_timeout: 0.0
+
+    # A confirmed track counts as currently visible only if refreshed recently.
     visible_timeout: 0.35
 
     tf_timeout: 0.05
