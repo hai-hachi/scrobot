@@ -20,8 +20,8 @@
       </inertial>
 
       <velocity_decay>
-        <linear>0.35</linear>
-        <angular>0.55</angular>
+        <linear>0.80</linear>
+        <angular>0.90</angular>
       </velocity_decay>
 
       <!-- Low-detail visual for large simulation populations. -->
