@@ -7,9 +7,10 @@
             name="scrobot_simulation::ShuttleActivitySystem">
       <robot_model>scrobot</robot_model>
       <update_rate>10.0</update_rate>
-      <activation_distance>1.2</activation_distance>
-      <freeze_distance>1.6</freeze_distance>
-      <settle_time>1.25</settle_time>
+      <!-- Keep resting shuttles frozen while Nav2 moves to the 0.75 m staging pose. -->
+      <activation_distance>0.35</activation_distance>
+      <freeze_distance>0.55</freeze_distance>
+      <settle_time>0.75</settle_time>
     </plugin>
 
     <!-- ======================================================
