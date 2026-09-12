@@ -10,11 +10,9 @@
   direction: GZ_TO_ROS
   qos_profile: CLOCK
 
-
 # ============================================================
 # D435i combined IMU
 # ============================================================
-
 - ros_topic_name: "/camera/camera/imu"
   gz_topic_name: "/camera/imu"
   ros_type_name: "sensor_msgs/msg/Imu"
@@ -25,7 +23,6 @@
 # ============================================================
 # Separate 5883L magnetometer
 # ============================================================
-
 - ros_topic_name: "/imu/mag"
   gz_topic_name: "/imu/mag"
   ros_type_name: "sensor_msgs/msg/MagneticField"
@@ -34,11 +31,9 @@
   qos_profile: SENSOR_DATA
   frame_id: "mag_link"
 
-
 # ============================================================
 # Color camera
 # ============================================================
-
 - ros_topic_name: "/camera/camera/color/camera_info"
   gz_topic_name: "/camera/color/camera_info"
   ros_type_name: "sensor_msgs/msg/CameraInfo"
@@ -47,11 +42,9 @@
   qos_profile: SENSOR_DATA
   frame_id: "camera_color_optical_frame"
 
-
 # ============================================================
 # Raw depth camera
 # ============================================================
-
 - ros_topic_name: "/camera/camera/depth/camera_info"
   gz_topic_name: "/camera/camera_info"
   ros_type_name: "sensor_msgs/msg/CameraInfo"
@@ -63,7 +56,6 @@
 # ============================================================
 # Native Gazebo depth point cloud
 # ============================================================
-
 - ros_topic_name: "/camera/camera/depth/points"
   gz_topic_name: "/camera/depth/points"
   ros_type_name: "sensor_msgs/msg/PointCloud2"
@@ -75,12 +67,10 @@
   frame_id: "camera_depth_frame"
 
 # ============================================================
-# Evaluation ground truth
+# Evaluation / simulation ground truth
 # ============================================================
 
 # Full Gazebo world pose stream. Keep this for evaluation/debugging only.
-# Note: Pose_V -> TFMessage does not reliably preserve entity frame names in
-# ros_gz_bridge, so shuttle perception must NOT depend on this topic.
 - ros_topic_name: /evaluation/ground_truth_tf
   gz_topic_name: /world/badminton_court/dynamic_pose/info
   ros_type_name: tf2_msgs/msg/TFMessage
@@ -89,8 +79,6 @@
   lazy: false
 
 # Dedicated shuttle-only ground truth produced by ShuttleActivitySystem.
-# Pose identity is intentionally unnecessary: the fake detector only needs the
-# current set of shuttle world poses. The future tracker assigns persistent IDs.
 - ros_topic_name: /evaluation/shuttle_ground_truth
   gz_topic_name: /evaluation/shuttle_ground_truth_gz
   ros_type_name: geometry_msgs/msg/PoseArray
@@ -98,6 +86,17 @@
   direction: GZ_TO_ROS
   qos_profile: SENSOR_DATA
   publisher_queue: 1
+  lazy: false
+
+# One-shot physical collection events. Each pose is the world pose of a shuttle
+# immediately before ShuttleActivitySystem requests removal from Gazebo.
+- ros_topic_name: /evaluation/shuttle_collected
+  gz_topic_name: /evaluation/shuttle_collected_gz
+  ros_type_name: geometry_msgs/msg/PoseArray
+  gz_type_name: gz.msgs.Pose_V
+  direction: GZ_TO_ROS
+  qos_profile: SENSOR_DATA
+  publisher_queue: 10
   lazy: false
 
 # Dedicated Gazebo ground truth odometry for local evaluation.
