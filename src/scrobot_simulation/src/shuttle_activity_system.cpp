@@ -30,6 +30,7 @@ private:
     std::chrono::steady_clock::duration lastProtectedTime{};
     bool initialized{false};
     bool requestedStatic{false};
+    bool removalRequested{false};
   };
 
 public:
@@ -55,6 +56,14 @@ public:
       "settle_time", this->settleTime_).first;
     this->groundTruthTopic_ = _sdf->Get<std::string>(
       "ground_truth_topic", this->groundTruthTopic_).first;
+    this->collectedTopic_ = _sdf->Get<std::string>(
+      "collected_topic", this->collectedTopic_).first;
+    this->pickupOffsetX_ = _sdf->Get<double>(
+      "pickup_offset_x", this->pickupOffsetX_).first;
+    this->pickupHalfLength_ = _sdf->Get<double>(
+      "pickup_half_length", this->pickupHalfLength_).first;
+    this->pickupHalfWidth_ = _sdf->Get<double>(
+      "pickup_half_width", this->pickupHalfWidth_).first;
 
     if (this->updateRate_ <= 0.0)
       this->updateRate_ = 10.0;
@@ -64,6 +73,10 @@ public:
       this->freezeDistance_ = this->activationDistance_;
     if (this->settleTime_ < 0.0)
       this->settleTime_ = 0.0;
+    if (this->pickupHalfLength_ <= 0.0)
+      this->pickupHalfLength_ = 0.08;
+    if (this->pickupHalfWidth_ <= 0.0)
+      this->pickupHalfWidth_ = 0.17;
 
     this->updatePeriod_ = std::chrono::duration_cast<
       std::chrono::steady_clock::duration>(
@@ -74,6 +87,8 @@ public:
 
     this->groundTruthPublisher_ =
       this->transportNode_.Advertise<gz::msgs::Pose_V>(this->groundTruthTopic_);
+    this->collectedPublisher_ =
+      this->transportNode_.Advertise<gz::msgs::Pose_V>(this->collectedTopic_);
 
     this->ResolveRobot(_ecm);
   }
@@ -106,7 +121,12 @@ public:
       return;
 
     const auto robotPose = gz::sim::worldPose(this->robotEntity_, _ecm);
+    const double robotYaw = robotPose.Rot().Yaw();
+    const double cosYaw = std::cos(robotYaw);
+    const double sinYaw = std::sin(robotYaw);
+
     gz::msgs::Pose_V shuttleGroundTruthMsg;
+    gz::msgs::Pose_V collectedMsg;
 
     _ecm.Each<gz::sim::components::Model, gz::sim::components::Name>(
       [&](const gz::sim::Entity &_entity,
@@ -121,6 +141,9 @@ public:
           return true;
 
         auto &state = this->states_[_entity];
+        if (state.removalRequested)
+          return true;
+
         if (!state.initialized)
         {
           state.lastProtectedTime = _info.simTime;
@@ -128,25 +151,37 @@ public:
         }
 
         const auto shuttlePose = gz::sim::worldPose(_entity, _ecm);
+        const double worldDx = shuttlePose.Pos().X() - robotPose.Pos().X();
+        const double worldDy = shuttlePose.Pos().Y() - robotPose.Pos().Y();
+        const double localX = cosYaw * worldDx + sinYaw * worldDy;
+        const double localY = -sinYaw * worldDx + cosYaw * worldDy;
 
-        // Dedicated shuttle-only ground truth. The Gazebo pose name is useful
-        // for Gazebo-side debugging, but the ROS bridge converts this Pose_V to
-        // a PoseArray, where identity is intentionally not required.
+        const bool insidePickupZone =
+          std::abs(localX - this->pickupOffsetX_) <= this->pickupHalfLength_ &&
+          std::abs(localY) <= this->pickupHalfWidth_;
+
+        if (insidePickupZone)
+        {
+          auto *collectedPose = collectedMsg.add_pose();
+          this->FillPoseMessage(
+            *collectedPose,
+            _entity,
+            _nameComp->Data(),
+            shuttlePose);
+
+          state.removalRequested = true;
+          _ecm.RequestRemoveEntity(_entity);
+          return true;
+        }
+
         auto *poseMsg = shuttleGroundTruthMsg.add_pose();
-        poseMsg->set_name(_nameComp->Data());
-        poseMsg->set_id(static_cast<uint64_t>(_entity));
-        poseMsg->mutable_position()->set_x(shuttlePose.Pos().X());
-        poseMsg->mutable_position()->set_y(shuttlePose.Pos().Y());
-        poseMsg->mutable_position()->set_z(shuttlePose.Pos().Z());
-        poseMsg->mutable_orientation()->set_x(shuttlePose.Rot().X());
-        poseMsg->mutable_orientation()->set_y(shuttlePose.Rot().Y());
-        poseMsg->mutable_orientation()->set_z(shuttlePose.Rot().Z());
-        poseMsg->mutable_orientation()->set_w(shuttlePose.Rot().W());
+        this->FillPoseMessage(
+          *poseMsg,
+          _entity,
+          _nameComp->Data(),
+          shuttlePose);
 
-        const double dx = shuttlePose.Pos().X() - robotPose.Pos().X();
-        const double dy = shuttlePose.Pos().Y() - robotPose.Pos().Y();
-        const double distance = std::hypot(dx, dy);
-
+        const double distance = std::hypot(worldDx, worldDy);
         const bool staticNow = state.requestedStatic || model.Static(_ecm);
 
         if (staticNow)
@@ -175,13 +210,30 @@ public:
         return true;
       });
 
-    // Publish even when no shuttles exist. An empty PoseArray on the ROS side
-    // is a valid "zero shuttles" state and lets consumers distinguish that
-    // from a missing ground-truth stream.
     this->groundTruthPublisher_.Publish(shuttleGroundTruthMsg);
+    if (collectedMsg.pose_size() > 0)
+      this->collectedPublisher_.Publish(collectedMsg);
   }
 
 private:
+  template<typename PoseType>
+  void FillPoseMessage(
+    PoseType &_poseMsg,
+    const gz::sim::Entity &_entity,
+    const std::string &_name,
+    const gz::math::Pose3d &_pose)
+  {
+    _poseMsg.set_name(_name);
+    _poseMsg.set_id(static_cast<uint64_t>(_entity));
+    _poseMsg.mutable_position()->set_x(_pose.Pos().X());
+    _poseMsg.mutable_position()->set_y(_pose.Pos().Y());
+    _poseMsg.mutable_position()->set_z(_pose.Pos().Z());
+    _poseMsg.mutable_orientation()->set_x(_pose.Rot().X());
+    _poseMsg.mutable_orientation()->set_y(_pose.Rot().Y());
+    _poseMsg.mutable_orientation()->set_z(_pose.Rot().Z());
+    _poseMsg.mutable_orientation()->set_w(_pose.Rot().W());
+  }
+
   void SetModelStatic(
     const gz::sim::Entity &_entity,
     const bool _static,
@@ -220,13 +272,18 @@ private:
 
   gz::transport::Node transportNode_;
   gz::transport::Node::Publisher groundTruthPublisher_;
+  gz::transport::Node::Publisher collectedPublisher_;
 
   std::string robotName_{"scrobot"};
   std::string groundTruthTopic_{"/evaluation/shuttle_ground_truth_gz"};
+  std::string collectedTopic_{"/evaluation/shuttle_collected_gz"};
   double updateRate_{10.0};
-  double activationDistance_{1.2};
-  double freezeDistance_{1.6};
-  double settleTime_{1.25};
+  double activationDistance_{0.35};
+  double freezeDistance_{0.55};
+  double settleTime_{0.75};
+  double pickupOffsetX_{0.165};
+  double pickupHalfLength_{0.08};
+  double pickupHalfWidth_{0.17};
 
   std::chrono::steady_clock::duration updatePeriod_{};
   std::chrono::steady_clock::duration settleDuration_{};
