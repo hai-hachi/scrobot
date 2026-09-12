@@ -3,10 +3,10 @@
 import math
 
 import rclpy
-from geometry_msgs.msg import TwistStamped
+from geometry_msgs.msg import PoseArray, TwistStamped
 from rclpy.duration import Duration
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from rclpy.time import Time
 from std_msgs.msg import String
 from tf2_ros import Buffer, TransformException, TransformListener
@@ -72,7 +72,7 @@ def clamp(value, low, high):
 
 
 class FinalApproachController(Node):
-    """Drive a selected shuttle from Nav2 staging into pickup_link."""
+    """Drive the requested persistent shuttle track into pickup_link."""
 
     def __init__(self):
         super().__init__('final_approach_controller')
@@ -81,6 +81,7 @@ class FinalApproachController(Node):
         self.declare_parameter('request_topic', '/mission/collection_request')
         self.declare_parameter('complete_topic', '/mission/collection_complete')
         self.declare_parameter('failed_topic', '/mission/collection_failed')
+        self.declare_parameter('simulation_collection_topic', '/evaluation/shuttle_collected')
         self.declare_parameter('cmd_vel_topic', '/cmd_vel_approach')
         self.declare_parameter('tracking_frame', 'map')
         self.declare_parameter('pickup_frame', 'pickup_link')
@@ -96,11 +97,13 @@ class FinalApproachController(Node):
         self.declare_parameter('heading_slowdown_angle', 0.45)
         self.declare_parameter('rotate_only_angle', 0.90)
         self.declare_parameter('hold_distance', 0.025)
+        self.declare_parameter('collection_event_match_distance', 0.50)
 
         self.tracked_topic = str(self.get_parameter('tracked_topic').value)
         self.request_topic = str(self.get_parameter('request_topic').value)
         self.complete_topic = str(self.get_parameter('complete_topic').value)
         self.failed_topic = str(self.get_parameter('failed_topic').value)
+        self.simulation_collection_topic = str(self.get_parameter('simulation_collection_topic').value)
         self.cmd_vel_topic = str(self.get_parameter('cmd_vel_topic').value)
         self.tracking_frame = str(self.get_parameter('tracking_frame').value)
         self.pickup_frame = str(self.get_parameter('pickup_frame').value)
@@ -113,11 +116,12 @@ class FinalApproachController(Node):
         self.min_linear_speed = float(self.get_parameter('min_linear_speed').value)
         self.max_linear_speed = float(self.get_parameter('max_linear_speed').value)
         self.max_angular_speed = float(self.get_parameter('max_angular_speed').value)
-        self.heading_slowdown_angle = float(
-            self.get_parameter('heading_slowdown_angle').value
-        )
+        self.heading_slowdown_angle = float(self.get_parameter('heading_slowdown_angle').value)
         self.rotate_only_angle = float(self.get_parameter('rotate_only_angle').value)
         self.hold_distance = float(self.get_parameter('hold_distance').value)
+        self.collection_event_match_distance = float(
+            self.get_parameter('collection_event_match_distance').value
+        )
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -128,33 +132,30 @@ class FinalApproachController(Node):
         self.last_wait_log_ns = 0
 
         qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
-        self.create_subscription(
-            Detection3DArray,
-            self.tracked_topic,
-            self._tracks_callback,
-            qos,
-        )
+        self.create_subscription(Detection3DArray, self.tracked_topic, self._tracks_callback, qos)
         self.create_subscription(String, self.request_topic, self._request_callback, qos)
         self.create_subscription(String, self.complete_topic, self._complete_callback, qos)
+        self.create_subscription(
+            PoseArray,
+            self.simulation_collection_topic,
+            self._simulation_collection_callback,
+            qos_profile_sensor_data,
+        )
 
         self.cmd_pub = self.create_publisher(TwistStamped, self.cmd_vel_topic, qos)
+        self.complete_pub = self.create_publisher(String, self.complete_topic, qos)
         self.failed_pub = self.create_publisher(String, self.failed_topic, qos)
-
         self.timer = self.create_timer(1.0 / self.control_rate, self._control)
 
         self.get_logger().info(
-            'Final approach controller started: '
-            f'{self.request_topic} -> {self.cmd_vel_topic}, pickup={self.pickup_frame}'
+            f'Final approach: request={self.request_topic}, cmd={self.cmd_vel_topic}, '
+            f'pickup={self.pickup_frame}'
         )
 
     def _tracks_callback(self, msg):
         if msg.header.frame_id and msg.header.frame_id != self.tracking_frame:
             return
-        self.tracks = {
-            detection.id: detection
-            for detection in msg.detections
-            if detection.id
-        }
+        self.tracks = {detection.id: detection for detection in msg.detections if detection.id}
 
     def _request_callback(self, msg):
         shuttle_id = msg.data.strip()
@@ -162,10 +163,9 @@ class FinalApproachController(Node):
             return
         if self.active_id and self.active_id != shuttle_id:
             self.get_logger().warn(
-                f'Ignoring collection request {shuttle_id}; already approaching {self.active_id}.'
+                f'Ignoring request {shuttle_id}; already approaching {self.active_id}.'
             )
             return
-
         self.active_id = shuttle_id
         self.start_ns = self.get_clock().now().nanoseconds
         self.get_logger().info(f'Final approach started for shuttle {shuttle_id}.')
@@ -178,6 +178,34 @@ class FinalApproachController(Node):
         self.get_logger().info(f'Final approach complete for shuttle {shuttle_id}.')
         self.active_id = ''
         self.start_ns = 0
+
+    def _simulation_collection_callback(self, msg):
+        if not self.active_id or not msg.poses:
+            return
+        detection = self.tracks.get(self.active_id)
+        if detection is None:
+            return
+
+        tx, ty, tz = detection_position(detection)
+        best = min(
+            math.sqrt(
+                (float(pose.position.x) - tx) ** 2
+                + (float(pose.position.y) - ty) ** 2
+                + (float(pose.position.z) - tz) ** 2
+            )
+            for pose in msg.poses
+        )
+        if best > self.collection_event_match_distance:
+            return
+
+        complete = String()
+        complete.data = self.active_id
+        self._publish_stop()
+        self.complete_pub.publish(complete)
+        self.get_logger().info(
+            f'Physical collection matched shuttle {self.active_id} '
+            f'(event error={best:.3f} m).'
+        )
 
     def _publish_cmd(self, linear_x, angular_z):
         msg = TwistStamped()
@@ -203,7 +231,6 @@ class FinalApproachController(Node):
         self.start_ns = 0
 
     def _target_in_pickup_frame(self, detection):
-        target_map = detection_position(detection)
         try:
             transform = self.tf_buffer.lookup_transform(
                 self.pickup_frame,
@@ -219,25 +246,20 @@ class FinalApproachController(Node):
                     f'Waiting for TF {self.pickup_frame} <- {self.tracking_frame}: {exc}'
                 )
             return None
-        return transform_point(transform, target_map)
+        return transform_point(transform, detection_position(detection))
 
     def _control(self):
         if not self.active_id:
             return
 
         now_ns = self.get_clock().now().nanoseconds
-        if self.start_ns and (now_ns - self.start_ns) > int(self.timeout * 1.0e9):
+        if self.start_ns and now_ns - self.start_ns > int(self.timeout * 1.0e9):
             self._fail(f'timeout after {self.timeout:.1f} s')
             return
 
         detection = self.tracks.get(self.active_id)
         if detection is None:
             self._publish_stop()
-            if now_ns - self.last_wait_log_ns > int(2.0e9):
-                self.last_wait_log_ns = now_ns
-                self.get_logger().warn(
-                    f'Waiting for persistent track {self.active_id}.'
-                )
             return
 
         local = self._target_in_pickup_frame(detection)
@@ -248,7 +270,6 @@ class FinalApproachController(Node):
         x, y, _ = local
         distance = math.hypot(x, y)
         heading = math.atan2(y, x) if distance > 1e-6 else 0.0
-
         if distance <= self.hold_distance:
             self._publish_stop()
             return
@@ -258,7 +279,6 @@ class FinalApproachController(Node):
             -self.max_angular_speed,
             self.max_angular_speed,
         )
-
         if abs(heading) >= self.rotate_only_angle or x <= 0.0:
             linear = 0.0
         else:
