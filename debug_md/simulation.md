@@ -12,6 +12,20 @@ Inspect available launch arguments with:
 ros2 launch scrobot_simulation simulation.launch.py --show-args
 ```
 
+## Shuttle physics behavior
+
+`ShuttleActivitySystem` keeps resting shuttles static until the robot is very close. Current distances are:
+
+```text
+activation_distance = 0.35 m
+freeze_distance = 0.55 m
+settle_time = 0.75 s
+```
+
+This is intentionally inside the mission staging distance (`0.75 m`), so simply reaching the staging pose does not unfreeze and disturb the shuttle. When the robot gets within `0.35 m` during final approach, the shuttle becomes dynamic so collector contact can move it. After the robot moves farther than `0.55 m` and the settle time passes, it is frozen again.
+
+Both detailed and fast shuttle models also use stronger velocity damping to suppress unrealistic long-lasting rolling/orbiting from the cone-like geometry.
+
 ## Spawn shuttles
 
 Supported modes:
