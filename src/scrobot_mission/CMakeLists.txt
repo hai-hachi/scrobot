@@ -32,9 +32,14 @@ install(
 )
 
 install(
-  DIRECTORY
-    launch
-    config
+  PROGRAMS
+    scrobot_mission/final_approach_controller.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME final_approach_controller
+)
+
+install(
+  DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}
 )
 
