@@ -38,13 +38,13 @@ camera_depth_optical_frame
 ros2 launch scrobot_perception shuttle_tracking.launch.py
 ```
 
-Publishes persistent tracks:
+Publishes persistent confirmed tracks:
 
 ```text
 /perception/tracked_shuttles
 ```
 
-and the currently-visible subset:
+and the currently-visible confirmed subset:
 
 ```text
 /perception/visible_tracked_shuttles
@@ -57,13 +57,37 @@ vision_msgs/msg/Detection3DArray
 frame_id: map
 ```
 
-`/perception/tracked_shuttles` keeps a shuttle for `stale_timeout` after it disappears.
+## Track lifecycle
 
-`/perception/visible_tracked_shuttles` only includes tracks refreshed within `visible_timeout`, so mission logic can distinguish:
+The tracker now uses two stages:
 
 ```text
-known track != currently in camera view
+new detection
+    -> tentative track
+    -> repeated consistent detection
+    -> confirmed track
 ```
+
+Current defaults:
+
+```text
+association_distance: 0.40 m
+position_alpha: 0.40
+min_confirmations: 2
+tentative_timeout: 0.75 s
+confirmed_retention_timeout: 0.0
+visible_timeout: 0.35 s
+```
+
+`confirmed_retention_timeout: 0.0` means a confirmed shuttle does not expire automatically when the camera turns away. It remains in `/perception/tracked_shuttles` as a known court object.
+
+`/perception/visible_tracked_shuttles` only includes confirmed tracks refreshed within `visible_timeout`, so mission logic can distinguish:
+
+```text
+known shuttle != currently visible shuttle
+```
+
+Tentative tracks are internal and are not published to mission logic until they reach `min_confirmations`.
 
 ## Inspect detections
 
@@ -87,21 +111,14 @@ ros2 topic hz /perception/tracked_shuttles
 ros2 topic hz /perception/visible_tracked_shuttles
 ```
 
-Typical configuration:
-
-```text
-fake detector: 15 Hz
-tracker output: 10 Hz
-visible_timeout: 0.35 s
-stale_timeout: 1.50 s
-```
-
 ## Tracker parameters
 
 ```bash
 ros2 param get /shuttle_tracker association_distance
 ros2 param get /shuttle_tracker position_alpha
-ros2 param get /shuttle_tracker stale_timeout
+ros2 param get /shuttle_tracker min_confirmations
+ros2 param get /shuttle_tracker tentative_timeout
+ros2 param get /shuttle_tracker confirmed_retention_timeout
 ros2 param get /shuttle_tracker visible_timeout
 ros2 param get /shuttle_tracker fallback_to_latest_tf
 ros2 param get /shuttle_tracker use_sim_time
