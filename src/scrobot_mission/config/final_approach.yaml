@@ -1,0 +1,32 @@
+final_approach_controller:
+  ros__parameters:
+    use_sim_time: true
+
+    tracked_topic: /perception/tracked_shuttles
+    request_topic: /mission/collection_request
+    complete_topic: /mission/collection_complete
+    failed_topic: /mission/collection_failed
+    simulation_collection_topic: /evaluation/shuttle_collected
+    cmd_vel_topic: /cmd_vel_approach
+
+    tracking_frame: map
+    pickup_frame: pickup_link
+    base_frame: base_footprint
+
+    control_rate: 20.0
+    timeout: 12.0
+    tf_timeout: 0.05
+
+    linear_kp: 0.8
+    angular_kp: 2.0
+    min_linear_speed: 0.04
+    max_linear_speed: 0.18
+    max_angular_speed: 0.8
+
+    heading_slowdown_angle: 0.45
+    rotate_only_angle: 0.90
+    hold_distance: 0.025
+
+    # Gazebo collection event is in court/world coordinates. Match it to the
+    # persistent map-frame shuttle target with a modest tolerance.
+    collection_event_match_distance: 0.50
