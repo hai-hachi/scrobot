@@ -20,6 +20,14 @@ import numpy as np
 import yaml
 
 
+# Shuttle simulation policy lives in the generated court model so regenerating
+# AprilTags does not silently remove the ShuttleActivitySystem plugin.
+SHUTTLE_ACTIVITY_UPDATE_RATE = 10.0
+SHUTTLE_ACTIVATION_DISTANCE = 0.35
+SHUTTLE_FREEZE_DISTANCE = 0.55
+SHUTTLE_SETTLE_TIME = 0.75
+
+
 def load_params(config_path):
     data = yaml.safe_load(Path(config_path).read_text())
     return data['tag_global_localizer']['ros__parameters']
@@ -71,8 +79,6 @@ def generate_texture(tag_id, params, output_path):
     marker_px = active_cells * cell_px
 
     dictionary = april_dictionary()
-
-    # OpenCV 4.6 API.
     marker = cv2.aruco.drawMarker(
         dictionary,
         tag_id,
@@ -88,10 +94,6 @@ def generate_texture(tag_id, params, output_path):
 
     q = quiet_cells * cell_px
     texture[q:q + marker_px, q:q + marker_px] = marker
-
-    # DO NOT rotate here. The generated OBJ UV convention guarantees:
-    # PNG top   -> +Z_mount
-    # PNG right -> +Y_mount
     cv2.imwrite(str(output_path), texture)
 
 
@@ -104,7 +106,6 @@ def write_obj(tag_id, plate_size, mesh_dir, texture_dir):
 
     obj = f'''# AprilTag {tag_id}\n# Frame convention:\n#   +X = visible face outward\n#   +Y = image right when viewed from +X\n#   +Z = image up\nmtllib {mtl_name}\no tag_{tag_id}\n\n# bottom-left, bottom-right, top-right, top-left as viewed from +X\nv 0 {-half:.9f} {-half:.9f}\nv 0 {+half:.9f} {-half:.9f}\nv 0 {+half:.9f} {+half:.9f}\nv 0 {-half:.9f} {+half:.9f}\n\n# OBJ UV: (0,0) bottom-left, (1,1) top-right\nvt 0.0 0.0\nvt 1.0 0.0\nvt 1.0 1.0\nvt 0.0 1.0\n\nvn 1.0 0.0 0.0\n\nusemtl tag_{tag_id}_material\n# Counter-clockwise when viewed from +X -> normal +X\nf 1/1/1 2/2/1 3/3/1\nf 1/1/1 3/3/1 4/4/1\n'''
 
-    # MTL texture path is relative to the OBJ file.
     rel_texture = f'../materials/textures/{texture_name}'
     mtl = f'''newmtl tag_{tag_id}_material\nKa 1.000 1.000 1.000\nKd 1.000 1.000 1.000\nKs 0.000 0.000 0.000\nd 1.0\nillum 1\nmap_Kd {rel_texture}\n'''
 
@@ -152,8 +153,6 @@ def write_model_sdf(params, output_dir, plate_size, headings):
     <link name="tag_mount_{tag_id}">
       <pose>{x:.9f} {y:.9f} {z:.9f} 0 0 {heading:.9f}</pose>
 
-      <!-- Thin opaque backing plate. It also prevents the marker from
-           being visible from the physical back side. -->
       <visual name="backing">
         <pose>{backing_center_x:.6f} 0 0 0 0 0</pose>
         <geometry>
@@ -168,8 +167,6 @@ def write_model_sdf(params, output_dir, plate_size, headings):
         </material>
       </visual>
 
-      <!-- Explicitly UV-mapped front quad. No Gazebo plane-normal
-           texture rotation is involved. -->
       <visual name="tag_texture">
         <geometry>
           <mesh>
@@ -180,11 +177,24 @@ def write_model_sdf(params, output_dir, plate_size, headings):
     </link>
 ''')
 
+    plugin = f'''
+    <!-- Shuttle activity policy. Resting shuttles stay static during patrol
+         and staging; they become dynamic only during the close final approach. -->
+    <plugin filename="libshuttle_activity_system.so"
+            name="scrobot_simulation::ShuttleActivitySystem">
+      <robot_model>scrobot</robot_model>
+      <update_rate>{SHUTTLE_ACTIVITY_UPDATE_RATE:.1f}</update_rate>
+      <activation_distance>{SHUTTLE_ACTIVATION_DISTANCE:.2f}</activation_distance>
+      <freeze_distance>{SHUTTLE_FREEZE_DISTANCE:.2f}</freeze_distance>
+      <settle_time>{SHUTTLE_SETTLE_TIME:.2f}</settle_time>
+    </plugin>
+'''
+
     sdf = f'''<?xml version="1.0"?>
 <sdf version="1.9">
   <model name="court_apriltags">
     <static>true</static>
-{''.join(links)}
+{plugin}{''.join(links)}
   </model>
 </sdf>
 '''
@@ -245,6 +255,12 @@ def main():
     print(f'  detector edge size: {tag_edge_size:.6f} m')
     print(f'  full rendered plate: {plate_size:.6f} m')
     print(f'  inward angle: {float(params["inward_angle_deg"]):.1f} deg')
+    print(
+        '  shuttle activity: '
+        f'activate={SHUTTLE_ACTIVATION_DISTANCE:.2f} m, '
+        f'freeze={SHUTTLE_FREEZE_DISTANCE:.2f} m, '
+        f'settle={SHUTTLE_SETTLE_TIME:.2f} s'
+    )
 
     for tag_id in range(4):
         x, y, z, heading = tag_pose(tag_id, params, headings)
