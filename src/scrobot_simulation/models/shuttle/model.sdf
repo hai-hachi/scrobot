@@ -19,9 +19,11 @@
         </inertia>
       </inertial>
 
+      <!-- Strong damping prevents the conical shuttle from orbiting/rolling
+           unrealistically after a small contact impulse. -->
       <velocity_decay>
-        <linear>0.35</linear>
-        <angular>0.55</angular>
+        <linear>0.80</linear>
+        <angular>0.90</angular>
       </velocity_decay>
 
       <visual name="shuttle_visual">
