@@ -38,16 +38,22 @@ patrol_manager:
     # Patrol / shuttle excursion behavior
     # ========================================================
     action_retry_period: 0.5
+
+    # A scan may rotate up to 360 deg, but it is canceled as soon as the first
+    # confirmed shuttle appears in visible_tracked_shuttles.
     spin_angle: 6.283185307179586
     spin_time_allowance: 20.0
+
+    # How long patrol_manager waits for target_selector to return the requested
+    # shuttle's staging pose after a first-seen ID is latched.
     selection_wait_timeout: 2.0
 
     visible_tracks_topic: /perception/visible_tracked_shuttles
+    target_request_topic: /mission/target_request_id
     selected_id_topic: /mission/selected_shuttle_id
     staging_pose_topic: /mission/shuttle_staging_pose
     selection_enabled_topic: /mission/target_selection_enabled
 
-    # Final-approach / collector handoff. For now this can be tested manually:
-    # request publishes the shuttle ID; complete must publish the same ID.
+    # Final approach / collector handoff.
     collection_request_topic: /mission/collection_request
     collection_complete_topic: /mission/collection_complete
