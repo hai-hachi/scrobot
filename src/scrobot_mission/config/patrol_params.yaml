@@ -11,8 +11,10 @@ patrol_manager:
     range_factor: 0.90
     max_grid_size: 20
 
-    # Staging is now computed directly by patrol_manager.
-    staging_distance: 0.75
+    # Keep a little more distance before the camera-local final approach takes
+    # over. This reduces the chance that Nav2 finishes while already touching
+    # or disturbing the shuttle.
+    staging_distance: 0.90
     tf_timeout: 0.05
 
     # Initial absolute localization
@@ -20,8 +22,11 @@ patrol_manager:
     initial_tag_id: -1
     tag_approach_distance: 1.70
     tag_approach_timeout: 60.0
-    relocalize_sample_count: 15
-    relocalize_timeout: 7.0
+
+    # Give the stationary batch more time under occasional Gazebo/transport
+    # load. Spawning the large shuttle population after this step is preferred.
+    relocalize_sample_count: 12
+    relocalize_timeout: 12.0
 
     # Nav2 startup / retry
     nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
