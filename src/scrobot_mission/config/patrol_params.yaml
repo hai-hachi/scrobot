@@ -13,17 +13,27 @@ patrol_manager:
     max_grid_size: 20
     tf_timeout: 0.05
 
-    # Keep enough image margin for scan cancellation at the higher spin speed.
-    primary_scan_edge_bearing: 0.38
+    # Optimized scan behavior. The normal Nav2 Spin is only the empty-court
+    # search. Once the first shuttle is seen, cancel it and use /cmd_vel_scan
+    # at a much lower angular rate until that first shuttle approaches the
+    # opposite edge of the image. This is intentionally conservative because
+    # observed spin overshoot was the largest source of wasted motion.
+    scan_cmd_vel_topic: /cmd_vel_scan
+    slow_observe_angular_velocity: 0.18
+    slow_observe_edge_bearing: 0.28
+    slow_observe_timeout: 4.0
+    scan_first_lost_grace: 0.30
+    scan_control_rate: 30.0
+
+    # Single target mowing: after the observation arc, choose the farthest
+    # visible/remembered target that is still no farther than 3 m from robot.
+    mow_target_max_range: 3.0
+    pickup_offset_x: 0.165
+    mow_overrun: 0.03
     target_lost_timeout: 0.65
 
-    group_settle_time: 0.25
-    group_lateral_tolerance: 0.15
-    group_longitudinal_tolerance: 0.25
-
-    staging_distance: 0.80
-
-    # Initial absolute localization.
+    # Initial absolute localization still uses the validated approach-tag
+    # transaction once at startup.
     initial_global_localization: true
     initial_tag_id: -1
     tag_approach_distance: 1.70
@@ -32,24 +42,30 @@ patrol_manager:
     relocalize_timeout: 15.0
     relocalize_retries: 4
 
-    # Runtime relocalization uses accumulated ODOM PATH LENGTH.
+    # Runtime localization: bypass /approach_tag. DUE only injects immediately
+    # after a mow pass when already very near one of the initial tag-watch
+    # poses. REQUIRED may Nav2 directly to the closest known watch pose.
     relocalize_due_distance: 15.0
     relocalize_required_distance: 30.0
-    relocalize_opportunity_radius: 2.50
-    left_tag_region_x: 0.0
-    left_tag_region_y: 3.05
-    right_tag_region_x: 0.0
-    right_tag_region_y: -3.05
+    quick_relocalize_radius: 0.50
+    quick_relocalize_sample_count: 8
+    quick_relocalize_timeout: 6.0
+    tag_mount_frame_prefix: tag_mount_
+    quick_align_kp: 1.5
+    quick_align_min_speed: 0.10
+    quick_align_max_speed: 0.35
+    quick_align_tolerance_deg: 3.0
 
     nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
     nav2_startup_timeout: 30.0
     nav2_startup_retries: 3
     nav2_tf_settle_time: 0.50
-    navigation_goal_retries: 3
-    action_retry_period: 0.25
+    navigation_goal_retries: 2
+    action_retry_period: 0.20
 
+    # Empty-court search can remain moderately fast; it is canceled on first
+    # detection and handed off to the 0.18 rad/s conservative observation arc.
     spin_angle: 6.283185307179586
-    spin_time_allowance: 15.0
+    spin_time_allowance: 18.0
 
     visible_tracks_topic: /perception/visible_tracked_shuttles
-    collect_action_name: /collect_shuttle
