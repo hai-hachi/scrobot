@@ -58,15 +58,17 @@ tag_approach_controller:
     selection_min_samples: 4
     pending_detection_max_age: 0.25
 
-    search_angular_velocity: 0.45
-    max_linear_velocity: 0.35
-    max_angular_velocity: 0.70
-    k_position: 1.00
-    k_heading: 1.60
-    k_final_yaw: 1.60
+    # Smooth localization maneuver. This transaction is infrequent, so favor
+    # stable tag geometry over raw speed.
+    search_angular_velocity: 0.30
+    max_linear_velocity: 0.30
+    max_angular_velocity: 0.50
+    k_position: 0.85
+    k_heading: 1.40
+    k_final_yaw: 1.40
     drive_heading_limit_deg: 35.0
     position_tolerance: 0.08
     yaw_tolerance_deg: 5.0
-    stable_time: 0.30
+    stable_time: 0.35
     goal_filter_alpha: 0.30
     control_rate: 25.0

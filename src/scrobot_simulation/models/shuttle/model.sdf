@@ -6,24 +6,24 @@
     <allow_auto_disable>true</allow_auto_disable>
 
     <link name="shuttle_link">
-      <!-- Keep the center of mass low so contact does not excite tumbling/orbiting. -->
+      <!-- Heavier simulation shuttle to reduce excessive bouncing/rolling.
+           COM supplied from the intended collision mesh: +29.6 mm in Z. -->
       <inertial>
-        <pose>0 0 0.010 0 0 0</pose>
-        <mass>0.005</mass>
+        <pose>0 0 0.0296 0 0 0</pose>
+        <mass>0.050</mass>
         <inertia>
-          <ixx>2.0e-6</ixx>
-          <iyy>2.0e-6</iyy>
-          <izz>4.0e-6</izz>
+          <ixx>6.57e-5</ixx>
+          <iyy>6.57e-5</iyy>
+          <izz>7.37e-5</izz>
           <ixy>0.0</ixy>
           <ixz>0.0</ixz>
           <iyz>0.0</iyz>
         </inertia>
       </inertial>
 
-      <!-- Strong decay: a bumped shuttle can move, but should settle quickly. -->
       <velocity_decay>
-        <linear>5.0</linear>
-        <angular>10.0</angular>
+        <linear>3.0</linear>
+        <angular>5.0</angular>
       </velocity_decay>
 
       <visual name="shuttle_visual">
@@ -39,22 +39,20 @@
         </material>
       </visual>
 
-      <!-- Simplified low physics footprint. The realistic visual stays unchanged,
-           but the collision body no longer acts like a tall rolling/tumbling object. -->
+      <!-- New low-poly collision mesh supplied by the project:
+           frustum r=28 mm, R=68 mm, h=90 mm with rounded head. -->
       <collision name="shuttle_collision">
-        <pose>0 0 0.010 0 0 0</pose>
-        <max_contacts>4</max_contacts>
+        <max_contacts>8</max_contacts>
         <geometry>
-          <cylinder>
-            <radius>0.034</radius>
-            <length>0.020</length>
-          </cylinder>
+          <mesh>
+            <uri>model://shuttle/meshes/shuttle_collision.stl</uri>
+          </mesh>
         </geometry>
         <surface>
           <friction>
             <ode>
-              <mu>2.5</mu>
-              <mu2>2.5</mu2>
+              <mu>1.2</mu>
+              <mu2>1.2</mu2>
             </ode>
           </friction>
           <bounce>

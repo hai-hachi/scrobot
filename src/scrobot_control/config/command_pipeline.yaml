@@ -29,18 +29,17 @@ velocity_smoother:
     use_sim_time: true
 
     smoothing_frequency: 20.0
-
-    # Preserve commanded curvature when one velocity component is limited.
     scale_velocities: true
-
     feedback: "OPEN_LOOP"
     enable_stamped_cmd_vel: true
 
-    max_velocity: [1.0, 0.0, 2.0]
-    min_velocity: [-1.0, 0.0, -2.0]
+    max_velocity: [1.0, 0.0, 1.2]
+    min_velocity: [-1.0, 0.0, -1.2]
 
-    max_accel: [1.0, 0.0, 2.0]
-    max_decel: [-1.5, 0.0, -2.5]
+    # Softer acceleration/deceleration makes state changes less abrupt while
+    # still allowing emergency stopping through collision_monitor.
+    max_accel: [0.70, 0.0, 1.00]
+    max_decel: [-1.00, 0.0, -1.20]
 
     deadband_velocity: [0.0, 0.0, 0.0]
 
@@ -53,13 +52,11 @@ collision_monitor:
   ros__parameters:
     use_sim_time: true
 
-    # Frames
     base_frame_id: base_footprint
     odom_frame_id: odom
     transform_tolerance: 0.2
     base_shift_correction: true
 
-    # Velocity pipeline
     cmd_vel_in_topic: /cmd_vel_smoothed
     cmd_vel_out_topic: /diff_drive_controller/cmd_vel
     enable_stamped_cmd_vel: true
@@ -68,9 +65,6 @@ collision_monitor:
     source_timeout: 0.3
     stop_pub_timeout: 2.0
 
-    # Direction-aware safety zones.
-    # Forward motion uses the front zones. Manual reverse switches to the rear
-    # zones, so a front obstacle does not permanently trap the robot in STOP.
     polygons:
       - stop_zone
       - slowdown_zone
