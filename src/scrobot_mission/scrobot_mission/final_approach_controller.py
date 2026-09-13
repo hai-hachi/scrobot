@@ -77,8 +77,16 @@ def clamp(value, low, high):
     return max(low, min(high, value))
 
 
+def point_distance(a, b):
+    return math.sqrt(
+        (a[0] - b[0]) ** 2
+        + (a[1] - b[1]) ** 2
+        + (a[2] - b[2]) ** 2
+    )
+
+
 class FinalApproachController(Node):
-    """Drive a locked shuttle group from live camera-local 3D detections."""
+    """Drive a locked shuttle group using live camera-local 3D geometry."""
 
     def __init__(self):
         super().__init__('final_approach_controller')
@@ -100,7 +108,14 @@ class FinalApproachController(Node):
         self.declare_parameter('max_angular_speed', 1.20)
         self.declare_parameter('heading_slowdown_angle', 0.35)
         self.declare_parameter('rotate_only_angle', 0.75)
-        self.declare_parameter('camera_association_distance', 0.35)
+
+        # One-time map-to-camera acquisition gate. It is intentionally much
+        # looser than the frame-to-frame local tracking gate because map
+        # localization error must not prevent final approach from starting.
+        self.declare_parameter('startup_association_distance', 1.00)
+
+        # After the first raw camera lock, steering is camera-local only.
+        self.declare_parameter('camera_association_distance', 0.45)
         self.declare_parameter('camera_lost_grace_time', 0.70)
         self.declare_parameter('blind_forward_speed', 0.08)
         self.declare_parameter('collection_event_match_distance', 0.50)
@@ -108,7 +123,9 @@ class FinalApproachController(Node):
         self.tracked_topic = str(self.get_parameter('tracked_topic').value)
         self.raw_detection_topic = str(self.get_parameter('raw_detection_topic').value)
         self.action_name = str(self.get_parameter('action_name').value)
-        self.simulation_collection_topic = str(self.get_parameter('simulation_collection_topic').value)
+        self.simulation_collection_topic = str(
+            self.get_parameter('simulation_collection_topic').value
+        )
         self.cmd_vel_topic = str(self.get_parameter('cmd_vel_topic').value)
         self.tracking_frame = str(self.get_parameter('tracking_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
@@ -120,12 +137,25 @@ class FinalApproachController(Node):
         self.min_linear_speed = float(self.get_parameter('min_linear_speed').value)
         self.max_linear_speed = float(self.get_parameter('max_linear_speed').value)
         self.max_angular_speed = float(self.get_parameter('max_angular_speed').value)
-        self.heading_slowdown_angle = float(self.get_parameter('heading_slowdown_angle').value)
+        self.heading_slowdown_angle = float(
+            self.get_parameter('heading_slowdown_angle').value
+        )
         self.rotate_only_angle = float(self.get_parameter('rotate_only_angle').value)
-        self.camera_association_distance = float(self.get_parameter('camera_association_distance').value)
-        self.camera_lost_grace_time = float(self.get_parameter('camera_lost_grace_time').value)
-        self.blind_forward_speed = float(self.get_parameter('blind_forward_speed').value)
-        self.collection_event_match_distance = float(self.get_parameter('collection_event_match_distance').value)
+        self.startup_association_distance = float(
+            self.get_parameter('startup_association_distance').value
+        )
+        self.camera_association_distance = float(
+            self.get_parameter('camera_association_distance').value
+        )
+        self.camera_lost_grace_time = float(
+            self.get_parameter('camera_lost_grace_time').value
+        )
+        self.blind_forward_speed = float(
+            self.get_parameter('blind_forward_speed').value
+        )
+        self.collection_event_match_distance = float(
+            self.get_parameter('collection_event_match_distance').value
+        )
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -138,23 +168,44 @@ class FinalApproachController(Node):
         self.active_ids = []
         self.primary_id = ''
         self.collected_ids = set()
+
+        # Local camera state for the active pass.
+        self.camera_locked = False
+        self.last_group_points = []
         self.last_local_target = None
         self.last_local_target_time = 0.0
+        self.last_wait_log_time = 0.0
 
         reliable_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
         self.create_subscription(
-            Detection3DArray, self.tracked_topic, self._tracks_callback,
-            reliable_qos, callback_group=self.callback_group)
+            Detection3DArray,
+            self.tracked_topic,
+            self._tracks_callback,
+            reliable_qos,
+            callback_group=self.callback_group,
+        )
         self.create_subscription(
-            Detection3DArray, self.raw_detection_topic, self._raw_detections_callback,
-            qos_profile_sensor_data, callback_group=self.callback_group)
+            Detection3DArray,
+            self.raw_detection_topic,
+            self._raw_detections_callback,
+            qos_profile_sensor_data,
+            callback_group=self.callback_group,
+        )
         self.create_subscription(
-            PoseArray, self.simulation_collection_topic, self._simulation_collection_callback,
-            qos_profile_sensor_data, callback_group=self.callback_group)
-        self.cmd_pub = self.create_publisher(TwistStamped, self.cmd_vel_topic, reliable_qos)
+            PoseArray,
+            self.simulation_collection_topic,
+            self._simulation_collection_callback,
+            qos_profile_sensor_data,
+            callback_group=self.callback_group,
+        )
+        self.cmd_pub = self.create_publisher(
+            TwistStamped, self.cmd_vel_topic, reliable_qos
+        )
 
         self.action_server = ActionServer(
-            self, CollectShuttle, self.action_name,
+            self,
+            CollectShuttle,
+            self.action_name,
             execute_callback=self._execute,
             goal_callback=self._goal_callback,
             cancel_callback=self._cancel_callback,
@@ -162,8 +213,9 @@ class FinalApproachController(Node):
         )
 
         self.get_logger().info(
-            f'CollectShuttle grouped camera-local servo ready on {self.action_name}; '
-            f'raw={self.raw_detection_topic}, base={self.base_frame}.'
+            f'CollectShuttle camera-local servo ready on {self.action_name}; '
+            f'raw={self.raw_detection_topic}, base={self.base_frame}, '
+            f'startup_gate={self.startup_association_distance:.2f} m.'
         )
 
     def _tracks_callback(self, msg):
@@ -175,7 +227,9 @@ class FinalApproachController(Node):
     def _raw_detections_callback(self, msg):
         with self.lock:
             self.raw_frame = msg.header.frame_id
-            self.raw_detections = [detection_position(d) for d in msg.detections]
+            self.raw_detections = [
+                detection_position(d) for d in msg.detections
+            ]
 
     def _goal_callback(self, goal_request):
         ids = [item.strip() for item in goal_request.shuttle_ids if item.strip()]
@@ -192,14 +246,20 @@ class FinalApproachController(Node):
     def _simulation_collection_callback(self, msg):
         if not msg.poses:
             return
+
         with self.lock:
             active_ids = list(self.active_ids)
-            tracks = {track_id: self.tracks.get(track_id) for track_id in active_ids}
+            tracks = {
+                track_id: self.tracks.get(track_id)
+                for track_id in active_ids
+            }
+            already_collected = set(self.collected_ids)
 
         newly_collected = []
         for track_id, detection in tracks.items():
-            if detection is None or track_id in self.collected_ids:
+            if detection is None or track_id in already_collected:
                 continue
+
             tx, ty, tz = detection_position(detection)
             best = min(
                 math.sqrt(
@@ -237,69 +297,186 @@ class FinalApproachController(Node):
             return point
         try:
             tf = self.tf_buffer.lookup_transform(
-                self.base_frame, source_frame, Time(),
+                self.base_frame,
+                source_frame,
+                Time(),
                 timeout=Duration(seconds=self.tf_timeout),
             ).transform
         except TransformException:
             return None
         return transform_point(tf, point)
 
-    def _expected_targets_local(self):
-        with self.lock:
-            active_ids = list(self.active_ids)
-            tracks = {track_id: self.tracks.get(track_id) for track_id in active_ids}
-        output = {}
-        for track_id, detection in tracks.items():
-            if detection is None:
-                continue
-            local = self._transform_point_to_base(
-                self.tracking_frame, detection_position(detection))
-            if local is not None:
-                output[track_id] = local
-        return output
-
-    def _camera_group_center_local(self):
-        expected = self._expected_targets_local()
-        if not expected:
-            return None
-
+    def _raw_points_local(self):
         with self.lock:
             raw_points = list(self.raw_detections)
             raw_frame = self.raw_frame
-            collected = set(self.collected_ids)
 
-        local_raw = []
+        output = []
         for point in raw_points:
             local = self._transform_point_to_base(raw_frame, point)
             if local is not None and local[0] > -0.05:
-                local_raw.append(local)
+                output.append(local)
+        return output
 
-        candidates = []
-        for track_id, expected_point in expected.items():
+    def _expected_targets_local(self):
+        """Map tracks transformed locally, used only for initial acquisition."""
+        with self.lock:
+            active_ids = list(self.active_ids)
+            tracks = {
+                track_id: self.tracks.get(track_id)
+                for track_id in active_ids
+            }
+            collected = set(self.collected_ids)
+
+        output = []
+        for track_id in active_ids:
             if track_id in collected:
                 continue
-            best_index = None
-            best_distance = self.camera_association_distance
-            for index, local in enumerate(local_raw):
-                distance = math.sqrt(
-                    (local[0] - expected_point[0]) ** 2
-                    + (local[1] - expected_point[1]) ** 2
-                    + (local[2] - expected_point[2]) ** 2
-                )
-                if distance < best_distance:
-                    best_distance = distance
-                    best_index = index
-            if best_index is not None:
-                candidates.append(local_raw.pop(best_index))
+            detection = tracks.get(track_id)
+            if detection is None:
+                continue
+            local = self._transform_point_to_base(
+                self.tracking_frame,
+                detection_position(detection),
+            )
+            if local is not None:
+                output.append(local)
+        return output
 
-        if not candidates:
+    @staticmethod
+    def _center(points):
+        if not points:
+            return None
+        count = float(len(points))
+        return (
+            sum(p[0] for p in points) / count,
+            sum(p[1] for p in points) / count,
+            sum(p[2] for p in points) / count,
+        )
+
+    def _initial_camera_lock(self, raw_local):
+        """Acquire the locked group from the current camera image once."""
+        expected = self._expected_targets_local()
+        desired_count = max(1, len(self.active_ids) - len(self.collected_ids))
+
+        if not raw_local:
             return None
 
-        count = float(len(candidates))
-        return (
-            sum(p[0] for p in candidates) / count,
-            sum(p[1] for p in candidates) / count,
-            sum(p[2] for p in candidates) / count,
+        # Normal case: match each map track to a unique raw camera point, but
+        # with a deliberately loose startup gate. The map point is only a hint.
+        matched = []
+        remaining = list(raw_local)
+        for expected_point in expected:
+            if not remaining:
+                break
+            best_index = min(
+                range(len(remaining)),
+                key=lambda i: point_distance(remaining[i], expected_point),
+            )
+            best_distance = point_distance(remaining[best_index], expected_point)
+            if best_distance <= self.startup_association_distance:
+                matched.append(remaining.pop(best_index))
+
+        if matched:
+            # If a group contains more IDs than successful map associations,
+            # fill the rest using camera points nearest to the matched center.
+            center = self._center(matched)
+            while remaining and len(matched) < desired_count:
+                best_index = min(
+                    range(len(remaining)),
+                    key=lambda i: point_distance(remaining[i], center),
+                )
+                candidate = remaining[best_index]
+                if point_distance(candidate, center) > self.startup_association_distance:
+                    break
+                matched.append(remaining.pop(best_index))
+                center = self._center(matched)
+
+            self.camera_locked = True
+            self.last_group_points = matched
+            self.get_logger().info(
+                f'Camera-local target acquired: {len(matched)} point(s), '
+                f'center x={center[0]:.3f}, y={center[1]:.3f} m.'
+            )
+            return center
+
+        # Fallback: the mission entered COLLECTING only because a confirmed
+        # shuttle was currently visible. If map->base is too inaccurate for
+        # even the loose gate, do not freeze. Use the nearest visible camera
+        # point as the primary local target. This keeps final approach local.
+        nearest = min(raw_local, key=lambda p: math.hypot(p[0], p[1]))
+        selected = [nearest]
+        others = [p for p in raw_local if p is not nearest]
+        while others and len(selected) < desired_count:
+            center = self._center(selected)
+            best_index = min(
+                range(len(others)),
+                key=lambda i: point_distance(others[i], center),
+            )
+            candidate = others[best_index]
+            if abs(candidate[1] - center[1]) > 0.30:
+                break
+            selected.append(others.pop(best_index))
+
+        center = self._center(selected)
+        self.camera_locked = True
+        self.last_group_points = selected
+        self.get_logger().warn(
+            'Map-to-camera startup association failed; using visible raw '
+            f'camera target directly at x={center[0]:.3f}, y={center[1]:.3f} m.'
+        )
+        return center
+
+    def _track_camera_group(self, raw_local):
+        """Track the already-acquired group using only camera-local geometry."""
+        if not raw_local or not self.last_group_points:
+            return None
+
+        desired_count = max(1, len(self.active_ids) - len(self.collected_ids))
+        previous = list(self.last_group_points)
+        remaining = list(raw_local)
+        matched = []
+
+        # Each previous camera point claims its nearest current raw point.
+        # Robot motion between 25 Hz samples is small, so this is independent
+        # of global map localization after the first camera lock.
+        for previous_point in previous:
+            if not remaining or len(matched) >= desired_count:
+                break
+            best_index = min(
+                range(len(remaining)),
+                key=lambda i: point_distance(remaining[i], previous_point),
+            )
+            best_distance = point_distance(remaining[best_index], previous_point)
+            if best_distance <= self.camera_association_distance:
+                matched.append(remaining.pop(best_index))
+
+        if not matched:
+            return None
+
+        self.last_group_points = matched
+        return self._center(matched)
+
+    def _camera_group_center_local(self):
+        raw_local = self._raw_points_local()
+        if not raw_local:
+            return None
+        if not self.camera_locked:
+            return self._initial_camera_lock(raw_local)
+        return self._track_camera_group(raw_local)
+
+    def _log_waiting_for_camera(self, now):
+        if now - self.last_wait_log_time < 1.0:
+            return
+        self.last_wait_log_time = now
+        with self.lock:
+            raw_count = len(self.raw_detections)
+            raw_frame = self.raw_frame
+            track_count = len(self.tracks)
+        self.get_logger().warn(
+            'COLLECTING but no usable local camera target: '
+            f'raw_count={raw_count}, raw_frame="{raw_frame}", '
+            f'tracks={track_count}, camera_locked={self.camera_locked}.'
         )
 
     def _execute(self, goal_handle):
@@ -317,11 +494,14 @@ class FinalApproachController(Node):
             self.active_ids = ids
             self.primary_id = primary_id
             self.collected_ids = set()
+            self.camera_locked = False
+            self.last_group_points = []
             self.last_local_target = None
             self.last_local_target_time = 0.0
+            self.last_wait_log_time = 0.0
 
         self.get_logger().info(
-            f'Collecting shuttle group {ids} with local camera servo; '
+            f'Collecting shuttle group {ids} with camera-local servo; '
             f'primary={primary_id}.'
         )
         start = time.monotonic()
@@ -343,13 +523,16 @@ class FinalApproachController(Node):
                     self._publish_stop()
                     goal_handle.abort()
                     result.success = False
-                    result.message = f'Collection timed out after {self.timeout:.1f} s.'
+                    result.message = (
+                        f'Collection timed out after {self.timeout:.1f} s.'
+                    )
                     result.collected_ids = sorted(self.collected_ids)
                     self.get_logger().error(result.message)
                     return result
 
                 with self.lock:
                     collected = set(self.collected_ids)
+
                 if primary_id in collected:
                     self._publish_stop()
                     goal_handle.succeed()
@@ -364,17 +547,20 @@ class FinalApproachController(Node):
 
                 local = self._camera_group_center_local()
                 using_blind_target = False
+
                 if local is not None:
                     self.last_local_target = local
                     self.last_local_target_time = now
                 elif (
                     self.last_local_target is not None
-                    and now - self.last_local_target_time <= self.camera_lost_grace_time
+                    and now - self.last_local_target_time
+                    <= self.camera_lost_grace_time
                 ):
                     local = self.last_local_target
                     using_blind_target = True
                 else:
                     self._publish_stop()
+                    self._log_waiting_for_camera(now)
                     feedback.distance_to_target = float('nan')
                     goal_handle.publish_feedback(feedback)
                     time.sleep(period)
@@ -391,6 +577,7 @@ class FinalApproachController(Node):
                     -self.max_angular_speed,
                     self.max_angular_speed,
                 )
+
                 if abs(heading) >= self.rotate_only_angle or x <= 0.0:
                     linear = 0.0
                 else:
@@ -412,6 +599,8 @@ class FinalApproachController(Node):
                 self.active_ids = []
                 self.primary_id = ''
                 self.collected_ids = set()
+                self.camera_locked = False
+                self.last_group_points = []
                 self.last_local_target = None
                 self.last_local_target_time = 0.0
 
