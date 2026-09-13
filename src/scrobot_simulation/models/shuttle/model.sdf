@@ -12,8 +12,8 @@
         <pose>0 0 0.0296 0 0 0</pose>
         <mass>0.050</mass>
         <inertia>
-          <ixx>6.51e-5</ixx>
-          <iyy>6.51e-5</iyy>
+          <ixx>6.57e-5</ixx>
+          <iyy>6.57e-5</iyy>
           <izz>7.37e-5</izz>
           <ixy>0.0</ixy>
           <ixz>0.0</ixz>
