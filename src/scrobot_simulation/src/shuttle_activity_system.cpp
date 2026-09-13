@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <memory>
@@ -64,6 +65,8 @@ public:
       "pickup_half_length", this->pickupHalfLength_).first;
     this->pickupHalfWidth_ = _sdf->Get<double>(
       "pickup_half_width", this->pickupHalfWidth_).first;
+    this->shuttleCollisionRadius_ = _sdf->Get<double>(
+      "shuttle_collision_radius", this->shuttleCollisionRadius_).first;
 
     if (this->updateRate_ <= 0.0)
       this->updateRate_ = 10.0;
@@ -74,9 +77,11 @@ public:
     if (this->settleTime_ < 0.0)
       this->settleTime_ = 0.0;
     if (this->pickupHalfLength_ <= 0.0)
-      this->pickupHalfLength_ = 0.08;
+      this->pickupHalfLength_ = 0.060;
     if (this->pickupHalfWidth_ <= 0.0)
-      this->pickupHalfWidth_ = 0.17;
+      this->pickupHalfWidth_ = 0.150;
+    if (this->shuttleCollisionRadius_ < 0.0)
+      this->shuttleCollisionRadius_ = 0.0;
 
     this->updatePeriod_ = std::chrono::duration_cast<
       std::chrono::steady_clock::duration>(
@@ -156,11 +161,24 @@ public:
         const double localX = cosYaw * worldDx + sinYaw * worldDy;
         const double localY = -sinYaw * worldDx + cosYaw * worldDy;
 
-        const bool insidePickupZone =
-          std::abs(localX - this->pickupOffsetX_) <= this->pickupHalfLength_ &&
-          std::abs(localY) <= this->pickupHalfWidth_;
+        // Treat the shuttle collision geometry as an orientation-independent
+        // 2D bounding circle. A shuttle is collected as soon as any part of
+        // this footprint intersects the rectangular collector zone.
+        //
+        // Rectangle center: (pickupOffsetX_, 0)
+        // Rectangle half-size: pickupHalfLength_ x pickupHalfWidth_
+        // Circle center: shuttle model origin in robot-local coordinates.
+        const double dx = std::max(
+          std::abs(localX - this->pickupOffsetX_) - this->pickupHalfLength_,
+          0.0);
+        const double dy = std::max(
+          std::abs(localY) - this->pickupHalfWidth_,
+          0.0);
+        const bool touchesPickupZone =
+          dx * dx + dy * dy <=
+          this->shuttleCollisionRadius_ * this->shuttleCollisionRadius_;
 
-        if (insidePickupZone)
+        if (touchesPickupZone)
         {
           auto *collectedPose = collectedMsg.add_pose();
           this->FillPoseMessage(
@@ -282,8 +300,9 @@ private:
   double freezeDistance_{0.55};
   double settleTime_{0.75};
   double pickupOffsetX_{0.165};
-  double pickupHalfLength_{0.08};
-  double pickupHalfWidth_{0.17};
+  double pickupHalfLength_{0.060};
+  double pickupHalfWidth_{0.150};
+  double shuttleCollisionRadius_{0.096};
 
   std::chrono::steady_clock::duration updatePeriod_{};
   std::chrono::steady_clock::duration settleDuration_{};
