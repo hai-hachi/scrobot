@@ -35,7 +35,7 @@ tag_global_localizer:
     minimum_batch_keep_ratio: 0.70
     stationary_linear_threshold: 0.02
     stationary_angular_threshold: 0.03
-    stationary_settle_time: 0.40
+    stationary_settle_time: 0.30
     processing_rate: 20.0
     publish_rate: 30.0
 
@@ -53,22 +53,20 @@ tag_approach_controller:
     default_timeout: 60.0
     tag_lost_timeout: 1.0
 
-    selection_settle_time: 0.25
-    selection_window: 0.40
-    selection_min_samples: 4
+    selection_settle_time: 0.18
+    selection_window: 0.30
+    selection_min_samples: 3
     pending_detection_max_age: 0.25
 
-    # Smooth localization maneuver. This transaction is infrequent, so favor
-    # stable tag geometry over raw speed.
-    search_angular_velocity: 0.30
-    max_linear_velocity: 0.30
-    max_angular_velocity: 0.50
-    k_position: 0.85
-    k_heading: 1.40
-    k_final_yaw: 1.40
+    search_angular_velocity: 0.45
+    max_linear_velocity: 0.45
+    max_angular_velocity: 0.75
+    k_position: 1.10
+    k_heading: 1.70
+    k_final_yaw: 1.70
     drive_heading_limit_deg: 35.0
     position_tolerance: 0.08
     yaw_tolerance_deg: 5.0
-    stable_time: 0.35
+    stable_time: 0.25
     goal_filter_alpha: 0.30
     control_rate: 25.0

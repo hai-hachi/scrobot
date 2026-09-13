@@ -17,24 +17,19 @@ final_approach_controller:
     control_rate: 25.0
     tf_timeout: 0.05
 
-    acquisition_timeout: 0.75
+    acquisition_timeout: 0.60
     startup_association_distance: 1.00
 
-    # Nav2 staging already supplies most of the desired heading, so ALIGN is a
-    # small low-speed correction instead of an aggressive rotation.
-    align_kp: 1.50
-    align_tolerance: 0.0523598776   # 3 deg
-    align_timeout: 2.5
-    min_align_speed: 0.10
-    max_align_speed: 0.50
+    align_kp: 1.90
+    align_tolerance: 0.0523598776
+    align_timeout: 2.0
+    min_align_speed: 0.12
+    max_align_speed: 0.70
 
-    # Fixed final collection pass. Keep it slower than Nav2 travel so physical
-    # funnel/contact behavior is predictable.
     pickup_offset_x: 0.165
     overrun_margin: 0.10
     minimum_drive_distance: 0.10
-    drive_speed: 0.18
-    drive_timeout: 20.0
+    drive_speed: 0.28
+    drive_timeout: 12.0
 
-    # Simulation-only evaluation; never controls mission progression.
     collection_event_match_distance: 0.50
