@@ -1,59 +1,39 @@
 patrol_manager:
   ros__parameters:
     frame_id: map
+    base_frame: base_footprint
     autostart: true
 
-    # ========================================================
-    # Patrol grid generation
-    # ========================================================
+    # Patrol grid
     court_length: 13.40
     court_width: 6.10
     camera_range: 3.0
     range_factor: 0.90
     max_grid_size: 20
 
-    # ========================================================
-    # Initial absolute localization only
-    # ========================================================
+    # Staging is now computed directly by patrol_manager.
+    staging_distance: 0.75
+    tf_timeout: 0.05
+
+    # Initial absolute localization
     initial_global_localization: true
     initial_tag_id: -1
-    initial_relocalization_retries: 3
-
     tag_approach_distance: 1.70
     tag_approach_timeout: 60.0
-
     relocalize_sample_count: 15
     relocalize_timeout: 7.0
 
-    # ========================================================
-    # Nav2 startup
-    # ========================================================
+    # Nav2 startup / retry
     nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
     nav2_startup_timeout: 30.0
     nav2_startup_retries: 3
     nav2_tf_settle_time: 0.75
     navigation_goal_retries: 3
-
-    # ========================================================
-    # Patrol / shuttle excursion behavior
-    # ========================================================
     action_retry_period: 0.5
 
-    # A scan may rotate up to 360 deg, but it is canceled as soon as the first
-    # confirmed shuttle appears in visible_tracked_shuttles.
+    # Scan until first confirmed visible shuttle, otherwise finish 360 deg.
     spin_angle: 6.283185307179586
     spin_time_allowance: 20.0
 
-    # How long patrol_manager waits for target_selector to return the requested
-    # shuttle's staging pose after a first-seen ID is latched.
-    selection_wait_timeout: 2.0
-
     visible_tracks_topic: /perception/visible_tracked_shuttles
-    target_request_topic: /mission/target_request_id
-    selected_id_topic: /mission/selected_shuttle_id
-    staging_pose_topic: /mission/shuttle_staging_pose
-    selection_enabled_topic: /mission/target_selection_enabled
-
-    # Final approach / collector handoff.
-    collection_request_topic: /mission/collection_request
-    collection_complete_topic: /mission/collection_complete
+    collect_action_name: /collect_shuttle
