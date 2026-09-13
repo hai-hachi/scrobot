@@ -45,56 +45,33 @@ public:
     if (this->worldEntity_ == gz::sim::kNullEntity)
       this->worldEntity_ = _entity;
 
-    this->robotName_ = _sdf->Get<std::string>(
-      "robot_model", this->robotName_).first;
-    this->updateRate_ = _sdf->Get<double>(
-      "update_rate", this->updateRate_).first;
-    this->activationDistance_ = _sdf->Get<double>(
-      "activation_distance", this->activationDistance_).first;
-    this->freezeDistance_ = _sdf->Get<double>(
-      "freeze_distance", this->freezeDistance_).first;
-    this->settleTime_ = _sdf->Get<double>(
-      "settle_time", this->settleTime_).first;
-    this->groundTruthTopic_ = _sdf->Get<std::string>(
-      "ground_truth_topic", this->groundTruthTopic_).first;
-    this->collectedTopic_ = _sdf->Get<std::string>(
-      "collected_topic", this->collectedTopic_).first;
-    this->pickupOffsetX_ = _sdf->Get<double>(
-      "pickup_offset_x", this->pickupOffsetX_).first;
-    this->pickupHalfLength_ = _sdf->Get<double>(
-      "pickup_half_length", this->pickupHalfLength_).first;
-    this->pickupHalfWidth_ = _sdf->Get<double>(
-      "pickup_half_width", this->pickupHalfWidth_).first;
-    this->shuttleCollisionRadius_ = _sdf->Get<double>(
-      "shuttle_collision_radius", this->shuttleCollisionRadius_).first;
+    this->robotName_ = _sdf->Get<std::string>("robot_model", this->robotName_).first;
+    this->updateRate_ = _sdf->Get<double>("update_rate", this->updateRate_).first;
+    this->activationDistance_ = _sdf->Get<double>("activation_distance", this->activationDistance_).first;
+    this->freezeDistance_ = _sdf->Get<double>("freeze_distance", this->freezeDistance_).first;
+    this->settleTime_ = _sdf->Get<double>("settle_time", this->settleTime_).first;
+    this->groundTruthTopic_ = _sdf->Get<std::string>("ground_truth_topic", this->groundTruthTopic_).first;
+    this->collectedTopic_ = _sdf->Get<std::string>("collected_topic", this->collectedTopic_).first;
+    this->pickupOffsetX_ = _sdf->Get<double>("pickup_offset_x", this->pickupOffsetX_).first;
+    this->pickupHalfLength_ = _sdf->Get<double>("pickup_half_length", this->pickupHalfLength_).first;
+    this->pickupHalfWidth_ = _sdf->Get<double>("pickup_half_width", this->pickupHalfWidth_).first;
+    this->shuttleCollisionRadius_ = _sdf->Get<double>("shuttle_collision_radius", this->shuttleCollisionRadius_).first;
 
-    if (this->updateRate_ <= 0.0)
-      this->updateRate_ = 10.0;
-    if (this->activationDistance_ < 0.0)
-      this->activationDistance_ = 0.0;
-    if (this->freezeDistance_ < this->activationDistance_)
-      this->freezeDistance_ = this->activationDistance_;
-    if (this->settleTime_ < 0.0)
-      this->settleTime_ = 0.0;
-    if (this->pickupHalfLength_ <= 0.0)
-      this->pickupHalfLength_ = 0.060;
-    if (this->pickupHalfWidth_ <= 0.0)
-      this->pickupHalfWidth_ = 0.150;
-    if (this->shuttleCollisionRadius_ < 0.0)
-      this->shuttleCollisionRadius_ = 0.0;
+    if (this->updateRate_ <= 0.0) this->updateRate_ = 10.0;
+    if (this->activationDistance_ < 0.0) this->activationDistance_ = 0.0;
+    if (this->freezeDistance_ < this->activationDistance_) this->freezeDistance_ = this->activationDistance_;
+    if (this->settleTime_ < 0.0) this->settleTime_ = 0.0;
+    if (this->pickupHalfLength_ <= 0.0) this->pickupHalfLength_ = 0.030;
+    if (this->pickupHalfWidth_ <= 0.0) this->pickupHalfWidth_ = 0.150;
+    if (this->shuttleCollisionRadius_ < 0.0) this->shuttleCollisionRadius_ = 0.0;
 
-    this->updatePeriod_ = std::chrono::duration_cast<
-      std::chrono::steady_clock::duration>(
-        std::chrono::duration<double>(1.0 / this->updateRate_));
-    this->settleDuration_ = std::chrono::duration_cast<
-      std::chrono::steady_clock::duration>(
-        std::chrono::duration<double>(this->settleTime_));
+    this->updatePeriod_ = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+      std::chrono::duration<double>(1.0 / this->updateRate_));
+    this->settleDuration_ = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+      std::chrono::duration<double>(this->settleTime_));
 
-    this->groundTruthPublisher_ =
-      this->transportNode_.Advertise<gz::msgs::Pose_V>(this->groundTruthTopic_);
-    this->collectedPublisher_ =
-      this->transportNode_.Advertise<gz::msgs::Pose_V>(this->collectedTopic_);
-
+    this->groundTruthPublisher_ = this->transportNode_.Advertise<gz::msgs::Pose_V>(this->groundTruthTopic_);
+    this->collectedPublisher_ = this->transportNode_.Advertise<gz::msgs::Pose_V>(this->collectedTopic_);
     this->ResolveRobot(_ecm);
   }
 
@@ -116,12 +93,8 @@ public:
       return;
     this->lastUpdate_ = _info.simTime;
 
-    if (this->robotEntity_ == gz::sim::kNullEntity ||
-        !_ecm.HasEntity(this->robotEntity_))
-    {
+    if (this->robotEntity_ == gz::sim::kNullEntity || !_ecm.HasEntity(this->robotEntity_))
       this->ResolveRobot(_ecm);
-    }
-
     if (this->robotEntity_ == gz::sim::kNullEntity)
       return;
 
@@ -148,7 +121,6 @@ public:
         auto &state = this->states_[_entity];
         if (state.removalRequested)
           return true;
-
         if (!state.initialized)
         {
           state.lastProtectedTime = _info.simTime;
@@ -161,43 +133,24 @@ public:
         const double localX = cosYaw * worldDx + sinYaw * worldDy;
         const double localY = -sinYaw * worldDx + cosYaw * worldDy;
 
-        // Treat the shuttle collision geometry as an orientation-independent
-        // 2D bounding circle. A shuttle is collected as soon as any part of
-        // this footprint intersects the rectangular collector zone.
-        //
-        // Rectangle center: (pickupOffsetX_, 0)
-        // Rectangle half-size: pickupHalfLength_ x pickupHalfWidth_
-        // Circle center: shuttle model origin in robot-local coordinates.
         const double dx = std::max(
-          std::abs(localX - this->pickupOffsetX_) - this->pickupHalfLength_,
-          0.0);
+          std::abs(localX - this->pickupOffsetX_) - this->pickupHalfLength_, 0.0);
         const double dy = std::max(
-          std::abs(localY) - this->pickupHalfWidth_,
-          0.0);
+          std::abs(localY) - this->pickupHalfWidth_, 0.0);
         const bool touchesPickupZone =
-          dx * dx + dy * dy <=
-          this->shuttleCollisionRadius_ * this->shuttleCollisionRadius_;
+          dx * dx + dy * dy <= this->shuttleCollisionRadius_ * this->shuttleCollisionRadius_;
 
         if (touchesPickupZone)
         {
           auto *collectedPose = collectedMsg.add_pose();
-          this->FillPoseMessage(
-            *collectedPose,
-            _entity,
-            _nameComp->Data(),
-            shuttlePose);
-
+          this->FillPoseMessage(*collectedPose, _entity, _nameComp->Data(), shuttlePose);
           state.removalRequested = true;
           _ecm.RequestRemoveEntity(_entity);
           return true;
         }
 
         auto *poseMsg = shuttleGroundTruthMsg.add_pose();
-        this->FillPoseMessage(
-          *poseMsg,
-          _entity,
-          _nameComp->Data(),
-          shuttlePose);
+        this->FillPoseMessage(*poseMsg, _entity, _nameComp->Data(), shuttlePose);
 
         const double distance = std::hypot(worldDx, worldDy);
         const bool staticNow = state.requestedStatic || model.Static(_ecm);
@@ -224,7 +177,6 @@ public:
           this->SetModelStatic(_entity, true, _ecm);
           state.requestedStatic = true;
         }
-
         return true;
       });
 
@@ -257,9 +209,7 @@ private:
     const bool _static,
     gz::sim::EntityComponentManager &_ecm)
   {
-    auto staticComp =
-      _ecm.Component<gz::sim::components::Static>(_entity);
-
+    auto staticComp = _ecm.Component<gz::sim::components::Static>(_entity);
     if (staticComp)
     {
       staticComp->SetData(
@@ -271,9 +221,7 @@ private:
     }
     else
     {
-      _ecm.CreateComponent(
-        _entity,
-        gz::sim::components::Static(_static));
+      _ecm.CreateComponent(_entity, gz::sim::components::Static(_static));
     }
   }
 
@@ -300,9 +248,9 @@ private:
   double freezeDistance_{0.55};
   double settleTime_{0.75};
   double pickupOffsetX_{0.165};
-  double pickupHalfLength_{0.060};
+  double pickupHalfLength_{0.030};
   double pickupHalfWidth_{0.150};
-  double shuttleCollisionRadius_{0.096};
+  double shuttleCollisionRadius_{0.050};
 
   std::chrono::steady_clock::duration updatePeriod_{};
   std::chrono::steady_clock::duration settleDuration_{};
