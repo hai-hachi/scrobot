@@ -17,16 +17,17 @@ endif()
 
 ament_python_install_package(${PROJECT_NAME})
 
-# Keep patrol_manager.py as the reusable base implementation. The installed
-# executable is the runtime wrapper, which subclasses it and adds deferred
-# /approach_tag -> /relocalize behavior without duplicating the working mission.
+# Optimized branch executable. The previous runtime and base managers stay in
+# the Python package for comparison, but patrol_mission launches this version.
 install(
   PROGRAMS
-    scrobot_mission/runtime_patrol_manager.py
+    scrobot_mission/optimized_mow_patrol_manager.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME patrol_manager
 )
 
+# Kept installed for A/B testing and rollback, but no longer launched by the
+# optimized patrol mission.
 install(
   PROGRAMS
     scrobot_mission/final_approach_controller.py
