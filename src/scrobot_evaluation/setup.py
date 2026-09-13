@@ -17,7 +17,7 @@ setup(
     zip_safe=True,
     maintainer='scrobot',
     maintainer_email='user@example.com',
-    description='Evaluation tools for SC Robot localization, odometry, navigation, and patrol trajectory.',
+    description='Evaluation tools for SC Robot localization, odometry, navigation, patrol, and collection sessions.',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
@@ -26,6 +26,7 @@ setup(
             'analyze_local_odom = scrobot_evaluation.analyze_local_odom:main',
             'patrol_trajectory_logger = scrobot_evaluation.patrol_trajectory_logger:main',
             'analyze_patrol = scrobot_evaluation.analyze_patrol:main',
+            'collection_session_evaluator = scrobot_evaluation.collection_session_evaluator:main',
         ],
     },
 )
