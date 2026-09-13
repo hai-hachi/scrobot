@@ -1,0 +1,6 @@
+string shuttle_id
+---
+bool success
+string message
+---
+float32 distance_to_target
