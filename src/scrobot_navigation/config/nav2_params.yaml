@@ -173,6 +173,9 @@ behavior_server:
     enable_stamped_cmd_vel: true
     simulate_ahead_time: 1.5
 
-    max_rotational_vel: 0.70
-    min_rotational_vel: 0.18
-    rotational_acc_lim: 1.40
+    # Empty-court search only. Once a shuttle is detected the mission cancels
+    # this action and /cmd_vel_scan takes over at 0.18 rad/s. Keep this initial
+    # search conservative too so cancellation has little residual overshoot.
+    max_rotational_vel: 0.50
+    min_rotational_vel: 0.12
+    rotational_acc_lim: 0.90
