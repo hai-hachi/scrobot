@@ -86,7 +86,7 @@ def point_distance(a, b):
 
 
 class FinalApproachController(Node):
-    """Drive a locked shuttle group using live camera-local 3D geometry."""
+    """Camera-local collection servo with a bounded blind-zone commit phase."""
 
     def __init__(self):
         super().__init__('final_approach_controller')
@@ -98,26 +98,35 @@ class FinalApproachController(Node):
         self.declare_parameter('cmd_vel_topic', '/cmd_vel_approach')
         self.declare_parameter('tracking_frame', 'map')
         self.declare_parameter('base_frame', 'base_link')
+        self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('control_rate', 25.0)
         self.declare_parameter('timeout', 20.0)
         self.declare_parameter('tf_timeout', 0.05)
+
+        # Visual-servo gains and limits.
         self.declare_parameter('linear_kp', 1.10)
         self.declare_parameter('angular_kp', 2.40)
         self.declare_parameter('min_linear_speed', 0.05)
         self.declare_parameter('max_linear_speed', 0.30)
         self.declare_parameter('max_angular_speed', 1.20)
         self.declare_parameter('heading_slowdown_angle', 0.35)
-        self.declare_parameter('rotate_only_angle', 0.75)
+        self.declare_parameter('rotate_only_angle', 0.15)
 
-        # One-time map-to-camera acquisition gate. It is intentionally much
-        # looser than the frame-to-frame local tracking gate because map
-        # localization error must not prevent final approach from starting.
+        # Collector target point in base_link. Visual servo drives the shuttle
+        # toward this point, not toward the base_link origin.
+        self.declare_parameter('pickup_offset_x', 0.165)
+
+        # Map is only a loose hint for the first raw-camera association.
         self.declare_parameter('startup_association_distance', 1.00)
+        self.declare_parameter('camera_association_distance', 0.50)
 
-        # After the first raw camera lock, steering is camera-local only.
-        self.declare_parameter('camera_association_distance', 0.45)
-        self.declare_parameter('camera_lost_grace_time', 0.70)
-        self.declare_parameter('blind_forward_speed', 0.08)
+        # Camera blind-zone transition. A short grace handles dropped frames;
+        # after that, a bounded straight odometry-based commit begins.
+        self.declare_parameter('camera_lost_grace_time', 0.25)
+        self.declare_parameter('commit_speed', 0.12)
+        self.declare_parameter('commit_max_distance', 0.45)
+        self.declare_parameter('commit_timeout', 5.0)
+
         self.declare_parameter('collection_event_match_distance', 0.50)
 
         self.tracked_topic = str(self.get_parameter('tracked_topic').value)
@@ -129,6 +138,7 @@ class FinalApproachController(Node):
         self.cmd_vel_topic = str(self.get_parameter('cmd_vel_topic').value)
         self.tracking_frame = str(self.get_parameter('tracking_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
+        self.odom_frame = str(self.get_parameter('odom_frame').value)
         self.control_rate = float(self.get_parameter('control_rate').value)
         self.timeout = float(self.get_parameter('timeout').value)
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
@@ -141,6 +151,7 @@ class FinalApproachController(Node):
             self.get_parameter('heading_slowdown_angle').value
         )
         self.rotate_only_angle = float(self.get_parameter('rotate_only_angle').value)
+        self.pickup_offset_x = float(self.get_parameter('pickup_offset_x').value)
         self.startup_association_distance = float(
             self.get_parameter('startup_association_distance').value
         )
@@ -150,9 +161,11 @@ class FinalApproachController(Node):
         self.camera_lost_grace_time = float(
             self.get_parameter('camera_lost_grace_time').value
         )
-        self.blind_forward_speed = float(
-            self.get_parameter('blind_forward_speed').value
+        self.commit_speed = float(self.get_parameter('commit_speed').value)
+        self.commit_max_distance = float(
+            self.get_parameter('commit_max_distance').value
         )
+        self.commit_timeout = float(self.get_parameter('commit_timeout').value)
         self.collection_event_match_distance = float(
             self.get_parameter('collection_event_match_distance').value
         )
@@ -169,12 +182,18 @@ class FinalApproachController(Node):
         self.primary_id = ''
         self.collected_ids = set()
 
-        # Local camera state for the active pass.
+        # Camera-local state for the active pass.
         self.camera_locked = False
         self.last_group_points = []
         self.last_local_target = None
         self.last_local_target_time = 0.0
+        self.camera_loss_start_time = None
         self.last_wait_log_time = 0.0
+
+        # Blind-zone commit state.
+        self.commit_active = False
+        self.commit_start_time = None
+        self.commit_start_xy = None
 
         reliable_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
         self.create_subscription(
@@ -215,7 +234,8 @@ class FinalApproachController(Node):
         self.get_logger().info(
             f'CollectShuttle camera-local servo ready on {self.action_name}; '
             f'raw={self.raw_detection_topic}, base={self.base_frame}, '
-            f'startup_gate={self.startup_association_distance:.2f} m.'
+            f'collector_x={self.pickup_offset_x:.3f} m, '
+            f'commit={self.commit_max_distance:.2f} m @ {self.commit_speed:.2f} m/s.'
         )
 
     def _tracks_callback(self, msg):
@@ -227,9 +247,7 @@ class FinalApproachController(Node):
     def _raw_detections_callback(self, msg):
         with self.lock:
             self.raw_frame = msg.header.frame_id
-            self.raw_detections = [
-                detection_position(d) for d in msg.detections
-            ]
+            self.raw_detections = [detection_position(d) for d in msg.detections]
 
     def _goal_callback(self, goal_request):
         ids = [item.strip() for item in goal_request.shuttle_ids if item.strip()]
@@ -249,10 +267,7 @@ class FinalApproachController(Node):
 
         with self.lock:
             active_ids = list(self.active_ids)
-            tracks = {
-                track_id: self.tracks.get(track_id)
-                for track_id in active_ids
-            }
+            tracks = {track_id: self.tracks.get(track_id) for track_id in active_ids}
             already_collected = set(self.collected_ids)
 
         newly_collected = []
@@ -306,6 +321,18 @@ class FinalApproachController(Node):
             return None
         return transform_point(tf, point)
 
+    def _base_xy_in_odom(self):
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                self.odom_frame,
+                self.base_frame,
+                Time(),
+                timeout=Duration(seconds=self.tf_timeout),
+            ).transform
+        except TransformException:
+            return None
+        return float(tf.translation.x), float(tf.translation.y)
+
     def _raw_points_local(self):
         with self.lock:
             raw_points = list(self.raw_detections)
@@ -322,10 +349,7 @@ class FinalApproachController(Node):
         """Map tracks transformed locally, used only for initial acquisition."""
         with self.lock:
             active_ids = list(self.active_ids)
-            tracks = {
-                track_id: self.tracks.get(track_id)
-                for track_id in active_ids
-            }
+            tracks = {track_id: self.tracks.get(track_id) for track_id in active_ids}
             collected = set(self.collected_ids)
 
         output = []
@@ -354,16 +378,25 @@ class FinalApproachController(Node):
             sum(p[2] for p in points) / count,
         )
 
+    @staticmethod
+    def _corridor_target(points):
+        """Target the center of the group's lateral envelope."""
+        if not points:
+            return None
+        count = float(len(points))
+        mean_x = sum(p[0] for p in points) / count
+        mean_z = sum(p[2] for p in points) / count
+        ys = [p[1] for p in points]
+        center_y = 0.5 * (min(ys) + max(ys))
+        return mean_x, center_y, mean_z
+
     def _initial_camera_lock(self, raw_local):
-        """Acquire the locked group from the current camera image once."""
         expected = self._expected_targets_local()
         desired_count = max(1, len(self.active_ids) - len(self.collected_ids))
 
         if not raw_local:
             return None
 
-        # Normal case: match each map track to a unique raw camera point, but
-        # with a deliberately loose startup gate. The map point is only a hint.
         matched = []
         remaining = list(raw_local)
         for expected_point in expected:
@@ -378,8 +411,6 @@ class FinalApproachController(Node):
                 matched.append(remaining.pop(best_index))
 
         if matched:
-            # If a group contains more IDs than successful map associations,
-            # fill the rest using camera points nearest to the matched center.
             center = self._center(matched)
             while remaining and len(matched) < desired_count:
                 best_index = min(
@@ -394,16 +425,13 @@ class FinalApproachController(Node):
 
             self.camera_locked = True
             self.last_group_points = matched
+            target = self._corridor_target(matched)
             self.get_logger().info(
                 f'Camera-local target acquired: {len(matched)} point(s), '
-                f'center x={center[0]:.3f}, y={center[1]:.3f} m.'
+                f'corridor x={target[0]:.3f}, y={target[1]:.3f} m.'
             )
-            return center
+            return target
 
-        # Fallback: the mission entered COLLECTING only because a confirmed
-        # shuttle was currently visible. If map->base is too inaccurate for
-        # even the loose gate, do not freeze. Use the nearest visible camera
-        # point as the primary local target. This keeps final approach local.
         nearest = min(raw_local, key=lambda p: math.hypot(p[0], p[1]))
         selected = [nearest]
         others = [p for p in raw_local if p is not nearest]
@@ -418,17 +446,16 @@ class FinalApproachController(Node):
                 break
             selected.append(others.pop(best_index))
 
-        center = self._center(selected)
         self.camera_locked = True
         self.last_group_points = selected
+        target = self._corridor_target(selected)
         self.get_logger().warn(
             'Map-to-camera startup association failed; using visible raw '
-            f'camera target directly at x={center[0]:.3f}, y={center[1]:.3f} m.'
+            f'camera target directly at x={target[0]:.3f}, y={target[1]:.3f} m.'
         )
-        return center
+        return target
 
     def _track_camera_group(self, raw_local):
-        """Track the already-acquired group using only camera-local geometry."""
         if not raw_local or not self.last_group_points:
             return None
 
@@ -437,9 +464,6 @@ class FinalApproachController(Node):
         remaining = list(raw_local)
         matched = []
 
-        # Each previous camera point claims its nearest current raw point.
-        # Robot motion between 25 Hz samples is small, so this is independent
-        # of global map localization after the first camera lock.
         for previous_point in previous:
             if not remaining or len(matched) >= desired_count:
                 break
@@ -455,9 +479,9 @@ class FinalApproachController(Node):
             return None
 
         self.last_group_points = matched
-        return self._center(matched)
+        return self._corridor_target(matched)
 
-    def _camera_group_center_local(self):
+    def _camera_group_target_local(self):
         raw_local = self._raw_points_local()
         if not raw_local:
             return None
@@ -476,8 +500,43 @@ class FinalApproachController(Node):
         self.get_logger().warn(
             'COLLECTING but no usable local camera target: '
             f'raw_count={raw_count}, raw_frame="{raw_frame}", '
-            f'tracks={track_count}, camera_locked={self.camera_locked}.'
+            f'tracks={track_count}, camera_locked={self.camera_locked}, '
+            f'commit_active={self.commit_active}.'
         )
+
+    def _start_commit(self, now):
+        self.commit_active = True
+        self.commit_start_time = now
+        self.commit_start_xy = self._base_xy_in_odom()
+        self.get_logger().info(
+            'Camera target entered near blind zone; starting straight COMMIT: '
+            f'{self.commit_max_distance:.2f} m max at {self.commit_speed:.2f} m/s.'
+        )
+
+    def _commit_distance(self, now):
+        if self.commit_start_xy is not None:
+            current = self._base_xy_in_odom()
+            if current is not None:
+                return math.hypot(
+                    current[0] - self.commit_start_xy[0],
+                    current[1] - self.commit_start_xy[1],
+                )
+        # TF unavailable: conservative fallback using commanded distance.
+        return max(0.0, now - self.commit_start_time) * self.commit_speed
+
+    def _reset_action_state(self):
+        with self.lock:
+            self.active_ids = []
+            self.primary_id = ''
+            self.collected_ids = set()
+            self.camera_locked = False
+            self.last_group_points = []
+            self.last_local_target = None
+            self.last_local_target_time = 0.0
+            self.camera_loss_start_time = None
+            self.commit_active = False
+            self.commit_start_time = None
+            self.commit_start_xy = None
 
     def _execute(self, goal_handle):
         ids = []
@@ -498,11 +557,15 @@ class FinalApproachController(Node):
             self.last_group_points = []
             self.last_local_target = None
             self.last_local_target_time = 0.0
+            self.camera_loss_start_time = None
             self.last_wait_log_time = 0.0
+            self.commit_active = False
+            self.commit_start_time = None
+            self.commit_start_xy = None
 
         self.get_logger().info(
-            f'Collecting shuttle group {ids} with camera-local servo; '
-            f'primary={primary_id}.'
+            f'Collecting shuttle group {ids}; primary={primary_id}. '
+            'Phases: ALIGN -> visual DRIVE -> odometry-bounded COMMIT.'
         )
         start = time.monotonic()
         period = 1.0 / max(self.control_rate, 1.0)
@@ -523,9 +586,7 @@ class FinalApproachController(Node):
                     self._publish_stop()
                     goal_handle.abort()
                     result.success = False
-                    result.message = (
-                        f'Collection timed out after {self.timeout:.1f} s.'
-                    )
+                    result.message = f'Collection timed out after {self.timeout:.1f} s.'
                     result.collected_ids = sorted(self.collected_ids)
                     self.get_logger().error(result.message)
                     return result
@@ -545,19 +606,53 @@ class FinalApproachController(Node):
                     self.get_logger().info(result.message)
                     return result
 
-                local = self._camera_group_center_local()
-                using_blind_target = False
+                # Once COMMIT starts, do not reacquire arbitrary detections.
+                # Continue the locked straight corridor until Gazebo confirms
+                # collection or the bounded local travel limit is reached.
+                if self.commit_active:
+                    elapsed = now - self.commit_start_time
+                    travelled = self._commit_distance(now)
+                    feedback.distance_to_target = float(
+                        max(0.0, self.commit_max_distance - travelled)
+                    )
+                    goal_handle.publish_feedback(feedback)
+
+                    if elapsed >= self.commit_timeout or travelled >= self.commit_max_distance:
+                        self._publish_stop()
+                        goal_handle.abort()
+                        result.success = False
+                        result.collected_ids = sorted(collected)
+                        result.message = (
+                            'Blind-zone commit ended without physical collection: '
+                            f'travelled={travelled:.3f} m, elapsed={elapsed:.2f} s.'
+                        )
+                        self.get_logger().error(result.message)
+                        return result
+
+                    self._publish_cmd(self.commit_speed, 0.0)
+                    time.sleep(period)
+                    continue
+
+                local = self._camera_group_target_local()
 
                 if local is not None:
                     self.last_local_target = local
                     self.last_local_target_time = now
-                elif (
-                    self.last_local_target is not None
-                    and now - self.last_local_target_time
-                    <= self.camera_lost_grace_time
-                ):
+                    self.camera_loss_start_time = None
+                elif self.camera_locked and self.last_local_target is not None:
+                    if self.camera_loss_start_time is None:
+                        self.camera_loss_start_time = now
+
+                    lost_for = now - self.camera_loss_start_time
+                    if lost_for >= self.camera_lost_grace_time:
+                        self._start_commit(now)
+                        self._publish_cmd(self.commit_speed, 0.0)
+                        time.sleep(period)
+                        continue
+
+                    # Brief dropped-frame grace: keep the previous local target
+                    # but do not accelerate further.
                     local = self.last_local_target
-                    using_blind_target = True
                 else:
                     self._publish_stop()
                     self._log_waiting_for_camera(now)
@@ -567,42 +662,47 @@ class FinalApproachController(Node):
                     continue
 
                 x, y, _ = local
-                distance = math.hypot(x, y)
+
+                # Drive the shuttle group toward the collector center, not the
+                # base_link origin. For grouped shuttles, y is the midpoint of
+                # the current lateral envelope.
+                error_x = x - self.pickup_offset_x
+                error_y = y
+                distance = math.hypot(error_x, error_y)
                 feedback.distance_to_target = float(distance)
                 goal_handle.publish_feedback(feedback)
 
-                heading = math.atan2(y, max(x, 1e-6))
+                heading = math.atan2(error_y, max(error_x, 1e-6))
                 angular = clamp(
                     self.angular_kp * heading,
                     -self.max_angular_speed,
                     self.max_angular_speed,
                 )
 
-                if abs(heading) >= self.rotate_only_angle or x <= 0.0:
+                # ALIGN phase: rotate in place until the collector corridor is
+                # pointed closely enough at the live camera-local target.
+                if abs(heading) >= self.rotate_only_angle or error_x <= 0.0:
                     linear = 0.0
                 else:
+                    # DRIVE phase: mostly straight with small live corrections.
                     linear = clamp(
-                        self.linear_kp * x,
+                        self.linear_kp * max(error_x, 0.0),
                         self.min_linear_speed,
                         self.max_linear_speed,
                     )
                     if abs(heading) >= self.heading_slowdown_angle:
                         linear *= 0.35
-                    if using_blind_target:
-                        linear = min(linear, self.blind_forward_speed)
+
+                    # If we are in the short lost-frame grace interval, limit
+                    # forward speed until COMMIT formally starts.
+                    if self.camera_loss_start_time is not None:
+                        linear = min(linear, self.commit_speed)
 
                 self._publish_cmd(linear, angular)
                 time.sleep(period)
         finally:
             self._publish_stop()
-            with self.lock:
-                self.active_ids = []
-                self.primary_id = ''
-                self.collected_ids = set()
-                self.camera_locked = False
-                self.last_group_points = []
-                self.last_local_target = None
-                self.last_local_target_time = 0.0
+            self._reset_action_state()
 
         result.success = False
         result.message = 'Collection stopped because ROS shut down.'
