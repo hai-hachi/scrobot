@@ -27,6 +27,7 @@ setup(
             'patrol_trajectory_logger = scrobot_evaluation.patrol_trajectory_logger:main',
             'analyze_patrol = scrobot_evaluation.analyze_patrol:main',
             'collection_session_evaluator = scrobot_evaluation.collection_session_evaluator:main',
+            'analyze_collection_session = scrobot_evaluation.analyze_collection_session:main',
         ],
     },
 )
