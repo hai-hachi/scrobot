@@ -12,21 +12,24 @@ patrol_manager:
     max_grid_size: 20
     tf_timeout: 0.05
 
-    # First-seen shuttle grouping.
-    # Cancel the scan as soon as the first confirmed shuttle is seen, then hold
-    # still briefly so nearby visible tracks stabilize before the collection pass.
+    # First-visible primary selection stays intentionally simple. During a spin,
+    # keep rotating after the first confirmed shuttle is seen so nearby shuttles
+    # around it can enter the FOV. Stop when the primary reaches about 26 deg
+    # toward the opposite camera edge.
+    primary_scan_edge_bearing: 0.45
+    target_lost_timeout: 0.75
+
+    # Once the scan stops, hold still briefly before locking the group.
     group_settle_time: 0.40
-
-    # Opportunistically collect shuttles lying in the same 300 mm corridor.
-    # The +/-0.15 m lateral gate is measured perpendicular to robot forward.
     group_lateral_tolerance: 0.15
-
-    # Keep the pass local: don't pull in a shuttle much farther ahead/behind the
-    # primary just because it happens to share the same lateral corridor.
     group_longitudinal_tolerance: 0.25
 
-    # Initial absolute localization. Large shuttle populations should be spawned
-    # after this succeeds so camera/Gazebo load is low during tag sampling.
+    # Hybrid collection: Nav2 moves to a staging pose this far behind the locked
+    # group along the current robot->group approach direction. The staging yaw
+    # points toward the group. Local CollectShuttle then performs ALIGN -> DRIVE.
+    staging_distance: 0.80
+
+    # Initial absolute localization.
     initial_global_localization: true
     initial_tag_id: -1
     tag_approach_distance: 1.70
@@ -35,8 +38,6 @@ patrol_manager:
     relocalize_timeout: 15.0
     relocalize_retries: 4
 
-    # Nav2 is patrol/return-only. Precision shuttle pickup is local camera servo,
-    # so a curved Nav2 arrival cannot bias the final collection heading.
     nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
     nav2_startup_timeout: 30.0
     nav2_startup_retries: 3
@@ -44,7 +45,7 @@ patrol_manager:
     navigation_goal_retries: 3
     action_retry_period: 0.5
 
-    # Scan until first confirmed visible shuttle, otherwise finish 360 deg.
+    # Scan behavior
     spin_angle: 6.283185307179586
     spin_time_allowance: 20.0
 
