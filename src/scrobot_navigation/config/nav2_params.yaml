@@ -1,20 +1,5 @@
 # ============================================================
 # SCROBOT NAV2 CONFIGURATION
-#
-# TF:
-#   map -> odom -> base_footprint
-#
-# Velocity:
-#   Nav2
-#     -> /cmd_vel_nav
-#     -> twist_mux
-#     -> velocity_smoother
-#     -> collision_monitor
-#     -> diff_drive_controller
-# ============================================================
-
-# ============================================================
-# BT NAVIGATOR
 # ============================================================
 
 bt_navigator:
@@ -25,306 +10,149 @@ bt_navigator:
     odom_topic: /odometry/filtered
     bt_loop_duration: 10
     default_server_timeout: 20
-
-    navigators:
-      - navigate_to_pose
-
+    navigators: [navigate_to_pose]
     navigate_to_pose:
       plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
-
-# ============================================================
-# PLANNER SERVER
-# ============================================================
 
 planner_server:
   ros__parameters:
     use_sim_time: true
-    expected_planner_frequency: 1.0
-    planner_plugins:
-      - GridBased
+    expected_planner_frequency: 2.0
+    planner_plugins: [GridBased]
     GridBased:
       plugin: "nav2_navfn_planner::NavfnPlanner"
-      tolerance: 0.15
-
-      # Use A* rather than Dijkstra.
+      tolerance: 0.10
       use_astar: true
-
-      # Our global costmap is explicitly initialized as free space.
       allow_unknown: false
-
-# ============================================================
-# CONTROLLER SERVER
-# ============================================================
 
 controller_server:
   ros__parameters:
-
     use_sim_time: true
-
-    controller_frequency: 20.0
-
+    controller_frequency: 25.0
     odom_topic: /odometry/filtered
-
-    # IMPORTANT:
-    # Your twist_mux uses TwistStamped.
     enable_stamped_cmd_vel: true
-
     min_x_velocity_threshold: 0.001
-
-    # Differential drive:
-    # Y velocity should effectively always be zero.
     min_y_velocity_threshold: 0.5
-
     min_theta_velocity_threshold: 0.001
-
-    progress_checker_plugins:
-      - progress_checker
-
-    goal_checker_plugins:
-      - goal_checker
-
-    controller_plugins:
-      - FollowPath
-
-    # --------------------------------------------------------
-    # Progress checker
-    # --------------------------------------------------------
+    progress_checker_plugins: [progress_checker]
+    goal_checker_plugins: [goal_checker]
+    controller_plugins: [FollowPath]
 
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
       required_movement_radius: 0.10
-      movement_time_allowance: 10.0
+      movement_time_allowance: 8.0
 
-
-    # --------------------------------------------------------
-    # Goal checker
-    #
-    # We use PositionGoalChecker because patrol-point yaw is
-    # not important: immediately after reaching the position,
-    # the mission manager will command a 360-degree scan.
-    # --------------------------------------------------------
-
+    # Unlike PositionGoalChecker, SimpleGoalChecker requires both XY and yaw.
+    # This is important for staging poses because final approach assumes the
+    # collector is actually facing the selected shuttle.
     goal_checker:
-      plugin: "nav2_controller::PositionGoalChecker"
+      plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.05
+      yaw_goal_tolerance: 0.0523598776   # 3 deg
       stateful: true
-
-
-    # --------------------------------------------------------
-    # Regulated Pure Pursuit
-    # --------------------------------------------------------
 
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
-
-      # Start conservatively.
-      # Robot specification allows up to 1.0 m/s.
-      desired_linear_vel: 0.50
-
-      lookahead_dist: 0.60
-
-      min_lookahead_dist: 0.30
-      max_lookahead_dist: 0.90
-
-      lookahead_time: 1.50
-
-      # Keep constant lookahead initially.
-      # Easier to evaluate/tune later.
-      use_velocity_scaled_lookahead_dist: false
-
-      min_approach_linear_velocity: 0.05
-      approach_velocity_scaling_dist: 0.60
-
+      desired_linear_vel: 0.75
+      lookahead_dist: 0.50
+      min_lookahead_dist: 0.25
+      max_lookahead_dist: 0.80
+      lookahead_time: 1.00
+      use_velocity_scaled_lookahead_dist: true
+      min_approach_linear_velocity: 0.06
+      approach_velocity_scaling_dist: 0.70
       transform_tolerance: 0.20
-
-      # RPP's own forward collision checking.
       use_collision_detection: true
-
-      max_allowed_time_to_collision_up_to_carrot: 1.0
-
+      max_allowed_time_to_collision_up_to_carrot: 0.8
       use_regulated_linear_velocity_scaling: true
-
-      regulated_linear_scaling_min_radius: 0.90
-      regulated_linear_scaling_min_speed: 0.20
-
+      regulated_linear_scaling_min_radius: 0.75
+      regulated_linear_scaling_min_speed: 0.25
       use_cost_regulated_linear_velocity_scaling: false
-
-      # Differential drive can rotate in place.
       use_rotate_to_heading: true
-
-      rotate_to_heading_angular_vel: 1.0
-      rotate_to_heading_min_angle: 0.785
-
-      max_angular_accel: 2.0
-
+      rotate_to_heading_angular_vel: 1.4
+      rotate_to_heading_min_angle: 0.35
+      max_angular_accel: 3.0
       allow_reversing: false
 
-# ============================================================
-# LOCAL COSTMAP
-#
-# Used by:
-#   RPP controller
-#   Nav2 behaviors
-#
-# Frame:
-#   odom
-#
-# Sensor:
-#   RGB-D point cloud
-# ============================================================
-
 local_costmap:
-
   local_costmap:
-
     ros__parameters:
-
       use_sim_time: true
       global_frame: odom
       robot_base_frame: base_footprint
-
-      update_frequency: 10.0
+      update_frequency: 12.0
       publish_frequency: 5.0
-
       rolling_window: true
       width: 6
       height: 6
-
       resolution: 0.05
-
       transform_tolerance: 0.30
-
       track_unknown_space: false
-
-      # ======================================================
-      # TEMPORARY navigation footprint
-      #
-      # Replace this with exact URDF dimensions later.
-      #
-      # Front is +X.
-      # This deliberately includes the forward collector.
-      # ======================================================
-
       footprint: '[[0.325, -0.225], [0.325,  0.225], [-0.335,  0.225], [-0.335, -0.225]]'
-
-      plugins:
-        - obstacle_layer
-        - inflation_layer
-
-      # ------------------------------------------------------
-      # RGB-D obstacle layer
-      # ------------------------------------------------------
-
+      plugins: [obstacle_layer, inflation_layer]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: true
         footprint_clearing_enabled: true
-
         observation_sources: depth_scan
-
         depth_scan:
           topic: /camera/camera/depth/scan
           data_type: LaserScan
           sensor_frame: ""
-
           marking: true
           clearing: true
           inf_is_valid: true
-
           obstacle_min_range: 0.20
           obstacle_max_range: 2.50
-
           raytrace_min_range: 0.20
           raytrace_max_range: 3.00
-
           observation_persistence: 0.0
           expected_update_rate: 0.0
-
-      # ------------------------------------------------------
-      # Inflation
-      # ------------------------------------------------------
-
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: true
         inflation_radius: 0.55
         cost_scaling_factor: 5.0
 
-# ============================================================
-# GLOBAL COSTMAP
-#
-# No map_server yet.
-#
-# We create a known-free rectangular map around the court and
-# overlay currently observed RGB-D obstacles.
-# ============================================================
-
 global_costmap:
-
   global_costmap:
-
     ros__parameters:
-
       use_sim_time: true
       global_frame: map
       robot_base_frame: base_footprint
-
-      update_frequency: 5.0
-      publish_frequency: 2.0
-
+      update_frequency: 6.0
+      publish_frequency: 3.0
       rolling_window: false
       resolution: 0.05
-
-      # Court:
-      # 13.40 x 6.10 m
-      #
-      # Add margin around it.
       width: 15
       height: 8
-
       origin_x: -7.50
       origin_y: -4.00
-
       track_unknown_space: false
-
       transform_tolerance: 0.30
-
       footprint: '[[0.325, -0.225], [0.325,  0.225], [-0.335,  0.225], [-0.335, -0.225]]'
-
-      plugins:
-        - obstacle_layer
-        - inflation_layer
-
+      plugins: [obstacle_layer, inflation_layer]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: true
-
         observation_sources: depth_scan
-
         depth_scan:
           topic: /camera/camera/depth/scan
           data_type: LaserScan
           sensor_frame: ""
-
           marking: true
           clearing: true
           inf_is_valid: true
-
           obstacle_min_range: 0.20
           obstacle_max_range: 2.50
-
           raytrace_min_range: 0.20
           raytrace_max_range: 3.00
-
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: true
         inflation_radius: 0.55
         cost_scaling_factor: 5.0
-
-# ============================================================
-# BEHAVIOR SERVER
-# ============================================================
 
 behavior_server:
   ros__parameters:
@@ -333,29 +161,20 @@ behavior_server:
     global_costmap_topic: global_costmap/costmap_raw
     local_footprint_topic: local_costmap/published_footprint
     global_footprint_topic: global_costmap/published_footprint
-    cycle_frequency: 10.0
+    cycle_frequency: 15.0
     local_frame: odom
     global_frame: map
     robot_base_frame: base_footprint
     transform_tolerance: 0.20
-
-    behavior_plugins:
-      - spin
-      - backup
-      - wait
-
+    behavior_plugins: [spin, backup, wait]
     spin:
       plugin: "nav2_behaviors::Spin"
-
     backup:
       plugin: "nav2_behaviors::BackUp"
-
     wait:
       plugin: "nav2_behaviors::Wait"
-
-    # Crucial for our command pipeline.
     enable_stamped_cmd_vel: true
-    simulate_ahead_time: 2.0
-    max_rotational_vel: 1.0
-    min_rotational_vel: 0.20
-    rotational_acc_lim: 2.0
+    simulate_ahead_time: 1.5
+    max_rotational_vel: 1.4
+    min_rotational_vel: 0.30
+    rotational_acc_lim: 3.0
