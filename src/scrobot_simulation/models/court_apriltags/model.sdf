@@ -14,85 +14,48 @@
       <collected_topic>/evaluation/shuttle_collected_gz</collected_topic>
       <!-- pickup_link is at collector_x=0.165 m, centered laterally. -->
       <pickup_offset_x>0.165</pickup_offset_x>
-      <pickup_half_length>0.08</pickup_half_length>
-      <pickup_half_width>0.17</pickup_half_width>
+      <pickup_half_length>0.060</pickup_half_length>
+      <pickup_half_width>0.150</pickup_half_width>
     </plugin>
 
-    <!-- ======================================================
-         Tag 0
-         ====================================================== -->
     <link name="tag_mount_0">
       <pose>0.053033009 2.996966991 0.150000000 0 0 -0.785398163</pose>
       <visual name="backing">
         <pose>-0.001750 0 0 0 0 0</pose>
         <geometry><box><size>0.003000 0.133333333 0.133333333</size></box></geometry>
-        <material>
-          <ambient>0.15 0.15 0.15 1</ambient>
-          <diffuse>0.15 0.15 0.15 1</diffuse>
-          <specular>0 0 0 1</specular>
-        </material>
+        <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.15 0.15 0.15 1</diffuse><specular>0 0 0 1</specular></material>
       </visual>
-      <visual name="tag_texture">
-        <geometry><mesh><uri>model://court_apriltags/meshes/tag_0.obj</uri></mesh></geometry>
-      </visual>
+      <visual name="tag_texture"><geometry><mesh><uri>model://court_apriltags/meshes/tag_0.obj</uri></mesh></geometry></visual>
     </link>
 
-    <!-- ======================================================
-         Tag 1
-         ====================================================== -->
     <link name="tag_mount_1">
       <pose>0.053033009 -2.996966991 0.150000000 0 0 0.785398163</pose>
       <visual name="backing">
         <pose>-0.001750 0 0 0 0 0</pose>
         <geometry><box><size>0.003000 0.133333333 0.133333333</size></box></geometry>
-        <material>
-          <ambient>0.15 0.15 0.15 1</ambient>
-          <diffuse>0.15 0.15 0.15 1</diffuse>
-          <specular>0 0 0 1</specular>
-        </material>
+        <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.15 0.15 0.15 1</diffuse><specular>0 0 0 1</specular></material>
       </visual>
-      <visual name="tag_texture">
-        <geometry><mesh><uri>model://court_apriltags/meshes/tag_1.obj</uri></mesh></geometry>
-      </visual>
+      <visual name="tag_texture"><geometry><mesh><uri>model://court_apriltags/meshes/tag_1.obj</uri></mesh></geometry></visual>
     </link>
 
-    <!-- ======================================================
-         Tag 2
-         ====================================================== -->
     <link name="tag_mount_2">
       <pose>-0.053033009 2.996966991 0.150000000 0 0 -2.356194490</pose>
       <visual name="backing">
         <pose>-0.001750 0 0 0 0 0</pose>
         <geometry><box><size>0.003000 0.133333333 0.133333333</size></box></geometry>
-        <material>
-          <ambient>0.15 0.15 0.15 1</ambient>
-          <diffuse>0.15 0.15 0.15 1</diffuse>
-          <specular>0 0 0 1</specular>
-        </material>
+        <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.15 0.15 0.15 1</diffuse><specular>0 0 0 1</specular></material>
       </visual>
-      <visual name="tag_texture">
-        <geometry><mesh><uri>model://court_apriltags/meshes/tag_2.obj</uri></mesh></geometry>
-      </visual>
+      <visual name="tag_texture"><geometry><mesh><uri>model://court_apriltags/meshes/tag_2.obj</uri></mesh></geometry></visual>
     </link>
 
-    <!-- ======================================================
-         Tag 3
-         ====================================================== -->
     <link name="tag_mount_3">
       <pose>-0.053033009 -2.996966991 0.150000000 0 0 2.356194490</pose>
       <visual name="backing">
         <pose>-0.001750 0 0 0 0 0</pose>
         <geometry><box><size>0.003000 0.133333333 0.133333333</size></box></geometry>
-        <material>
-          <ambient>0.15 0.15 0.15 1</ambient>
-          <diffuse>0.15 0.15 0.15 1</diffuse>
-          <specular>0 0 0 1</specular>
-        </material>
+        <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.15 0.15 0.15 1</diffuse><specular>0 0 0 1</specular></material>
       </visual>
-      <visual name="tag_texture">
-        <geometry><mesh><uri>model://court_apriltags/meshes/tag_3.obj</uri></mesh></geometry>
-      </visual>
+      <visual name="tag_texture"><geometry><mesh><uri>model://court_apriltags/meshes/tag_3.obj</uri></mesh></geometry></visual>
     </link>
-
   </model>
 </sdf>
