@@ -2,14 +2,16 @@ final_approach_controller:
   ros__parameters:
     use_sim_time: true
 
+    # Persistent track is used only to identify which raw camera detection is
+    # the locked shuttle. Driving itself uses the live camera-local 3D point.
     tracked_topic: /perception/tracked_shuttles
+    raw_detection_topic: /perception/shuttle_detections_3d
     action_name: /collect_shuttle
     simulation_collection_topic: /evaluation/shuttle_collected
     cmd_vel_topic: /cmd_vel_approach
 
     tracking_frame: map
-    pickup_frame: pickup_link
-    base_frame: base_footprint
+    base_frame: base_link
 
     control_rate: 25.0
     timeout: 20.0
@@ -23,6 +25,16 @@ final_approach_controller:
 
     heading_slowdown_angle: 0.35
     rotate_only_angle: 0.75
-    hold_distance: 0.020
+
+    # Associate the locked persistent ID with the nearest live camera 3D
+    # measurement in base_link. This keeps pickup local even if map localization
+    # drifts slightly after staging.
+    camera_association_distance: 0.35
+
+    # The camera may lose the shuttle just before it reaches the collector
+    # because it is too close / below the FOV. Continue slowly along the last
+    # local bearing for a short time while Gazebo remains the success authority.
+    camera_lost_grace_time: 0.70
+    blind_forward_speed: 0.08
 
     collection_event_match_distance: 0.50
