@@ -17,26 +17,24 @@ final_approach_controller:
     control_rate: 25.0
     tf_timeout: 0.05
 
-    # Acquire one local snapshot of the locked group, then ignore later
-    # perception changes for the rest of the pass.
     acquisition_timeout: 0.75
     startup_association_distance: 1.00
 
-    # ALIGN: rotate toward the group corridor as well as possible, but never
-    # block forever waiting for perfect alignment.
-    align_kp: 2.40
+    # Nav2 staging already supplies most of the desired heading, so ALIGN is a
+    # small low-speed correction instead of an aggressive rotation.
+    align_kp: 1.50
     align_tolerance: 0.0523598776   # 3 deg
-    align_timeout: 2.0
-    min_align_speed: 0.15
-    max_align_speed: 1.20
+    align_timeout: 2.5
+    min_align_speed: 0.10
+    max_align_speed: 0.50
 
-    # DRIVE: fixed straight pass measured with odom -> base_link.
+    # Fixed final collection pass. Keep it slower than Nav2 travel so physical
+    # funnel/contact behavior is predictable.
     pickup_offset_x: 0.165
     overrun_margin: 0.10
     minimum_drive_distance: 0.10
-    drive_speed: 0.20
+    drive_speed: 0.18
     drive_timeout: 20.0
 
-    # Simulation-only matching of Gazebo collection events to intended IDs.
-    # This affects the outcome topic only; it never stops the maneuver.
+    # Simulation-only evaluation; never controls mission progression.
     collection_event_match_distance: 0.50
