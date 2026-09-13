@@ -1,7 +1,6 @@
-string[] shuttle_ids
+string shuttle_id
 ---
 bool success
 string message
-string[] collected_ids
 ---
 float32 distance_to_target
