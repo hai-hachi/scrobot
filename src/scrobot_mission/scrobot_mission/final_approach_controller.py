@@ -79,39 +79,42 @@ def clamp(value, low, high):
 
 
 class FinalApproachController(Node):
-    """Action server that drives one persistent shuttle track into pickup_link."""
+    """Camera-local action server for one or more locked shuttle tracks."""
 
     def __init__(self):
         super().__init__('final_approach_controller')
 
         self.declare_parameter('tracked_topic', '/perception/tracked_shuttles')
+        self.declare_parameter('raw_detection_topic', '/perception/shuttle_detections_3d')
         self.declare_parameter('action_name', '/collect_shuttle')
         self.declare_parameter('simulation_collection_topic', '/evaluation/shuttle_collected')
         self.declare_parameter('cmd_vel_topic', '/cmd_vel_approach')
         self.declare_parameter('tracking_frame', 'map')
-        self.declare_parameter('pickup_frame', 'pickup_link')
-        self.declare_parameter('base_frame', 'base_footprint')
-        self.declare_parameter('control_rate', 20.0)
-        self.declare_parameter('timeout', 10.0)
+        self.declare_parameter('base_frame', 'base_link')
+        self.declare_parameter('control_rate', 25.0)
+        self.declare_parameter('timeout', 20.0)
         self.declare_parameter('tf_timeout', 0.05)
-        self.declare_parameter('linear_kp', 0.8)
-        self.declare_parameter('angular_kp', 2.0)
-        self.declare_parameter('min_linear_speed', 0.04)
-        self.declare_parameter('max_linear_speed', 0.18)
-        self.declare_parameter('max_angular_speed', 0.8)
-        self.declare_parameter('heading_slowdown_angle', 0.45)
-        self.declare_parameter('rotate_only_angle', 0.90)
-        self.declare_parameter('hold_distance', 0.025)
+        self.declare_parameter('linear_kp', 1.10)
+        self.declare_parameter('angular_kp', 2.40)
+        self.declare_parameter('min_linear_speed', 0.05)
+        self.declare_parameter('max_linear_speed', 0.30)
+        self.declare_parameter('max_angular_speed', 1.20)
+        self.declare_parameter('heading_slowdown_angle', 0.35)
+        self.declare_parameter('rotate_only_angle', 0.75)
+        self.declare_parameter('camera_association_distance', 0.35)
+        self.declare_parameter('camera_lost_grace_time', 0.60)
+        self.declare_parameter('blind_forward_speed', 0.08)
+        self.declare_parameter('minimum_success_events', 1)
         self.declare_parameter('collection_event_match_distance', 0.50)
 
         self.tracked_topic = str(self.get_parameter('tracked_topic').value)
+        self.raw_detection_topic = str(self.get_parameter('raw_detection_topic').value)
         self.action_name = str(self.get_parameter('action_name').value)
         self.simulation_collection_topic = str(
             self.get_parameter('simulation_collection_topic').value
         )
         self.cmd_vel_topic = str(self.get_parameter('cmd_vel_topic').value)
         self.tracking_frame = str(self.get_parameter('tracking_frame').value)
-        self.pickup_frame = str(self.get_parameter('pickup_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
         self.control_rate = float(self.get_parameter('control_rate').value)
         self.timeout = float(self.get_parameter('timeout').value)
@@ -125,7 +128,18 @@ class FinalApproachController(Node):
             self.get_parameter('heading_slowdown_angle').value
         )
         self.rotate_only_angle = float(self.get_parameter('rotate_only_angle').value)
-        self.hold_distance = float(self.get_parameter('hold_distance').value)
+        self.camera_association_distance = float(
+            self.get_parameter('camera_association_distance').value
+        )
+        self.camera_lost_grace_time = float(
+            self.get_parameter('camera_lost_grace_time').value
+        )
+        self.blind_forward_speed = float(
+            self.get_parameter('blind_forward_speed').value
+        )
+        self.minimum_success_events = max(
+            1, int(self.get_parameter('minimum_success_events').value)
+        )
         self.collection_event_match_distance = float(
             self.get_parameter('collection_event_match_distance').value
         )
@@ -133,11 +147,16 @@ class FinalApproachController(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.callback_group = ReentrantCallbackGroup()
-
         self.lock = threading.Lock()
+
         self.tracks = {}
-        self.active_id = ''
-        self.collected_id = ''
+        self.raw_detections = []
+        self.raw_frame = ''
+        self.raw_stamp = None
+        self.active_ids = []
+        self.collected_ids = set()
+        self.last_local_target = None
+        self.last_local_target_time = 0.0
 
         qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
         self.create_subscription(
@@ -145,6 +164,13 @@ class FinalApproachController(Node):
             self.tracked_topic,
             self._tracks_callback,
             qos,
+            callback_group=self.callback_group,
+        )
+        self.create_subscription(
+            Detection3DArray,
+            self.raw_detection_topic,
+            self._raw_detections_callback,
+            qos_profile_sensor_data,
             callback_group=self.callback_group,
         )
         self.create_subscription(
@@ -167,8 +193,8 @@ class FinalApproachController(Node):
         )
 
         self.get_logger().info(
-            f'CollectShuttle action server ready on {self.action_name}; '
-            f'cmd={self.cmd_vel_topic}, pickup={self.pickup_frame}.'
+            f'CollectShuttle local camera servo ready on {self.action_name}; '
+            f'raw={self.raw_detection_topic}, base={self.base_frame}.'
         )
 
     def _tracks_callback(self, msg):
@@ -181,16 +207,18 @@ class FinalApproachController(Node):
                 if detection.id
             }
 
+    def _raw_detections_callback(self, msg):
+        with self.lock:
+            self.raw_frame = msg.header.frame_id
+            self.raw_stamp = msg.header.stamp
+            self.raw_detections = [detection_position(d) for d in msg.detections]
+
     def _goal_callback(self, goal_request):
-        shuttle_id = goal_request.shuttle_id.strip()
-        if not shuttle_id:
+        ids = [value.strip() for value in goal_request.shuttle_ids if value.strip()]
+        if not ids:
             return GoalResponse.REJECT
         with self.lock:
-            if self.active_id:
-                self.get_logger().warn(
-                    f'Rejecting collection of {shuttle_id}; already collecting '
-                    f'{self.active_id}.'
-                )
+            if self.active_ids:
                 return GoalResponse.REJECT
         return GoalResponse.ACCEPT
 
@@ -201,27 +229,30 @@ class FinalApproachController(Node):
         if not msg.poses:
             return
         with self.lock:
-            active_id = self.active_id
-            detection = self.tracks.get(active_id) if active_id else None
-        if not active_id or detection is None:
-            return
+            active_ids = list(self.active_ids)
+            tracks = {sid: self.tracks.get(sid) for sid in active_ids}
 
-        tx, ty, tz = detection_position(detection)
-        best = min(
-            math.sqrt(
-                (float(p.position.x) - tx) ** 2
-                + (float(p.position.y) - ty) ** 2
-                + (float(p.position.z) - tz) ** 2
-            )
-            for p in msg.poses
-        )
-        if best <= self.collection_event_match_distance:
-            with self.lock:
-                self.collected_id = active_id
-            self.get_logger().info(
-                f'Physical collection matched shuttle {active_id} '
-                f'(event error={best:.3f} m).'
-            )
+        for pose in msg.poses:
+            px = float(pose.position.x)
+            py = float(pose.position.y)
+            pz = float(pose.position.z)
+            best_id = ''
+            best_error = float('inf')
+            for sid, detection in tracks.items():
+                if detection is None or sid in self.collected_ids:
+                    continue
+                tx, ty, tz = detection_position(detection)
+                error = math.sqrt((px - tx) ** 2 + (py - ty) ** 2 + (pz - tz) ** 2)
+                if error < best_error:
+                    best_error = error
+                    best_id = sid
+            if best_id and best_error <= self.collection_event_match_distance:
+                with self.lock:
+                    self.collected_ids.add(best_id)
+                self.get_logger().info(
+                    f'Physical collection matched shuttle {best_id} '
+                    f'(event error={best_error:.3f} m).'
+                )
 
     def _publish_cmd(self, linear_x, angular_z):
         msg = TwistStamped()
@@ -234,70 +265,140 @@ class FinalApproachController(Node):
     def _publish_stop(self):
         self._publish_cmd(0.0, 0.0)
 
-    def _target_in_pickup_frame(self, detection):
+    def _transform_point_to_base(self, source_frame, point):
+        if not source_frame:
+            return None
+        if source_frame == self.base_frame:
+            return point
         try:
             transform = self.tf_buffer.lookup_transform(
-                self.pickup_frame,
-                self.tracking_frame,
+                self.base_frame,
+                source_frame,
                 Time(),
                 timeout=Duration(seconds=self.tf_timeout),
             ).transform
         except TransformException:
             return None
-        return transform_point(transform, detection_position(detection))
+        return transform_point(transform, point)
+
+    def _locked_expected_local(self):
+        with self.lock:
+            active_ids = list(self.active_ids)
+            tracks = {sid: self.tracks.get(sid) for sid in active_ids}
+        expected = {}
+        for sid, detection in tracks.items():
+            if detection is None:
+                continue
+            local = self._transform_point_to_base(
+                self.tracking_frame,
+                detection_position(detection),
+            )
+            if local is not None:
+                expected[sid] = local
+        return expected
+
+    def _camera_group_center(self):
+        with self.lock:
+            raw_points = list(self.raw_detections)
+            raw_frame = self.raw_frame
+        local_raw = []
+        for point in raw_points:
+            local = self._transform_point_to_base(raw_frame, point)
+            if local is not None and local[0] > -0.05:
+                local_raw.append(local)
+        if not local_raw:
+            return None
+
+        expected = self._locked_expected_local()
+        if not expected:
+            return None
+
+        candidates = []
+        used = set()
+        for sid, target in expected.items():
+            best_index = None
+            best_distance = self.camera_association_distance
+            for index, point in enumerate(local_raw):
+                if index in used:
+                    continue
+                distance = math.sqrt(
+                    (point[0] - target[0]) ** 2
+                    + (point[1] - target[1]) ** 2
+                    + (point[2] - target[2]) ** 2
+                )
+                if distance < best_distance:
+                    best_distance = distance
+                    best_index = index
+            if best_index is not None:
+                used.add(best_index)
+                candidates.append(local_raw[best_index])
+
+        if not candidates:
+            return None
+        x = sum(p[0] for p in candidates) / len(candidates)
+        y = sum(p[1] for p in candidates) / len(candidates)
+        z = sum(p[2] for p in candidates) / len(candidates)
+        return x, y, z
 
     def _execute(self, goal_handle):
-        shuttle_id = goal_handle.request.shuttle_id.strip()
+        ids = [value.strip() for value in goal_handle.request.shuttle_ids if value.strip()]
         result = CollectShuttle.Result()
         feedback = CollectShuttle.Feedback()
 
         with self.lock:
-            self.active_id = shuttle_id
-            self.collected_id = ''
+            self.active_ids = ids
+            self.collected_ids = set()
+            self.last_local_target = None
+            self.last_local_target_time = 0.0
 
-        self.get_logger().info(f'Collecting shuttle {shuttle_id}.')
+        self.get_logger().info('Collecting shuttle group: ' + ', '.join(ids))
         start = time.monotonic()
         period = 1.0 / max(self.control_rate, 1.0)
 
         try:
             while rclpy.ok():
+                now = time.monotonic()
                 if goal_handle.is_cancel_requested:
                     self._publish_stop()
                     goal_handle.canceled()
                     result.success = False
                     result.message = 'Collection canceled.'
+                    result.collected_ids = sorted(self.collected_ids)
                     return result
 
-                if time.monotonic() - start > self.timeout:
+                if now - start > self.timeout:
                     self._publish_stop()
                     goal_handle.abort()
                     result.success = False
                     result.message = f'Collection timed out after {self.timeout:.1f} s.'
+                    result.collected_ids = sorted(self.collected_ids)
                     self.get_logger().error(result.message)
                     return result
 
                 with self.lock:
-                    collected = self.collected_id == shuttle_id
-                    detection = self.tracks.get(shuttle_id)
-
-                if collected:
+                    collected = set(self.collected_ids)
+                if len(collected) >= self.minimum_success_events:
                     self._publish_stop()
                     goal_handle.succeed()
                     result.success = True
-                    result.message = f'Shuttle {shuttle_id} collected.'
+                    result.collected_ids = sorted(collected)
+                    result.message = 'Collected: ' + ', '.join(result.collected_ids)
                     self.get_logger().info(result.message)
                     return result
 
-                if detection is None:
+                local = self._camera_group_center()
+                if local is not None:
+                    self.last_local_target = local
+                    self.last_local_target_time = now
+                elif (
+                    self.last_local_target is not None
+                    and now - self.last_local_target_time <= self.camera_lost_grace_time
+                ):
+                    local = self.last_local_target
+                else:
                     self._publish_stop()
                     feedback.distance_to_target = float('nan')
                     goal_handle.publish_feedback(feedback)
-                    time.sleep(period)
-                    continue
-
-                local = self._target_in_pickup_frame(detection)
-                if local is None:
-                    self._publish_stop()
                     time.sleep(period)
                     continue
 
@@ -306,17 +407,13 @@ class FinalApproachController(Node):
                 feedback.distance_to_target = float(distance)
                 goal_handle.publish_feedback(feedback)
 
-                if distance <= self.hold_distance:
-                    self._publish_stop()
-                    time.sleep(period)
-                    continue
-
-                heading = math.atan2(y, x) if distance > 1e-6 else 0.0
+                heading = math.atan2(y, max(x, 1e-6))
                 angular = clamp(
                     self.angular_kp * heading,
                     -self.max_angular_speed,
                     self.max_angular_speed,
                 )
+
                 if abs(heading) >= self.rotate_only_angle or x <= 0.0:
                     linear = 0.0
                 else:
@@ -328,13 +425,18 @@ class FinalApproachController(Node):
                     if abs(heading) >= self.heading_slowdown_angle:
                         linear *= 0.35
 
+                    if local is self.last_local_target and now - self.last_local_target_time > 0.0:
+                        linear = min(linear, self.blind_forward_speed)
+
                 self._publish_cmd(linear, angular)
                 time.sleep(period)
         finally:
             self._publish_stop()
             with self.lock:
-                self.active_id = ''
-                self.collected_id = ''
+                self.active_ids = []
+                self.collected_ids = set()
+                self.last_local_target = None
+                self.last_local_target_time = 0.0
 
         result.success = False
         result.message = 'Collection stopped because ROS shut down.'
