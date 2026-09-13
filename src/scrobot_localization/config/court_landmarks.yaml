@@ -1,59 +1,25 @@
 tag_global_localizer:
   ros__parameters:
-
-    # ========================================================
-    # Frames / topics
-    # ========================================================
     map_frame: map
     odom_frame: odom
     base_frame: base_footprint
-
     detections_topic: /apriltag/detections
     observed_tag_prefix: observed_tag_
     mount_frame_prefix: tag_mount_
     known_tag_prefix: court_tag_
 
-    # ========================================================
-    # Physical court / tag geometry
-    #
-    # This is now the SINGLE geometry source of truth.
-    # The Gazebo model generator reads this same file.
-    #
-    # tag_mount_N is REP-103 intuitive:
-    #   +X = outward normal of visible tag face
-    #   +Y = left
-    #   +Z = up
-    # ========================================================
     pole_x: 0.0
     left_pole_y: 3.05
     right_pole_y: -3.05
-
     tag_height: 0.150
     tag_mount_radius: 0.075
-
-    # One experimental parameter controls all four tag headings.
-    # 0 deg  -> straight along +/-X court direction
-    # 45 deg -> diagonally inward
     inward_angle_deg: 45.0
-
-    # Detector edge size: distance between AprilTag detection corners.
     tag_edge_size: 0.100
-
-    # tag16h5 active marker = 6 cells across (4 data + black border)
-    # plus one white quiet-zone cell on each side for rendering.
     active_grid_cells: 6
     quiet_border_cells: 1
     texture_pixels: 1024
 
-    # ========================================================
-    # Temporal map -> odom filtering
-    # ========================================================
     filter_tau: 0.25
-
-    # ========================================================
-    # Observation gating
-    # ========================================================
-
     min_decision_margin: 20.0
     max_tag_distance: 9.0
     relocalization_max_distance: 2.0
@@ -70,7 +36,6 @@ tag_global_localizer:
     stationary_linear_threshold: 0.02
     stationary_angular_threshold: 0.03
     stationary_settle_time: 0.40
-
     processing_rate: 20.0
     publish_rate: 30.0
 
@@ -88,27 +53,20 @@ tag_approach_controller:
     default_timeout: 60.0
     tag_lost_timeout: 1.0
 
-    # V3 initial tag acquisition:
-    #   search -> stop -> settle -> observe -> choose best-facing tag -> lock.
-    # At 15 Hz, 0.50 s is about 7-8 camera frames.
-    selection_settle_time: 0.30
-    selection_window: 0.50
+    selection_settle_time: 0.25
+    selection_window: 0.40
     selection_min_samples: 4
-
-    # Detection messages are processed from the 20 Hz control timer so the
-    # matching AprilTag TF has time to reach tf2. Do not retain stale frames.
     pending_detection_max_age: 0.25
 
-    search_angular_velocity: 0.25
-    max_linear_velocity: 0.25
-    max_angular_velocity: 0.25
-    k_position: 0.80
-    k_heading: 1.20
-    k_final_yaw: 1.20
+    search_angular_velocity: 0.45
+    max_linear_velocity: 0.35
+    max_angular_velocity: 0.70
+    k_position: 1.00
+    k_heading: 1.60
+    k_final_yaw: 1.60
     drive_heading_limit_deg: 35.0
     position_tolerance: 0.08
     yaw_tolerance_deg: 5.0
-    stable_time: 0.40
+    stable_time: 0.30
     goal_filter_alpha: 0.30
-    control_rate: 20.0
-
+    control_rate: 25.0
