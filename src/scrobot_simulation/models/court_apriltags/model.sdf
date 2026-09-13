@@ -16,6 +16,8 @@
       <pickup_offset_x>0.165</pickup_offset_x>
       <pickup_half_length>0.060</pickup_half_length>
       <pickup_half_width>0.150</pickup_half_width>
+      <!-- Conservative 2D bounding radius for shuttle collision geometry. -->
+      <shuttle_collision_radius>0.096</shuttle_collision_radius>
     </plugin>
 
     <link name="tag_mount_0">
