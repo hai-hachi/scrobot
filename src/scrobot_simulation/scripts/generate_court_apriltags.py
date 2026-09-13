@@ -11,8 +11,6 @@ import numpy as np
 import yaml
 
 
-# Shuttle simulation policy lives in the generated court model so regenerating
-# AprilTags does not silently remove the ShuttleActivitySystem plugin.
 SHUTTLE_ACTIVITY_UPDATE_RATE = 10.0
 SHUTTLE_ACTIVATION_DISTANCE = 0.35
 SHUTTLE_FREEZE_DISTANCE = 0.55
@@ -20,8 +18,8 @@ SHUTTLE_SETTLE_TIME = 0.75
 SHUTTLE_GROUND_TRUTH_TOPIC = '/evaluation/shuttle_ground_truth_gz'
 SHUTTLE_COLLECTED_TOPIC = '/evaluation/shuttle_collected_gz'
 PICKUP_OFFSET_X = 0.165
-PICKUP_HALF_LENGTH = 0.08
-PICKUP_HALF_WIDTH = 0.17
+PICKUP_HALF_LENGTH = 0.060
+PICKUP_HALF_WIDTH = 0.150
 
 
 def load_params(config_path):
@@ -58,14 +56,11 @@ def generate_texture(tag_id, params, output_path):
     total_cells = active_cells + 2 * quiet_cells
     if texture_pixels % total_cells != 0:
         raise ValueError(
-            f'texture_pixels={texture_pixels} must be divisible by total cells '
-            f'{total_cells}'
+            f'texture_pixels={texture_pixels} must be divisible by total cells {total_cells}'
         )
     cell_px = texture_pixels // total_cells
     marker_px = active_cells * cell_px
-    marker = cv2.aruco.drawMarker(
-        april_dictionary(), tag_id, marker_px, borderBits=1
-    )
+    marker = cv2.aruco.drawMarker(april_dictionary(), tag_id, marker_px, borderBits=1)
     texture = np.full((texture_pixels, texture_pixels), 255, dtype=np.uint8)
     q = quiet_cells * cell_px
     texture[q:q + marker_px, q:q + marker_px] = marker
@@ -102,7 +97,6 @@ def write_model_sdf(params, output_dir, plate_size, headings):
     plate_thickness = 0.003
     backing_center_x = -(plate_thickness / 2.0 + 0.00025)
     links = []
-
     for tag_id in range(4):
         x, y, z, heading = tag_pose(tag_id, params, headings)
         links.append(f'''
@@ -111,15 +105,9 @@ def write_model_sdf(params, output_dir, plate_size, headings):
       <visual name="backing">
         <pose>{backing_center_x:.6f} 0 0 0 0 0</pose>
         <geometry><box><size>{plate_thickness:.6f} {plate_size:.9f} {plate_size:.9f}</size></box></geometry>
-        <material>
-          <ambient>0.15 0.15 0.15 1</ambient>
-          <diffuse>0.15 0.15 0.15 1</diffuse>
-          <specular>0 0 0 1</specular>
-        </material>
+        <material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.15 0.15 0.15 1</diffuse><specular>0 0 0 1</specular></material>
       </visual>
-      <visual name="tag_texture">
-        <geometry><mesh><uri>model://court_apriltags/meshes/tag_{tag_id}.obj</uri></mesh></geometry>
-      </visual>
+      <visual name="tag_texture"><geometry><mesh><uri>model://court_apriltags/meshes/tag_{tag_id}.obj</uri></mesh></geometry></visual>
     </link>
 ''')
 
@@ -166,9 +154,7 @@ def main():
     tag_edge_size = float(params['tag_edge_size'])
     active_cells = int(params['active_grid_cells'])
     quiet_cells = int(params['quiet_border_cells'])
-    plate_size = tag_edge_size * (
-        active_cells + 2 * quiet_cells
-    ) / active_cells
+    plate_size = tag_edge_size * (active_cells + 2 * quiet_cells) / active_cells
     headings = compute_headings(params['inward_angle_deg'])
 
     for tag_id in range(4):
@@ -186,7 +172,8 @@ def main():
     print(
         f'  shuttle: activate={SHUTTLE_ACTIVATION_DISTANCE:.2f} m, '
         f'freeze={SHUTTLE_FREEZE_DISTANCE:.2f} m, '
-        f'pickup x={PICKUP_OFFSET_X:.3f} m'
+        f'pickup x={PICKUP_OFFSET_X:.3f} m, '
+        f'half-size=({PICKUP_HALF_LENGTH:.3f}, {PICKUP_HALF_WIDTH:.3f}) m'
     )
 
 
