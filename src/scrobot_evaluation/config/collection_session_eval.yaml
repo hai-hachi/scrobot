@@ -1,0 +1,11 @@
+collection_session_evaluator:
+  ros__parameters:
+    use_sim_time: true
+    map_frame: map
+    base_frame: base_footprint
+    ground_truth_topic: /evaluation/ground_truth_odom
+    mission_state_topic: /mission/state
+    sample_rate: 20.0
+    tf_timeout: 0.02
+    output_root: /home/sea/scrobot_ws/evaluation_results/collection_session
+    run_name: ""
