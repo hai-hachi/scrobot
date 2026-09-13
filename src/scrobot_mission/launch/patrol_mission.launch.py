@@ -14,7 +14,6 @@ def generate_launch_description():
     navigation_pkg = get_package_share_directory('scrobot_navigation')
 
     patrol_params = os.path.join(mission_pkg, 'config', 'patrol_params.yaml')
-    target_params = os.path.join(mission_pkg, 'config', 'target_selector.yaml')
     final_approach_params = os.path.join(
         mission_pkg,
         'config',
@@ -44,20 +43,6 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': use_sim_time}.items(),
     )
 
-    target_selector = Node(
-        package='scrobot_mission',
-        executable='target_selector',
-        name='shuttle_target_selector',
-        output='screen',
-        parameters=[
-            target_params,
-            {
-                'use_sim_time': use_sim_time,
-                'enabled_at_start': False,
-            },
-        ],
-    )
-
     final_approach = Node(
         package='scrobot_mission',
         executable='final_approach_controller',
@@ -85,7 +70,6 @@ def generate_launch_description():
         ),
         global_localization,
         navigation,
-        target_selector,
         final_approach,
         patrol_manager,
     ])
