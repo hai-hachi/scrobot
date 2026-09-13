@@ -17,11 +17,12 @@ endif()
 
 ament_python_install_package(${PROJECT_NAME})
 
-# Optimized branch executable. The previous runtime and base managers stay in
-# the Python package for comparison, but patrol_mission launches this version.
+# Optimized branch executable. The entrypoint adds a strict Nav2 lifecycle
+# activation gate around the optimized mowing mission so the first patrol goal
+# cannot race bt_navigator activation.
 install(
   PROGRAMS
-    scrobot_mission/optimized_mow_patrol_manager.py
+    scrobot_mission/optimized_mow_patrol_entry.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME patrol_manager
 )
