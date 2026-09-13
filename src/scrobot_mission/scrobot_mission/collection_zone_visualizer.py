@@ -12,7 +12,7 @@ class CollectionZoneVisualizer(Node):
         self.declare_parameter('frame_id', 'base_footprint')
         self.declare_parameter('topic', '/mission/collection_zone')
         self.declare_parameter('pickup_offset_x', 0.165)
-        self.declare_parameter('pickup_half_length', 0.060)
+        self.declare_parameter('pickup_half_length', 0.030)
         self.declare_parameter('pickup_half_width', 0.150)
 
         self.frame_id = str(self.get_parameter('frame_id').value)
