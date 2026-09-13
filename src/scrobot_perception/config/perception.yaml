@@ -36,7 +36,7 @@ depth_pointcloud_to_scan:
     transform_tolerance: 0.05
 
     # Robot-relevant vertical obstacle band.
-    min_height: 0.08
+    min_height: 0.01
     max_height: 0.70
 
     # D435i horizontal field of view, approximately 87 deg.
