@@ -2,8 +2,8 @@ final_approach_controller:
   ros__parameters:
     use_sim_time: true
 
-    # Persistent track is used only to identify which raw camera detection is
-    # the locked shuttle. Driving itself uses the live camera-local 3D point.
+    # Persistent tracks identify the locked shuttle group. Driving itself uses
+    # the nearest live camera-local 3D measurements for those IDs.
     tracked_topic: /perception/tracked_shuttles
     raw_detection_topic: /perception/shuttle_detections_3d
     action_name: /collect_shuttle
@@ -26,14 +26,15 @@ final_approach_controller:
     heading_slowdown_angle: 0.35
     rotate_only_angle: 0.75
 
-    # Associate the locked persistent ID with the nearest live camera 3D
-    # measurement in base_link. This keeps pickup local even if map localization
-    # drifts slightly after staging.
+    # Associate each locked persistent ID with the nearest live camera 3D
+    # measurement in base_link. The steering target is the mean of the matched
+    # local group, so the collector passes through the group's center.
     camera_association_distance: 0.35
 
-    # The camera may lose the shuttle just before it reaches the collector
-    # because it is too close / below the FOV. Continue slowly along the last
-    # local bearing for a short time while Gazebo remains the success authority.
+    # The camera may lose the group just before it reaches the collector
+    # because objects are too close / below the FOV. Continue slowly along the
+    # last local group-center bearing for a short time while Gazebo remains the
+    # physical collection authority.
     camera_lost_grace_time: 0.70
     blind_forward_speed: 0.08
 
