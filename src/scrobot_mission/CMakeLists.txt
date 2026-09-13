@@ -26,13 +26,6 @@ install(
 
 install(
   PROGRAMS
-    scrobot_mission/target_selector.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME target_selector
-)
-
-install(
-  PROGRAMS
     scrobot_mission/final_approach_controller.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME final_approach_controller
