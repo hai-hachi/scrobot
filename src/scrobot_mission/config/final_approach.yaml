@@ -24,18 +24,20 @@ final_approach_controller:
     heading_slowdown_angle: 0.35
     rotate_only_angle: 0.75
 
-    # Map track is only a loose one-time hint for acquiring the currently
-    # visible raw camera target. It must not block the local approach.
+    # The persistent map track is only used to identify the first camera target.
+    # It is deliberately a loose gate; after lock, global localization is no
+    # longer used to steer the pickup motion.
     startup_association_distance: 1.00
 
-    # After initial camera acquisition, follow the target locally from one
-    # camera sample to the next. No map localization is used for steering.
-    camera_association_distance: 0.45
+    # Live camera detections are transformed directly into base_link and tracked
+    # frame-to-frame. A slightly wider gate tolerates shuttle motion after contact.
+    camera_association_distance: 0.50
 
-    # If the shuttle drops below the camera FOV immediately before pickup,
-    # continue briefly along the last camera-local direction. Gazebo collection
-    # contact remains the only success condition.
-    camera_lost_grace_time: 0.70
-    blind_forward_speed: 0.08
+    # When the shuttle passes below the camera near the collector, continue a
+    # short, slow local commit using the last camera-relative direction. Gazebo
+    # contact remains the only success condition, so this cannot create a false
+    # collection result.
+    camera_lost_grace_time: 1.00
+    blind_forward_speed: 0.10
 
     collection_event_match_distance: 0.50
