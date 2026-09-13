@@ -10,34 +10,43 @@ final_approach_controller:
 
     tracking_frame: map
     base_frame: base_link
+    odom_frame: odom
 
     control_rate: 25.0
     timeout: 20.0
     tf_timeout: 0.05
 
+    # Visual ALIGN / DRIVE controller.
     linear_kp: 1.10
     angular_kp: 2.40
     min_linear_speed: 0.05
     max_linear_speed: 0.30
     max_angular_speed: 1.20
 
+    # Rotate in place when the target corridor is more than about 8.6 deg off.
+    # Once inside this angle, drive forward with live camera corrections.
     heading_slowdown_angle: 0.35
-    rotate_only_angle: 0.75
+    rotate_only_angle: 0.15
 
-    # The persistent map track is only used to identify the first camera target.
-    # It is deliberately a loose gate; after lock, global localization is no
-    # longer used to steer the pickup motion.
+    # Physical collector center in base_link. The visual controller steers the
+    # shuttle toward this point instead of toward the base_link origin.
+    pickup_offset_x: 0.165
+
+    # Persistent map tracks are used only as a loose one-time association hint.
     startup_association_distance: 1.00
 
-    # Live camera detections are transformed directly into base_link and tracked
-    # frame-to-frame. A slightly wider gate tolerates shuttle motion after contact.
+    # After lock, live camera detections transformed to base_link own steering.
     camera_association_distance: 0.50
 
-    # When the shuttle passes below the camera near the collector, continue a
-    # short, slow local commit using the last camera-relative direction. Gazebo
-    # contact remains the only success condition, so this cannot create a false
-    # collection result.
-    camera_lost_grace_time: 1.00
-    blind_forward_speed: 0.10
+    # Near-camera blind zone handling.
+    # Brief losses shorter than this are treated as dropped frames. After this
+    # delay, enter COMMIT and stop trying to reacquire arbitrary detections.
+    camera_lost_grace_time: 0.25
+
+    # COMMIT is a straight local motion measured in odom, not map. Collection
+    # success still requires the Gazebo physical collection event.
+    commit_speed: 0.12
+    commit_max_distance: 0.45
+    commit_timeout: 5.0
 
     collection_event_match_distance: 0.50
