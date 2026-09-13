@@ -7,46 +7,36 @@ final_approach_controller:
     action_name: /collect_shuttle
     simulation_collection_topic: /evaluation/shuttle_collected
     cmd_vel_topic: /cmd_vel_approach
+    collection_phase_topic: /mission/collection_phase
+    collection_outcome_topic: /mission/collection_outcome
 
     tracking_frame: map
     base_frame: base_link
     odom_frame: odom
 
     control_rate: 25.0
-    timeout: 20.0
     tf_timeout: 0.05
 
-    # Visual ALIGN / DRIVE controller.
-    linear_kp: 1.10
-    angular_kp: 2.40
-    min_linear_speed: 0.05
-    max_linear_speed: 0.30
-    max_angular_speed: 1.20
-
-    # Rotate in place when the target corridor is more than about 8.6 deg off.
-    # Once inside this angle, drive forward with live camera corrections.
-    heading_slowdown_angle: 0.35
-    rotate_only_angle: 0.15
-
-    # Physical collector center in base_link. The visual controller steers the
-    # shuttle toward this point instead of toward the base_link origin.
-    pickup_offset_x: 0.165
-
-    # Persistent map tracks are used only as a loose one-time association hint.
+    # Acquire one local snapshot of the locked group, then ignore later
+    # perception changes for the rest of the pass.
+    acquisition_timeout: 0.75
     startup_association_distance: 1.00
 
-    # After lock, live camera detections transformed to base_link own steering.
-    camera_association_distance: 0.50
+    # ALIGN: rotate toward the group corridor as well as possible, but never
+    # block forever waiting for perfect alignment.
+    align_kp: 2.40
+    align_tolerance: 0.0523598776   # 3 deg
+    align_timeout: 2.0
+    min_align_speed: 0.15
+    max_align_speed: 1.20
 
-    # Near-camera blind zone handling.
-    # Brief losses shorter than this are treated as dropped frames. After this
-    # delay, enter COMMIT and stop trying to reacquire arbitrary detections.
-    camera_lost_grace_time: 0.25
+    # DRIVE: fixed straight pass measured with odom -> base_link.
+    pickup_offset_x: 0.165
+    overrun_margin: 0.10
+    minimum_drive_distance: 0.10
+    drive_speed: 0.20
+    drive_timeout: 20.0
 
-    # COMMIT is a straight local motion measured in odom, not map. Collection
-    # success still requires the Gazebo physical collection event.
-    commit_speed: 0.12
-    commit_max_distance: 0.45
-    commit_timeout: 5.0
-
+    # Simulation-only matching of Gazebo collection events to intended IDs.
+    # This affects the outcome topic only; it never stops the maneuver.
     collection_event_match_distance: 0.50
