@@ -10,11 +10,11 @@
            COM supplied from the intended collision mesh: +29.6 mm in Z. -->
       <inertial>
         <pose>0 0 0.0296 0 0 0</pose>
-        <mass>0.050</mass>
+        <mass>0.100</mass>
         <inertia>
-          <ixx>6.57e-5</ixx>
-          <iyy>6.57e-5</iyy>
-          <izz>7.37e-5</izz>
+          <ixx>1.314e-4</ixx>
+          <iyy>1.314e-4</iyy>
+          <izz>1.474e-4</izz>
           <ixy>0.0</ixy>
           <ixz>0.0</ixz>
           <iyz>0.0</iyz>
@@ -22,8 +22,8 @@
       </inertial>
 
       <velocity_decay>
-        <linear>3.0</linear>
-        <angular>5.0</angular>
+        <linear>4.0</linear>
+        <angular>10.0</angular>
       </velocity_decay>
 
       <visual name="shuttle_visual">
