@@ -46,7 +46,7 @@
         <max_contacts>4</max_contacts>
         <geometry>
           <cylinder>
-            <radius>0.050</radius>
+            <radius>0.034</radius>
             <length>0.020</length>
           </cylinder>
         </geometry>
