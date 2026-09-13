@@ -88,8 +88,14 @@ class RuntimePatrolManager(PatrolManager):
 
     def publish_state(self):
         msg = String()
-        msg.data = self.runtime_phase if self.runtime_phase else self.state.name
+        phase = getattr(self, 'runtime_phase', '')
+        msg.data = phase if phase else self.state.name
         self.state_pub.publish(msg)
+
+    def enter_error(self, reason):
+        self.runtime_phase = ''
+        self.runtime_localization_active = False
+        super().enter_error(reason)
 
     def _set_runtime_phase(self, phase):
         self.runtime_phase = phase
