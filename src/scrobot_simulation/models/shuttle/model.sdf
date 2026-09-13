@@ -19,41 +19,31 @@
         </inertia>
       </inertial>
 
-      <!-- Strong damping prevents the conical shuttle from orbiting/rolling
-           unrealistically after a small contact impulse. -->
+      <!-- Stronger damping so contacted shuttles lose energy and settle. -->
       <velocity_decay>
-        <linear>0.80</linear>
-        <angular>0.90</angular>
+        <linear>2.0</linear>
+        <angular>3.0</angular>
       </velocity_decay>
 
       <visual name="shuttle_visual">
         <geometry>
-          <mesh>
-            <uri>model://shuttle/meshes/shuttle.STL</uri>
-          </mesh>
+          <mesh><uri>model://shuttle/meshes/shuttle.STL</uri></mesh>
         </geometry>
         <material>
           <ambient>0.78 0.78 0.78 1.0</ambient>
           <diffuse>0.92 0.92 0.92 1.0</diffuse>
           <specular>0.02 0.02 0.02 1.0</specular>
           <emissive>0.0 0.0 0.0 1.0</emissive>
-          <pbr>
-            <metal>
-              <metalness>0.0</metalness>
-              <roughness>0.92</roughness>
-            </metal>
-          </pbr>
+          <pbr><metal><metalness>0.0</metalness><roughness>0.92</roughness></metal></pbr>
         </material>
       </visual>
 
       <collision name="cork_collision">
         <pose>0 0 0.014 0 0 0</pose>
         <max_contacts>1</max_contacts>
-        <geometry>
-          <sphere><radius>0.014</radius></sphere>
-        </geometry>
+        <geometry><sphere><radius>0.014</radius></sphere></geometry>
         <surface>
-          <friction><ode><mu>0.7</mu><mu2>0.7</mu2></ode></friction>
+          <friction><ode><mu>1.5</mu><mu2>1.5</mu2></ode></friction>
           <bounce><restitution_coefficient>0.0</restitution_coefficient><threshold>1000000.0</threshold></bounce>
           <contact>
             <collide_without_contact>false</collide_without_contact>
@@ -66,11 +56,9 @@
       <collision name="skirt_collision">
         <pose>0 0 0.086 0 0 0</pose>
         <max_contacts>1</max_contacts>
-        <geometry>
-          <cylinder><radius>0.034</radius><length>0.008</length></cylinder>
-        </geometry>
+        <geometry><cylinder><radius>0.034</radius><length>0.008</length></cylinder></geometry>
         <surface>
-          <friction><ode><mu>0.7</mu><mu2>0.7</mu2></ode></friction>
+          <friction><ode><mu>1.5</mu><mu2>1.5</mu2></ode></friction>
           <bounce><restitution_coefficient>0.0</restitution_coefficient><threshold>1000000.0</threshold></bounce>
           <contact>
             <collide_without_contact>false</collide_without_contact>
