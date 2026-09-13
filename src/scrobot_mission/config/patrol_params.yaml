@@ -10,12 +10,20 @@ patrol_manager:
     camera_range: 3.0
     range_factor: 0.90
     max_grid_size: 20
-
-    # Keep a little more distance before the camera-local final approach takes
-    # over. This reduces the chance that Nav2 finishes while already touching
-    # or disturbing the shuttle.
-    staging_distance: 0.90
     tf_timeout: 0.05
+
+    # First-seen shuttle grouping.
+    # Once the first confirmed shuttle is locked, cancel the scan and keep the
+    # robot stationary briefly so nearby confirmed tracks can stabilize.
+    group_settle_time: 0.40
+
+    # Group shuttles relative to the primary in robot-local coordinates.
+    # Lateral tolerance corresponds to the +/-150 mm collector half-width.
+    group_lateral_tolerance: 0.15
+
+    # Prevent a shuttle far ahead on the same lateral line from joining the
+    # same collection pass.
+    group_longitudinal_tolerance: 0.25
 
     # Initial absolute localization
     initial_global_localization: true
@@ -23,12 +31,13 @@ patrol_manager:
     tag_approach_distance: 1.70
     tag_approach_timeout: 60.0
 
-    # Give the stationary batch more time under occasional Gazebo/transport
-    # load. Spawning the large shuttle population after this step is preferred.
+    # Spawning a large shuttle population after this initial relocalization is
+    # preferred so Gazebo / transport load is low during the stationary batch.
     relocalize_sample_count: 12
     relocalize_timeout: 12.0
+    relocalize_retries: 3
 
-    # Nav2 startup / retry
+    # Nav2 is now patrol-only. Shuttle collection does not use NavigateToPose.
     nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
     nav2_startup_timeout: 30.0
     nav2_startup_retries: 3
