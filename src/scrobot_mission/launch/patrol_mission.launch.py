@@ -14,7 +14,6 @@ def generate_launch_description():
     navigation_pkg = get_package_share_directory('scrobot_navigation')
 
     patrol_params = os.path.join(mission_pkg, 'config', 'patrol_params.yaml')
-    final_approach_params = os.path.join(mission_pkg, 'config', 'final_approach.yaml')
     use_sim_time = LaunchConfiguration('use_sim_time')
 
     global_localization = IncludeLaunchDescription(
@@ -29,14 +28,6 @@ def generate_launch_description():
             os.path.join(navigation_pkg, 'launch', 'navigation.launch.py')
         ),
         launch_arguments={'use_sim_time': use_sim_time}.items(),
-    )
-
-    final_approach = Node(
-        package='scrobot_mission',
-        executable='final_approach_controller',
-        name='final_approach_controller',
-        output='screen',
-        parameters=[final_approach_params, {'use_sim_time': use_sim_time}],
     )
 
     collection_zone_visualizer = Node(
@@ -63,7 +54,6 @@ def generate_launch_description():
         ),
         global_localization,
         navigation,
-        final_approach,
         collection_zone_visualizer,
         patrol_manager,
     ])
