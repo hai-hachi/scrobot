@@ -13,6 +13,14 @@ twist_mux:
         timeout: 0.25
         priority: 50
 
+      # Optimized branch: immediate low-speed handoff after the first shuttle
+      # appears during Nav2 Spin, and short tag-facing correction before quick
+      # runtime /relocalize. Higher than Nav2 so braking/slow rotation wins.
+      scan_override:
+        topic: /cmd_vel_scan
+        timeout: 0.20
+        priority: 55
+
       relocalization:
         topic: /cmd_vel_relocalization
         timeout: 0.5
@@ -37,7 +45,9 @@ velocity_smoother:
     min_velocity: [-1.0, 0.0, -1.5]
 
     max_accel: [1.00, 0.0, 1.60]
-    max_decel: [-1.40, 0.0, -1.80]
+    # Keep strong angular braking: scan overshoot is more expensive than the
+    # brief deceleration transient when the first shuttle is detected.
+    max_decel: [-1.40, 0.0, -2.40]
 
     deadband_velocity: [0.0, 0.0, 0.0]
 
