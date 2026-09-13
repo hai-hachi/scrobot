@@ -11,9 +11,15 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
+from rclpy.qos import (
+    DurabilityPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+    qos_profile_sensor_data,
+)
 from rclpy.time import Time
 from scrobot_interfaces.action import CollectShuttle
+from std_msgs.msg import String
 from tf2_ros import Buffer, TransformException, TransformListener
 from vision_msgs.msg import Detection3DArray
 
@@ -96,6 +102,7 @@ class FinalApproachController(Node):
         self.declare_parameter('action_name', '/collect_shuttle')
         self.declare_parameter('simulation_collection_topic', '/evaluation/shuttle_collected')
         self.declare_parameter('cmd_vel_topic', '/cmd_vel_approach')
+        self.declare_parameter('collection_phase_topic', '/mission/collection_phase')
         self.declare_parameter('tracking_frame', 'map')
         self.declare_parameter('base_frame', 'base_link')
         self.declare_parameter('odom_frame', 'odom')
@@ -103,7 +110,6 @@ class FinalApproachController(Node):
         self.declare_parameter('timeout', 20.0)
         self.declare_parameter('tf_timeout', 0.05)
 
-        # Visual-servo gains and limits.
         self.declare_parameter('linear_kp', 1.10)
         self.declare_parameter('angular_kp', 2.40)
         self.declare_parameter('min_linear_speed', 0.05)
@@ -111,22 +117,14 @@ class FinalApproachController(Node):
         self.declare_parameter('max_angular_speed', 1.20)
         self.declare_parameter('heading_slowdown_angle', 0.35)
         self.declare_parameter('rotate_only_angle', 0.15)
-
-        # Collector target point in base_link. Visual servo drives the shuttle
-        # toward this point, not toward the base_link origin.
         self.declare_parameter('pickup_offset_x', 0.165)
 
-        # Map is only a loose hint for the first raw-camera association.
         self.declare_parameter('startup_association_distance', 1.00)
         self.declare_parameter('camera_association_distance', 0.50)
-
-        # Camera blind-zone transition. A short grace handles dropped frames;
-        # after that, a bounded straight odometry-based commit begins.
         self.declare_parameter('camera_lost_grace_time', 0.25)
         self.declare_parameter('commit_speed', 0.12)
         self.declare_parameter('commit_max_distance', 0.45)
         self.declare_parameter('commit_timeout', 5.0)
-
         self.declare_parameter('collection_event_match_distance', 0.50)
 
         self.tracked_topic = str(self.get_parameter('tracked_topic').value)
@@ -136,6 +134,9 @@ class FinalApproachController(Node):
             self.get_parameter('simulation_collection_topic').value
         )
         self.cmd_vel_topic = str(self.get_parameter('cmd_vel_topic').value)
+        self.collection_phase_topic = str(
+            self.get_parameter('collection_phase_topic').value
+        )
         self.tracking_frame = str(self.get_parameter('tracking_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
         self.odom_frame = str(self.get_parameter('odom_frame').value)
@@ -181,8 +182,8 @@ class FinalApproachController(Node):
         self.active_ids = []
         self.primary_id = ''
         self.collected_ids = set()
+        self.current_phase = ''
 
-        # Camera-local state for the active pass.
         self.camera_locked = False
         self.last_group_points = []
         self.last_local_target = None
@@ -190,12 +191,17 @@ class FinalApproachController(Node):
         self.camera_loss_start_time = None
         self.last_wait_log_time = 0.0
 
-        # Blind-zone commit state.
         self.commit_active = False
         self.commit_start_time = None
         self.commit_start_xy = None
 
         reliable_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
+        phase_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+
         self.create_subscription(
             Detection3DArray,
             self.tracked_topic,
@@ -220,6 +226,9 @@ class FinalApproachController(Node):
         self.cmd_pub = self.create_publisher(
             TwistStamped, self.cmd_vel_topic, reliable_qos
         )
+        self.phase_pub = self.create_publisher(
+            String, self.collection_phase_topic, phase_qos
+        )
 
         self.action_server = ActionServer(
             self,
@@ -231,12 +240,22 @@ class FinalApproachController(Node):
             callback_group=self.callback_group,
         )
 
+        self._set_phase('IDLE')
         self.get_logger().info(
             f'CollectShuttle camera-local servo ready on {self.action_name}; '
-            f'raw={self.raw_detection_topic}, base={self.base_frame}, '
+            f'phase={self.collection_phase_topic}, raw={self.raw_detection_topic}, '
             f'collector_x={self.pickup_offset_x:.3f} m, '
             f'commit={self.commit_max_distance:.2f} m @ {self.commit_speed:.2f} m/s.'
         )
+
+    def _set_phase(self, phase):
+        if phase == self.current_phase:
+            return
+        self.current_phase = phase
+        msg = String()
+        msg.data = phase
+        self.phase_pub.publish(msg)
+        self.get_logger().info(f'Collection phase -> {phase}')
 
     def _tracks_callback(self, msg):
         if msg.header.frame_id and msg.header.frame_id != self.tracking_frame:
@@ -346,7 +365,6 @@ class FinalApproachController(Node):
         return output
 
     def _expected_targets_local(self):
-        """Map tracks transformed locally, used only for initial acquisition."""
         with self.lock:
             active_ids = list(self.active_ids)
             tracks = {track_id: self.tracks.get(track_id) for track_id in active_ids}
@@ -380,7 +398,6 @@ class FinalApproachController(Node):
 
     @staticmethod
     def _corridor_target(points):
-        """Target the center of the group's lateral envelope."""
         if not points:
             return None
         count = float(len(points))
@@ -393,7 +410,6 @@ class FinalApproachController(Node):
     def _initial_camera_lock(self, raw_local):
         expected = self._expected_targets_local()
         desired_count = max(1, len(self.active_ids) - len(self.collected_ids))
-
         if not raw_local:
             return None
 
@@ -508,6 +524,7 @@ class FinalApproachController(Node):
         self.commit_active = True
         self.commit_start_time = now
         self.commit_start_xy = self._base_xy_in_odom()
+        self._set_phase('COMMIT')
         self.get_logger().info(
             'Camera target entered near blind zone; starting straight COMMIT: '
             f'{self.commit_max_distance:.2f} m max at {self.commit_speed:.2f} m/s.'
@@ -521,7 +538,6 @@ class FinalApproachController(Node):
                     current[0] - self.commit_start_xy[0],
                     current[1] - self.commit_start_xy[1],
                 )
-        # TF unavailable: conservative fallback using commanded distance.
         return max(0.0, now - self.commit_start_time) * self.commit_speed
 
     def _reset_action_state(self):
@@ -563,6 +579,7 @@ class FinalApproachController(Node):
             self.commit_start_time = None
             self.commit_start_xy = None
 
+        self._set_phase('ALIGN')
         self.get_logger().info(
             f'Collecting shuttle group {ids}; primary={primary_id}. '
             'Phases: ALIGN -> visual DRIVE -> odometry-bounded COMMIT.'
@@ -576,6 +593,7 @@ class FinalApproachController(Node):
 
                 if goal_handle.is_cancel_requested:
                     self._publish_stop()
+                    self._set_phase('CANCELED')
                     goal_handle.canceled()
                     result.success = False
                     result.message = 'Collection canceled.'
@@ -584,6 +602,7 @@ class FinalApproachController(Node):
 
                 if now - start > self.timeout:
                     self._publish_stop()
+                    self._set_phase('FAILED')
                     goal_handle.abort()
                     result.success = False
                     result.message = f'Collection timed out after {self.timeout:.1f} s.'
@@ -596,6 +615,7 @@ class FinalApproachController(Node):
 
                 if primary_id in collected:
                     self._publish_stop()
+                    self._set_phase('SUCCESS')
                     goal_handle.succeed()
                     result.success = True
                     result.collected_ids = sorted(collected)
@@ -606,9 +626,6 @@ class FinalApproachController(Node):
                     self.get_logger().info(result.message)
                     return result
 
-                # Once COMMIT starts, do not reacquire arbitrary detections.
-                # Continue the locked straight corridor until Gazebo confirms
-                # collection or the bounded local travel limit is reached.
                 if self.commit_active:
                     elapsed = now - self.commit_start_time
                     travelled = self._commit_distance(now)
@@ -619,6 +636,7 @@ class FinalApproachController(Node):
 
                     if elapsed >= self.commit_timeout or travelled >= self.commit_max_distance:
                         self._publish_stop()
+                        self._set_phase('FAILED')
                         goal_handle.abort()
                         result.success = False
                         result.collected_ids = sorted(collected)
@@ -650,11 +668,10 @@ class FinalApproachController(Node):
                         time.sleep(period)
                         continue
 
-                    # Brief dropped-frame grace: keep the previous local target
-                    # but do not accelerate further.
                     local = self.last_local_target
                 else:
                     self._publish_stop()
+                    self._set_phase('ALIGN')
                     self._log_waiting_for_camera(now)
                     feedback.distance_to_target = float('nan')
                     goal_handle.publish_feedback(feedback)
@@ -662,10 +679,6 @@ class FinalApproachController(Node):
                     continue
 
                 x, y, _ = local
-
-                # Drive the shuttle group toward the collector center, not the
-                # base_link origin. For grouped shuttles, y is the midpoint of
-                # the current lateral envelope.
                 error_x = x - self.pickup_offset_x
                 error_y = y
                 distance = math.hypot(error_x, error_y)
@@ -679,12 +692,11 @@ class FinalApproachController(Node):
                     self.max_angular_speed,
                 )
 
-                # ALIGN phase: rotate in place until the collector corridor is
-                # pointed closely enough at the live camera-local target.
                 if abs(heading) >= self.rotate_only_angle or error_x <= 0.0:
+                    self._set_phase('ALIGN')
                     linear = 0.0
                 else:
-                    # DRIVE phase: mostly straight with small live corrections.
+                    self._set_phase('DRIVE')
                     linear = clamp(
                         self.linear_kp * max(error_x, 0.0),
                         self.min_linear_speed,
@@ -692,9 +704,6 @@ class FinalApproachController(Node):
                     )
                     if abs(heading) >= self.heading_slowdown_angle:
                         linear *= 0.35
-
-                    # If we are in the short lost-frame grace interval, limit
-                    # forward speed until COMMIT formally starts.
                     if self.camera_loss_start_time is not None:
                         linear = min(linear, self.commit_speed)
 
@@ -704,6 +713,7 @@ class FinalApproachController(Node):
             self._publish_stop()
             self._reset_action_state()
 
+        self._set_phase('FAILED')
         result.success = False
         result.message = 'Collection stopped because ROS shut down.'
         result.collected_ids = []
