@@ -13,16 +13,14 @@ patrol_manager:
     max_grid_size: 20
     tf_timeout: 0.05
 
-    # First-visible primary stays simple. Keep scanning until the primary moves
-    # near the opposite FOV edge so nearby shuttles can enter view.
-    primary_scan_edge_bearing: 0.45
-    target_lost_timeout: 0.75
+    # Keep enough image margin for scan cancellation at the higher spin speed.
+    primary_scan_edge_bearing: 0.38
+    target_lost_timeout: 0.65
 
-    group_settle_time: 0.40
+    group_settle_time: 0.25
     group_lateral_tolerance: 0.15
     group_longitudinal_tolerance: 0.25
 
-    # Nav2 obstacle-aware staging before local ALIGN -> DRIVE.
     staging_distance: 0.80
 
     # Initial absolute localization.
@@ -34,13 +32,9 @@ patrol_manager:
     relocalize_timeout: 15.0
     relocalize_retries: 4
 
-    # Runtime relocalization uses accumulated ODOM PATH LENGTH, not map
-    # displacement. DUE is opportunistic; REQUIRED is the hard limit.
+    # Runtime relocalization uses accumulated ODOM PATH LENGTH.
     relocalize_due_distance: 8.0
     relocalize_required_distance: 15.0
-
-    # A DUE correction is only taken on RETURN_TO_PATROL when no shuttle is
-    # visible and the robot is already close to either court pole/tag region.
     relocalize_opportunity_radius: 2.50
     left_tag_region_x: 0.0
     left_tag_region_y: 3.05
@@ -50,12 +44,12 @@ patrol_manager:
     nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
     nav2_startup_timeout: 30.0
     nav2_startup_retries: 3
-    nav2_tf_settle_time: 0.75
+    nav2_tf_settle_time: 0.50
     navigation_goal_retries: 3
-    action_retry_period: 0.5
+    action_retry_period: 0.25
 
     spin_angle: 6.283185307179586
-    spin_time_allowance: 25.0
+    spin_time_allowance: 15.0
 
     visible_tracks_topic: /perception/visible_tracked_shuttles
     collect_action_name: /collect_shuttle
