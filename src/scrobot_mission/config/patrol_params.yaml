@@ -33,8 +33,8 @@ patrol_manager:
     relocalize_retries: 4
 
     # Runtime relocalization uses accumulated ODOM PATH LENGTH.
-    relocalize_due_distance: 8.0
-    relocalize_required_distance: 15.0
+    relocalize_due_distance: 15.0
+    relocalize_required_distance: 30.0
     relocalize_opportunity_radius: 2.50
     left_tag_region_x: 0.0
     left_tag_region_y: 3.05
