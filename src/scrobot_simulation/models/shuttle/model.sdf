@@ -6,23 +6,24 @@
     <allow_auto_disable>true</allow_auto_disable>
 
     <link name="shuttle_link">
+      <!-- Keep the center of mass low so contact does not excite tumbling/orbiting. -->
       <inertial>
-        <pose>0 0 0.0296 0 0 0</pose>
+        <pose>0 0 0.010 0 0 0</pose>
         <mass>0.005</mass>
         <inertia>
-          <ixx>1.02123536e-5</ixx>
-          <iyy>1.02123536e-5</iyy>
-          <izz>7.36831510e-6</izz>
+          <ixx>2.0e-6</ixx>
+          <iyy>2.0e-6</iyy>
+          <izz>4.0e-6</izz>
           <ixy>0.0</ixy>
           <ixz>0.0</ixz>
           <iyz>0.0</iyz>
         </inertia>
       </inertial>
 
-      <!-- Damping tuned so a contacted shuttle can move, then settle quickly instead of rolling indefinitely. -->
+      <!-- Strong decay: a bumped shuttle can move, but should settle quickly. -->
       <velocity_decay>
-        <linear>3.0</linear>
-        <angular>5.0</angular>
+        <linear>5.0</linear>
+        <angular>10.0</angular>
       </velocity_decay>
 
       <visual name="shuttle_visual">
@@ -38,28 +39,28 @@
         </material>
       </visual>
 
-      <collision name="cork_collision">
-        <pose>0 0 0.014 0 0 0</pose>
-        <max_contacts>1</max_contacts>
-        <geometry><sphere><radius>0.014</radius></sphere></geometry>
+      <!-- Simplified low physics footprint. The realistic visual stays unchanged,
+           but the collision body no longer acts like a tall rolling/tumbling object. -->
+      <collision name="shuttle_collision">
+        <pose>0 0 0.010 0 0 0</pose>
+        <max_contacts>4</max_contacts>
+        <geometry>
+          <cylinder>
+            <radius>0.050</radius>
+            <length>0.020</length>
+          </cylinder>
+        </geometry>
         <surface>
-          <friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction>
-          <bounce><restitution_coefficient>0.0</restitution_coefficient><threshold>1000000.0</threshold></bounce>
-          <contact>
-            <collide_without_contact>false</collide_without_contact>
-            <category_bitmask>0x0002</category_bitmask>
-            <collide_bitmask>0xFFFD</collide_bitmask>
-          </contact>
-        </surface>
-      </collision>
-
-      <collision name="skirt_collision">
-        <pose>0 0 0.086 0 0 0</pose>
-        <max_contacts>1</max_contacts>
-        <geometry><cylinder><radius>0.034</radius><length>0.008</length></cylinder></geometry>
-        <surface>
-          <friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction>
-          <bounce><restitution_coefficient>0.0</restitution_coefficient><threshold>1000000.0</threshold></bounce>
+          <friction>
+            <ode>
+              <mu>2.5</mu>
+              <mu2>2.5</mu2>
+            </ode>
+          </friction>
+          <bounce>
+            <restitution_coefficient>0.0</restitution_coefficient>
+            <threshold>1000000.0</threshold>
+          </bounce>
           <contact>
             <collide_without_contact>false</collide_without_contact>
             <category_bitmask>0x0002</category_bitmask>
