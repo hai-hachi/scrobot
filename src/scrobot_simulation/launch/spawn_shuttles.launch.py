@@ -14,6 +14,7 @@ def generate_launch_description():
     mode = LaunchConfiguration('mode')
     visual = LaunchConfiguration('visual')
     batch = LaunchConfiguration('batch')
+    count = LaunchConfiguration('count')
     x = LaunchConfiguration('x')
     y = LaunchConfiguration('y')
 
@@ -24,6 +25,7 @@ def generate_launch_description():
             '--mode', mode,
             '--visual', visual,
             '--batch', batch,
+            '--count', count,
             '--x', x,
             '--y', y,
         ],
@@ -42,7 +44,19 @@ def generate_launch_description():
             default_value='detail',
             choices=['detail', 'fast'],
         ),
-        DeclareLaunchArgument('batch', default_value='1'),
+        DeclareLaunchArgument(
+            'batch',
+            default_value='',
+            description=(
+                'Optional entity-name batch suffix. Leave empty to auto-generate '
+                'a unique batch so shuttles can be spawned repeatedly while Gazebo runs.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'count',
+            default_value='20',
+            description='Number of shuttles for random, cluster, or mixed modes.',
+        ),
         DeclareLaunchArgument(
             'x',
             default_value='0.0',
