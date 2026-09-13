@@ -107,6 +107,12 @@ Visualization Manager:
           Value: true
         map:
           Value: true
+        observed_tag_0:
+          Value: true
+        observed_tag_1:
+          Value: true
+        observed_tag_2:
+          Value: true
         observed_tag_3:
           Value: true
         odom:
@@ -134,36 +140,6 @@ Visualization Manager:
       Show Names: false
       Tree:
         map:
-          odom:
-            base_footprint:
-              base_link:
-                camera_bottom_screw_frame:
-                  camera_link:
-                    camera_color_frame:
-                      camera_color_optical_frame:
-                        observed_tag_3:
-                          {}
-                    camera_depth_frame:
-                      camera_depth_optical_frame:
-                        {}
-                    camera_imu_frame:
-                      camera_imu_optical_frame:
-                        {}
-                collector_link:
-                  pickup_link:
-                    {}
-                left_caster_link:
-                  left_caster_wheel_link:
-                    {}
-                left_wheel_link:
-                  {}
-                mag_link:
-                  {}
-                right_caster_link:
-                  right_caster_wheel_link:
-                    {}
-                right_wheel_link:
-                  {}
           tag_mount_0:
             court_tag_0:
               {}
@@ -453,7 +429,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: -0.010000007227063179
+      Angle: 6.210041046142578
       Class: rviz_default_plugins/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
@@ -463,11 +439,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 156.53475952148438
+      Scale: 102.58601379394531
       Target Frame: map
       Value: TopDownOrtho (rviz_default_plugins)
-      X: 3.438845634460449
-      Y: -1.5169706344604492
+      X: 0.0014709122478961945
+      Y: -1.228909969329834
     Saved: ~
 Window Geometry:
   Displays:
