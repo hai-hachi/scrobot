@@ -32,6 +32,13 @@ install(
 )
 
 install(
+  PROGRAMS
+    scrobot_mission/collection_zone_visualizer.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME collection_zone_visualizer
+)
+
+install(
   DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}
 )
