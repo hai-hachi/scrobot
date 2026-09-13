@@ -3,9 +3,19 @@ collection_session_evaluator:
     use_sim_time: true
     map_frame: map
     base_frame: base_footprint
+
     ground_truth_topic: /evaluation/ground_truth_odom
+    shuttle_ground_truth_topic: /evaluation/shuttle_ground_truth
+    shuttle_collected_topic: /evaluation/shuttle_collected
+
     mission_state_topic: /mission/state
+    collection_phase_topic: /mission/collection_phase
+    collection_outcome_topic: /mission/collection_outcome
+    relocalization_status_topic: /mission/relocalization_status
+
     sample_rate: 20.0
+    path_publish_rate: 1.0
     tf_timeout: 0.02
+
     output_root: /home/sea/scrobot_ws/evaluation_results/collection_session
     run_name: ""
