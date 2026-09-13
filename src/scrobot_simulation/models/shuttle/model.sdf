@@ -19,10 +19,10 @@
         </inertia>
       </inertial>
 
-      <!-- Stronger damping so contacted shuttles lose energy and settle. -->
+      <!-- Damping tuned so a contacted shuttle can move, then settle quickly instead of rolling indefinitely. -->
       <velocity_decay>
-        <linear>2.0</linear>
-        <angular>3.0</angular>
+        <linear>3.0</linear>
+        <angular>5.0</angular>
       </velocity_decay>
 
       <visual name="shuttle_visual">
@@ -43,7 +43,7 @@
         <max_contacts>1</max_contacts>
         <geometry><sphere><radius>0.014</radius></sphere></geometry>
         <surface>
-          <friction><ode><mu>1.5</mu><mu2>1.5</mu2></ode></friction>
+          <friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction>
           <bounce><restitution_coefficient>0.0</restitution_coefficient><threshold>1000000.0</threshold></bounce>
           <contact>
             <collide_without_contact>false</collide_without_contact>
@@ -58,7 +58,7 @@
         <max_contacts>1</max_contacts>
         <geometry><cylinder><radius>0.034</radius><length>0.008</length></cylinder></geometry>
         <surface>
-          <friction><ode><mu>1.5</mu><mu2>1.5</mu2></ode></friction>
+          <friction><ode><mu>2.0</mu><mu2>2.0</mu2></ode></friction>
           <bounce><restitution_coefficient>0.0</restitution_coefficient><threshold>1000000.0</threshold></bounce>
           <contact>
             <collide_without_contact>false</collide_without_contact>
