@@ -3,9 +3,7 @@ final_approach_controller:
     use_sim_time: true
 
     tracked_topic: /perception/tracked_shuttles
-    request_topic: /mission/collection_request
-    complete_topic: /mission/collection_complete
-    failed_topic: /mission/collection_failed
+    action_name: /collect_shuttle
     simulation_collection_topic: /evaluation/shuttle_collected
     cmd_vel_topic: /cmd_vel_approach
 
@@ -27,6 +25,6 @@ final_approach_controller:
     rotate_only_angle: 0.90
     hold_distance: 0.025
 
-    # Gazebo collection event is in court/world coordinates. Match it to the
-    # persistent map-frame shuttle target with a modest tolerance.
+    # Temporary simulation matching tolerance. We can tighten/fix frame handling
+    # after the simplified flow is running reliably.
     collection_event_match_distance: 0.50
