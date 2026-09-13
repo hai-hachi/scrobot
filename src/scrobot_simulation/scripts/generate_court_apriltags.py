@@ -20,6 +20,7 @@ SHUTTLE_COLLECTED_TOPIC = '/evaluation/shuttle_collected_gz'
 PICKUP_OFFSET_X = 0.165
 PICKUP_HALF_LENGTH = 0.060
 PICKUP_HALF_WIDTH = 0.150
+SHUTTLE_COLLISION_RADIUS = 0.096
 
 
 def load_params(config_path):
@@ -124,6 +125,7 @@ def write_model_sdf(params, output_dir, plate_size, headings):
       <pickup_offset_x>{PICKUP_OFFSET_X:.3f}</pickup_offset_x>
       <pickup_half_length>{PICKUP_HALF_LENGTH:.3f}</pickup_half_length>
       <pickup_half_width>{PICKUP_HALF_WIDTH:.3f}</pickup_half_width>
+      <shuttle_collision_radius>{SHUTTLE_COLLISION_RADIUS:.3f}</shuttle_collision_radius>
     </plugin>
 '''
 
@@ -173,7 +175,8 @@ def main():
         f'  shuttle: activate={SHUTTLE_ACTIVATION_DISTANCE:.2f} m, '
         f'freeze={SHUTTLE_FREEZE_DISTANCE:.2f} m, '
         f'pickup x={PICKUP_OFFSET_X:.3f} m, '
-        f'half-size=({PICKUP_HALF_LENGTH:.3f}, {PICKUP_HALF_WIDTH:.3f}) m'
+        f'half-size=({PICKUP_HALF_LENGTH:.3f}, {PICKUP_HALF_WIDTH:.3f}) m, '
+        f'collision-radius={SHUTTLE_COLLISION_RADIUS:.3f} m'
     )
 
 
