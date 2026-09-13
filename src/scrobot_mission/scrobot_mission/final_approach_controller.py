@@ -56,8 +56,7 @@ def transform_point(transform, point):
     q = transform.rotation
     t = transform.translation
     rotated = quat_rotate(
-        (float(q.x), float(q.y), float(q.z), float(q.w)),
-        point,
+        (float(q.x), float(q.y), float(q.z), float(q.w)), point
     )
     return (
         rotated[0] + float(t.x),
@@ -79,7 +78,7 @@ def clamp(value, low, high):
 
 
 class FinalApproachController(Node):
-    """Drive the locked shuttle from live camera-local 3D detections."""
+    """Drive a locked shuttle group from live camera-local 3D detections."""
 
     def __init__(self):
         super().__init__('final_approach_controller')
@@ -136,8 +135,9 @@ class FinalApproachController(Node):
         self.tracks = {}
         self.raw_detections = []
         self.raw_frame = ''
-        self.active_id = ''
-        self.collected_id = ''
+        self.active_ids = []
+        self.primary_id = ''
+        self.collected_ids = set()
         self.last_local_target = None
         self.last_local_target_time = 0.0
 
@@ -162,7 +162,7 @@ class FinalApproachController(Node):
         )
 
         self.get_logger().info(
-            f'CollectShuttle camera-local servo ready on {self.action_name}; '
+            f'CollectShuttle grouped camera-local servo ready on {self.action_name}; '
             f'raw={self.raw_detection_topic}, base={self.base_frame}.'
         )
 
@@ -178,11 +178,11 @@ class FinalApproachController(Node):
             self.raw_detections = [detection_position(d) for d in msg.detections]
 
     def _goal_callback(self, goal_request):
-        shuttle_id = goal_request.shuttle_id.strip()
-        if not shuttle_id:
+        ids = [item.strip() for item in goal_request.shuttle_ids if item.strip()]
+        if not ids:
             return GoalResponse.REJECT
         with self.lock:
-            if self.active_id:
+            if self.active_ids:
                 return GoalResponse.REJECT
         return GoalResponse.ACCEPT
 
@@ -193,26 +193,30 @@ class FinalApproachController(Node):
         if not msg.poses:
             return
         with self.lock:
-            active_id = self.active_id
-            detection = self.tracks.get(active_id) if active_id else None
-        if not active_id or detection is None:
-            return
+            active_ids = list(self.active_ids)
+            tracks = {track_id: self.tracks.get(track_id) for track_id in active_ids}
 
-        tx, ty, tz = detection_position(detection)
-        best = min(
-            math.sqrt(
-                (float(p.position.x) - tx) ** 2
-                + (float(p.position.y) - ty) ** 2
-                + (float(p.position.z) - tz) ** 2
+        newly_collected = []
+        for track_id, detection in tracks.items():
+            if detection is None or track_id in self.collected_ids:
+                continue
+            tx, ty, tz = detection_position(detection)
+            best = min(
+                math.sqrt(
+                    (float(p.position.x) - tx) ** 2
+                    + (float(p.position.y) - ty) ** 2
+                    + (float(p.position.z) - tz) ** 2
+                )
+                for p in msg.poses
             )
-            for p in msg.poses
-        )
-        if best <= self.collection_event_match_distance:
+            if best <= self.collection_event_match_distance:
+                newly_collected.append(track_id)
+
+        if newly_collected:
             with self.lock:
-                self.collected_id = active_id
+                self.collected_ids.update(newly_collected)
             self.get_logger().info(
-                f'Physical collection matched shuttle {active_id} '
-                f'(event error={best:.3f} m).'
+                'Physical collection matched: ' + ', '.join(newly_collected)
             )
 
     def _publish_cmd(self, linear_x, angular_z):
@@ -233,62 +237,93 @@ class FinalApproachController(Node):
             return point
         try:
             tf = self.tf_buffer.lookup_transform(
-                self.base_frame,
-                source_frame,
-                Time(),
+                self.base_frame, source_frame, Time(),
                 timeout=Duration(seconds=self.tf_timeout),
             ).transform
         except TransformException:
             return None
         return transform_point(tf, point)
 
-    def _expected_target_local(self, shuttle_id):
+    def _expected_targets_local(self):
         with self.lock:
-            detection = self.tracks.get(shuttle_id)
-        if detection is None:
-            return None
-        return self._transform_point_to_base(
-            self.tracking_frame,
-            detection_position(detection),
-        )
+            active_ids = list(self.active_ids)
+            tracks = {track_id: self.tracks.get(track_id) for track_id in active_ids}
+        output = {}
+        for track_id, detection in tracks.items():
+            if detection is None:
+                continue
+            local = self._transform_point_to_base(
+                self.tracking_frame, detection_position(detection))
+            if local is not None:
+                output[track_id] = local
+        return output
 
-    def _camera_target_local(self, shuttle_id):
-        expected = self._expected_target_local(shuttle_id)
-        if expected is None:
+    def _camera_group_center_local(self):
+        expected = self._expected_targets_local()
+        if not expected:
             return None
 
         with self.lock:
             raw_points = list(self.raw_detections)
             raw_frame = self.raw_frame
+            collected = set(self.collected_ids)
 
-        best = None
-        best_distance = self.camera_association_distance
+        local_raw = []
         for point in raw_points:
             local = self._transform_point_to_base(raw_frame, point)
-            if local is None or local[0] <= -0.05:
+            if local is not None and local[0] > -0.05:
+                local_raw.append(local)
+
+        candidates = []
+        for track_id, expected_point in expected.items():
+            if track_id in collected:
                 continue
-            distance = math.sqrt(
-                (local[0] - expected[0]) ** 2
-                + (local[1] - expected[1]) ** 2
-                + (local[2] - expected[2]) ** 2
-            )
-            if distance < best_distance:
-                best_distance = distance
-                best = local
-        return best
+            best_index = None
+            best_distance = self.camera_association_distance
+            for index, local in enumerate(local_raw):
+                distance = math.sqrt(
+                    (local[0] - expected_point[0]) ** 2
+                    + (local[1] - expected_point[1]) ** 2
+                    + (local[2] - expected_point[2]) ** 2
+                )
+                if distance < best_distance:
+                    best_distance = distance
+                    best_index = index
+            if best_index is not None:
+                candidates.append(local_raw.pop(best_index))
+
+        if not candidates:
+            return None
+
+        count = float(len(candidates))
+        return (
+            sum(p[0] for p in candidates) / count,
+            sum(p[1] for p in candidates) / count,
+            sum(p[2] for p in candidates) / count,
+        )
 
     def _execute(self, goal_handle):
-        shuttle_id = goal_handle.request.shuttle_id.strip()
+        ids = []
+        for item in goal_handle.request.shuttle_ids:
+            shuttle_id = item.strip()
+            if shuttle_id and shuttle_id not in ids:
+                ids.append(shuttle_id)
+
+        primary_id = ids[0]
         result = CollectShuttle.Result()
         feedback = CollectShuttle.Feedback()
 
         with self.lock:
-            self.active_id = shuttle_id
-            self.collected_id = ''
+            self.active_ids = ids
+            self.primary_id = primary_id
+            self.collected_ids = set()
             self.last_local_target = None
             self.last_local_target_time = 0.0
 
-        self.get_logger().info(f'Collecting shuttle {shuttle_id} with local camera servo.')
+        self.get_logger().info(
+            f'Collecting shuttle group {ids} with local camera servo; '
+            f'primary={primary_id}.'
+        )
         start = time.monotonic()
         period = 1.0 / max(self.control_rate, 1.0)
 
@@ -301,6 +336,7 @@ class FinalApproachController(Node):
                     goal_handle.canceled()
                     result.success = False
                     result.message = 'Collection canceled.'
+                    result.collected_ids = sorted(self.collected_ids)
                     return result
 
                 if now - start > self.timeout:
@@ -308,20 +344,25 @@ class FinalApproachController(Node):
                     goal_handle.abort()
                     result.success = False
                     result.message = f'Collection timed out after {self.timeout:.1f} s.'
+                    result.collected_ids = sorted(self.collected_ids)
                     self.get_logger().error(result.message)
                     return result
 
                 with self.lock:
-                    collected = self.collected_id == shuttle_id
-                if collected:
+                    collected = set(self.collected_ids)
+                if primary_id in collected:
                     self._publish_stop()
                     goal_handle.succeed()
                     result.success = True
-                    result.message = f'Shuttle {shuttle_id} collected.'
+                    result.collected_ids = sorted(collected)
+                    result.message = (
+                        f'Primary shuttle {primary_id} collected; '
+                        f'{len(collected)} shuttle(s) collected in pass.'
+                    )
                     self.get_logger().info(result.message)
                     return result
 
-                local = self._camera_target_local(shuttle_id)
+                local = self._camera_group_center_local()
                 using_blind_target = False
                 if local is not None:
                     self.last_local_target = local
@@ -350,7 +391,6 @@ class FinalApproachController(Node):
                     -self.max_angular_speed,
                     self.max_angular_speed,
                 )
-
                 if abs(heading) >= self.rotate_only_angle or x <= 0.0:
                     linear = 0.0
                 else:
@@ -369,13 +409,15 @@ class FinalApproachController(Node):
         finally:
             self._publish_stop()
             with self.lock:
-                self.active_id = ''
-                self.collected_id = ''
+                self.active_ids = []
+                self.primary_id = ''
+                self.collected_ids = set()
                 self.last_local_target = None
                 self.last_local_target_time = 0.0
 
         result.success = False
         result.message = 'Collection stopped because ROS shut down.'
+        result.collected_ids = []
         return result
 
     def destroy_node(self):
