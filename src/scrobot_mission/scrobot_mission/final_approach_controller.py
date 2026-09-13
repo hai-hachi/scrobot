@@ -92,7 +92,7 @@ class FinalApproachController(Node):
         self.declare_parameter('pickup_frame', 'pickup_link')
         self.declare_parameter('base_frame', 'base_footprint')
         self.declare_parameter('control_rate', 20.0)
-        self.declare_parameter('timeout', 12.0)
+        self.declare_parameter('timeout', 10.0)
         self.declare_parameter('tf_timeout', 0.05)
         self.declare_parameter('linear_kp', 0.8)
         self.declare_parameter('angular_kp', 2.0)

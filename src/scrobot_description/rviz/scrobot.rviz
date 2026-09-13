@@ -1,25 +1,43 @@
 Panels:
   - Class: rviz_common/Displays
+    Help Height: 70
     Name: Displays
+    Property Tree Widget:
+      Expanded: ~
+      Splitter Ratio: 0.5
+    Tree Height: 436
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
     Name: Views
+    Splitter Ratio: 0.5
 Visualization Manager:
   Class: ""
   Displays:
-    - Class: rviz_default_plugins/Grid
-      Name: Grid
-      Enabled: true
-      Alpha: 0.45
+    - Alpha: 0.44999998807907104
       Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
       Plane: XY
       Plane Cell Count: 20
       Reference Frame: <Fixed Frame>
-
-    - Class: rviz_default_plugins/RobotModel
-      Name: Robot
-      Enabled: true
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description File: ""
       Description Source: Topic
       Description Topic:
         Depth: 5
@@ -27,176 +45,397 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /robot_description
+      Enabled: false
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+      Mass Properties:
+        Inertia: false
+        Mass: false
+      Name: Robot
+      TF Prefix: ""
+      Update Interval: 0
+      Value: false
       Visual Enabled: true
-      Collision Enabled: false
-
     - Class: rviz_default_plugins/TF
-      Name: TF
       Enabled: true
+      Filter (blacklist): ""
+      Filter (whitelist): ""
       Frame Timeout: 15
-      Marker Scale: 0.35
+      Frames:
+        All Enabled: true
+        base_footprint:
+          Value: true
+        base_link:
+          Value: true
+        camera_bottom_screw_frame:
+          Value: true
+        camera_color_frame:
+          Value: true
+        camera_color_optical_frame:
+          Value: true
+        camera_depth_frame:
+          Value: true
+        camera_depth_optical_frame:
+          Value: true
+        camera_imu_frame:
+          Value: true
+        camera_imu_optical_frame:
+          Value: true
+        camera_link:
+          Value: true
+        collector_link:
+          Value: true
+        court_tag_0:
+          Value: true
+        court_tag_1:
+          Value: true
+        court_tag_2:
+          Value: true
+        court_tag_3:
+          Value: true
+        left_caster_link:
+          Value: true
+        left_caster_wheel_link:
+          Value: true
+        left_wheel_link:
+          Value: true
+        mag_link:
+          Value: true
+        map:
+          Value: true
+        observed_tag_3:
+          Value: true
+        odom:
+          Value: true
+        pickup_link:
+          Value: true
+        right_caster_link:
+          Value: true
+        right_caster_wheel_link:
+          Value: true
+        right_wheel_link:
+          Value: true
+        tag_mount_0:
+          Value: true
+        tag_mount_1:
+          Value: true
+        tag_mount_2:
+          Value: true
+        tag_mount_3:
+          Value: true
+      Marker Scale: 0.3499999940395355
+      Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: false
-
+      Tree:
+        map:
+          odom:
+            base_footprint:
+              base_link:
+                camera_bottom_screw_frame:
+                  camera_link:
+                    camera_color_frame:
+                      camera_color_optical_frame:
+                        observed_tag_3:
+                          {}
+                    camera_depth_frame:
+                      camera_depth_optical_frame:
+                        {}
+                    camera_imu_frame:
+                      camera_imu_optical_frame:
+                        {}
+                collector_link:
+                  pickup_link:
+                    {}
+                left_caster_link:
+                  left_caster_wheel_link:
+                    {}
+                left_wheel_link:
+                  {}
+                mag_link:
+                  {}
+                right_caster_link:
+                  right_caster_wheel_link:
+                    {}
+                right_wheel_link:
+                  {}
+          tag_mount_0:
+            court_tag_0:
+              {}
+          tag_mount_1:
+            court_tag_1:
+              {}
+          tag_mount_2:
+            court_tag_2:
+              {}
+          tag_mount_3:
+            court_tag_3:
+              {}
+      Update Interval: 0
+      Value: true
     - Class: rviz_default_plugins/MarkerArray
-      Name: Court
       Enabled: true
+      Name: Court
+      Namespaces:
+        court_lines: true
+        floor: true
+        net: true
+        net_poles: true
+        net_top_tape: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /court_markers
-
-    - Class: rviz_default_plugins/Map
-      Name: Global Costmap
-      Enabled: true
-      Alpha: 0.35
+      Value: true
+    - Alpha: 0.3499999940395355
+      Binary representation: false
+      Binary threshold: 100
+      Class: rviz_default_plugins/Map
       Color Scheme: costmap
       Draw Behind: true
+      Enabled: true
+      Name: Global Costmap
       Topic:
         Depth: 5
         Durability Policy: Transient Local
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /global_costmap/costmap
-
-    - Class: rviz_default_plugins/Map
-      Name: Local Costmap
-      Enabled: true
-      Alpha: 0.55
+      Update Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /global_costmap/costmap_updates
+      Use Timestamp: false
+      Value: true
+    - Alpha: 0.550000011920929
+      Binary representation: false
+      Binary threshold: 100
+      Class: rviz_default_plugins/Map
       Color Scheme: costmap
       Draw Behind: false
+      Enabled: true
+      Name: Local Costmap
       Topic:
         Depth: 5
         Durability Policy: Transient Local
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /local_costmap/costmap
-
-    - Class: rviz_default_plugins/Path
-      Name: Nav2 Global Plan
-      Enabled: true
+      Update Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_costmap/costmap_updates
+      Use Timestamp: false
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
       Color: 25; 255; 25
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
       Line Style: Lines
-      Line Width: 0.05
+      Line Width: 0.05000000074505806
+      Name: Nav2 Global Plan
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
       Pose Style: None
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
       Topic:
         Depth: 5
         Durability Policy: Volatile
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /plan
-
-    - Class: rviz_default_plugins/Pose
-      Name: Current Mission Goal
-      Enabled: true
-      Shape: Arrow
+      Value: true
+    - Alpha: 1
+      Axes Length: 1
+      Axes Radius: 0.10000000149011612
+      Class: rviz_default_plugins/Pose
       Color: 255; 85; 0
-      Alpha: 1
-      Shaft Length: 0.35
-      Shaft Radius: 0.025
-      Head Length: 0.15
-      Head Radius: 0.06
+      Enabled: true
+      Head Length: 0.15000000596046448
+      Head Radius: 0.05999999865889549
+      Name: Current Mission Goal
+      Shaft Length: 0.3499999940395355
+      Shaft Radius: 0.02500000037252903
+      Shape: Arrow
       Topic:
         Depth: 1
         Durability Policy: Transient Local
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /mission/current_goal
-
-    - Class: rviz_default_plugins/PoseArray
-      Name: Patrol Points
-      Enabled: true
-      Shape: Arrow (Flat)
+      Value: true
+    - Alpha: 0.8999999761581421
+      Arrow Length: 0.20000000298023224
+      Axes Length: 0.30000001192092896
+      Axes Radius: 0.009999999776482582
+      Class: rviz_default_plugins/PoseArray
       Color: 255; 165; 0
-      Alpha: 0.9
-      Arrow Length: 0.20
+      Enabled: true
+      Head Length: 0.07000000029802322
+      Head Radius: 0.029999999329447746
+      Name: Patrol Points
+      Shaft Length: 0.23000000417232513
+      Shaft Radius: 0.009999999776482582
+      Shape: Arrow (Flat)
       Topic:
         Depth: 1
         Durability Policy: Transient Local
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /mission/patrol_points
-
-    - Class: rviz_default_plugins/PoseArray
-      Name: Shuttles - Gazebo Ground Truth
-      Enabled: true
-      Shape: Axes
+      Value: true
+    - Alpha: 1
+      Arrow Length: 0.30000001192092896
+      Axes Length: 0.1599999964237213
+      Axes Radius: 0.012000000104308128
+      Class: rviz_default_plugins/PoseArray
       Color: 0; 255; 255
-      Alpha: 1
-      Axes Length: 0.16
-      Axes Radius: 0.012
+      Enabled: true
+      Head Length: 0.07000000029802322
+      Head Radius: 0.029999999329447746
+      Name: Shuttles - Gazebo Ground Truth
+      Shaft Length: 0.23000000417232513
+      Shaft Radius: 0.009999999776482582
+      Shape: Axes
       Topic:
         Depth: 5
         Durability Policy: Volatile
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /evaluation/shuttle_ground_truth
-
-    - Class: rviz_default_plugins/Polygon
-      Name: Collection Zone
-      Enabled: true
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/Polygon
       Color: 0; 255; 100
-      Alpha: 1
+      Enabled: true
+      Name: Collection Zone
       Topic:
         Depth: 1
         Durability Policy: Transient Local
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /mission/collection_zone
-
-    - Class: rviz_default_plugins/Polygon
-      Name: Collision Stop Zone
-      Enabled: true
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/Polygon
       Color: 255; 0; 0
-      Alpha: 1
+      Enabled: true
+      Name: Collision Stop Zone
       Topic:
         Depth: 5
         Durability Policy: Volatile
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /collision_monitor/stop_zone
-
-    - Class: rviz_default_plugins/Polygon
-      Name: Collision Slowdown Zone
-      Enabled: true
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/Polygon
       Color: 255; 220; 0
-      Alpha: 1
+      Enabled: true
+      Name: Collision Slowdown Zone
       Topic:
         Depth: 5
         Durability Policy: Volatile
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /collision_monitor/slowdown_zone
-
-    - Class: rviz_default_plugins/LaserScan
-      Name: Depth Scan
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/LaserScan
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
       Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: Depth Scan
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Points
       Topic:
         Depth: 5
         Durability Policy: Volatile
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /camera/camera/depth/scan
-      Style: Points
-      Size (Pixels): 3
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: ""
       Decay Time: 0
-
-    - Class: rviz_default_plugins/PointCloud2
-      Name: Depth PointCloud
       Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: Depth PointCloud
+      Position Transformer: ""
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.009999999776482582
+      Style: Points
       Topic:
         Depth: 2
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /camera/camera/depth/points
-      Style: Points
-      Size (Pixels): 2
-      Decay Time: 0
-
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
   Enabled: true
   Global Options:
     Background Color: 40; 40; 40
@@ -205,22 +444,42 @@ Visualization Manager:
   Name: root
   Tools:
     - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
     - Class: rviz_default_plugins/MoveCamera
     - Class: rviz_default_plugins/Select
   Transformation:
     Current:
       Class: rviz_default_plugins/TF
+  Value: true
   Views:
     Current:
+      Angle: -0.010000007227063179
       Class: rviz_default_plugins/TopDownOrtho
-      Angle: 0
-      Scale: 45
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Scale: 156.53475952148438
       Target Frame: map
-      X: 0
-      Y: 0
-      Name: Court Top View
+      Value: TopDownOrtho (rviz_default_plugins)
+      X: 3.438845634460449
+      Y: -1.5169706344604492
+    Saved: ~
 Window Geometry:
-  Height: 1000
-  Width: 1600
-  X: 0
-  Y: 30
+  Displays:
+    collapsed: false
+  Height: 1043
+  Hide Left Dock: false
+  Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd0000000100000000000001c9000003b5fc0200000003fb000000100044006900730070006c006100790073010000003f0000023a000000cc00fffffffb0000001200530065006c0065006300740069006f006e0000000211000000de0000005d00fffffffb0000000a00560069006500770073010000027f00000175000000a900ffffff000004e6000003b500000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Selection:
+    collapsed: false
+  Views:
+    collapsed: false
+  Width: 1717
+  X: 2072
+  Y: 73

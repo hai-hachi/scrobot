@@ -12,7 +12,7 @@ final_approach_controller:
     base_frame: base_footprint
 
     control_rate: 25.0
-    timeout: 10.0
+    timeout: 20.0
     tf_timeout: 0.05
 
     linear_kp: 1.10
