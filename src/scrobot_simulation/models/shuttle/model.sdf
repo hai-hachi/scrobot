@@ -45,7 +45,7 @@
         <max_contacts>8</max_contacts>
         <geometry>
           <mesh>
-            <uri>model://shuttle/meshes/shuttle_collision.stl</uri>
+            <uri>model://shuttle/meshes/shuttle_collision.STL</uri>
           </mesh>
         </geometry>
         <surface>
