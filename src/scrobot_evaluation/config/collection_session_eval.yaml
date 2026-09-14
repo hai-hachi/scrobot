@@ -1,6 +1,7 @@
 collection_session_evaluator:
   ros__parameters:
     use_sim_time: true
+
     map_frame: map
     base_frame: base_footprint
 
@@ -9,13 +10,16 @@ collection_session_evaluator:
     shuttle_collected_topic: /evaluation/shuttle_collected
 
     mission_state_topic: /mission/state
-    collection_phase_topic: /mission/collection_phase
-    collection_outcome_topic: /mission/collection_outcome
-    relocalization_status_topic: /mission/relocalization_status
+    local_collect_phase_topic: /mission/local_collect_phase
+
+    # Must match the final collection filter geometry.
+    pole_x: 0.0
+    pole_y_positions: [3.05, -3.05]
+    pole_exclusion_radius: 0.60
 
     sample_rate: 20.0
     path_publish_rate: 1.0
     tf_timeout: 0.02
 
-    output_root: /home/sea/scrobot_ws/evaluation_results/collection_session
+    output_root: ~/scrobot_ws/evaluation_results/collection_session
     run_name: ""
