@@ -38,6 +38,7 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Stage 1: autonomous command arbitration only.
     twist_mux = Node(
         package='twist_mux',
         executable='twist_mux',
@@ -67,6 +68,18 @@ def generate_launch_description():
         parameters=[pipeline_params, {'use_sim_time': use_sim_time}],
     )
 
+    # Stage 2: final output arbitration. Safe autonomous commands pass through
+    # normally; manual teleop has higher priority and intentionally bypasses
+    # collision_monitor so the operator can back out of a stop condition.
+    manual_override_mux = Node(
+        package='twist_mux',
+        executable='twist_mux',
+        name='manual_override_mux',
+        output='screen',
+        parameters=[pipeline_params, {'use_sim_time': use_sim_time}],
+        remappings=[('cmd_vel_out', '/diff_drive_controller/cmd_vel')],
+    )
+
     lifecycle_manager = Node(
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
@@ -90,5 +103,6 @@ def generate_launch_description():
         twist_mux,
         velocity_smoother,
         collision_monitor,
+        manual_override_mux,
         lifecycle_manager,
     ])
