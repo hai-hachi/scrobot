@@ -51,6 +51,13 @@ install(
 
 install(
   PROGRAMS
+    scrobot_mission/shuttle_debug_monitor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME shuttle_debug_monitor
+)
+
+install(
+  PROGRAMS
     scrobot_mission/collection_zone_visualizer.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME collection_zone_visualizer
