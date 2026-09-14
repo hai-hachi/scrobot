@@ -1,0 +1,26 @@
+local_collect_controller:
+  ros__parameters:
+    raw_detection_topic: /perception/shuttle_detections_3d
+    action_name: /local_collect
+    cmd_vel_topic: /cmd_vel_approach
+    phase_topic: /mission/local_collect_phase
+
+    odom_frame: odom
+    base_frame: base_link
+    collector_frame: collector_link
+    control_rate: 30.0
+    tf_timeout: 0.05
+    detection_max_age: 0.30
+
+    position_tolerance: 0.07
+    target_timeout: 12.0
+    reacquire_exclusion_radius: 0.12
+
+    linear_kp: 0.85
+    angular_kp: 2.40
+    max_linear_speed: 0.45
+    max_angular_speed: 1.20
+    max_linear_accel: 0.65
+    max_angular_accel: 2.40
+    heading_stop_deg: 70.0
+    slow_radius: 0.60
