@@ -11,9 +11,15 @@ sweep_mission_manager:
     court_length: 13.40
     court_width: 6.10
     sweep_passes: 4
+
+    # Camera coverage proxy:
+    #   scan line is treated as 0.50 m in front of base_link
+    #   requested outside coverage margin is another 0.50 m
+    # so only the FIRST sweep entry starts 1.00 m outside the court.
+    # All U-turns and the final endpoint stay inside the court markings.
     sweep_extension: 1.00
-    sweep_path_resolution: 0.25
-    turn_samples: 12
+    sweep_path_resolution: 0.20
+    turn_samples: 18
 
     # Same tag geometry as scrobot_localization.
     pole_x: 0.0
