@@ -19,7 +19,7 @@ sweep_mission_manager:
     pole_x: 0.0
     left_pole_y: 3.05
     right_pole_y: -3.05
-    tag_mount_radius: 0.030
+    tag_mount_radius: 0.075
     tag_inward_angle_deg: 45.0
 
     # A second-lane intersection is required for the tag whose nearest lane is
