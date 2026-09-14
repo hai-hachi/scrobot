@@ -24,14 +24,20 @@ install(
   RENAME patrol_manager
 )
 
-# Keep the base survey manager as an importable implementation. The installed
-# executable uses the smooth wrapper: exact FollowPath survey + sequential
-# NavigateToPose collection targets.
+# Survey-first strategy executable. The visual wrapper keeps the exact FollowPath
+# sweep, then uses smoothed Nav2 staging + live camera-guided intercepts.
 install(
   PROGRAMS
-    scrobot_mission/global_sweep_smooth_manager.py
+    scrobot_mission/global_sweep_visual_manager.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME global_sweep_manager
+)
+
+install(
+  PROGRAMS
+    scrobot_mission/visual_intercept_controller.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME visual_intercept_controller
 )
 
 install(
