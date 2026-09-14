@@ -15,16 +15,19 @@ from scrobot_mission.sweep_mission_manager import MissionState, SweepMissionMana
 class RuntimeSweepMissionManager(SweepMissionManager):
     """Sweep runtime wrapper focused on path-following tests.
 
-    The base class owns the real mission behavior, including deterministic
-    fixed-stop relocalization. This wrapper adds:
+    The base class owns the real mission behavior. This wrapper adds:
 
       * a forgiving NavigateToPose -> FollowPath handoff at sweep start;
       * an option to disable all shuttle-triggered diversions;
       * a test goal interrupt that leaves the sweep, visits a pose, returns to
-        the exact departure checkpoint, then resumes the sweep;
+        the exact departure XY checkpoint, aligns to the sweep tangent heading,
+        then resumes the sweep;
+      * unconditional fixed-stop relocalization at every generated station;
       * ABORT / RESTART_SWEEP runtime commands for repeatable controller tests.
 
-    Fixed-stop relocalization remains the active/default strategy.
+    There is intentionally no traveled-distance threshold for fixed-stop
+    relocalization in this runtime manager. Every fixed station is visited once
+    in path order on each sweep run.
     """
 
     def __init__(self):
@@ -93,10 +96,27 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         self._publish_test_phase('IDLE')
         self.get_logger().info(
             'Sweep test runtime ready: '
-            f'fixed-stop relocalization, join_acceptance={self.join_acceptance_distance:.2f} m, '
+            'fixed-stop relocalization at every station, '
+            f'join_acceptance={self.join_acceptance_distance:.2f} m, '
             f'shuttle_interrupts={self.enable_shuttle_interrupts}, '
             f'commands={self.test_command_topic}, goals={self.test_goal_topic}'
             + (f' + {self.rviz_goal_topic}' if self.accept_rviz_goal_topic else '')
+        )
+
+    # ------------------------------------------------------------------
+    # Checkpoint heading helper
+    # ------------------------------------------------------------------
+
+    def _checkpoint_with_sweep_heading(self, pose, path_index):
+        """Keep the departure XY but replace yaw with the sweep tangent yaw."""
+        if not self.sweep_points:
+            return copy.deepcopy(pose)
+        index = max(0, min(int(path_index), len(self.sweep_points) - 1))
+        sweep_yaw = self.sweep_points[index].yaw
+        return self._pose_xy_yaw(
+            pose.position.x,
+            pose.position.y,
+            sweep_yaw,
         )
 
     # ------------------------------------------------------------------
@@ -106,7 +126,39 @@ class RuntimeSweepMissionManager(SweepMissionManager):
     def _detections_cb(self, msg):
         if not self.enable_shuttle_interrupts:
             return
+
+        # Let the base manager create the hard checkpoint and begin cancellation.
         super()._detections_cb(msg)
+
+        # A return checkpoint is positional, but its required final orientation
+        # is the sweep tangent. This makes NavigateToPose stop translating once
+        # XY is accepted and rotate in place to the direction FollowPath expects.
+        if self.checkpoint_pose is not None and self.sweep_points:
+            self.checkpoint_pose = self._checkpoint_with_sweep_heading(
+                self.checkpoint_pose,
+                self.checkpoint_index,
+            )
+
+    # ------------------------------------------------------------------
+    # Fixed-stop relocalization: always visit the next station
+    # ------------------------------------------------------------------
+
+    def _odom_cb(self, msg):
+        """Track distance only for diagnostics; it no longer gates relocalization."""
+        x = float(msg.pose.pose.position.x)
+        y = float(msg.pose.pose.position.y)
+        if self.last_odom_xy is not None:
+            step = math.hypot(x - self.last_odom_xy[0], y - self.last_odom_xy[1])
+            if step < 1.0:
+                self.distance_since_relocalize += step
+        self.last_odom_xy = (x, y)
+
+    def _next_due_stop(self):
+        """Return the next fixed station regardless of traveled distance."""
+        for stop in self.relocalization_stops:
+            if stop.path_index > self.current_path_index + 1:
+                return stop
+        return None
 
     # ------------------------------------------------------------------
     # Test status helpers
@@ -185,7 +237,6 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             return
 
         pose, _ = pose_info
-        self.checkpoint_pose = copy.deepcopy(pose)
         self.checkpoint_index = nearest_path_index(
             self.sweep_points,
             pose.position.x,
@@ -193,14 +244,20 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             self.current_path_index,
         )
         self.current_path_index = self.checkpoint_index
+        self.checkpoint_pose = self._checkpoint_with_sweep_heading(
+            pose,
+            self.checkpoint_index,
+        )
         self.test_goal_pose = copy.deepcopy(msg.pose)
         self.test_active = True
         self.diversion_pending = True
         self._publish_test_phase('LEAVING_SWEEP')
 
+        sweep_yaw = self.sweep_points[self.checkpoint_index].yaw
         self.get_logger().info(
             f'Test excursion requested: saved checkpoint index={self.checkpoint_index}, '
-            f'x={pose.position.x:.2f}, y={pose.position.y:.2f}; '
+            f'x={pose.position.x:.2f}, y={pose.position.y:.2f}, '
+            f'return_yaw={math.degrees(sweep_yaw):.1f} deg; '
             f'goal=({self.test_goal_pose.position.x:.2f}, '
             f'{self.test_goal_pose.position.y:.2f}).'
         )
@@ -221,12 +278,17 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             self._fail('Test excursion has no saved sweep checkpoint.')
             return
         self._publish_test_phase('RETURN_TO_CHECKPOINT')
+        self.get_logger().info(
+            'Returning to checkpoint XY; goal yaw is the local sweep tangent. '
+            'RPP rotate-to-heading will align before NavigateToPose succeeds.'
+        )
         self._send_navigation(self.checkpoint_pose, 'test_return')
 
     def _finish_test_return(self):
         self.current_path_index = self.checkpoint_index
         self.get_logger().info(
-            f'Returned to test checkpoint index={self.checkpoint_index}; resuming FollowPath.'
+            f'Returned and aligned to test checkpoint index={self.checkpoint_index}; '
+            'resuming FollowPath.'
         )
         self.test_active = False
         self.test_goal_pose = None
@@ -261,7 +323,9 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             )
             return
 
-        self.get_logger().info('RESTART_SWEEP requested: canceling current motion and restarting at path index 0.')
+        self.get_logger().info(
+            'RESTART_SWEEP requested: canceling current motion and restarting at path index 0.'
+        )
         self.restart_pending = True
         self.abort_pending = False
         self.control_cancel_reason = 'restart_sweep'
@@ -443,7 +507,8 @@ class RuntimeSweepMissionManager(SweepMissionManager):
 
         if self.state == MissionState.SWEEPING:
             self._update_sweep_progress()
-            self._maybe_reschedule_for_relocalization()
+            # No distance-trigger rescheduling: _start_sweep_follow() always
+            # targets the next fixed relocalization station directly.
 
 
 def main(args=None):
