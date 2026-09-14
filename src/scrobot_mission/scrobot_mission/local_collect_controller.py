@@ -35,12 +35,12 @@ def detection_position(detection):
 class LocalCollectController(Node):
     """Odom-only visual collection spree.
 
-    The first current raw detection is locked immediately. Its measured point is
-    transformed once into odom and never updated from perception while that
-    target is active. Motion continuously drives collector_link toward the
-    frozen odom point with coupled linear/angular control. When the attempt is
-    complete, the first currently visible eligible detection is locked and the
-    process repeats. No scan or target ranking is performed.
+    The first current eligible detection is locked immediately. Its measured
+    point is transformed once into odom and never updated from perception while
+    that target is active. Motion drives collector_link toward the frozen odom
+    point, then continues straight by a configurable overrun distance so the
+    shuttle passes fully into the collector. When the attempt is complete, the
+    first currently visible eligible detection is locked and the process repeats.
     """
 
     def __init__(self):
@@ -58,6 +58,8 @@ class LocalCollectController(Node):
         self.declare_parameter('detection_max_age', 0.30)
 
         self.declare_parameter('position_tolerance', 0.07)
+        self.declare_parameter('overrun_distance', 0.0)
+        self.declare_parameter('overrun_speed', 0.20)
         self.declare_parameter('target_timeout', 12.0)
         self.declare_parameter('reacquire_exclusion_radius', 0.12)
 
@@ -81,6 +83,8 @@ class LocalCollectController(Node):
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
         self.detection_max_age = float(self.get_parameter('detection_max_age').value)
         self.position_tolerance = float(self.get_parameter('position_tolerance').value)
+        self.overrun_distance = max(0.0, float(self.get_parameter('overrun_distance').value))
+        self.overrun_speed = max(0.0, float(self.get_parameter('overrun_speed').value))
         self.target_timeout = float(self.get_parameter('target_timeout').value)
         self.reacquire_exclusion_radius = float(
             self.get_parameter('reacquire_exclusion_radius').value
@@ -125,7 +129,10 @@ class LocalCollectController(Node):
             callback_group=self.callback_group,
         )
         self._phase('IDLE')
-        self.get_logger().info('LocalCollect ready: first-visible lock, odom-only pursuit, no scan.')
+        self.get_logger().info(
+            'LocalCollect ready: first-visible eligible lock, odom-only pursuit, '
+            f'overrun={self.overrun_distance:.2f} m.'
+        )
 
     def _detections_cb(self, msg):
         points = [detection_position(d) for d in msg.detections]
@@ -177,14 +184,18 @@ class LocalCollectController(Node):
         tf = self._lookup(target_frame, source_frame)
         if tf is None:
             return None
-        stamped = type('PointStampedLike', (), {})()
-        # tf2_geometry_msgs requires a real PointStamped-like ROS message.
         from geometry_msgs.msg import PointStamped
         ps = PointStamped()
         ps.header.frame_id = source_frame
         ps.point = point
         out = do_transform_point(ps, tf)
         return float(out.point.x), float(out.point.y), float(out.point.z)
+
+    def _frame_origin_in_odom(self, frame):
+        tf = self._lookup(self.odom_frame, frame)
+        if tf is None:
+            return None
+        return float(tf.transform.translation.x), float(tf.transform.translation.y)
 
     def _fresh_points_snapshot(self):
         with self.lock:
@@ -212,7 +223,7 @@ class LocalCollectController(Node):
             bearing = math.atan2(local[1], max(local[0], 1e-6))
             rng = math.hypot(local[0], local[1])
             self.get_logger().info(
-                f'Locked first-visible shuttle: range={rng:.3f} m, '
+                f'Locked first-visible eligible shuttle: range={rng:.3f} m, '
                 f'bearing={math.degrees(bearing):+.1f} deg.'
             )
             return odom, bearing, rng
@@ -221,6 +232,59 @@ class LocalCollectController(Node):
     def _slew(self, current, desired, max_rate, dt):
         delta = clamp(desired - current, -max_rate * dt, max_rate * dt)
         return current + delta
+
+    def _drive_overrun(self, goal_handle, feedback):
+        if self.overrun_distance <= 0.0 or self.overrun_speed <= 0.0:
+            return True, 'collector reached target'
+
+        start = self._frame_origin_in_odom(self.collector_frame)
+        if start is None:
+            self._stop()
+            return True, 'collector reached target; overrun TF unavailable'
+
+        self._phase('OVERRUN')
+        feedback.phase = 'OVERRUN'
+        goal_handle.publish_feedback(feedback)
+        self.get_logger().info(
+            f'Collector reached target; overrunning {self.overrun_distance:.2f} m.'
+        )
+
+        period = 1.0 / max(self.control_rate, 1.0)
+        previous = time.monotonic()
+        desired_speed = min(self.overrun_speed, self.max_linear_speed)
+
+        while rclpy.ok():
+            if goal_handle.is_cancel_requested:
+                self._stop()
+                return False, 'canceled during overrun'
+
+            current = self._frame_origin_in_odom(self.collector_frame)
+            if current is None:
+                self._stop()
+                time.sleep(period)
+                continue
+
+            traveled = math.hypot(current[0] - start[0], current[1] - start[1])
+            feedback.range_m = max(0.0, self.overrun_distance - traveled)
+            goal_handle.publish_feedback(feedback)
+            if traveled >= self.overrun_distance:
+                self._stop()
+                return True, 'collector reached target + overrun'
+
+            now = time.monotonic()
+            dt = max(1e-3, now - previous)
+            previous = now
+            self.last_v = self._slew(
+                self.last_v, desired_speed, self.max_linear_accel, dt
+            )
+            self.last_w = self._slew(
+                self.last_w, 0.0, self.max_angular_accel, dt
+            )
+            self._publish_cmd(self.last_v, self.last_w)
+            time.sleep(period)
+
+        self._stop()
+        return False, 'ROS shutdown during overrun'
 
     def _drive_target(self, target_odom, goal_handle, feedback):
         period = 1.0 / max(self.control_rate, 1.0)
@@ -252,12 +316,8 @@ class LocalCollectController(Node):
             goal_handle.publish_feedback(feedback)
 
             if distance <= self.position_tolerance:
-                self._stop()
-                return True, 'collector reached target'
+                return self._drive_overrun(goal_handle, feedback)
 
-            # Smooth coupled pursuit. Linear motion fades out for large heading
-            # errors; angular speed naturally eases out with bearing, and both
-            # channels are acceleration-limited to avoid command steps.
             heading_gate = max(0.0, math.cos(bearing)) ** 2
             if abs(bearing) >= self.heading_stop or x <= 0.0:
                 heading_gate = 0.0
@@ -342,7 +402,7 @@ class LocalCollectController(Node):
 
                 self.get_logger().info(
                     f'Local target {attempted_count} finished ({reason}); '
-                    'checking current FOV for the first next shuttle.'
+                    'checking current FOV for the first next eligible shuttle.'
                 )
                 self._phase('SELECT')
         finally:
