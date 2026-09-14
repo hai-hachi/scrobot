@@ -28,20 +28,20 @@ local_collect_controller:
     # ------------------------------------------------------------
     # Coupled local pursuit gains
     # ------------------------------------------------------------
-    linear_kp: 1.10
-    angular_kp: 2.40
+    linear_kp: 1.0
+    angular_kp: 1.0
 
     # Hard command limits.
-    max_linear_speed: 0.55
-    max_angular_speed: 1.20
+    max_linear_speed: 0.5
+    max_angular_speed: 0.5
 
     # Ease-in / ease-out slew-rate limits.
-    max_linear_accel: 0.90
-    max_angular_accel: 2.40
+    max_linear_accel: 1.0
+    max_angular_accel: 1.0
 
     # Stop forward motion and rotate when bearing exceeds this angle.
     heading_stop_deg: 70.0
 
     # Distance below which forward speed reduces toward the target.
     # Smaller = faster final section; larger = gentler approach.
-    slow_radius: 0.35
+    slow_radius: 0.30
