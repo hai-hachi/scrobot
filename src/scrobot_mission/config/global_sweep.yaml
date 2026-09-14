@@ -7,26 +7,27 @@ global_sweep_manager:
     court_width: 6.10
     tf_timeout: 0.05
 
-    # Full-court lawnmower survey. Straight lanes are joined by tangent
-    # semicircles whose radius is half the actual lane spacing. The complete
-    # path is sent directly to Nav2 FollowPath rather than replanned between
-    # waypoints.
+    # Full-court lawnmower survey. The outer lanes are kept well inside the
+    # pole line; the ~3 m camera range still observes the court boundary.
     sweep_lane_spacing: 2.20
     sweep_waypoint_spacing: 0.30
-    sweep_margin_x: 0.45
-    sweep_margin_y: 0.45
+    sweep_margin_x: 0.60
+    sweep_margin_y: 0.90
     sweep_controller_id: SweepPath
     sweep_start_retries: 2
 
-    # Collection route targets pickup_link, not base_footprint. Each optimized
-    # shuttle target is sent as a separate NavigateToPose goal so one failure
-    # can be retried/skipped without aborting the entire route.
+    # Survey results define global visit order only. Collection no longer asks
+    # Nav2 to drive over the stale frozen shuttle coordinate. Instead Nav2 goes
+    # to a staging point, then /visual_intercept tracks the current camera pose.
     pickup_offset_x: 0.165
     collection_overrun: 0.03
     two_opt_max_passes: 100
     collection_target_retries: 2
+    collection_staging_distance: 0.85
+    visual_intercept_action: /visual_intercept
+    visual_intercept_retries: 1
 
-    # Persistent confirmed map-frame tracker output.
+    # Persistent confirmed map-frame tracker output recorded during the sweep.
     tracked_shuttles_topic: /perception/tracked_shuttles
 
     # One validated global localization at startup.
@@ -44,3 +45,30 @@ global_sweep_manager:
     nav2_activation_guard: 0.20
     route_goal_retries: 2
     control_period: 0.10
+
+visual_intercept_controller:
+  ros__parameters:
+    use_sim_time: true
+    visible_topic: /perception/visible_tracked_shuttles
+    action_name: /visual_intercept
+    cmd_vel_topic: /cmd_vel_approach
+    tracking_frame: map
+    base_frame: base_link
+    control_rate: 25.0
+    tf_timeout: 0.05
+
+    acquisition_timeout: 2.0
+    lost_grace: 0.35
+    intercept_timeout: 8.0
+
+    pickup_offset_x: 0.165
+    target_capture_x: 0.23
+    target_capture_y: 0.11
+    blind_overrun_time: 0.55
+
+    linear_kp: 0.85
+    angular_kp: 2.40
+    min_linear_speed: 0.08
+    max_linear_speed: 0.28
+    max_angular_speed: 0.70
+    heading_slowdown_angle: 0.30
