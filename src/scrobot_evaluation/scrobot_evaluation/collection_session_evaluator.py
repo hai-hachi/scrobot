@@ -19,11 +19,12 @@ from tf2_ros import Buffer, TransformException, TransformListener
 
 
 class CollectionSessionEvaluator(Node):
-    """Record end-to-end performance of one shuttle-collection session.
+    """Record one complete sweep + local-collection mission.
 
-    Gazebo ground truth is used only for evaluation metrics. It never feeds the
-    mission controller. Recording starts when the mission first leaves IDLE and
-    finishes automatically at COMPLETE / ERROR, or as PARTIAL on Ctrl-C.
+    Gazebo ground truth is used only for evaluation. The current mission uses
+    /mission/state and /mission/local_collect_phase, so collection-pass and
+    relocalization metrics are inferred from those final interfaces instead of
+    the removed legacy collection_outcome / relocalization_status topics.
     """
 
     def __init__(self):
@@ -35,12 +36,18 @@ class CollectionSessionEvaluator(Node):
         self.declare_parameter('shuttle_ground_truth_topic', '/evaluation/shuttle_ground_truth')
         self.declare_parameter('shuttle_collected_topic', '/evaluation/shuttle_collected')
         self.declare_parameter('mission_state_topic', '/mission/state')
-        self.declare_parameter('collection_phase_topic', '/mission/collection_phase')
-        self.declare_parameter('collection_outcome_topic', '/mission/collection_outcome')
-        self.declare_parameter('relocalization_status_topic', '/mission/relocalization_status')
+        self.declare_parameter('local_collect_phase_topic', '/mission/local_collect_phase')
         self.declare_parameter('sample_rate', 20.0)
         self.declare_parameter('path_publish_rate', 1.0)
         self.declare_parameter('tf_timeout', 0.02)
+
+        # Permanent mission exclusion around the two net poles. Keeping these
+        # values in the evaluator lets the report distinguish intentionally
+        # ignored pole-adjacent shuttles from actual collection misses.
+        self.declare_parameter('pole_x', 0.0)
+        self.declare_parameter('pole_y_positions', [3.05, -3.05])
+        self.declare_parameter('pole_exclusion_radius', 0.60)
+
         self.declare_parameter(
             'output_root',
             '~/scrobot_ws/evaluation_results/collection_session',
@@ -50,25 +57,22 @@ class CollectionSessionEvaluator(Node):
         self.map_frame = str(self.get_parameter('map_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
         self.gt_topic = str(self.get_parameter('ground_truth_topic').value)
-        self.shuttle_gt_topic = str(
-            self.get_parameter('shuttle_ground_truth_topic').value
-        )
-        self.shuttle_collected_topic = str(
-            self.get_parameter('shuttle_collected_topic').value
-        )
+        self.shuttle_gt_topic = str(self.get_parameter('shuttle_ground_truth_topic').value)
+        self.shuttle_collected_topic = str(self.get_parameter('shuttle_collected_topic').value)
         self.state_topic = str(self.get_parameter('mission_state_topic').value)
-        self.collection_phase_topic = str(
-            self.get_parameter('collection_phase_topic').value
-        )
-        self.collection_outcome_topic = str(
-            self.get_parameter('collection_outcome_topic').value
-        )
-        self.relocalization_status_topic = str(
-            self.get_parameter('relocalization_status_topic').value
+        self.local_collect_phase_topic = str(
+            self.get_parameter('local_collect_phase_topic').value
         )
         self.sample_rate = float(self.get_parameter('sample_rate').value)
         self.path_publish_rate = float(self.get_parameter('path_publish_rate').value)
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
+        self.pole_x = float(self.get_parameter('pole_x').value)
+        self.pole_y_positions = [
+            float(v) for v in self.get_parameter('pole_y_positions').value
+        ]
+        self.pole_exclusion_radius = float(
+            self.get_parameter('pole_exclusion_radius').value
+        )
 
         output_root = Path(
             os.path.expanduser(str(self.get_parameter('output_root').value))
@@ -84,13 +88,13 @@ class CollectionSessionEvaluator(Node):
 
         self.latest_gt = None
         self.remaining_shuttles = 0
+        self.remaining_near_poles = 0
         self.total_shuttles_seen = 0
+        self.initial_near_poles = None
         self.collected_count = 0
 
         self.state = 'UNKNOWN'
-        self.collection_phase = 'IDLE'
-        self.collection_outcome = 'UNKNOWN'
-        self.relocalization_status = 'NORMAL'
+        self.local_collect_phase = 'IDLE'
 
         self.active = False
         self.finalized = False
@@ -106,37 +110,46 @@ class CollectionSessionEvaluator(Node):
 
         self.state_enter_time = None
         self.state_durations = defaultdict(float)
-        self.runtime_relocalizations = 0
+        self.phase_enter_time = None
+        self.phase_durations = defaultdict(float)
+
+        self.fixed_relocalizations = 0
         self.collection_passes = 0
-        self.outcome_counts = defaultdict(int)
+        self.pass_start_time = None
+        self.pass_start_collected = 0
 
         self.trajectory_file = open(
             self.output_dir / 'collection_trajectory.csv', 'w', newline=''
         )
         self.trajectory_writer = csv.writer(self.trajectory_file)
         self.trajectory_writer.writerow([
-            'ros_time', 'elapsed_s', 'mission_state', 'collection_phase',
-            'relocalization_status',
+            'ros_time', 'elapsed_s', 'mission_state', 'local_collect_phase',
             'gt_x', 'gt_y', 'est_x', 'est_y', 'position_error_m',
             'gt_distance_total_m', 'est_distance_total_m',
-            'remaining_shuttles', 'collected_shuttles', 'total_shuttles_seen',
-            'collection_rate_percent',
+            'remaining_shuttles', 'remaining_near_poles', 'remaining_eligible',
+            'collected_shuttles', 'total_shuttles_seen', 'eligible_shuttles',
+            'overall_collection_rate_percent', 'eligible_collection_rate_percent',
         ])
 
         self.state_file = open(self.output_dir / 'state_events.csv', 'w', newline='')
         self.state_writer = csv.writer(self.state_file)
-        self.state_writer.writerow([
-            'ros_time', 'elapsed_s', 'from_state', 'to_state',
-        ])
+        self.state_writer.writerow(['ros_time', 'elapsed_s', 'from_state', 'to_state'])
+
+        self.phase_file = open(
+            self.output_dir / 'local_collect_phase_events.csv', 'w', newline=''
+        )
+        self.phase_writer = csv.writer(self.phase_file)
+        self.phase_writer.writerow(['ros_time', 'elapsed_s', 'from_phase', 'to_phase'])
 
         self.collection_file = open(
             self.output_dir / 'collection_events.csv', 'w', newline=''
         )
         self.collection_writer = csv.writer(self.collection_file)
         self.collection_writer.writerow([
-            'pass_index', 'ros_time', 'elapsed_s', 'outcome',
-            'collected_total', 'remaining_shuttles', 'total_shuttles_seen',
-            'collection_rate_percent',
+            'pass_index', 'start_elapsed_s', 'end_elapsed_s', 'duration_s',
+            'collected_this_pass', 'collected_total', 'remaining_shuttles',
+            'remaining_near_poles', 'remaining_eligible',
+            'eligible_collection_rate_percent',
         ])
 
         sensor_qos = QoSProfile(
@@ -148,6 +161,11 @@ class CollectionSessionEvaluator(Node):
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        event_qos = QoSProfile(
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
         )
 
         self.create_subscription(Odometry, self.gt_topic, self.gt_callback, sensor_qos)
@@ -163,21 +181,9 @@ class CollectionSessionEvaluator(Node):
         self.create_subscription(String, self.state_topic, self.state_callback, state_qos)
         self.create_subscription(
             String,
-            self.collection_phase_topic,
-            self.collection_phase_callback,
-            state_qos,
-        )
-        self.create_subscription(
-            String,
-            self.collection_outcome_topic,
-            self.collection_outcome_callback,
-            state_qos,
-        )
-        self.create_subscription(
-            String,
-            self.relocalization_status_topic,
-            self.relocalization_status_callback,
-            state_qos,
+            self.local_collect_phase_topic,
+            self.local_collect_phase_callback,
+            event_qos,
         )
 
         path_qos = QoSProfile(
@@ -200,7 +206,8 @@ class CollectionSessionEvaluator(Node):
         )
 
         self.get_logger().info(
-            f'Collection session recorder ready: {self.output_dir}'
+            f'Collection session evaluator ready: {self.output_dir}; '
+            f'pole exclusion={self.pole_exclusion_radius:.2f} m.'
         )
 
     def now_s(self):
@@ -217,12 +224,27 @@ class CollectionSessionEvaluator(Node):
         p = msg.pose.pose.position
         self.latest_gt = (float(p.x), float(p.y))
 
+    def _near_pole(self, x, y):
+        return any(
+            math.hypot(float(x) - self.pole_x, float(y) - pole_y)
+            <= self.pole_exclusion_radius
+            for pole_y in self.pole_y_positions
+        )
+
     def shuttle_gt_callback(self, msg):
         self.remaining_shuttles = len(msg.poses)
-        self.total_shuttles_seen = max(
-            self.total_shuttles_seen,
-            self.remaining_shuttles + self.collected_count,
+        self.remaining_near_poles = sum(
+            1 for pose in msg.poses
+            if self._near_pole(pose.position.x, pose.position.y)
         )
+
+        candidate_total = self.remaining_shuttles + self.collected_count
+        self.total_shuttles_seen = max(self.total_shuttles_seen, candidate_total)
+
+        # The first complete ground-truth snapshot is the cleanest count of
+        # permanently excluded pole-adjacent shuttles.
+        if self.initial_near_poles is None and self.remaining_shuttles > 0:
+            self.initial_near_poles = self.remaining_near_poles
 
     def shuttle_collected_callback(self, msg):
         if not msg.poses:
@@ -232,6 +254,49 @@ class CollectionSessionEvaluator(Node):
             self.total_shuttles_seen,
             self.remaining_shuttles + self.collected_count,
         )
+
+    def eligible_shuttles(self):
+        excluded = 0 if self.initial_near_poles is None else self.initial_near_poles
+        return max(0, self.total_shuttles_seen - excluded)
+
+    def remaining_eligible(self):
+        return max(0, self.remaining_shuttles - self.remaining_near_poles)
+
+    def overall_collection_rate_percent(self):
+        if self.total_shuttles_seen <= 0:
+            return 0.0
+        return 100.0 * self.collected_count / float(self.total_shuttles_seen)
+
+    def eligible_collection_rate_percent(self):
+        eligible = self.eligible_shuttles()
+        if eligible <= 0:
+            return 0.0
+        return 100.0 * self.collected_count / float(eligible)
+
+    def _start_collection_pass(self, now):
+        self.collection_passes += 1
+        self.pass_start_time = now
+        self.pass_start_collected = self.collected_count
+
+    def _finish_collection_pass(self, now):
+        if self.pass_start_time is None:
+            return
+        duration = max(0.0, now - self.pass_start_time)
+        collected_this_pass = max(0, self.collected_count - self.pass_start_collected)
+        self.collection_writer.writerow([
+            self.collection_passes,
+            self.elapsed_s(self.pass_start_time),
+            self.elapsed_s(now),
+            duration,
+            collected_this_pass,
+            self.collected_count,
+            self.remaining_shuttles,
+            self.remaining_near_poles,
+            self.remaining_eligible(),
+            self.eligible_collection_rate_percent(),
+        ])
+        self.collection_file.flush()
+        self.pass_start_time = None
 
     def state_callback(self, msg):
         new_state = msg.data.strip() or 'UNKNOWN'
@@ -247,13 +312,19 @@ class CollectionSessionEvaluator(Node):
         if self.active and new_state != previous:
             if self.state_enter_time is not None and previous not in ('UNKNOWN', 'IDLE'):
                 self.state_durations[previous] += max(0.0, now - self.state_enter_time)
+
             self.state_writer.writerow([
                 now, self.elapsed_s(now), previous, new_state,
             ])
             self.state_file.flush()
             self.state_enter_time = now
-            if new_state == 'RUNTIME_TAG_APPROACH':
-                self.runtime_relocalizations += 1
+
+            if new_state == 'RELOCALIZING':
+                self.fixed_relocalizations += 1
+            if new_state == 'LOCAL_COLLECT':
+                self._start_collection_pass(now)
+            if previous == 'LOCAL_COLLECT' and new_state != 'LOCAL_COLLECT':
+                self._finish_collection_pass(now)
 
         self.state = new_state
 
@@ -261,34 +332,24 @@ class CollectionSessionEvaluator(Node):
             self.end_time = now
             self.finalize(new_state)
 
-    def collection_phase_callback(self, msg):
+    def local_collect_phase_callback(self, msg):
         new_phase = msg.data.strip() or 'UNKNOWN'
-        previous = self.collection_phase
-        self.collection_phase = new_phase
+        now = self.now_s()
+        previous = self.local_collect_phase
+        if new_phase == previous:
+            return
 
-        if self.active and new_phase == 'DONE' and previous != 'DONE':
-            self.collection_passes += 1
-            outcome = self.collection_outcome
-            self.outcome_counts[outcome] += 1
-            rate = self.collection_rate_percent()
-            now = self.now_s()
-            self.collection_writer.writerow([
-                self.collection_passes,
-                now,
-                self.elapsed_s(now),
-                outcome,
-                self.collected_count,
-                self.remaining_shuttles,
-                self.total_shuttles_seen,
-                rate,
+        if self.active and self.phase_enter_time is not None and previous != 'UNKNOWN':
+            self.phase_durations[previous] += max(0.0, now - self.phase_enter_time)
+
+        if self.active:
+            self.phase_writer.writerow([
+                now, self.elapsed_s(now), previous, new_phase,
             ])
-            self.collection_file.flush()
+            self.phase_file.flush()
+            self.phase_enter_time = now
 
-    def collection_outcome_callback(self, msg):
-        self.collection_outcome = msg.data.strip() or 'UNKNOWN'
-
-    def relocalization_status_callback(self, msg):
-        self.relocalization_status = msg.data.strip() or 'NORMAL'
+        self.local_collect_phase = new_phase
 
     def estimated_xy(self):
         try:
@@ -308,11 +369,6 @@ class CollectionSessionEvaluator(Node):
         if current is None or previous is None:
             return 0.0
         return math.hypot(current[0] - previous[0], current[1] - previous[1])
-
-    def collection_rate_percent(self):
-        if self.total_shuttles_seen <= 0:
-            return 0.0
-        return 100.0 * self.collected_count / float(self.total_shuttles_seen)
 
     def sample(self):
         if not self.active or self.finalized:
@@ -347,8 +403,7 @@ class CollectionSessionEvaluator(Node):
             now,
             self.elapsed_s(now),
             self.state,
-            self.collection_phase,
-            self.relocalization_status,
+            self.local_collect_phase,
             gt[0] if gt else '',
             gt[1] if gt else '',
             est[0] if est else '',
@@ -357,9 +412,13 @@ class CollectionSessionEvaluator(Node):
             self.gt_distance,
             self.est_distance,
             self.remaining_shuttles,
+            self.remaining_near_poles,
+            self.remaining_eligible(),
             self.collected_count,
             self.total_shuttles_seen,
-            self.collection_rate_percent(),
+            self.eligible_shuttles(),
+            self.overall_collection_rate_percent(),
+            self.eligible_collection_rate_percent(),
         ])
         self.trajectory_file.flush()
 
@@ -382,6 +441,18 @@ class CollectionSessionEvaluator(Node):
         if self.est_path_xy:
             self.est_path_pub.publish(self._make_nav_path(self.est_path_xy))
 
+    def _write_duration_csv(self, filename, key_name, durations, duration):
+        with open(self.output_dir / filename, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([key_name, 'duration_s', 'percent_of_session'])
+            for key, value in sorted(durations.items(), key=lambda item: item[1], reverse=True):
+                percent = (
+                    100.0 * value / duration
+                    if duration and math.isfinite(duration) and duration > 0.0
+                    else 0.0
+                )
+                writer.writerow([key, value, percent])
+
     def finalize(self, terminal_state='PARTIAL'):
         if self.finalized:
             return
@@ -390,9 +461,16 @@ class CollectionSessionEvaluator(Node):
         if self.end_time is None:
             self.end_time = self.now_s()
 
+        if self.pass_start_time is not None:
+            self._finish_collection_pass(self.end_time)
+
         if self.state_enter_time is not None and self.state not in ('UNKNOWN', 'IDLE'):
             self.state_durations[self.state] += max(
                 0.0, self.end_time - self.state_enter_time
+            )
+        if self.phase_enter_time is not None and self.local_collect_phase != 'UNKNOWN':
+            self.phase_durations[self.local_collect_phase] += max(
+                0.0, self.end_time - self.phase_enter_time
             )
 
         duration = (
@@ -405,7 +483,6 @@ class CollectionSessionEvaluator(Node):
             if self.position_error_sq else float('nan')
         )
         path_error = self.est_distance - self.gt_distance
-        rate = self.collection_rate_percent()
         distance_per_collected = (
             self.gt_distance / self.collected_count
             if self.collected_count > 0 else float('nan')
@@ -414,81 +491,87 @@ class CollectionSessionEvaluator(Node):
             duration / self.collected_count
             if self.collected_count > 0 else float('nan')
         )
-        runtime_relocalization_time = (
-            self.state_durations.get('RUNTIME_TAG_APPROACH', 0.0)
-            + self.state_durations.get('RUNTIME_RELOCALIZATION', 0.0)
-        )
 
         for handle in (
             self.trajectory_file,
             self.state_file,
+            self.phase_file,
             self.collection_file,
         ):
             handle.flush()
 
-        with open(self.output_dir / 'state_durations.csv', 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['state', 'duration_s', 'percent_of_session'])
-            for state, state_duration in sorted(
-                self.state_durations.items(), key=lambda item: item[1], reverse=True
-            ):
-                percent = (
-                    100.0 * state_duration / duration
-                    if duration and math.isfinite(duration) and duration > 0.0 else 0.0
-                )
-                writer.writerow([state, state_duration, percent])
+        self._write_duration_csv(
+            'state_durations.csv', 'state', self.state_durations, duration
+        )
+        self._write_duration_csv(
+            'local_collect_phase_durations.csv',
+            'phase',
+            self.phase_durations,
+            duration,
+        )
+
+        fixed_relocalization_time = sum(
+            self.state_durations.get(state, 0.0)
+            for state in ('TURN_TO_TAG', 'RELOCALIZING', 'RESTORE_SWEEP_HEADING')
+        )
 
         with open(self.output_dir / 'summary.csv', 'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([
                 'terminal_state', 'duration_s',
-                'total_shuttles_seen', 'collected_shuttles', 'remaining_shuttles',
-                'collection_rate_percent', 'collection_passes',
-                'outcome_collected', 'outcome_partial', 'outcome_missed',
+                'total_shuttles_seen', 'ignored_near_poles', 'eligible_shuttles',
+                'collected_shuttles', 'remaining_shuttles',
+                'remaining_near_poles', 'remaining_eligible',
+                'overall_collection_rate_percent', 'eligible_collection_rate_percent',
+                'collection_passes',
                 'ground_truth_path_m', 'estimated_path_m', 'path_length_error_m',
-                'position_rmse_m', 'distance_per_collected_m',
-                'time_per_collected_s', 'runtime_relocalizations',
-                'runtime_relocalization_time_s',
+                'position_rmse_m', 'distance_per_collected_m', 'time_per_collected_s',
+                'fixed_relocalizations', 'fixed_relocalization_time_s',
+                'sweeping_time_s', 'local_collect_time_s', 'return_to_sweep_time_s',
             ])
             writer.writerow([
                 terminal_state,
                 duration,
                 self.total_shuttles_seen,
+                0 if self.initial_near_poles is None else self.initial_near_poles,
+                self.eligible_shuttles(),
                 self.collected_count,
                 self.remaining_shuttles,
-                rate,
+                self.remaining_near_poles,
+                self.remaining_eligible(),
+                self.overall_collection_rate_percent(),
+                self.eligible_collection_rate_percent(),
                 self.collection_passes,
-                self.outcome_counts.get('COLLECTED', 0),
-                self.outcome_counts.get('PARTIAL', 0),
-                self.outcome_counts.get('MISSED', 0),
                 self.gt_distance,
                 self.est_distance,
                 path_error,
                 rmse,
                 distance_per_collected,
                 time_per_collected,
-                self.runtime_relocalizations,
-                runtime_relocalization_time,
+                self.fixed_relocalizations,
+                fixed_relocalization_time,
+                self.state_durations.get('SWEEPING', 0.0),
+                self.state_durations.get('LOCAL_COLLECT', 0.0),
+                self.state_durations.get('RETURN_TO_SWEEP', 0.0),
             ])
 
         self.publish_paths()
         self.get_logger().info(
-            'Evaluation finished: '
-            f'state={terminal_state}, collected={self.collected_count}/'
-            f'{self.total_shuttles_seen} ({rate:.1f}%), '
-            f'GT path={self.gt_distance:.2f} m, duration={duration:.1f} s, '
-            f'RMSE={rmse:.3f} m, runtime relocalizations={self.runtime_relocalizations}.'
-        )
-        self.get_logger().info(
-            f'Run data saved in: {self.output_dir}'
+            'Collection evaluation complete: '
+            f't={duration:.1f}s, collected={self.collected_count}/'
+            f'{self.eligible_shuttles()} eligible, '
+            f'eligible_rate={self.eligible_collection_rate_percent():.1f}%, '
+            f'GT distance={self.gt_distance:.1f}m.'
         )
 
     def destroy_node(self):
-        if not self.finalized and (self.active or self.gt_path_xy or self.est_path_xy):
+        if not self.finalized:
+            self.end_time = self.now_s()
             self.finalize('PARTIAL')
         for handle in (
             self.trajectory_file,
             self.state_file,
+            self.phase_file,
             self.collection_file,
         ):
             if not handle.closed:
