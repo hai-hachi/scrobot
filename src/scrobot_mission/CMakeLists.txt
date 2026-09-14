@@ -17,9 +17,7 @@ endif()
 
 ament_python_install_package(${PROJECT_NAME})
 
-# Keep patrol_manager.py as the reusable base implementation. The installed
-# executable is the runtime wrapper, which subclasses it and adds deferred
-# /approach_tag -> /relocalize behavior without duplicating the working mission.
+# Existing patrol-point strategy retained for baseline comparison.
 install(
   PROGRAMS
     scrobot_mission/runtime_patrol_manager.py
@@ -32,6 +30,21 @@ install(
     scrobot_mission/final_approach_controller.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME final_approach_controller
+)
+
+# New sweep + local-collect strategy.
+install(
+  PROGRAMS
+    scrobot_mission/sweep_mission_manager.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME sweep_mission_manager
+)
+
+install(
+  PROGRAMS
+    scrobot_mission/local_collect_controller.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME local_collect_controller
 )
 
 install(
