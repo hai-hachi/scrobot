@@ -46,59 +46,55 @@ controller_server:
     goal_checker:
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.10
-      yaw_goal_tolerance: 0.0873   # 10 deg
+      yaw_goal_tolerance: 0.0873   # 5 deg
       stateful: true
 
     # ----------------------------------------------------------
-    # BASELINE RPP TEST
+    # RPP - 0.8 m/s sweep tune
     # ----------------------------------------------------------
-    # Keep this deliberately simple while tuning the sweep path.
-    # Tune only these first:
-    #   1) desired_linear_vel
-    #   2) lookahead_dist
     FollowPath:
         plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
 
-        # Desired motion
-        desired_linear_vel: 0.50
+        # Desired cruise speed
+        desired_linear_vel: 0.80
 
-        # Derived from:
-        # Rmin = 0.5 m
-        # ey <= 0.05 m
-        # heading error <= 10 deg
-        lookahead_dist: 0.35
-        
+        # Adaptive Pure Pursuit lookahead. Keep the same 0.70 s preview time
+        # that worked at 0.50 m/s. At 0.80 m/s this gives 0.56 m lookahead.
+        lookahead_dist: 0.56
         use_velocity_scaled_lookahead_dist: true
         lookahead_time: 0.70
-        min_lookahead_dist: 0.25
-        max_lookahead_dist: 0.35
+        min_lookahead_dist: 0.35
+        max_lookahead_dist: 0.56
 
-        # Curvature regulation
+        # Curvature regulation. R_min remains 0.50 m.
+        # At v=0.80 m/s, v/R_min = 1.60 rad/s.
         use_regulated_linear_velocity_scaling: true
         regulated_linear_scaling_min_radius: 0.50
-        regulated_linear_scaling_min_speed: 0.20
 
-        # Leave obstacle-cost speed regulation out of the controller experiment
+        # Preserve the same R_floor ~= 0.20 m interpretation used before:
+        # v_min = 0.80 * 0.20 / 0.50 = 0.32 m/s.
+        regulated_linear_scaling_min_speed: 0.32
+
+        # Keep obstacle-cost regulation disabled while tuning motion response.
         use_cost_regulated_linear_velocity_scaling: false
 
-        # We want smooth curvature-constrained merges instead of stop + spin
+        # Keep rotate-to-heading: required for clean NavigateToPose completion
+        # and sweep-path rejoin after XY tolerance is reached.
         use_rotate_to_heading: true
-
-        rotate_to_heading_angular_vel: 1.0
+        rotate_to_heading_angular_vel: 1.60
         rotate_to_heading_min_angle: 0.3491   # 20 deg
-        max_angular_accel: 1.0
-        min_approach_linear_velocity: 0.05
-        approach_velocity_scaling_dist: 0.30
-
+        max_angular_accel: 1.00
         allow_reversing: false
 
-        # Final-path slowdown
+        # Goal approach slowdown. Kinematic stopping distance at 0.80 m/s and
+        # 1.0 m/s^2 is 0.32 m; use roughly 2x for a comfortable handoff.
         min_approach_linear_velocity: 0.10
-        approach_velocity_scaling_dist: 0.25
+        approach_velocity_scaling_dist: 0.64
 
-        # Safety
+        # Collision projection. Braking time from 0.80 m/s at 1.0 m/s^2 is
+        # approximately 0.80 s. Projection is still capped at the carrot.
         use_collision_detection: true
-        max_allowed_time_to_collision_up_to_carrot: 0.70
+        max_allowed_time_to_collision_up_to_carrot: 0.80
 
         transform_tolerance: 0.20
 
@@ -203,6 +199,6 @@ behavior_server:
     enable_stamped_cmd_vel: true
     simulate_ahead_time: 1.5
 
-    max_rotational_vel: 0.5
-    min_rotational_vel: 0.1
-    rotational_acc_lim: 1.0
+    max_rotational_vel: 1.60
+    min_rotational_vel: 0.10
+    rotational_acc_lim: 1.00
