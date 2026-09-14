@@ -10,14 +10,7 @@ from scrobot_mission.patrol_manager import PatrolManager
 
 
 class OptimizedMowPatrolEntry(OptimizedMowPatrolManager):
-    """Optimized mow manager with a strict Nav2 lifecycle startup gate.
-
-    An action server can be discoverable while its lifecycle node is still
-    INACTIVE. The previous startup logic treated action discovery as readiness,
-    which allowed the first patrol goal to be rejected repeatedly during Nav2
-    activation. This wrapper waits for lifecycle STARTUP to complete before any
-    patrol goal can be queued.
-    """
+    """Optimized mow manager with a strict Nav2 lifecycle startup gate."""
 
     def __init__(self):
         super().__init__()
@@ -25,14 +18,13 @@ class OptimizedMowPatrolEntry(OptimizedMowPatrolManager):
         self.nav2_activation_ready_time = None
 
     def start_nav2_then_patrol(self):
-        # Preserve the optimized nearest-Pi / least-turn route selection.
-        self._optimize_initial_patrol_order()
+        # The optimized manager now applies the deterministic tag->patrol route
+        # before entering this lifecycle gate. Do not recompute from live pose.
+        self._apply_precomputed_tag_route()
 
         self.nav2_startup_command_complete = False
         self.nav2_activation_ready_time = None
 
-        # Use the base initializer, but its process_pending_actions() call will
-        # dispatch to our overridden process_nav2_startup() below.
         PatrolManager.start_nav2_then_patrol(self)
 
     def process_nav2_startup(self):
@@ -44,8 +36,6 @@ class OptimizedMowPatrolEntry(OptimizedMowPatrolManager):
             self.enter_error('Nav2 startup timed out before lifecycle activation.')
             return
 
-        # Phase 1: explicitly request lifecycle STARTUP and wait for the service
-        # response. Do not use action-server discovery as the activation test.
         if not self.nav2_startup_command_complete:
             if self.nav2_startup_future is not None:
                 if not self.nav2_startup_future.done():
@@ -63,8 +53,6 @@ class OptimizedMowPatrolEntry(OptimizedMowPatrolManager):
 
                 if response is not None and response.success:
                     self.nav2_startup_command_complete = True
-                    # Small guard after lifecycle_manager reports success so the
-                    # BT action server has completed its activation callbacks.
                     self.nav2_activation_ready_time = now + 0.20
                     self.get_logger().info(
                         'Nav2 lifecycle STARTUP completed; waiting for active '
@@ -98,8 +86,6 @@ class OptimizedMowPatrolEntry(OptimizedMowPatrolManager):
             self.nav2_startup_future = self.nav2_lifecycle_client.call_async(request)
             return
 
-        # Phase 2: lifecycle manager has completed STARTUP. Only now may we
-        # inspect action-server readiness and release the first patrol goal.
         if (
             self.nav2_activation_ready_time is not None
             and now < self.nav2_activation_ready_time
