@@ -49,27 +49,34 @@ controller_server:
       yaw_goal_tolerance: 0.0523598776
       stateful: true
 
+    # The sweep manager sends nav2_msgs/action/FollowPath directly to the
+    # controller server. RPP should continuously steer through the sampled
+    # U-turns, not stop and rotate toward intermediate path headings.
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
-      desired_linear_vel: 0.85
-      lookahead_dist: 0.55
-      min_lookahead_dist: 0.25
-      max_lookahead_dist: 0.90
-      lookahead_time: 0.90
+      desired_linear_vel: 0.65
+      lookahead_dist: 0.45
+      min_lookahead_dist: 0.22
+      max_lookahead_dist: 0.70
+      lookahead_time: 0.75
       use_velocity_scaled_lookahead_dist: true
-      min_approach_linear_velocity: 0.08
-      approach_velocity_scaling_dist: 0.60
+      min_approach_linear_velocity: 0.10
+      approach_velocity_scaling_dist: 0.45
       transform_tolerance: 0.20
       use_collision_detection: true
       max_allowed_time_to_collision_up_to_carrot: 0.8
       use_regulated_linear_velocity_scaling: true
-      regulated_linear_scaling_min_radius: 0.75
-      regulated_linear_scaling_min_speed: 0.30
+      regulated_linear_scaling_min_radius: 1.00
+      regulated_linear_scaling_min_speed: 0.18
       use_cost_regulated_linear_velocity_scaling: false
-      use_rotate_to_heading: true
-      rotate_to_heading_angular_vel: 0.85
-      rotate_to_heading_min_angle: 0.35
-      max_angular_accel: 1.8
+
+      # Critical for the sweep: do not perform in-place heading rotations while
+      # following the snake. The separate relocalization state still uses the
+      # Nav2 Spin behavior when it intentionally needs to face an AprilTag.
+      use_rotate_to_heading: false
+      rotate_to_heading_angular_vel: 0.70
+      rotate_to_heading_min_angle: 0.50
+      max_angular_accel: 1.40
       allow_reversing: false
 
 local_costmap:
@@ -122,9 +129,8 @@ global_costmap:
       publish_frequency: 3.0
       rolling_window: false
       resolution: 0.05
-      # Sweep endpoints extend 1.0 m beyond the 13.4 m court and the smooth
-      # U-turns bulge another half lane spacing (~0.76 m). Keep the whole
-      # designed sweep comfortably inside the planning map.
+      # Only the initial sweep entry extends to +/-7.70 m now; all U-turns and
+      # the final endpoint stay inside the court. Keep margin for the join path.
       width: 18
       height: 8
       origin_x: -9.00
