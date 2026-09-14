@@ -3,7 +3,11 @@ sweep_mission_manager:
     frame_id: map
     base_frame: base_footprint
     odom_topic: /odometry/filtered
-    raw_detection_topic: /perception/shuttle_detections_3d
+
+    # Mission interrupts only for collection-eligible shuttles: <= 2 m from
+    # robot and outside the pole exclusion zones.
+    raw_detection_topic: /perception/collectable_shuttle_detections_3d
+
     autostart: true
     tf_timeout: 0.05
 
@@ -46,8 +50,6 @@ sweep_mission_manager:
     # Sweep / local-collect integration
     # ------------------------------------------------------------
     join_acceptance_distance: 0.40
-
-    # Shuttle interruptions are enabled again for local-collect testing.
     enable_shuttle_interrupts: true
 
     # Keep the existing test controls available while integrating collection.
