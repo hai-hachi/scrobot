@@ -7,59 +7,63 @@ sweep_mission_manager:
     autostart: true
     tf_timeout: 0.05
 
-    # Four-pass serpentine coverage.
+    # ------------------------------------------------------------
+    # Sweep geometry
+    # ------------------------------------------------------------
     court_length: 13.40
     court_width: 6.10
     sweep_passes: 4
 
     # Camera coverage proxy:
-    #   scan line is treated as 0.50 m in front of base_link
-    #   requested outside coverage margin is another 0.50 m
-    # so only the FIRST sweep entry starts 1.00 m outside the court.
-    # All U-turns and the final endpoint stay inside the court markings.
+    #   horizontal scan line ~= 0.50 m in front of base_link
+    #   desired outside margin ~= 0.50 m
+    # therefore only the first sweep entry begins 1.00 m outside.
     sweep_extension: 1.00
     sweep_path_resolution: 0.20
     turn_samples: 18
 
-    # Same tag geometry as scrobot_localization.
+    # ------------------------------------------------------------
+    # Fixed AprilTag relocalization stations
+    # ------------------------------------------------------------
     pole_x: 0.0
     left_pole_y: 3.05
     right_pole_y: -3.05
     tag_mount_radius: 0.075
     tag_inward_angle_deg: 45.0
-
-    # Fixed-stop mode is retained for later. It is not the active mode now.
     fixed_stop_max_tag_distance: 4.0
 
-    # Initial acquisition still uses approach_tag once.
     initial_tag_id: -1
     tag_approach_distance: 1.70
     tag_approach_timeout: 60.0
     relocalize_sample_count: 15
     relocalize_timeout: 15.0
 
-    # TEMPORARY runtime policy: opportunistic relocalization.
-    # Whenever the localizer reports a valid visible tag and it is close enough,
-    # pause FollowPath, call /relocalize while stationary, then resume the sweep.
-    # Set back to fixed_stops later to restore the deterministic station logic.
-    relocalization_mode: opportunistic
-    active_tags_topic: /global_localization/active_tags
-    observed_tag_prefix: observed_tag_
-    opportunistic_max_tag_distance: 3.50
-    opportunistic_min_travel_distance: 1.00
-    opportunistic_retry_cooldown: 2.00
-
-    # Still accumulated for diagnostics and for fixed_stops mode.
+    # Distance traveled before relocalization becomes due. The actual correction
+    # waits until the next deterministic fixed stop on the sweep path.
     relocalize_due_distance: 15.0
+    spin_time_allowance: 10.0
 
-    # JOIN_SWEEP does not need millimeter-level convergence. As soon as Nav2 gets
-    # within this radius of the first sweep point, cancel NavigateToPose and let
-    # FollowPath merge onto the sweep continuously. This prevents circling the
-    # exact start pose.
+    # ------------------------------------------------------------
+    # Sweep path-following test controls
+    # ------------------------------------------------------------
+    # NavigateToPose only needs to get close to the first sweep point. Once the
+    # robot enters this radius, FollowPath takes control of the actual sweep.
     join_acceptance_distance: 0.40
 
+    # Disable shuttle interruptions while tuning RPP. Turn this back on when
+    # integrating local collection again.
+    enable_shuttle_interrupts: false
+
+    enable_test_controls: true
+    test_command_topic: /mission/test_command
+    test_goal_topic: /mission/test_goal
+
+    # Also accept the standard RViz 2D Goal Pose topic for mid-sweep excursions.
+    accept_rviz_goal_topic: true
+    rviz_goal_topic: /goal_pose
+
+    # Retained for the full mission but unused while shuttle interrupts are off.
     local_collect_timeout: 120.0
-    spin_time_allowance: 10.0
 
     nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
     action_retry_period: 0.25
