@@ -38,6 +38,14 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}],
     )
 
+    collection_gate = Node(
+        package='scrobot_mission',
+        executable='collection_gate',
+        name='collection_gate',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
+    )
+
     mission = Node(
         package='scrobot_mission',
         executable='global_sweep_manager',
@@ -55,5 +63,6 @@ def generate_launch_description():
         global_localization,
         navigation,
         collection_zone_visualizer,
+        collection_gate,
         mission,
     ])
