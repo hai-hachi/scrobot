@@ -7,7 +7,6 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/Relocalize.action"
   "action/ApproachTag.action"
-  "action/CollectShuttle.action"
   "action/LocalCollect.action"
 )
 
