@@ -14,29 +14,64 @@ def _linspace(a, b, count):
     return [a + i * step for i in range(count)]
 
 
+def _append_unique(points, point, eps=1e-9):
+    x, y = point
+    if points:
+        px, py = points[-1]
+        if abs(px - x) <= eps and abs(py - y) <= eps:
+            return
+    points.append((float(x), float(y)))
+
+
+def _sample_line(x0, y0, x1, y1, spacing):
+    length = math.hypot(x1 - x0, y1 - y0)
+    segments = max(1, int(math.ceil(length / spacing)))
+    return [
+        (
+            x0 + (x1 - x0) * i / float(segments),
+            y0 + (y1 - y0) * i / float(segments),
+        )
+        for i in range(segments + 1)
+    ]
+
+
+def _sample_semicircle(cx, cy, radius, start_angle, end_angle, spacing):
+    arc_length = abs(end_angle - start_angle) * radius
+    segments = max(4, int(math.ceil(arc_length / spacing)))
+    return [
+        (
+            cx + radius * math.cos(start_angle + (end_angle - start_angle) * i / float(segments)),
+            cy + radius * math.sin(start_angle + (end_angle - start_angle) * i / float(segments)),
+        )
+        for i in range(segments + 1)
+    ]
+
+
 def orient_polyline(points):
-    """Return (x, y, yaw) for a 2-D polyline."""
+    """Return (x, y, yaw) using centered tangents where possible."""
     if not points:
         return []
 
     result = []
-    last_yaw = 0.0
     for i, (x, y) in enumerate(points):
         if len(points) == 1:
-            yaw = last_yaw
-        elif i < len(points) - 1:
-            nx, ny = points[i + 1]
+            yaw = 0.0
+        elif i == 0:
+            nx, ny = points[1]
             yaw = math.atan2(ny - y, nx - x)
-        else:
+        elif i == len(points) - 1:
             px, py = points[i - 1]
             yaw = math.atan2(y - py, x - px)
-        last_yaw = yaw
+        else:
+            px, py = points[i - 1]
+            nx, ny = points[i + 1]
+            yaw = math.atan2(ny - py, nx - px)
         result.append((float(x), float(y), float(yaw)))
     return result
 
 
 def reverse_oriented_polyline(route):
-    """Reverse an (x, y, yaw) route and recompute headings."""
+    """Reverse an (x, y, yaw) route and recompute tangent headings."""
     return orient_polyline([(x, y) for x, y, _ in reversed(route)])
 
 
@@ -48,11 +83,14 @@ def generate_snake_sweep(
     margin_x=0.45,
     margin_y=0.45,
 ):
-    """Generate a dense lawnmower path covering the usable court rectangle.
+    """Generate a C1-like lawnmower path with tangent semicircle U-turns.
 
-    Lane count is chosen so the actual lateral separation never exceeds
-    lane_spacing. Dense points along each lane discourage Nav2 from cutting
-    corners between only two distant lane endpoints.
+    Straight survey lanes are joined by semicircles whose diameter is exactly
+    the actual lane spacing. The straight lane endpoints are moved inward by
+    one turn radius, so the semicircle bulge remains inside the requested court
+    margins. This removes the old 90-deg corner + vertical connector + 90-deg
+    corner pattern and gives a differential-drive robot a continuous-curvature
+    direction change that RPP can track without stop/rotate behavior.
     """
     if court_length <= 0.0 or court_width <= 0.0:
         raise ValueError('Court dimensions must be positive.')
@@ -70,31 +108,69 @@ def generate_snake_sweep(
     lane_intervals = max(1, int(math.ceil(usable_width / lane_spacing)))
     lane_count = lane_intervals + 1
     lane_ys = _linspace(y_min, y_max, lane_count)
+    actual_lane_spacing = usable_width / float(lane_intervals)
 
-    usable_length = x_max - x_min
-    segment_count = max(1, int(math.ceil(usable_length / waypoint_spacing)))
-    lane_xs = _linspace(x_min, x_max, segment_count + 1)
+    turn_radius = 0.5 * actual_lane_spacing
+    left_lane_x = x_min + turn_radius
+    right_lane_x = x_max - turn_radius
+    if left_lane_x >= right_lane_x:
+        raise ValueError(
+            'Court is too short for semicircle connectors at this lane spacing.'
+        )
 
     points = []
+
     for lane_index, y in enumerate(lane_ys):
-        xs = lane_xs if lane_index % 2 == 0 else list(reversed(lane_xs))
-        for x in xs:
-            # Avoid duplicating the exact connector point if geometry ever
-            # produces one. Normally y changes, so both lane endpoints remain.
-            if points and abs(points[-1][0] - x) < 1e-9 and abs(points[-1][1] - y) < 1e-9:
-                continue
-            points.append((x, y))
+        moving_right = lane_index % 2 == 0
+        start_x = left_lane_x if moving_right else right_lane_x
+        end_x = right_lane_x if moving_right else left_lane_x
+
+        line = _sample_line(start_x, y, end_x, y, waypoint_spacing)
+        for point in line:
+            _append_unique(points, point)
+
+        if lane_index >= lane_count - 1:
+            continue
+
+        next_y = lane_ys[lane_index + 1]
+        cy = 0.5 * (y + next_y)
+
+        if moving_right:
+            # Start tangent points +X; end tangent points -X.
+            arc = _sample_semicircle(
+                right_lane_x,
+                cy,
+                turn_radius,
+                -0.5 * math.pi,
+                0.5 * math.pi,
+                waypoint_spacing,
+            )
+        else:
+            # Start tangent points -X; end tangent points +X.
+            arc = _sample_semicircle(
+                left_lane_x,
+                cy,
+                turn_radius,
+                1.5 * math.pi,
+                0.5 * math.pi,
+                waypoint_spacing,
+            )
+
+        for point in arc:
+            _append_unique(points, point)
 
     route = orient_polyline(points)
-    actual_lane_spacing = usable_width / float(lane_intervals)
     return route, {
         'lane_count': lane_count,
         'actual_lane_spacing': actual_lane_spacing,
+        'turn_radius': turn_radius,
         'waypoint_count': len(route),
         'x_min': x_min,
         'x_max': x_max,
         'y_min': y_min,
         'y_max': y_max,
+        'straight_x_min': left_lane_x,
+        'straight_x_max': right_lane_x,
     }
 
 
