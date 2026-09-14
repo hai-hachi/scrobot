@@ -7,19 +7,24 @@ global_sweep_manager:
     court_width: 6.10
     tf_timeout: 0.05
 
-    # Full-court lawnmower survey. 2.20 m lanes deliberately overlap the
-    # camera's roughly 3 m useful detection range. Dense 0.75 m waypoints keep
-    # NavigateThroughPoses close to the intended snake instead of cutting wide
-    # diagonals between only a few lane endpoints.
+    # Full-court lawnmower survey. Straight lanes are joined by tangent
+    # semicircles whose radius is half the actual lane spacing. The complete
+    # path is sent directly to Nav2 FollowPath rather than replanned between
+    # waypoints.
     sweep_lane_spacing: 2.20
-    sweep_waypoint_spacing: 0.75
+    sweep_waypoint_spacing: 0.30
     sweep_margin_x: 0.45
     sweep_margin_y: 0.45
+    sweep_controller_id: SweepPath
+    sweep_start_retries: 2
 
-    # Collection route targets pickup_link, not base_footprint.
+    # Collection route targets pickup_link, not base_footprint. Each optimized
+    # shuttle target is sent as a separate NavigateToPose goal so one failure
+    # can be retried/skipped without aborting the entire route.
     pickup_offset_x: 0.165
     collection_overrun: 0.03
     two_opt_max_passes: 100
+    collection_target_retries: 2
 
     # Persistent confirmed map-frame tracker output.
     tracked_shuttles_topic: /perception/tracked_shuttles
