@@ -38,30 +38,25 @@ sweep_mission_manager:
     relocalize_sample_count: 15
     relocalize_timeout: 15.0
 
-    # Every generated fixed station is now used unconditionally. There is no
+    # Every generated fixed station is used unconditionally. There is no
     # traveled-distance threshold before /relocalize becomes due.
     spin_time_allowance: 10.0
 
     # ------------------------------------------------------------
-    # Sweep path-following test controls
+    # Sweep / local-collect integration
     # ------------------------------------------------------------
-    # NavigateToPose only needs to get close to the first sweep point. Once the
-    # robot enters this radius, FollowPath takes control of the actual sweep.
     join_acceptance_distance: 0.40
 
-    # Disable shuttle interruptions while tuning RPP. Turn this back on when
-    # integrating local collection again.
-    enable_shuttle_interrupts: false
+    # Shuttle interruptions are enabled again for local-collect testing.
+    enable_shuttle_interrupts: true
 
+    # Keep the existing test controls available while integrating collection.
     enable_test_controls: true
     test_command_topic: /mission/test_command
     test_goal_topic: /mission/test_goal
-
-    # Also accept the standard RViz 2D Goal Pose topic for mid-sweep excursions.
     accept_rviz_goal_topic: true
     rviz_goal_topic: /goal_pose
 
-    # Retained for the full mission but unused while shuttle interrupts are off.
     local_collect_timeout: 120.0
 
     nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
