@@ -24,9 +24,12 @@ install(
   RENAME patrol_manager
 )
 
+# Keep the base survey manager as an importable implementation. The installed
+# executable uses the smooth wrapper: exact FollowPath survey + sequential
+# NavigateToPose collection targets.
 install(
   PROGRAMS
-    scrobot_mission/global_sweep_manager.py
+    scrobot_mission/global_sweep_smooth_manager.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME global_sweep_manager
 )
