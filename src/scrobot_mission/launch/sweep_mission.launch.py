@@ -52,7 +52,16 @@ def generate_launch_description():
         executable='shuttle_debug_monitor',
         name='shuttle_debug_monitor',
         output='screen',
-        parameters=[{'use_sim_time': use_sim_time}],
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'rosout_nodes': [
+                'fake_shuttle_detector',
+                'shuttle_tracker',
+                'shuttle_collection_filter',
+                'local_collect_controller',
+                'sweep_mission_manager',
+            ],
+        }],
     )
 
     sweep_manager = Node(
