@@ -122,9 +122,12 @@ global_costmap:
       publish_frequency: 3.0
       rolling_window: false
       resolution: 0.05
-      width: 15
+      # Sweep endpoints extend 1.0 m beyond the 13.4 m court and the smooth
+      # U-turns bulge another half lane spacing (~0.76 m). Keep the whole
+      # designed sweep comfortably inside the planning map.
+      width: 18
       height: 8
-      origin_x: -7.50
+      origin_x: -9.00
       origin_y: -4.00
       track_unknown_space: false
       transform_tolerance: 0.30
