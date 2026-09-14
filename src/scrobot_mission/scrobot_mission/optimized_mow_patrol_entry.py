@@ -1,24 +1,82 @@
 #!/usr/bin/env python3
 
+import math
 import time
 
 import rclpy
 from nav2_msgs.srv import ManageLifecycleNodes
 
 from scrobot_mission.optimized_mow_patrol_manager import OptimizedMowPatrolManager
-from scrobot_mission.patrol_manager import PatrolManager
+from scrobot_mission.patrol_manager import MissionState, PatrolManager, detection_position
 
 
 class OptimizedMowPatrolEntry(OptimizedMowPatrolManager):
-    """Optimized mow manager with a strict Nav2 lifecycle startup gate."""
+    """Optimized mow manager with Nav2 lifecycle and scan-transition guards."""
 
     def __init__(self):
         super().__init__()
         self.nav2_startup_command_complete = False
         self.nav2_activation_ready_time = None
 
+        # Do not cancel a patrol/local Spin for a track sitting right on the
+        # 3.0 m mowing boundary. Selection may still use the full max range;
+        # this margin only decides whether a scan is worth interrupting.
+        self.declare_parameter('mow_trigger_range_margin', 0.10)
+        self.mow_trigger_range_margin = max(
+            0.0,
+            float(self.get_parameter('mow_trigger_range_margin').value),
+        )
+
+    # ------------------------------------------------------------------
+    # Scan transition guard
+    # ------------------------------------------------------------------
+
+    def _eligible_scan_candidates(self, ordered):
+        robot = self._robot_pose_in_map()
+        if robot is None:
+            return []
+
+        rx, ry, _ = robot
+        trigger_range = max(
+            0.0,
+            self.mow_target_max_range - self.mow_trigger_range_margin,
+        )
+
+        eligible = []
+        for track_id, detection in ordered:
+            x, y, _ = detection_position(detection)
+            if math.hypot(x - rx, y - ry) <= trigger_range:
+                eligible.append((track_id, detection))
+        return eligible
+
+    def visible_tracks_callback(self, msg):
+        # The parent implementation correctly handles active slow observation,
+        # quick relocalization, and RETURN_TO_PATROL interception. The only
+        # problematic transition was PATROL_SCAN/LOCAL_SCAN -> SLOW_OBSERVE:
+        # it previously happened for any visible track, even one outside the
+        # <=3 m mow range. Then selection rejected that track and restarted the
+        # scan, causing LOCAL_SCAN <-> SLOW_OBSERVE oscillation.
+        if (
+            self.state in (MissionState.PATROL_SCAN, MissionState.LOCAL_SCAN)
+            and not self.slow_observation_active
+            and not self.quick_align_active
+            and not self.quick_relocalize_in_progress
+        ):
+            ordered = self._cache_visible(msg)
+            eligible = self._eligible_scan_candidates(ordered)
+            if eligible:
+                self._begin_slow_observation(eligible)
+            # If only distant tracks are visible, leave the Nav2 Spin alone.
+            return
+
+        super().visible_tracks_callback(msg)
+
+    # ------------------------------------------------------------------
+    # Nav2 lifecycle startup gate
+    # ------------------------------------------------------------------
+
     def start_nav2_then_patrol(self):
-        # The optimized manager now applies the deterministic tag->patrol route
+        # The optimized manager applies the deterministic tag->patrol route
         # before entering this lifecycle gate. Do not recompute from live pose.
         self._apply_precomputed_tag_route()
 
