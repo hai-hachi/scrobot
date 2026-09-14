@@ -5,7 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded: ~
       Splitter Ratio: 0.5
-    Tree Height: 650
+    Tree Height: 451
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Views
@@ -16,13 +16,13 @@ Panels:
 Visualization Manager:
   Class: ""
   Displays:
-    - Alpha: 0.45
+    - Alpha: 0.44999998807907104
       Cell Size: 1
       Class: rviz_default_plugins/Grid
       Color: 160; 160; 164
       Enabled: true
       Line Style:
-        Line Width: 0.03
+        Line Width: 0.029999999329447746
         Value: Lines
       Name: Grid
       Normal Cell Count: 0
@@ -34,7 +34,6 @@ Visualization Manager:
       Plane Cell Count: 20
       Reference Frame: <Fixed Frame>
       Value: true
-
     - Alpha: 1
       Class: rviz_default_plugins/RobotModel
       Collision Enabled: false
@@ -53,6 +52,91 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        base_footprint:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_bottom_screw_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_color_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_color_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_depth_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_depth_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_imu_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_imu_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        collector_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        left_caster_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        left_caster_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        left_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        mag_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        pickup_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        right_caster_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        right_caster_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        right_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
@@ -61,7 +145,6 @@ Visualization Manager:
       Update Interval: 0
       Value: true
       Visual Enabled: true
-
     - Class: rviz_default_plugins/TF
       Enabled: true
       Filter (blacklist): ""
@@ -69,14 +152,89 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
+        base_footprint:
+          Value: true
+        base_link:
+          Value: true
+        camera_bottom_screw_frame:
+          Value: true
+        camera_color_frame:
+          Value: true
+        camera_color_optical_frame:
+          Value: true
+        camera_depth_frame:
+          Value: true
+        camera_depth_optical_frame:
+          Value: true
+        camera_imu_frame:
+          Value: true
+        camera_imu_optical_frame:
+          Value: true
+        camera_link:
+          Value: true
+        collector_link:
+          Value: true
+        court_tag_0:
+          Value: true
+        court_tag_1:
+          Value: true
+        court_tag_2:
+          Value: true
+        court_tag_3:
+          Value: true
+        left_caster_link:
+          Value: true
+        left_caster_wheel_link:
+          Value: true
+        left_wheel_link:
+          Value: true
+        mag_link:
+          Value: true
+        map:
+          Value: true
+        observed_tag_0:
+          Value: true
+        observed_tag_2:
+          Value: true
+        odom:
+          Value: true
+        pickup_link:
+          Value: true
+        right_caster_link:
+          Value: true
+        right_caster_wheel_link:
+          Value: true
+        right_wheel_link:
+          Value: true
+        tag_mount_0:
+          Value: true
+        tag_mount_1:
+          Value: true
+        tag_mount_2:
+          Value: true
+        tag_mount_3:
+          Value: true
       Marker Scale: 0.25
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: false
+      Tree:
+        map:
+          tag_mount_0:
+            court_tag_0:
+              {}
+          tag_mount_1:
+            court_tag_1:
+              {}
+          tag_mount_2:
+            court_tag_2:
+              {}
+          tag_mount_3:
+            court_tag_3:
+              {}
       Update Interval: 0
       Value: true
-
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: Court
@@ -93,8 +251,7 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /court_markers
       Value: true
-
-    - Alpha: 0.30
+    - Alpha: 0.30000001192092896
       Binary representation: false
       Binary threshold: 100
       Class: rviz_default_plugins/Map
@@ -117,8 +274,7 @@ Visualization Manager:
         Value: /global_costmap/costmap_updates
       Use Timestamp: false
       Value: true
-
-    - Alpha: 0.55
+    - Alpha: 0.550000011920929
       Binary representation: false
       Binary threshold: 100
       Class: rviz_default_plugins/Map
@@ -141,17 +297,16 @@ Visualization Manager:
         Value: /local_costmap/costmap_updates
       Use Timestamp: false
       Value: true
-
     - Alpha: 1
       Buffer Length: 1
       Class: rviz_default_plugins/Path
       Color: 25; 255; 25
       Enabled: true
-      Head Diameter: 0.30
-      Head Length: 0.20
-      Length: 0.30
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
       Line Style: Lines
-      Line Width: 0.05
+      Line Width: 0.05000000074505806
       Name: Nav2 Global Plan
       Offset:
         X: 0
@@ -159,9 +314,9 @@ Visualization Manager:
         Z: 0
       Pose Color: 255; 85; 255
       Pose Style: None
-      Radius: 0.03
-      Shaft Diameter: 0.10
-      Shaft Length: 0.10
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -170,18 +325,17 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /plan
       Value: true
-
     - Alpha: 1
       Axes Length: 1
-      Axes Radius: 0.10
+      Axes Radius: 0.10000000149011612
       Class: rviz_default_plugins/Pose
       Color: 255; 85; 0
       Enabled: true
-      Head Length: 0.15
-      Head Radius: 0.06
+      Head Length: 0.15000000596046448
+      Head Radius: 0.05999999865889549
       Name: Current Mission Goal
-      Shaft Length: 0.35
-      Shaft Radius: 0.025
+      Shaft Length: 0.3499999940395355
+      Shaft Radius: 0.02500000037252903
       Shape: Arrow
       Topic:
         Depth: 1
@@ -191,19 +345,18 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /mission/current_goal
       Value: true
-
-    - Alpha: 0.90
-      Arrow Length: 0.20
-      Axes Length: 0.30
-      Axes Radius: 0.01
+    - Alpha: 0.8999999761581421
+      Arrow Length: 0.20000000298023224
+      Axes Length: 0.30000001192092896
+      Axes Radius: 0.009999999776482582
       Class: rviz_default_plugins/PoseArray
       Color: 255; 165; 0
       Enabled: true
-      Head Length: 0.07
-      Head Radius: 0.03
+      Head Length: 0.07000000029802322
+      Head Radius: 0.029999999329447746
       Name: Patrol Points
-      Shaft Length: 0.23
-      Shaft Radius: 0.01
+      Shaft Length: 0.23000000417232513
+      Shaft Radius: 0.009999999776482582
       Shape: Arrow (Flat)
       Topic:
         Depth: 1
@@ -213,19 +366,18 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /mission/patrol_points
       Value: true
-
     - Alpha: 1
-      Arrow Length: 0.30
-      Axes Length: 0.16
-      Axes Radius: 0.012
+      Arrow Length: 0.30000001192092896
+      Axes Length: 0.1599999964237213
+      Axes Radius: 0.012000000104308128
       Class: rviz_default_plugins/PoseArray
       Color: 0; 255; 255
       Enabled: true
-      Head Length: 0.07
-      Head Radius: 0.03
+      Head Length: 0.07000000029802322
+      Head Radius: 0.029999999329447746
       Name: Shuttle Ground Truth
-      Shaft Length: 0.23
-      Shaft Radius: 0.01
+      Shaft Length: 0.23000000417232513
+      Shaft Radius: 0.009999999776482582
       Shape: Axes
       Topic:
         Depth: 5
@@ -235,7 +387,6 @@ Visualization Manager:
         Reliability Policy: Best Effort
         Value: /evaluation/shuttle_ground_truth
       Value: true
-
     - Alpha: 1
       Class: rviz_default_plugins/Polygon
       Color: 0; 255; 100
@@ -249,7 +400,6 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /mission/collection_zone
       Value: true
-
     - Alpha: 1
       Class: rviz_default_plugins/Polygon
       Color: 255; 0; 0
@@ -263,7 +413,6 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /collision_monitor/stop_zone
       Value: true
-
     - Alpha: 1
       Class: rviz_default_plugins/Polygon
       Color: 255; 220; 0
@@ -277,7 +426,6 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /collision_monitor/slowdown_zone
       Value: true
-
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -300,7 +448,7 @@ Visualization Manager:
       Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.01
+      Size (m): 0.009999999776482582
       Style: Points
       Topic:
         Depth: 5
@@ -312,27 +460,26 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
-
     - Alpha: 1
       Buffer Length: 1
       Class: rviz_default_plugins/Path
       Color: 0; 200; 255
       Enabled: true
-      Head Diameter: 0.20
-      Head Length: 0.10
-      Length: 0.20
+      Head Diameter: 0.20000000298023224
+      Head Length: 0.10000000149011612
+      Length: 0.20000000298023224
       Line Style: Lines
-      Line Width: 0.05
+      Line Width: 0.05000000074505806
       Name: Evaluation Ground Truth Path
       Offset:
         X: 0
         Y: 0
-        Z: 0.02
+        Z: 0.019999999552965164
       Pose Color: 0; 200; 255
       Pose Style: None
-      Radius: 0.02
-      Shaft Diameter: 0.05
-      Shaft Length: 0.05
+      Radius: 0.019999999552965164
+      Shaft Diameter: 0.05000000074505806
+      Shaft Length: 0.05000000074505806
       Topic:
         Depth: 1
         Durability Policy: Transient Local
@@ -341,27 +488,26 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /evaluation/ground_truth_path
       Value: true
-
-    - Alpha: 0.85
+    - Alpha: 0.8500000238418579
       Buffer Length: 1
       Class: rviz_default_plugins/Path
       Color: 255; 0; 255
       Enabled: true
-      Head Diameter: 0.20
-      Head Length: 0.10
-      Length: 0.20
+      Head Diameter: 0.20000000298023224
+      Head Length: 0.10000000149011612
+      Length: 0.20000000298023224
       Line Style: Lines
-      Line Width: 0.035
+      Line Width: 0.03500000014901161
       Name: Evaluation Estimated Path
       Offset:
         X: 0
         Y: 0
-        Z: 0.04
+        Z: 0.03999999910593033
       Pose Color: 255; 0; 255
       Pose Style: None
-      Radius: 0.02
-      Shaft Diameter: 0.05
-      Shaft Length: 0.05
+      Radius: 0.019999999552965164
+      Shaft Diameter: 0.05000000074505806
+      Shaft Length: 0.05000000074505806
       Topic:
         Depth: 1
         Durability Policy: Transient Local
@@ -370,7 +516,6 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /evaluation/estimated_path
       Value: true
-
   Enabled: true
   Global Options:
     Background Color: 40; 40; 40
@@ -391,14 +536,14 @@ Visualization Manager:
       Angle: 0
       Class: rviz_default_plugins/TopDownOrtho
       Enable Stereo Rendering:
-        Stereo Eye Separation: 0.06
+        Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Invert Z Axis: false
       Name: Current View
-      Near Clip Distance: 0.01
-      Scale: 95
+      Near Clip Distance: 0.009999999776482582
+      Scale: 64.73983764648438
       Target Frame: map
       Value: TopDownOrtho (rviz_default_plugins)
       X: 0
@@ -407,13 +552,14 @@ Visualization Manager:
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 1000
+  Height: 1010
   Hide Left Dock: false
   Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd0000000100000000000001c900000394fc0200000003fb000000100044006900730070006c006100790073010000003f00000249000000cc00fffffffb0000001200530065006c0065006300740069006f006e0000000238000000800000005d00fffffffb0000000a00560069006500770073010000028e00000145000000a900ffffff000004e60000039400000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Views:
     collapsed: false
-  Width: 1700
-  X: 100
-  Y: 50
+  Width: 1717
+  X: 2034
+  Y: 65
