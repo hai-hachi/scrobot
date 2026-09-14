@@ -17,7 +17,6 @@ endif()
 
 ament_python_install_package(${PROJECT_NAME})
 
-# Existing patrol strategy remains available on this branch for comparison.
 install(
   PROGRAMS
     scrobot_mission/runtime_patrol_manager.py
@@ -25,13 +24,18 @@ install(
   RENAME patrol_manager
 )
 
-# New survey-first strategy: full-court snake sweep -> freeze shuttle map ->
-# nearest-neighbor + 2-opt collection route.
 install(
   PROGRAMS
     scrobot_mission/global_sweep_manager.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME global_sweep_manager
+)
+
+install(
+  PROGRAMS
+    scrobot_mission/collection_gate.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME collection_gate
 )
 
 install(
