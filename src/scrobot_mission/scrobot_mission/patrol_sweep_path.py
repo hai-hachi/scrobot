@@ -29,10 +29,7 @@ def wrap_angle(angle):
 
 def tag_geometry(pole_x=0.0, left_pole_y=3.05, right_pole_y=-3.05,
                  tag_mount_radius=0.075, inward_angle_deg=45.0):
-    """Return map-frame (x, y, inward_yaw) for the four court tags.
-
-    This mirrors tag_global_localizer.compute_tag_headings().
-    """
+    """Return map-frame (x, y, inward_yaw) for the four court tags."""
     a = math.radians(inward_angle_deg)
     headings = {0: -a, 1: +a, 2: -math.pi + a, 3: +math.pi - a}
     result = {}
@@ -47,12 +44,7 @@ def tag_geometry(pole_x=0.0, left_pole_y=3.05, right_pole_y=-3.05,
 
 
 def start_sides_for_tag(tag_id):
-    """Return (start_from_positive_x, start_from_positive_y).
-
-    The tag heading identifies the court quadrant it faces. Tags 0/1 face the
-    +X half and tags 2/3 face the -X half; tags 0/2 are on +Y and tags 1/3 on
-    -Y. This makes initial sweep entry deterministic after relocalization.
-    """
+    """Return (start_from_positive_x, start_from_positive_y)."""
     if tag_id not in (0, 1, 2, 3):
         return False, False
     return tag_id in (0, 1), tag_id in (0, 2)
@@ -69,22 +61,22 @@ def _append_point(points, x, y, yaw, lane_index, is_lane):
 
 
 def generate_sweep_path(court_length=13.40, court_width=6.10, passes=4,
-                        sweep_extension=1.0, turn_samples=12, start_tag_id=0):
-    """Generate a continuous four-pass serpentine sweep.
+                        sweep_extension=1.0, turn_samples=12,
+                        path_resolution=0.25, start_tag_id=0):
+    """Generate a dense continuous serpentine sweep.
 
-    Straight passes run along court X. Their first/last endpoints extend beyond
-    the court by sweep_extension so the accumulated forward camera footprint can
-    cover the end boundaries. U-turns are sampled half-circles outside the X
-    boundary to avoid point turns.
+    Straight passes run along court X and extend outside the court at both ends.
+    Dense straight samples provide stable departure/resume checkpoints. Adjacent
+    passes are joined with sampled semicircular U-turns.
     """
     passes = max(2, int(passes))
     turn_samples = max(3, int(turn_samples))
+    path_resolution = max(0.05, float(path_resolution))
     x_half = 0.5 * float(court_length)
     y_half = 0.5 * float(court_width)
     x_left = -x_half - float(sweep_extension)
     x_right = x_half + float(sweep_extension)
 
-    # Equal-width coverage strips: lane center is at the center of each strip.
     lane_spacing = float(court_width) / passes
     lane_ys = [-y_half + (i + 0.5) * lane_spacing for i in range(passes)]
 
@@ -99,8 +91,12 @@ def generate_sweep_path(court_length=13.40, court_width=6.10, passes=4,
         x_start = x_right if current_from_right else x_left
         x_end = x_left if current_from_right else x_right
         yaw = math.pi if current_from_right else 0.0
-        _append_point(points, x_start, y, yaw, lane_idx, True)
-        _append_point(points, x_end, y, yaw, lane_idx, True)
+        lane_length = abs(x_end - x_start)
+        samples = max(2, int(math.ceil(lane_length / path_resolution)) + 1)
+        for j in range(samples):
+            ratio = j / float(samples - 1)
+            x = x_start + ratio * (x_end - x_start)
+            _append_point(points, x, y, yaw, lane_idx, True)
 
         if lane_idx == passes - 1:
             break
@@ -110,10 +106,7 @@ def generate_sweep_path(court_length=13.40, court_width=6.10, passes=4,
         radius = 0.5 * abs(next_y - y)
         side_x = x_end
 
-        # Semicircle tangent to both straight lanes. Parameterization depends on
-        # whether the robot reached the left or right side of the court.
         if x_end > 0.0:
-            # At right edge: heading +X, bulge further +X, finish heading -X.
             start_angle = -math.pi / 2.0 if next_y > y else math.pi / 2.0
             sign = 1.0 if next_y > y else -1.0
             for j in range(1, turn_samples + 1):
@@ -123,7 +116,6 @@ def generate_sweep_path(court_length=13.40, court_width=6.10, passes=4,
                 tangent_yaw = theta + sign * math.pi / 2.0
                 _append_point(points, x, yy, tangent_yaw, lane_idx, False)
         else:
-            # At left edge: heading -X, bulge further -X, finish heading +X.
             start_angle = math.pi / 2.0 if next_y > y else -math.pi / 2.0
             sign = 1.0 if next_y > y else -1.0
             for j in range(1, turn_samples + 1):
@@ -154,21 +146,16 @@ def choose_fixed_relocalization_stops(points, court_length=13.40,
                                       tag_mount_radius=0.075,
                                       inward_angle_deg=45.0,
                                       max_tag_distance=2.0):
-    """Choose exactly one deterministic sweep stop per tag.
+    """Choose one deterministic fixed stop per tag.
 
-    Candidate stops are intersections of a tag inward normal with a straight
-    sweep pass. Intersections outside the court-length sweep span or beyond the
-    allowed tag range are rejected. For each tag, prefer a pass whose travel
-    direction faces generally toward the tag (|bearing| <= 90 deg), then choose
-    the closest valid intersection. No runtime rotation cost is used.
+    Each candidate is the intersection of the tag inward normal and one straight
+    sweep pass. Passes facing more than 90 degrees away from the tag are rejected.
+    Among the valid intersections, the closest-to-tag intersection is selected.
     """
     tags = tag_geometry(pole_x, left_pole_y, right_pole_y,
                         tag_mount_radius, inward_angle_deg)
-
-    # Lane metadata from the straight endpoints. Each lane is represented by
-    # the first lane point encountered in traversal order.
     lane_meta = {}
-    for idx, p in enumerate(points):
+    for p in points:
         if p.is_lane and p.lane_index not in lane_meta:
             lane_meta[p.lane_index] = (p.y, p.yaw)
 
@@ -186,11 +173,9 @@ def choose_fixed_relocalization_stops(points, court_length=13.40,
                 continue
 
             face_tag_yaw = math.atan2(ty - y, tx - x)
-            bearing_from_sweep = abs(wrap_angle(face_tag_yaw - sweep_yaw))
-            if bearing_from_sweep > math.pi / 2.0:
+            if abs(wrap_angle(face_tag_yaw - sweep_yaw)) > math.pi / 2.0:
                 continue
 
-            # Locate the closest sampled path point on this straight lane.
             lane_indices = [
                 i for i, p in enumerate(points)
                 if p.is_lane and p.lane_index == lane_idx
@@ -201,9 +186,7 @@ def choose_fixed_relocalization_stops(points, court_length=13.40,
                 lane_indices,
                 key=lambda i: math.hypot(points[i].x - x, points[i].y - y),
             )
-            # We store the exact analytic stop position while using path_index
-            # only as a traversal-order marker.
-            path_distance = points[path_index].distance + abs(x - points[path_index].x)
+            path_distance = points[path_index].distance
             candidates.append((ray_distance, lane_idx, path_index, path_distance,
                                x, y, sweep_yaw, face_tag_yaw))
 
@@ -221,7 +204,7 @@ def choose_fixed_relocalization_stops(points, court_length=13.40,
             face_tag_yaw=face_tag_yaw,
         ))
 
-    stops.sort(key=lambda s: s.path_distance)
+    stops.sort(key=lambda s: s.path_index)
     return stops
 
 
