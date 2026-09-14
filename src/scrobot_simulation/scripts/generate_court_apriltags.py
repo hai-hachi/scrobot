@@ -17,6 +17,7 @@ SHUTTLE_FREEZE_DISTANCE = 0.55
 SHUTTLE_SETTLE_TIME = 0.75
 SHUTTLE_GROUND_TRUTH_TOPIC = '/evaluation/shuttle_ground_truth_gz'
 SHUTTLE_COLLECTED_TOPIC = '/evaluation/shuttle_collected_gz'
+SHUTTLE_COLLECTION_CONTROL_TOPIC = '/mission/collection_enabled_gz'
 PICKUP_OFFSET_X = 0.165
 PICKUP_HALF_LENGTH = 0.030
 PICKUP_HALF_WIDTH = 0.150
@@ -122,6 +123,7 @@ def write_model_sdf(params, output_dir, plate_size, headings):
       <settle_time>{SHUTTLE_SETTLE_TIME:.2f}</settle_time>
       <ground_truth_topic>{SHUTTLE_GROUND_TRUTH_TOPIC}</ground_truth_topic>
       <collected_topic>{SHUTTLE_COLLECTED_TOPIC}</collected_topic>
+      <collection_control_topic>{SHUTTLE_COLLECTION_CONTROL_TOPIC}</collection_control_topic>
       <pickup_offset_x>{PICKUP_OFFSET_X:.3f}</pickup_offset_x>
       <pickup_half_length>{PICKUP_HALF_LENGTH:.3f}</pickup_half_length>
       <pickup_half_width>{PICKUP_HALF_WIDTH:.3f}</pickup_half_width>
