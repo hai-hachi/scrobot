@@ -1,0 +1,46 @@
+sweep_mission_manager:
+  ros__parameters:
+    frame_id: map
+    base_frame: base_footprint
+    odom_topic: /odometry/filtered
+    raw_detection_topic: /perception/shuttle_detections_3d
+    autostart: true
+    tf_timeout: 0.05
+
+    # Four-pass serpentine coverage.
+    court_length: 13.40
+    court_width: 6.10
+    sweep_passes: 4
+    sweep_extension: 1.00
+    sweep_path_resolution: 0.25
+    turn_samples: 12
+
+    # Same tag geometry as scrobot_localization.
+    pole_x: 0.0
+    left_pole_y: 3.05
+    right_pole_y: -3.05
+    tag_mount_radius: 0.030
+    tag_inward_angle_deg: 45.0
+
+    # A second-lane intersection is required for the tag whose nearest lane is
+    # traversed facing away. Keep this consistent with relocalization_max_distance.
+    fixed_stop_max_tag_distance: 4.0
+
+    # Initial acquisition still uses approach_tag once.
+    initial_tag_id: -1
+    tag_approach_distance: 1.70
+    tag_approach_timeout: 60.0
+    relocalize_sample_count: 15
+    relocalize_timeout: 15.0
+
+    # Accumulated odom distance across sweep + local collection + return.
+    relocalize_due_distance: 15.0
+
+    local_collect_timeout: 120.0
+    spin_time_allowance: 10.0
+
+    nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
+    action_retry_period: 0.25
+    controller_id: FollowPath
+    goal_checker_id: ''
+    progress_checker_id: ''
