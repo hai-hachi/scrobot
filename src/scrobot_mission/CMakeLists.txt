@@ -24,18 +24,18 @@ install(
   RENAME patrol_manager
 )
 
-# Survey-first strategy executable. The visual wrapper keeps the exact FollowPath
-# sweep, then uses smoothed Nav2 staging + live camera-guided intercepts.
+# Final survey-first strategy: deterministic four-lane exact FollowPath sweep,
+# absolute relocalization/remapping, smoothed Nav2 staging, live + TF intercept.
 install(
   PROGRAMS
-    scrobot_mission/global_sweep_visual_manager.py
+    scrobot_mission/global_sweep_final_manager.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME global_sweep_manager
 )
 
 install(
   PROGRAMS
-    scrobot_mission/visual_intercept_controller.py
+    scrobot_mission/visual_intercept_tf_controller.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME visual_intercept_controller
 )
