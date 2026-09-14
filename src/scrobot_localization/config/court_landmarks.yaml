@@ -22,7 +22,7 @@ tag_global_localizer:
     filter_tau: 0.25
     min_decision_margin: 20.0
     max_tag_distance: 9.0
-    relocalization_max_distance: 2.0
+    relocalization_max_distance: 4.0
     max_view_angle_deg: 35.0
     max_position_disagreement: 0.15
     max_yaw_disagreement_deg: 6.0
