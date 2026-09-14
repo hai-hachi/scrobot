@@ -52,7 +52,7 @@ cluster:
 mixed:
   count: 50
   seed: null
-  random_fraction: 0.30
+  random_fraction: 0.15
   random_density: uniform
 
 court:
