@@ -17,3 +17,7 @@ mission/collection_phase
 mission/collection_outcome
 
 ros2 launch scrobot_simulation spawn_shuttles.launch.py mode:=random count:=20
+
+
+ros2 topic pub --once /mission/test_goal geometry_msgs/msg/PoseStamped \
+"{header: {frame_id: map}, pose: {position: {x: 2.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}"

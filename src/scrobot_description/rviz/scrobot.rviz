@@ -5,7 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded: ~
       Splitter Ratio: 0.8058823347091675
-    Tree Height: 601
+    Tree Height: 490
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Views
@@ -109,11 +109,7 @@ Visualization Manager:
           Value: true
         observed_tag_0:
           Value: true
-        observed_tag_1:
-          Value: true
         observed_tag_2:
-          Value: true
-        observed_tag_3:
           Value: true
         odom:
           Value: true
@@ -140,42 +136,6 @@ Visualization Manager:
       Show Names: false
       Tree:
         map:
-          odom:
-            base_footprint:
-              base_link:
-                camera_bottom_screw_frame:
-                  camera_link:
-                    camera_color_frame:
-                      camera_color_optical_frame:
-                        observed_tag_0:
-                          {}
-                        observed_tag_1:
-                          {}
-                        observed_tag_2:
-                          {}
-                        observed_tag_3:
-                          {}
-                    camera_depth_frame:
-                      camera_depth_optical_frame:
-                        {}
-                    camera_imu_frame:
-                      camera_imu_optical_frame:
-                        {}
-                collector_link:
-                  pickup_link:
-                    {}
-                left_caster_link:
-                  left_caster_wheel_link:
-                    {}
-                left_wheel_link:
-                  {}
-                mag_link:
-                  {}
-                right_caster_link:
-                  right_caster_wheel_link:
-                    {}
-                right_wheel_link:
-                  {}
           tag_mount_0:
             court_tag_0:
               {}
@@ -551,7 +511,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: -0.03499980270862579
+      Angle: 0
       Class: rviz_default_plugins/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
@@ -561,11 +521,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 75.99687957763672
+      Scale: 60
       Target Frame: map
       Value: TopDownOrtho (rviz_default_plugins)
-      X: 1.3250731229782104
-      Y: 0.4146707057952881
+      X: 3.2070603370666504
+      Y: 0.8504476547241211
     Saved: ~
 Window Geometry:
   Displays:
@@ -573,7 +533,7 @@ Window Geometry:
   Height: 1010
   Hide Left Dock: false
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd00000001000000000000015600000394fc0200000003fb000000100044006900730070006c006100790073010000003f000002df000000cc00fffffffb0000000a005600690065007700730100000324000000af000000a900fffffffb0000001200530065006c0065006300740069006f006e00000001ec000000cc0000005d00ffffff000005590000039400000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000001000000000000015600000394fc0200000003fb000000100044006900730070006c006100790073010000003f00000270000000cc00fffffffb0000000a0056006900650077007301000002b50000011e000000a900fffffffb0000001200530065006c0065006300740069006f006e00000001ec000000cc0000005d00ffffff000005590000039400000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Views:
