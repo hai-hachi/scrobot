@@ -7,18 +7,18 @@ global_sweep_manager:
     court_width: 6.10
     tf_timeout: 0.05
 
-    # Full-court lawnmower survey. The outer lanes are kept well inside the
-    # pole line; the ~3 m camera range still observes the court boundary.
-    sweep_lane_spacing: 2.20
+    # Final sweep manager forces exactly four lanes and extends only the first
+    # entry / last exit 0.80 m beyond the playable court. The side margin keeps
+    # the outer lanes clear of the tag poles while preserving camera coverage.
+    sweep_lane_spacing: 1.45
     sweep_waypoint_spacing: 0.30
     sweep_margin_x: 0.60
     sweep_margin_y: 0.90
     sweep_controller_id: SweepPath
     sweep_start_retries: 2
 
-    # Survey results define global visit order only. Collection no longer asks
-    # Nav2 to drive over the stale frozen shuttle coordinate. Instead Nav2 goes
-    # to a staging point, then /visual_intercept tracks the current camera pose.
+    # Global route order uses the corrected frozen survey map. Nav2 approaches
+    # a staging pose, then live vision / collector TF owns the final intercept.
     pickup_offset_x: 0.165
     collection_overrun: 0.03
     two_opt_max_passes: 100
@@ -27,10 +27,19 @@ global_sweep_manager:
     visual_intercept_action: /visual_intercept
     visual_intercept_retries: 1
 
+    # Absolute-pose refresh. After the survey, all recorded shuttle coordinates
+    # are rigidly remapped by T_new(map<-odom) * inv(T_old(map<-odom)). During
+    # the longer collection run the same correction happens every 8 targets.
+    post_sweep_relocalize: true
+    collection_relocalize_every: 8
+    runtime_tag_distance: 1.70
+    runtime_relocalize_sample_count: 12
+    runtime_relocalize_timeout: 10.0
+
     # Persistent confirmed map-frame tracker output recorded during the sweep.
     tracked_shuttles_topic: /perception/tracked_shuttles
 
-    # One validated global localization at startup.
+    # Initial global localization.
     initial_global_localization: true
     initial_tag_id: -1
     tag_approach_distance: 1.70
@@ -54,16 +63,27 @@ visual_intercept_controller:
     cmd_vel_topic: /cmd_vel_approach
     tracking_frame: map
     base_frame: base_link
+    collector_frame: collector_link
     control_rate: 25.0
     tf_timeout: 0.05
 
-    acquisition_timeout: 2.0
+    # Search briefly at the staging pose if the target is not initially in the
+    # camera view. Once acquired, camera loss near the collector is expected.
+    acquisition_timeout: 4.0
+    acquisition_scan_speed: 0.18
     lost_grace: 0.35
-    intercept_timeout: 8.0
+    intercept_timeout: 10.0
 
     pickup_offset_x: 0.165
     target_capture_x: 0.23
     target_capture_y: 0.11
+
+    # Final success is geometry based, not timer based. The last observed
+    # shuttle point must pass 5 cm behind collector_link while staying inside
+    # the collector lateral corridor. TF continuation is bounded for safety.
+    collector_overrun_distance: 0.05
+    collector_lateral_tolerance: 0.13
+    blind_tf_timeout: 3.0
     blind_overrun_time: 0.55
 
     linear_kp: 0.85
