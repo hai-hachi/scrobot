@@ -38,9 +38,8 @@ sweep_mission_manager:
     relocalize_sample_count: 15
     relocalize_timeout: 15.0
 
-    # Distance traveled before relocalization becomes due. The actual correction
-    # waits until the next deterministic fixed stop on the sweep path.
-    relocalize_due_distance: 15.0
+    # Every generated fixed station is now used unconditionally. There is no
+    # traveled-distance threshold before /relocalize becomes due.
     spin_time_allowance: 10.0
 
     # ------------------------------------------------------------
