@@ -82,20 +82,24 @@ def generate_snake_sweep(
     waypoint_spacing,
     margin_x=0.45,
     margin_y=0.45,
+    lane_count=None,
+    start_extension=0.0,
+    end_extension=0.0,
 ):
-    """Generate a C1-like lawnmower path with tangent semicircle U-turns.
+    """Generate a smooth lawnmower path with tangent semicircle U-turns.
 
-    Straight survey lanes are joined by semicircles whose diameter is exactly
-    the actual lane spacing. The straight lane endpoints are moved inward by
-    one turn radius, so the semicircle bulge remains inside the requested court
-    margins. This removes the old 90-deg corner + vertical connector + 90-deg
-    corner pattern and gives a differential-drive robot a continuous-curvature
-    direction change that RPP can track without stop/rotate behavior.
+    ``lane_count`` may be fixed explicitly. Otherwise the old maximum-spacing
+    rule is used. Only the very first and very last straight runs are extended
+    beyond the court baseline; the U-turn geometry remains inside the requested
+    safety margins. This gives the perception system time to see the whole end
+    of the court before the sweep terminates or turns around.
     """
     if court_length <= 0.0 or court_width <= 0.0:
         raise ValueError('Court dimensions must be positive.')
     if lane_spacing <= 0.0 or waypoint_spacing <= 0.0:
         raise ValueError('Sweep spacing must be positive.')
+    if start_extension < 0.0 or end_extension < 0.0:
+        raise ValueError('Sweep extensions must be non-negative.')
 
     x_min = -0.5 * court_length + margin_x
     x_max = 0.5 * court_length - margin_x
@@ -105,8 +109,13 @@ def generate_snake_sweep(
         raise ValueError('Sweep margins leave no usable court area.')
 
     usable_width = y_max - y_min
-    lane_intervals = max(1, int(math.ceil(usable_width / lane_spacing)))
-    lane_count = lane_intervals + 1
+    if lane_count is None:
+        lane_intervals = max(1, int(math.ceil(usable_width / lane_spacing)))
+        lane_count = lane_intervals + 1
+    else:
+        lane_count = max(2, int(lane_count))
+        lane_intervals = lane_count - 1
+
     lane_ys = _linspace(y_min, y_max, lane_count)
     actual_lane_spacing = usable_width / float(lane_intervals)
 
@@ -118,12 +127,28 @@ def generate_snake_sweep(
             'Court is too short for semicircle connectors at this lane spacing.'
         )
 
+    court_left_x = -0.5 * court_length
+    court_right_x = 0.5 * court_length
     points = []
 
     for lane_index, y in enumerate(lane_ys):
         moving_right = lane_index % 2 == 0
         start_x = left_lane_x if moving_right else right_lane_x
         end_x = right_lane_x if moving_right else left_lane_x
+
+        if lane_index == 0 and start_extension > 0.0:
+            start_x = (
+                court_left_x - start_extension
+                if moving_right
+                else court_right_x + start_extension
+            )
+
+        if lane_index == lane_count - 1 and end_extension > 0.0:
+            end_x = (
+                court_right_x + end_extension
+                if moving_right
+                else court_left_x - end_extension
+            )
 
         line = _sample_line(start_x, y, end_x, y, waypoint_spacing)
         for point in line:
@@ -162,6 +187,7 @@ def generate_snake_sweep(
     route = orient_polyline(points)
     return route, {
         'lane_count': lane_count,
+        'lane_ys': lane_ys,
         'actual_lane_spacing': actual_lane_spacing,
         'turn_radius': turn_radius,
         'waypoint_count': len(route),
@@ -171,6 +197,10 @@ def generate_snake_sweep(
         'y_max': y_max,
         'straight_x_min': left_lane_x,
         'straight_x_max': right_lane_x,
+        'court_left_x': court_left_x,
+        'court_right_x': court_right_x,
+        'start_extension': float(start_extension),
+        'end_extension': float(end_extension),
     }
 
 
