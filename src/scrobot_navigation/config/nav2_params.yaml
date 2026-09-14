@@ -38,7 +38,7 @@ controller_server:
     min_theta_velocity_threshold: 0.001
     progress_checker_plugins: [progress_checker]
     goal_checker_plugins: [goal_checker]
-    controller_plugins: [FollowPath]
+    controller_plugins: [FollowPath, SweepPath]
 
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
@@ -51,6 +51,7 @@ controller_server:
       yaw_goal_tolerance: 0.0523598776
       stateful: true
 
+    # Normal point-to-point navigation / shuttle collection controller.
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
       desired_linear_vel: 0.85
@@ -72,6 +73,32 @@ controller_server:
       rotate_to_heading_angular_vel: 0.85
       rotate_to_heading_min_angle: 0.35
       max_angular_accel: 1.8
+      allow_reversing: false
+
+    # Dedicated survey-path tracker. The mission sends the generated snake
+    # directly to /follow_path, so NavFn cannot replace it with diagonal paths.
+    # Smaller lookahead + lower speed reduces lateral tracking error, while
+    # rotate-to-heading is disabled because the semicircle connectors provide a
+    # continuous tangent heading through every U-turn.
+    SweepPath:
+      plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
+      desired_linear_vel: 0.55
+      lookahead_dist: 0.32
+      min_lookahead_dist: 0.18
+      max_lookahead_dist: 0.50
+      lookahead_time: 0.55
+      use_velocity_scaled_lookahead_dist: true
+      min_approach_linear_velocity: 0.08
+      approach_velocity_scaling_dist: 0.35
+      transform_tolerance: 0.20
+      use_collision_detection: true
+      max_allowed_time_to_collision_up_to_carrot: 0.8
+      use_regulated_linear_velocity_scaling: true
+      regulated_linear_scaling_min_radius: 1.20
+      regulated_linear_scaling_min_speed: 0.18
+      use_cost_regulated_linear_velocity_scaling: false
+      use_rotate_to_heading: false
+      max_angular_accel: 1.4
       allow_reversing: false
 
 local_costmap:
