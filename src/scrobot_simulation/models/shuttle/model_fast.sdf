@@ -28,7 +28,7 @@
            spawned shuttles are easy to see during coverage testing. -->
       <visual name="shuttle_visual_fast">
         <geometry>
-          <mesh><uri>model://shuttle/meshes/shuttle_collision.stl</uri></mesh>
+          <mesh><uri>model://shuttle/meshes/shuttle_collision.STL</uri></mesh>
         </geometry>
         <material>
           <ambient>1.0 0.02 0.02 1.0</ambient>
