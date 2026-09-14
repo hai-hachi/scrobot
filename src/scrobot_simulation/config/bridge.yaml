@@ -67,10 +67,20 @@
   frame_id: "camera_depth_frame"
 
 # ============================================================
+# Mission -> simulation collection gate
+# ============================================================
+- ros_topic_name: /mission/collection_enabled
+  gz_topic_name: /mission/collection_enabled_gz
+  ros_type_name: std_msgs/msg/Bool
+  gz_type_name: gz.msgs.Boolean
+  direction: ROS_TO_GZ
+  subscriber_queue: 1
+  lazy: false
+
+# ============================================================
 # Evaluation / simulation ground truth
 # ============================================================
 
-# Full Gazebo world pose stream. Keep this for evaluation/debugging only.
 - ros_topic_name: /evaluation/ground_truth_tf
   gz_topic_name: /world/badminton_court/dynamic_pose/info
   ros_type_name: tf2_msgs/msg/TFMessage
@@ -78,7 +88,6 @@
   direction: GZ_TO_ROS
   lazy: false
 
-# Dedicated shuttle-only ground truth produced by ShuttleActivitySystem.
 - ros_topic_name: /evaluation/shuttle_ground_truth
   gz_topic_name: /evaluation/shuttle_ground_truth_gz
   ros_type_name: geometry_msgs/msg/PoseArray
@@ -88,8 +97,6 @@
   publisher_queue: 1
   lazy: false
 
-# One-shot physical collection events. Each pose is the world pose of a shuttle
-# immediately before ShuttleActivitySystem requests removal from Gazebo.
 - ros_topic_name: /evaluation/shuttle_collected
   gz_topic_name: /evaluation/shuttle_collected_gz
   ros_type_name: geometry_msgs/msg/PoseArray
@@ -99,7 +106,6 @@
   publisher_queue: 10
   lazy: false
 
-# Dedicated Gazebo ground truth odometry for local evaluation.
 - ros_topic_name: /evaluation/ground_truth_odom
   gz_topic_name: /evaluation/scrobot/ground_truth_odom_gz
   ros_type_name: nav_msgs/msg/Odometry
