@@ -29,8 +29,6 @@ planner_server:
       max_iterations: 1000000
       max_on_approach_iterations: 1000
       max_planning_time: 2.0
-      # Stronger than default so the global path prefers the middle of free
-      # corridors instead of clipping the inflated halo around poles/tags.
       cost_travel_multiplier: 3.5
       use_final_approach_orientation: false
       smoother:
@@ -139,7 +137,10 @@ local_costmap:
       resolution: 0.05
       transform_tolerance: 0.30
       track_unknown_space: false
-      footprint: '[[0.325, -0.225], [0.325,  0.225], [-0.335,  0.225], [-0.335, -0.225]]'
+      # Conservative footprint matches the collision-monitor stop envelope so
+      # Nav2 does not intentionally choose paths its downstream safety layer
+      # will immediately reject near poles/tags.
+      footprint: '[[0.55, -0.30], [0.55, 0.30], [-0.46, 0.30], [-0.46, -0.30]]'
       plugins: [obstacle_layer, inflation_layer]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -181,7 +182,7 @@ global_costmap:
       origin_y: -4.00
       track_unknown_space: false
       transform_tolerance: 0.30
-      footprint: '[[0.325, -0.225], [0.325,  0.225], [-0.335,  0.225], [-0.335, -0.225]]'
+      footprint: '[[0.55, -0.30], [0.55, 0.30], [-0.46, 0.30], [-0.46, -0.30]]'
       plugins: [obstacle_layer, inflation_layer]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
