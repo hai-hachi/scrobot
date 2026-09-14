@@ -46,6 +46,14 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}],
     )
 
+    visual_intercept = Node(
+        package='scrobot_mission',
+        executable='visual_intercept_controller',
+        name='visual_intercept_controller',
+        output='screen',
+        parameters=[mission_params, {'use_sim_time': use_sim_time}],
+    )
+
     mission = Node(
         package='scrobot_mission',
         executable='global_sweep_manager',
@@ -64,5 +72,6 @@ def generate_launch_description():
         navigation,
         collection_zone_visualizer,
         collection_gate,
+        visual_intercept,
         mission,
     ])
