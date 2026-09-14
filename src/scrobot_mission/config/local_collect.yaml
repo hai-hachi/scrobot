@@ -1,26 +1,47 @@
 local_collect_controller:
   ros__parameters:
+    # ------------------------------------------------------------
+    # Topics / frames
+    # ------------------------------------------------------------
     raw_detection_topic: /perception/shuttle_detections_3d
     action_name: /local_collect
     cmd_vel_topic: /cmd_vel_approach
     phase_topic: /mission/local_collect_phase
-
     odom_frame: odom
     base_frame: base_link
     collector_frame: collector_link
+
+    # ------------------------------------------------------------
+    # Timing / perception
+    # ------------------------------------------------------------
     control_rate: 30.0
     tf_timeout: 0.05
     detection_max_age: 0.30
 
-    position_tolerance: 0.07
+    # ------------------------------------------------------------
+    # Target completion / duplicate rejection
+    # ------------------------------------------------------------
+    position_tolerance: 0.08
     target_timeout: 12.0
     reacquire_exclusion_radius: 0.12
 
-    linear_kp: 0.85
+    # ------------------------------------------------------------
+    # Coupled local pursuit gains
+    # ------------------------------------------------------------
+    linear_kp: 1.10
     angular_kp: 2.40
-    max_linear_speed: 0.45
+
+    # Hard command limits.
+    max_linear_speed: 0.55
     max_angular_speed: 1.20
-    max_linear_accel: 0.65
+
+    # Ease-in / ease-out slew-rate limits.
+    max_linear_accel: 0.90
     max_angular_accel: 2.40
+
+    # Stop forward motion and rotate when bearing exceeds this angle.
     heading_stop_deg: 70.0
-    slow_radius: 0.60
+
+    # Distance below which forward speed reduces toward the target.
+    # Smaller = faster final section; larger = gentler approach.
+    slow_radius: 0.35
