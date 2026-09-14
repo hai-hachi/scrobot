@@ -32,7 +32,7 @@
         </geometry>
         <material>
           <ambient>0.78 0.78 0.78 1.0</ambient>
-          <diffuse>0.92 0.92 0.92 1.0</diffuse>
+          <diffuse>0.92 0.08 0.08 1.0</diffuse>
           <specular>0.02 0.02 0.02 1.0</specular>
           <emissive>0.0 0.0 0.0 1.0</emissive>
           <pbr><metal><metalness>0.0</metalness><roughness>0.92</roughness></metal></pbr>
