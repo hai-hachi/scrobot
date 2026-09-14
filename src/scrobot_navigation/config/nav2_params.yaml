@@ -137,9 +137,6 @@ local_costmap:
       resolution: 0.05
       transform_tolerance: 0.30
       track_unknown_space: false
-      # Conservative footprint matches the collision-monitor stop envelope so
-      # Nav2 does not intentionally choose paths its downstream safety layer
-      # will immediately reject near poles/tags.
       footprint: '[[0.55, -0.30], [0.55, 0.30], [-0.46, 0.30], [-0.46, -0.30]]'
       plugins: [obstacle_layer, inflation_layer]
       obstacle_layer:
@@ -176,9 +173,9 @@ global_costmap:
       publish_frequency: 3.0
       rolling_window: false
       resolution: 0.05
-      width: 15
+      width: 18
       height: 8
-      origin_x: -7.50
+      origin_x: -9.00
       origin_y: -4.00
       track_unknown_space: false
       transform_tolerance: 0.30
