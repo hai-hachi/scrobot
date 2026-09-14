@@ -32,10 +32,12 @@ install(
   RENAME final_approach_controller
 )
 
-# New sweep + local-collect strategy.
+# New sweep + local-collect strategy. Keep sweep_mission_manager.py as the
+# reusable base; install the runtime wrapper so temporary join/relocalization
+# policies can change without destroying the fixed-stop implementation.
 install(
   PROGRAMS
-    scrobot_mission/sweep_mission_manager.py
+    scrobot_mission/runtime_sweep_mission_manager.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME sweep_mission_manager
 )
