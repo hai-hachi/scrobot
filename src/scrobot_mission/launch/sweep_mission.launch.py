@@ -36,7 +36,7 @@ def generate_launch_description():
         executable='shuttle_collection_filter',
         name='shuttle_collection_filter',
         output='screen',
-        parameters=[sweep_params, {'use_sim_time': use_sim_time}],
+        parameters=[local_collect_params, {'use_sim_time': use_sim_time}],
     )
 
     local_collect = Node(
