@@ -39,6 +39,14 @@ def generate_launch_description():
         parameters=[local_collect_params, {'use_sim_time': use_sim_time}],
     )
 
+    debug_monitor = Node(
+        package='scrobot_mission',
+        executable='shuttle_debug_monitor',
+        name='shuttle_debug_monitor',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
+    )
+
     sweep_manager = Node(
         package='scrobot_mission',
         executable='sweep_mission_manager',
@@ -56,5 +64,6 @@ def generate_launch_description():
         global_localization,
         navigation,
         local_collect,
+        debug_monitor,
         sweep_manager,
     ])
