@@ -64,38 +64,66 @@ def plot_trajectory(rows, output_dir):
         ax.scatter([gx[-1]], [gy[-1]], marker='x', label='End')
     if est:
         ex, ey = zip(*est)
-        ax.plot(ex, ey, label='Estimated map->base', linewidth=1.3)
+        ax.plot(ex, ey, label='Estimated map->base', linewidth=1.2)
     ax.set_aspect('equal', adjustable='box')
     ax.set_xlabel('X [m]')
     ax.set_ylabel('Y [m]')
-    ax.set_title('Collection session trajectory')
+    ax.set_title('Collection-session trajectory')
     ax.grid(True)
     ax.legend()
     save_figure(fig, output_dir, 'collection_trajectory')
 
 
 def plot_collection_progress(rows, output_dir):
-    t = [fvalue(r, 'elapsed_s') for r in rows]
-    collected = [fvalue(r, 'collected_shuttles', 0.0) for r in rows]
-    remaining = [fvalue(r, 'remaining_shuttles', 0.0) for r in rows]
-
-    clean = [
-        (a, b, c) for a, b, c in zip(t, collected, remaining)
-        if math.isfinite(a)
-    ]
+    clean = []
+    for row in rows:
+        t = fvalue(row, 'elapsed_s')
+        if not math.isfinite(t):
+            continue
+        clean.append((
+            t,
+            fvalue(row, 'collected_shuttles', 0.0),
+            fvalue(row, 'remaining_eligible', 0.0),
+            fvalue(row, 'remaining_near_poles', 0.0),
+        ))
     if not clean:
         return
-    t, collected, remaining = zip(*clean)
 
+    t, collected, remaining_eligible, ignored = zip(*clean)
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(t, collected, label='Collected')
-    ax.plot(t, remaining, label='Remaining')
+    ax.plot(t, remaining_eligible, label='Remaining eligible')
+    ax.plot(t, ignored, label='Ignored near poles')
     ax.set_xlabel('Elapsed time [s]')
     ax.set_ylabel('Shuttle count')
     ax.set_title('Collection progress')
     ax.grid(True)
     ax.legend()
     save_figure(fig, output_dir, 'collection_progress')
+
+
+def plot_collection_rate(rows, output_dir):
+    clean = []
+    for row in rows:
+        t = fvalue(row, 'elapsed_s')
+        eligible_rate = fvalue(row, 'eligible_collection_rate_percent')
+        overall_rate = fvalue(row, 'overall_collection_rate_percent')
+        if math.isfinite(t):
+            clean.append((t, eligible_rate, overall_rate))
+    if not clean:
+        return
+
+    t, eligible_rate, overall_rate = zip(*clean)
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(t, eligible_rate, label='Eligible collection rate')
+    ax.plot(t, overall_rate, label='Overall rate incl. pole exclusions')
+    ax.set_xlabel('Elapsed time [s]')
+    ax.set_ylabel('Collection rate [%]')
+    ax.set_ylim(0, 105)
+    ax.set_title('Collection efficiency')
+    ax.grid(True)
+    ax.legend()
+    save_figure(fig, output_dir, 'collection_rate')
 
 
 def plot_localization_error(rows, output_dir):
@@ -118,58 +146,92 @@ def plot_localization_error(rows, output_dir):
     save_figure(fig, output_dir, 'localization_error')
 
 
-def plot_state_time(rows, output_dir):
+def plot_duration_table(rows, output_dir, key, title, stem):
     if not rows:
         return
-    states = [row['state'] for row in rows]
+    labels = [row.get(key, '') for row in rows]
     durations = [fvalue(row, 'duration_s', 0.0) for row in rows]
-
-    order = sorted(range(len(states)), key=lambda i: durations[i], reverse=True)
-    states = [states[i] for i in order]
+    order = sorted(range(len(labels)), key=lambda i: durations[i], reverse=True)
+    labels = [labels[i] for i in order]
     durations = [durations[i] for i in order]
 
-    fig, ax = plt.subplots(figsize=(10, max(5, 0.35 * len(states))))
-    ax.barh(states, durations)
+    fig, ax = plt.subplots(figsize=(10, max(4, 0.38 * len(labels))))
+    ax.barh(labels, durations)
     ax.invert_yaxis()
     ax.set_xlabel('Time [s]')
-    ax.set_ylabel('Mission state')
-    ax.set_title('Time spent in mission states')
+    ax.set_title(title)
     ax.grid(True, axis='x')
-    save_figure(fig, output_dir, 'state_time')
+    save_figure(fig, output_dir, stem)
+
+
+def plot_collection_passes(rows, output_dir):
+    if not rows:
+        return
+    passes = []
+    duration = []
+    collected = []
+    for row in rows:
+        index = int(fvalue(row, 'pass_index', 0.0))
+        if index <= 0:
+            continue
+        passes.append(str(index))
+        duration.append(fvalue(row, 'duration_s', 0.0))
+        collected.append(fvalue(row, 'collected_this_pass', 0.0))
+    if not passes:
+        return
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.bar(passes, duration)
+    ax.set_xlabel('Local-collect pass')
+    ax.set_ylabel('Duration [s]')
+    ax.set_title('Local-collection pass duration')
+    ax.grid(True, axis='y')
+    for i, count in enumerate(collected):
+        ax.text(i, duration[i], f'{int(count)} shuttle(s)', ha='center', va='bottom')
+    save_figure(fig, output_dir, 'collection_pass_duration')
 
 
 def print_summary(run_dir):
     summary_path = run_dir / 'summary.csv'
     if not summary_path.exists():
-        print('summary.csv not found; plots were generated from available raw CSV files.')
+        print('summary.csv not found; plots were generated from available CSV files.')
         return
     rows = read_csv(summary_path)
     if not rows:
         return
+
     s = rows[0]
     print('\nCollection session summary')
     print('--------------------------')
     fields = [
         ('Terminal state', 'terminal_state'),
         ('Duration [s]', 'duration_s'),
-        ('Collected', 'collected_shuttles'),
-        ('Total shuttles seen', 'total_shuttles_seen'),
-        ('Collection rate [%]', 'collection_rate_percent'),
-        ('Collection passes', 'collection_passes'),
+        ('Total spawned/seen', 'total_shuttles_seen'),
+        ('Ignored near poles', 'ignored_near_poles'),
+        ('Eligible shuttles', 'eligible_shuttles'),
+        ('Collected shuttles', 'collected_shuttles'),
+        ('Remaining eligible', 'remaining_eligible'),
+        ('Eligible collection rate [%]', 'eligible_collection_rate_percent'),
+        ('Overall collection rate [%]', 'overall_collection_rate_percent'),
+        ('Local-collect passes', 'collection_passes'),
         ('GT path [m]', 'ground_truth_path_m'),
+        ('Estimated path [m]', 'estimated_path_m'),
         ('Position RMSE [m]', 'position_rmse_m'),
         ('Distance / collected [m]', 'distance_per_collected_m'),
         ('Time / collected [s]', 'time_per_collected_s'),
-        ('Runtime relocalizations', 'runtime_relocalizations'),
-        ('Relocalization time [s]', 'runtime_relocalization_time_s'),
+        ('Fixed relocalizations', 'fixed_relocalizations'),
+        ('Relocalization time [s]', 'fixed_relocalization_time_s'),
+        ('Sweep time [s]', 'sweeping_time_s'),
+        ('Local collect time [s]', 'local_collect_time_s'),
+        ('Return-to-sweep time [s]', 'return_to_sweep_time_s'),
     ]
     for label, key in fields:
-        print(f'{label:28s}: {s.get(key, "")}')
+        print(f'{label:31s}: {s.get(key, "")}')
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Plot one SC Robot collection-session evaluation run.'
+        description='Analyze one SC Robot sweep + local-collection evaluation run.'
     )
     parser.add_argument(
         '--root',
@@ -192,12 +254,30 @@ def main():
         raise FileNotFoundError(f'Missing {trajectory_path}')
 
     trajectory = read_csv(trajectory_path)
-    states = read_csv(run_dir / 'state_durations.csv') if (run_dir / 'state_durations.csv').exists() else []
+    states_path = run_dir / 'state_durations.csv'
+    phases_path = run_dir / 'local_collect_phase_durations.csv'
+    passes_path = run_dir / 'collection_events.csv'
+
+    states = read_csv(states_path) if states_path.exists() else []
+    phases = read_csv(phases_path) if phases_path.exists() else []
+    passes = read_csv(passes_path) if passes_path.exists() else []
 
     plot_trajectory(trajectory, output_dir)
     plot_collection_progress(trajectory, output_dir)
+    plot_collection_rate(trajectory, output_dir)
     plot_localization_error(trajectory, output_dir)
-    plot_state_time(states, output_dir)
+    plot_duration_table(
+        states, output_dir, 'state', 'Time spent in mission states', 'state_time'
+    )
+    plot_duration_table(
+        phases,
+        output_dir,
+        'phase',
+        'Time spent in local-collect phases',
+        'local_collect_phase_time',
+    )
+    plot_collection_passes(passes, output_dir)
+
     print_summary(run_dir)
     print(f'\nPlots saved in: {output_dir}')
 
