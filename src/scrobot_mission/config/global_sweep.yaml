@@ -1,0 +1,41 @@
+global_sweep_manager:
+  ros__parameters:
+    frame_id: map
+    base_frame: base_footprint
+    autostart: true
+    court_length: 13.40
+    court_width: 6.10
+    tf_timeout: 0.05
+
+    # Full-court lawnmower survey. 2.20 m lanes deliberately overlap the
+    # camera's roughly 3 m useful detection range. Dense 0.75 m waypoints keep
+    # NavigateThroughPoses close to the intended snake instead of cutting wide
+    # diagonals between only a few lane endpoints.
+    sweep_lane_spacing: 2.20
+    sweep_waypoint_spacing: 0.75
+    sweep_margin_x: 0.45
+    sweep_margin_y: 0.45
+
+    # Collection route targets pickup_link, not base_footprint.
+    pickup_offset_x: 0.165
+    collection_overrun: 0.03
+    two_opt_max_passes: 100
+
+    # Persistent confirmed map-frame tracker output.
+    tracked_shuttles_topic: /perception/tracked_shuttles
+
+    # One validated global localization at startup.
+    initial_global_localization: true
+    initial_tag_id: -1
+    tag_approach_distance: 1.70
+    tag_approach_timeout: 60.0
+    relocalize_sample_count: 15
+    relocalize_timeout: 15.0
+    relocalize_retries: 4
+
+    nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
+    nav2_startup_timeout: 30.0
+    nav2_startup_retries: 3
+    nav2_activation_guard: 0.20
+    route_goal_retries: 2
+    control_period: 0.10
