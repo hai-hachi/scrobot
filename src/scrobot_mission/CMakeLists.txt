@@ -17,14 +17,21 @@ endif()
 
 ament_python_install_package(${PROJECT_NAME})
 
-# Keep patrol_manager.py as the reusable base implementation. The installed
-# executable is the runtime wrapper, which subclasses it and adds deferred
-# /approach_tag -> /relocalize behavior without duplicating the working mission.
+# Existing patrol strategy remains available on this branch for comparison.
 install(
   PROGRAMS
     scrobot_mission/runtime_patrol_manager.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME patrol_manager
+)
+
+# New survey-first strategy: full-court snake sweep -> freeze shuttle map ->
+# nearest-neighbor + 2-opt collection route.
+install(
+  PROGRAMS
+    scrobot_mission/global_sweep_manager.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME global_sweep_manager
 )
 
 install(
