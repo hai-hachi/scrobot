@@ -17,7 +17,8 @@ endif()
 
 ament_python_install_package(${PROJECT_NAME})
 
-# Existing patrol-point strategy retained for baseline comparison.
+# Existing patrol-point strategy is intentionally retained as the baseline
+# implementation for A/B evaluation against the final sweep strategy.
 install(
   PROGRAMS
     scrobot_mission/runtime_patrol_manager.py
@@ -32,9 +33,9 @@ install(
   RENAME final_approach_controller
 )
 
-# New sweep + local-collect strategy. Keep sweep_mission_manager.py as the
-# reusable base; install the runtime wrapper so temporary join/relocalization
-# policies can change without destroying the fixed-stop implementation.
+# Final sweep + local-collect mission. The runtime manager extends the reusable
+# sweep manager with the tested checkpoint/rejoin behavior and optional test
+# controls while preserving the mission state machine in one base module.
 install(
   PROGRAMS
     scrobot_mission/runtime_sweep_mission_manager.py
@@ -63,6 +64,7 @@ install(
   RENAME shuttle_debug_monitor
 )
 
+# Still used by the retained patrol baseline launch.
 install(
   PROGRAMS
     scrobot_mission/collection_zone_visualizer.py
