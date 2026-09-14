@@ -28,20 +28,27 @@ local_collect_controller:
     # ------------------------------------------------------------
     # Coupled local pursuit gains
     # ------------------------------------------------------------
-    linear_kp: 1.0
-    angular_kp: 1.0
+    # v_max = 0.80 m/s and full-speed distance ~= 0.50 m:
+    #   linear_kp = 0.80 / 0.50 = 1.60
+    linear_kp: 1.60
 
-    # Hard command limits.
-    max_linear_speed: 0.5
-    max_angular_speed: 0.5
+    # Keep angular saturation at roughly the same 0.50 rad (28.6 deg)
+    # bearing as the previous tune:
+    #   angular_kp = 1.60 / 0.50 = 3.20
+    angular_kp: 3.20
 
-    # Ease-in / ease-out slew-rate limits.
-    max_linear_accel: 1.0
-    max_angular_accel: 1.0
+    # Hard command limits. R_min = 0.50 m at 0.80 m/s requires
+    # omega = v / R = 1.60 rad/s.
+    max_linear_speed: 0.80
+    max_angular_speed: 1.60
+
+    # Kinematic command slew limits chosen for the project.
+    max_linear_accel: 1.00
+    max_angular_accel: 1.00
 
     # Stop forward motion and rotate when bearing exceeds this angle.
     heading_stop_deg: 70.0
 
-    # Distance below which forward speed reduces toward the target.
-    # Smaller = faster final section; larger = gentler approach.
-    slow_radius: 0.30
+    # v^2/(2a) at 0.80 m/s and 1.0 m/s^2 is 0.32 m, so begin the
+    # extra final-approach distance scaling just outside that distance.
+    slow_radius: 0.35
