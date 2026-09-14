@@ -1,10 +1,12 @@
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <memory>
 #include <string>
 #include <unordered_map>
 
+#include <gz/msgs/boolean.pb.h>
 #include <gz/msgs/pose_v.pb.h>
 #include <gz/plugin/Register.hh>
 #include <gz/sim/Model.hh>
@@ -52,6 +54,8 @@ public:
     this->settleTime_ = _sdf->Get<double>("settle_time", this->settleTime_).first;
     this->groundTruthTopic_ = _sdf->Get<std::string>("ground_truth_topic", this->groundTruthTopic_).first;
     this->collectedTopic_ = _sdf->Get<std::string>("collected_topic", this->collectedTopic_).first;
+    this->collectionControlTopic_ = _sdf->Get<std::string>(
+      "collection_control_topic", this->collectionControlTopic_).first;
     this->pickupOffsetX_ = _sdf->Get<double>("pickup_offset_x", this->pickupOffsetX_).first;
     this->pickupHalfLength_ = _sdf->Get<double>("pickup_half_length", this->pickupHalfLength_).first;
     this->pickupHalfWidth_ = _sdf->Get<double>("pickup_half_width", this->pickupHalfWidth_).first;
@@ -72,6 +76,10 @@ public:
 
     this->groundTruthPublisher_ = this->transportNode_.Advertise<gz::msgs::Pose_V>(this->groundTruthTopic_);
     this->collectedPublisher_ = this->transportNode_.Advertise<gz::msgs::Pose_V>(this->collectedTopic_);
+    this->transportNode_.Subscribe(
+      this->collectionControlTopic_,
+      &ShuttleActivitySystem::OnCollectionEnabled,
+      this);
     this->ResolveRobot(_ecm);
   }
 
@@ -102,6 +110,7 @@ public:
     const double robotYaw = robotPose.Rot().Yaw();
     const double cosYaw = std::cos(robotYaw);
     const double sinYaw = std::sin(robotYaw);
+    const bool collectionEnabled = this->collectionEnabled_.load();
 
     gz::msgs::Pose_V shuttleGroundTruthMsg;
     gz::msgs::Pose_V collectedMsg;
@@ -140,7 +149,7 @@ public:
         const bool touchesPickupZone =
           dx * dx + dy * dy <= this->shuttleCollisionRadius_ * this->shuttleCollisionRadius_;
 
-        if (touchesPickupZone)
+        if (collectionEnabled && touchesPickupZone)
         {
           auto *collectedPose = collectedMsg.add_pose();
           this->FillPoseMessage(*collectedPose, _entity, _nameComp->Data(), shuttlePose);
@@ -186,6 +195,11 @@ public:
   }
 
 private:
+  void OnCollectionEnabled(const gz::msgs::Boolean &_msg)
+  {
+    this->collectionEnabled_.store(_msg.data());
+  }
+
   template<typename PoseType>
   void FillPoseMessage(
     PoseType &_poseMsg,
@@ -243,6 +257,7 @@ private:
   std::string robotName_{"scrobot"};
   std::string groundTruthTopic_{"/evaluation/shuttle_ground_truth_gz"};
   std::string collectedTopic_{"/evaluation/shuttle_collected_gz"};
+  std::string collectionControlTopic_{"/mission/collection_enabled_gz"};
   double updateRate_{10.0};
   double activationDistance_{0.35};
   double freezeDistance_{0.55};
@@ -252,6 +267,7 @@ private:
   double pickupHalfWidth_{0.150};
   double shuttleCollisionRadius_{0.050};
 
+  std::atomic_bool collectionEnabled_{true};
   std::chrono::steady_clock::duration updatePeriod_{};
   std::chrono::steady_clock::duration settleDuration_{};
   std::chrono::steady_clock::duration lastUpdate_{};
