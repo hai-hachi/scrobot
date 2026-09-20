@@ -23,7 +23,7 @@
 
   <!-- Shared description defaults to passive/simulation geometry. -->
   <xacro:arg name="use_real_hardware" default="false"/>
-  <xacro:arg name="serial_port" default="/dev/scrobot_mcu"/>
+  <xacro:arg name="serial_port" default="/dev/ttyAMA0"/>
   <xacro:arg name="baud_rate" default="1000000"/>
 
   <!--
