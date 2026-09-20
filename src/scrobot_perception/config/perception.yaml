@@ -30,7 +30,7 @@ apriltag:
 
 depth_pointcloud_to_scan:
   ros__parameters:
-    use_sim_time: true
+    use_sim_time: false
 
     target_frame: base_footprint
     transform_tolerance: 0.05
