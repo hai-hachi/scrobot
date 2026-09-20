@@ -711,8 +711,6 @@ void ScrobotSystemHardware::publish_status(bool force)
   status_pub_->publish(msg);
 }
 
-uint8_t ScrobotSystemHardware::crc8(const uint8_t * data, size_t size);
-
 double ScrobotSystemHardware::rpm_to_rad_s(double rpm)
 {
   return rpm * kTwoPi / 60.0;
