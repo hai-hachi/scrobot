@@ -282,6 +282,19 @@ bit 7 INVALID_COMMAND seen
 
 The STM32 independent watchdog remains the final low-level safety mechanism.
 
+## PIDF persistence
+
+The current `scrobot_stm32/firmware-safety-prep` branch initializes all five PIDF controllers with zero Kp/Ki/Kd in `Core/Inc/app_config.h`.
+
+The STM32 protocol supports runtime `PID_SET` / `PID_GET`, and the tuning tools load gains successfully, but those values are RAM-only. After an STM32 reset or power cycle they return to the compile-time defaults.
+
+Before normal ROS driving, choose one of these approaches:
+
+1. write the final validated PIDF gains into `app_config.h` and reflash the STM32; or
+2. add a Pi startup step that loads the validated PID table through protocol v2 before arming.
+
+For the first integrated robot bringup, committing the final validated gains into STM32 firmware is simpler and keeps low-level motor control self-contained.
+
 ## Collector command
 
 The ROS-side collector interface is already reserved:
