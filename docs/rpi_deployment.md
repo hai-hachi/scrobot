@@ -116,19 +116,9 @@ The mission is not autostarted.
 
 ## ros2_control wheel convention
 
-The ROS controller commands wheel angular velocity in rad/s. The hardware plugin converts that to wheel RPM for the STM32.
+The ROS controller commands wheel angular velocity in rad/s. The hardware plugin converts WR/WL to RPM and sends them to the STM32. The STM32 owns encoder CPR/sign calibration and returns measured RPM.
 
-Default WL/WR encoder conversion:
-
-```text
-17 PPR * 4 quadrature edges * 51 gearbox = 3468 counts / wheel revolution
-```
-
-If the STM32 counter uses a different edge convention, change:
-
-```bash
-ros2 launch scrobot_bringup robot.launch.py counts_per_wheel_rev:=<value>
-```
+Normal telemetry does not contain cumulative encoder counts, so the Pi integrates measured WR/WL RPM to provide the wheel position state expected by `diff_drive_controller`.
 
 Wheel limit:
 
@@ -145,41 +135,41 @@ CV:      600 RPM
 
 ## UART protocol v1
 
-ASCII CSV is used initially because it is easy to inspect with a terminal and logic analyzer. The default link is 230400 baud so 100 Hz wheel control plus 50-100 Hz feedback has comfortable bandwidth. Every packet ends in newline.
+The Raspberry Pi uses the STM32 firmware's existing binary UART protocol over USART6 at **1,000,000 baud, 8-N-1**.
 
-Pi -> STM32:
-
-```text
-CMD,seq,WL_rpm,WR_rpm,BL_rpm,BR_rpm,CV_rpm,drive_enable,collector_enable
-```
-
-Example:
+Frame format:
 
 ```text
-CMD,42,55.300,55.300,400.000,400.000,600.000,1,1
+0xAA 0x55 | TYPE | PAYLOAD | CRC8
 ```
 
-STM32 -> Pi:
+CRC-8:
 
 ```text
-STATE,seq,WL_count,WR_count,WL_rpm,WR_rpm,estop,fault_code
+poly = 0x07
+init = 0x00
+coverage = TYPE + PAYLOAD
 ```
 
-Example:
+Normal Pi -> STM32 commands:
 
 ```text
-STATE,712,10342,10401,54.900,55.100,0,0
+A0: WR_ref, WL_ref
+A1: BR_ref, BL_ref, CV_ref
 ```
 
-Requirements:
+All values are little-endian IEEE-754 float32 RPM references.
 
-- send STATE continuously, recommended 50-100 Hz;
-- encoder counts are cumulative signed wheel counts;
-- wheel RPM is signed wheel-shaft RPM after the gearbox;
-- `estop=1` forces all commanded RPM to zero on both Pi and STM32;
-- any nonzero `fault_code` disables motor enables;
-- the STM32 must independently stop all motors if CMD packets time out;
-- the Pi hardware interface declares the link failed if no valid STATE packet arrives for 500 ms.
+Normal STM32 -> Pi telemetry at 100 Hz:
+
+```text
+01: WR, WL, BR, BL, CV measured RPM
+00: WR, WL, BR, BL, CV measured RPM, with E-stop active
+```
+
+A0 is the normal-mode heartbeat. If A0 is not received for 200 ms, the STM32 zeros the normal motor references. A1 traffic alone does not keep the previous drive command alive.
+
+The ROS hardware plugin sends A0 and A1 continuously and validates the STM32 CRC-8 on receive. It treats missing valid 00/01 telemetry for 250 ms as a hardware communication failure.
 
 The STM32 must implement its own watchdog; the Raspberry Pi timeout is not a substitute for MCU-side safety.
 
