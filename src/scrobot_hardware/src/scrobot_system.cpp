@@ -643,12 +643,17 @@ void ScrobotSystemHardware::parse_rx_buffer()
 {
   while (true)
   {
-    auto sof = std::search(
-      rx_buffer_.begin(), rx_buffer_.end(),
-      std::begin(std::array<uint8_t, 2>{kSof1, kSof2}),
-      std::end(std::array<uint8_t, 2>{kSof1, kSof2}));
+    size_t sof_index = rx_buffer_.size();
+    for (size_t i = 0; i + 1 < rx_buffer_.size(); ++i)
+    {
+      if (rx_buffer_[i] == kSof1 && rx_buffer_[i + 1] == kSof2)
+      {
+        sof_index = i;
+        break;
+      }
+    }
 
-    if (sof == rx_buffer_.end())
+    if (sof_index == rx_buffer_.size())
     {
       if (!rx_buffer_.empty() && rx_buffer_.back() == kSof1)
       {
@@ -663,9 +668,9 @@ void ScrobotSystemHardware::parse_rx_buffer()
       return;
     }
 
-    if (sof != rx_buffer_.begin())
+    if (sof_index != 0)
     {
-      rx_buffer_.erase(rx_buffer_.begin(), sof);
+      rx_buffer_.erase(rx_buffer_.begin(), rx_buffer_.begin() + sof_index);
     }
 
     if (rx_buffer_.size() < kHeaderLength)
