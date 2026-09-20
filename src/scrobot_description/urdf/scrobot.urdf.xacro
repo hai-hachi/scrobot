@@ -24,8 +24,7 @@
   <!-- Shared description defaults to passive/simulation geometry. -->
   <xacro:arg name="use_real_hardware" default="false"/>
   <xacro:arg name="serial_port" default="/dev/scrobot_mcu"/>
-  <xacro:arg name="baud_rate" default="230400"/>
-  <xacro:arg name="counts_per_wheel_rev" default="3468.0"/>
+  <xacro:arg name="baud_rate" default="1000000"/>
 
   <!--
     Collision width can be overridden by simulation while the visual and
@@ -90,8 +89,7 @@
   <xacro:if value="$(arg use_real_hardware)">
     <xacro:scrobot_real_ros2_control
       serial_port="$(arg serial_port)"
-      baud_rate="$(arg baud_rate)"
-      counts_per_wheel_rev="$(arg counts_per_wheel_rev)"/>
+      baud_rate="$(arg baud_rate)"/>
   </xacro:if>
 
   <!-- ====================================================== -->
