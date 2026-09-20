@@ -144,7 +144,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'baud_rate',
-            default_value='115200',
+            default_value='230400',
             description='STM32 UART baud rate.',
         ),
         DeclareLaunchArgument(
