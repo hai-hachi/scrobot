@@ -1,6 +1,6 @@
 shuttle_tracker:
   ros__parameters:
-    use_sim_time: true
+    use_sim_time: false
 
     input_topic: /perception/shuttle_detections_3d
     output_topic: /perception/tracked_shuttles
