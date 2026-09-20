@@ -21,11 +21,12 @@ sudo tee "${SERVICE_FILE}" >/dev/null <<EOF
 Description=SC Robot ROS 2 bringup
 After=network-online.target
 Wants=network-online.target
+
 [Service]
 Type=simple
 User=${SERVICE_USER}
 WorkingDirectory=${ROOT_DIR}
-ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do [ -e /dev/scrobot_mcu ] && exit 0; sleep 1; done; exit 1'
+ExecStartPre=/bin/sh -c 'for i in \$(seq 1 30); do [ -e /dev/ttyAMA0 ] && exit 0; sleep 1; done; exit 1'
 ExecStart=${START_SCRIPT}
 Restart=on-failure
 RestartSec=3
@@ -40,6 +41,6 @@ sudo systemctl daemon-reload
 sudo systemctl enable scrobot.service
 
 echo "Installed and enabled scrobot.service."
-echo "At boot it waits up to 30 s for /dev/scrobot_mcu; systemd retries on failure."
+echo "At boot it waits up to 30 s for /dev/ttyAMA0; systemd retries on failure."
 echo "Start now with: sudo systemctl start scrobot"
 echo "Logs: journalctl -u scrobot -f"
