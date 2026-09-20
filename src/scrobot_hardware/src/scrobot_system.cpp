@@ -4,6 +4,7 @@
 #include <cerrno>
 #include <cmath>
 #include <cstring>
+#include <exception>
 #include <fcntl.h>
 #include <iomanip>
 #include <sstream>
