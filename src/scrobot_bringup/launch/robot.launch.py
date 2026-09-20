@@ -21,7 +21,6 @@ def generate_launch_description():
 
     serial_port = LaunchConfiguration('serial_port')
     baud_rate = LaunchConfiguration('baud_rate')
-    counts_per_wheel_rev = LaunchConfiguration('counts_per_wheel_rev')
     launch_navigation = LaunchConfiguration('launch_navigation')
     launch_global_localization = LaunchConfiguration('launch_global_localization')
 
@@ -41,8 +40,6 @@ def generate_launch_description():
             serial_port,
             ' baud_rate:=',
             baud_rate,
-            ' counts_per_wheel_rev:=',
-            counts_per_wheel_rev,
         ]),
         value_type=str,
     )
@@ -144,13 +141,8 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'baud_rate',
-            default_value='230400',
+            default_value='1000000',
             description='STM32 UART baud rate.',
-        ),
-        DeclareLaunchArgument(
-            'counts_per_wheel_rev',
-            default_value='3468.0',
-            description='17 PPR x quadrature-4 x 51:1 wheel gearbox.',
         ),
         DeclareLaunchArgument(
             'launch_global_localization',
