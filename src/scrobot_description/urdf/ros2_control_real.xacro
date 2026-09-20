@@ -9,17 +9,32 @@
       <hardware>
         <plugin>scrobot_hardware/ScrobotSystemHardware</plugin>
 
+        <!-- STM32 USART6 protocol v2 -->
         <param name="serial_port">${serial_port}</param>
         <param name="baud_rate">${baud_rate}</param>
 
-        <!-- Motor/encoder signs and CPR are owned by the STM32 firmware. -->
+        <!--
+          FEEDBACK contains raw timer counts plus sign-corrected RPM.
+          Firmware APP_ENCODER_SIGN_WR=-1, APP_ENCODER_SIGN_WL=+1.
+          Apply signs only to raw count deltas on the Pi.
+        -->
+        <param name="counts_per_wheel_rev">3468.0</param>
+        <param name="right_count_sign">-1.0</param>
+        <param name="left_count_sign">1.0</param>
+
+        <!-- Logical ROS wheel commands map directly to firmware WR/WL references. -->
+        <param name="right_command_sign">1.0</param>
+        <param name="left_command_sign">1.0</param>
+
         <param name="max_wheel_rpm">200.0</param>
         <param name="max_brush_rpm">400.0</param>
         <param name="max_conveyor_rpm">600.0</param>
 
-        <!-- STM32 publishes normal RPM telemetry at 100 Hz. -->
-        <param name="state_timeout_ms">250</param>
+        <!-- Firmware feedback is 100 Hz; firmware command timeout is 200 ms. -->
+        <param name="feedback_timeout_ms">250</param>
         <param name="collector_timeout_ms">500</param>
+        <param name="handshake_timeout_ms">750</param>
+        <param name="arm_timeout_ms">300</param>
       </hardware>
 
       <joint name="left_wheel_joint">
