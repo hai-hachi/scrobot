@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
@@ -48,41 +49,36 @@ private:
   bool open_serial();
   void close_serial();
   bool configure_serial(int baud_rate);
-  bool send_command(
-    double left_rpm,
-    double right_rpm,
-    double brush_left_rpm,
-    double brush_right_rpm,
-    double conveyor_rpm,
-    bool drive_enable,
-    bool collector_enable);
-  bool parse_state_line(const std::string & line);
+
+  bool send_drive_frame(double right_rpm, double left_rpm);
+  bool send_aux_frame(double brush_right_rpm, double brush_left_rpm, double conveyor_rpm);
+  bool write_all(const uint8_t * data, size_t size);
+
+  void process_rx_buffer();
+  bool process_frame(const uint8_t * frame, size_t size);
   void publish_status(bool force = false);
 
+  static uint8_t crc8(const uint8_t * data, size_t size);
+  static float read_float_le(const uint8_t * data);
+  static void write_float_le(uint8_t * data, float value);
+  static size_t expected_frame_length(uint8_t type);
   static double rpm_to_rad_s(double rpm);
   static double rad_s_to_rpm(double rad_s);
 
   int serial_fd_{-1};
   std::string serial_port_{"/dev/scrobot_mcu"};
-  int baud_rate_{230400};
-  double counts_per_wheel_rev_{3468.0};
-  double left_command_sign_{1.0};
-  double right_command_sign_{1.0};
-  double left_state_sign_{1.0};
-  double right_state_sign_{1.0};
+  int baud_rate_{1000000};
   double max_wheel_rpm_{200.0};
   double max_brush_rpm_{400.0};
   double max_conveyor_rpm_{600.0};
-  int state_timeout_ms_{500};
+  int state_timeout_ms_{250};
   int collector_timeout_ms_{500};
 
   bool active_{false};
   bool connected_{false};
   bool estop_{false};
-  uint32_t fault_code_{0};
-  uint32_t tx_sequence_{0};
-  uint32_t rx_sequence_{0};
-  std::string rx_buffer_;
+  uint32_t rx_frame_count_{0};
+  std::vector<uint8_t> rx_buffer_;
 
   std::mutex collector_mutex_;
   scrobot_interfaces::msg::CollectorCommand collector_command_;
