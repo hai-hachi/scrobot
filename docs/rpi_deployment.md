@@ -145,7 +145,7 @@ CV:      600 RPM
 
 ## UART protocol v1
 
-ASCII CSV is used initially because it is easy to inspect with a terminal and logic analyzer. Every packet ends in newline.
+ASCII CSV is used initially because it is easy to inspect with a terminal and logic analyzer. The default link is 230400 baud so 100 Hz wheel control plus 50-100 Hz feedback has comfortable bandwidth. Every packet ends in newline.
 
 Pi -> STM32:
 
