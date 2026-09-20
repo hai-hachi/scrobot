@@ -136,8 +136,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'serial_port',
-            default_value='/dev/scrobot_mcu',
-            description='Stable STM32 serial device path.',
+            default_value='/dev/ttyAMA0',
+            description='Raspberry Pi hardware UART connected to STM32 USART6.',
         ),
         DeclareLaunchArgument(
             'baud_rate',
