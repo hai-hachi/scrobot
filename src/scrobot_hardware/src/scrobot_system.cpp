@@ -3,15 +3,13 @@
 #include <algorithm>
 #include <cerrno>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <exception>
 #include <fcntl.h>
-#include <iomanip>
-#include <sstream>
-#include <string>
 #include <termios.h>
 #include <unistd.h>
-#include <vector>
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "pluginlib/class_list_macros.hpp"
@@ -21,19 +19,30 @@ namespace scrobot_hardware
 {
 namespace
 {
-constexpr double kTwoPi = 6.28318530717958647692;
+constexpr uint8_t kSof1 = 0xAA;
+constexpr uint8_t kSof2 = 0x55;
 
-std::vector<std::string> split_csv(const std::string & line)
-{
-  std::vector<std::string> fields;
-  std::stringstream stream(line);
-  std::string field;
-  while (std::getline(stream, field, ','))
-  {
-    fields.push_back(field);
-  }
-  return fields;
-}
+constexpr uint8_t kTypeRpmEstop = 0x00;
+constexpr uint8_t kTypeRpmNormal = 0x01;
+
+constexpr uint8_t kTypeDriveRef = 0xA0;
+constexpr uint8_t kTypeAuxRef = 0xA1;
+
+constexpr uint8_t kTypePidWrEcho = 0xCA;
+constexpr uint8_t kTypePidWlEcho = 0xCB;
+constexpr uint8_t kTypePidBrEcho = 0xC0;
+constexpr uint8_t kTypePidBlEcho = 0xC1;
+constexpr uint8_t kTypePidCvEcho = 0xC2;
+
+constexpr uint8_t kTypeTuningRpm = 0xF2;
+
+constexpr size_t kDriveFrameLength = 12;
+constexpr size_t kAuxFrameLength = 16;
+constexpr size_t kPidEchoFrameLength = 20;
+constexpr size_t kNormalRpmFrameLength = 24;
+constexpr size_t kTuningFrameLength = 26;
+
+constexpr double kTwoPi = 6.28318530717958647692;
 
 speed_t baud_to_termios(int baud)
 {
@@ -56,6 +65,14 @@ speed_t baud_to_termios(int baud)
 #ifdef B460800
     case 460800:
       return B460800;
+#endif
+#ifdef B500000
+    case 500000:
+      return B500000;
+#endif
+#ifdef B1000000
+    case 1000000:
+      return B1000000;
 #endif
     default:
       return static_cast<speed_t>(0);
@@ -86,16 +103,6 @@ hardware_interface::CallbackReturn ScrobotSystemHardware::on_init(
   {
     serial_port_ = get_param("serial_port", serial_port_);
     baud_rate_ = std::stoi(get_param("baud_rate", std::to_string(baud_rate_)));
-    counts_per_wheel_rev_ =
-      std::stod(get_param("counts_per_wheel_rev", std::to_string(counts_per_wheel_rev_)));
-    left_command_sign_ =
-      std::stod(get_param("left_command_sign", std::to_string(left_command_sign_)));
-    right_command_sign_ =
-      std::stod(get_param("right_command_sign", std::to_string(right_command_sign_)));
-    left_state_sign_ =
-      std::stod(get_param("left_state_sign", std::to_string(left_state_sign_)));
-    right_state_sign_ =
-      std::stod(get_param("right_state_sign", std::to_string(right_state_sign_)));
     max_wheel_rpm_ = std::stod(get_param("max_wheel_rpm", std::to_string(max_wheel_rpm_)));
     max_brush_rpm_ = std::stod(get_param("max_brush_rpm", std::to_string(max_brush_rpm_)));
     max_conveyor_rpm_ =
@@ -108,12 +115,6 @@ hardware_interface::CallbackReturn ScrobotSystemHardware::on_init(
   catch (const std::exception & ex)
   {
     RCLCPP_FATAL(get_logger(), "Invalid SC Robot hardware parameter: %s", ex.what());
-    return hardware_interface::CallbackReturn::ERROR;
-  }
-
-  if (counts_per_wheel_rev_ <= 0.0)
-  {
-    RCLCPP_FATAL(get_logger(), "counts_per_wheel_rev must be positive");
     return hardware_interface::CallbackReturn::ERROR;
   }
 
@@ -197,17 +198,16 @@ hardware_interface::CallbackReturn ScrobotSystemHardware::on_configure(
 
   connected_ = false;
   estop_ = false;
-  fault_code_ = 0;
-  tx_sequence_ = 0;
-  rx_sequence_ = 0;
+  rx_frame_count_ = 0;
   rx_buffer_.clear();
+  rx_buffer_.reserve(256);
   last_state_ = std::chrono::steady_clock::now();
   last_status_publish_ = last_state_;
 
   RCLCPP_INFO(
     get_logger(),
-    "Configured STM32 serial interface on %s at %d baud, %.1f counts/wheel-rev",
-    serial_port_.c_str(), baud_rate_, counts_per_wheel_rev_);
+    "Configured STM32 USART6 protocol on %s at %d baud",
+    serial_port_.c_str(), baud_rate_);
 
   return hardware_interface::CallbackReturn::SUCCESS;
 }
@@ -226,7 +226,11 @@ hardware_interface::CallbackReturn ScrobotSystemHardware::on_activate(
 {
   active_ = true;
   last_state_ = std::chrono::steady_clock::now();
-  send_command(0.0, 0.0, 0.0, 0.0, 0.0, false, false);
+
+  // Send zero normal-mode commands before accepting motion.
+  send_drive_frame(0.0, 0.0);
+  send_aux_frame(0.0, 0.0, 0.0);
+
   RCLCPP_INFO(get_logger(), "SC Robot hardware activated");
   return hardware_interface::CallbackReturn::SUCCESS;
 }
@@ -235,26 +239,30 @@ hardware_interface::CallbackReturn ScrobotSystemHardware::on_deactivate(
   const rclcpp_lifecycle::State &)
 {
   active_ = false;
-  send_command(0.0, 0.0, 0.0, 0.0, 0.0, false, false);
-  RCLCPP_INFO(get_logger(), "SC Robot hardware deactivated; motor enables cleared");
+
+  // Explicit zero frames are followed by the STM32's own 200 ms A0 watchdog.
+  send_drive_frame(0.0, 0.0);
+  send_aux_frame(0.0, 0.0, 0.0);
+
+  RCLCPP_INFO(get_logger(), "SC Robot hardware deactivated; zero references sent");
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
 hardware_interface::return_type ScrobotSystemHardware::read(
-  const rclcpp::Time &, const rclcpp::Duration &)
+  const rclcpp::Time &, const rclcpp::Duration & period)
 {
   if (serial_fd_ < 0)
   {
     return hardware_interface::return_type::ERROR;
   }
 
-  char buffer[512];
+  uint8_t buffer[256];
   while (true)
   {
     const ssize_t count = ::read(serial_fd_, buffer, sizeof(buffer));
     if (count > 0)
     {
-      rx_buffer_.append(buffer, static_cast<size_t>(count));
+      rx_buffer_.insert(rx_buffer_.end(), buffer, buffer + count);
       continue;
     }
     if (count == 0 || errno == EAGAIN || errno == EWOULDBLOCK)
@@ -268,25 +276,22 @@ hardware_interface::return_type ScrobotSystemHardware::read(
     return hardware_interface::return_type::ERROR;
   }
 
-  size_t newline = std::string::npos;
-  while ((newline = rx_buffer_.find('\n')) != std::string::npos)
-  {
-    std::string line = rx_buffer_.substr(0, newline);
-    rx_buffer_.erase(0, newline + 1);
-    if (!line.empty() && line.back() == '\r')
-    {
-      line.pop_back();
-    }
-    if (!line.empty())
-    {
-      parse_state_line(line);
-    }
-  }
+  process_rx_buffer();
 
-  if (rx_buffer_.size() > 4096)
+  // STM32 normal telemetry contains measured RPM, not cumulative encoder counts.
+  // ros2_control's diff_drive_controller is configured for position feedback, so
+  // integrate the measured wheel velocity here to expose wheel position.
+  if (connected_)
   {
-    RCLCPP_WARN(get_logger(), "Discarding oversized serial receive buffer");
-    rx_buffer_.clear();
+    const double dt = std::max(0.0, period.seconds());
+    set_state(
+      "left_wheel_joint/position",
+      get_state("left_wheel_joint/position") +
+      get_state("left_wheel_joint/velocity") * dt);
+    set_state(
+      "right_wheel_joint/position",
+      get_state("right_wheel_joint/position") +
+      get_state("right_wheel_joint/velocity") * dt);
   }
 
   const auto now = std::chrono::steady_clock::now();
@@ -298,10 +303,12 @@ hardware_interface::return_type ScrobotSystemHardware::read(
     if (connected_)
     {
       RCLCPP_ERROR(
-        get_logger(), "STM32 feedback timeout: no valid STATE frame for %ld ms",
+        get_logger(), "STM32 feedback timeout: no valid 0x00/0x01 RPM frame for %ld ms",
         static_cast<long>(age_ms));
     }
     connected_ = false;
+    set_state("left_wheel_joint/velocity", 0.0);
+    set_state("right_wheel_joint/velocity", 0.0);
     publish_status(true);
     return hardware_interface::return_type::ERROR;
   }
@@ -318,10 +325,8 @@ hardware_interface::return_type ScrobotSystemHardware::write(
     return hardware_interface::return_type::ERROR;
   }
 
-  double left_rpm =
-    rad_s_to_rpm(get_command("left_wheel_joint/velocity")) * left_command_sign_;
-  double right_rpm =
-    rad_s_to_rpm(get_command("right_wheel_joint/velocity")) * right_command_sign_;
+  double left_rpm = rad_s_to_rpm(get_command("left_wheel_joint/velocity"));
+  double right_rpm = rad_s_to_rpm(get_command("right_wheel_joint/velocity"));
 
   if (!std::isfinite(left_rpm))
   {
@@ -338,7 +343,6 @@ hardware_interface::return_type ScrobotSystemHardware::write(
   double brush_left_rpm = 0.0;
   double brush_right_rpm = 0.0;
   double conveyor_rpm = 0.0;
-  bool collector_enable = false;
   bool collector_fresh = false;
 
   {
@@ -359,25 +363,27 @@ hardware_interface::return_type ScrobotSystemHardware::write(
         std::clamp(collector_command_.brush_right_rpm, -max_brush_rpm_, max_brush_rpm_);
       conveyor_rpm =
         std::clamp(collector_command_.conveyor_rpm, -max_conveyor_rpm_, max_conveyor_rpm_);
-      collector_enable = true;
     }
   }
 
-  bool drive_enable = active_;
-  if (estop_ || fault_code_ != 0)
+  if (!active_ || estop_)
   {
     left_rpm = 0.0;
     right_rpm = 0.0;
     brush_left_rpm = 0.0;
     brush_right_rpm = 0.0;
     conveyor_rpm = 0.0;
-    drive_enable = false;
-    collector_enable = false;
   }
 
-  if (!send_command(
-      left_rpm, right_rpm, brush_left_rpm, brush_right_rpm, conveyor_rpm,
-      drive_enable, collector_enable))
+  // A0 is the STM32's normal-mode heartbeat. Its payload order is WR, WL.
+  if (!send_drive_frame(right_rpm, left_rpm))
+  {
+    return hardware_interface::return_type::ERROR;
+  }
+
+  // A1 payload order is BR, BL, CV. Send it every cycle, including zeros, so
+  // a stale collector command cannot leave the auxiliary motors running.
+  if (!send_aux_frame(brush_right_rpm, brush_left_rpm, conveyor_rpm))
   {
     return hardware_interface::return_type::ERROR;
   }
@@ -455,33 +461,38 @@ bool ScrobotSystemHardware::configure_serial(int baud_rate)
   return true;
 }
 
-bool ScrobotSystemHardware::send_command(
-  double left_rpm,
-  double right_rpm,
-  double brush_left_rpm,
-  double brush_right_rpm,
-  double conveyor_rpm,
-  bool drive_enable,
-  bool collector_enable)
+bool ScrobotSystemHardware::send_drive_frame(double right_rpm, double left_rpm)
 {
-  if (serial_fd_ < 0)
-  {
-    return false;
-  }
+  uint8_t frame[kDriveFrameLength] = {};
+  frame[0] = kSof1;
+  frame[1] = kSof2;
+  frame[2] = kTypeDriveRef;
+  write_float_le(&frame[3], static_cast<float>(right_rpm));
+  write_float_le(&frame[7], static_cast<float>(left_rpm));
+  frame[kDriveFrameLength - 1] = crc8(&frame[2], kDriveFrameLength - 3);
+  return write_all(frame, sizeof(frame));
+}
 
-  std::ostringstream stream;
-  stream << "CMD," << tx_sequence_++ << ','
-         << std::fixed << std::setprecision(3)
-         << left_rpm << ',' << right_rpm << ','
-         << brush_left_rpm << ',' << brush_right_rpm << ',' << conveyor_rpm << ','
-         << (drive_enable ? 1 : 0) << ',' << (collector_enable ? 1 : 0) << "\n";
-  const std::string payload = stream.str();
+bool ScrobotSystemHardware::send_aux_frame(
+  double brush_right_rpm, double brush_left_rpm, double conveyor_rpm)
+{
+  uint8_t frame[kAuxFrameLength] = {};
+  frame[0] = kSof1;
+  frame[1] = kSof2;
+  frame[2] = kTypeAuxRef;
+  write_float_le(&frame[3], static_cast<float>(brush_right_rpm));
+  write_float_le(&frame[7], static_cast<float>(brush_left_rpm));
+  write_float_le(&frame[11], static_cast<float>(conveyor_rpm));
+  frame[kAuxFrameLength - 1] = crc8(&frame[2], kAuxFrameLength - 3);
+  return write_all(frame, sizeof(frame));
+}
 
+bool ScrobotSystemHardware::write_all(const uint8_t * data, size_t size)
+{
   size_t sent = 0;
-  while (sent < payload.size())
+  while (sent < size)
   {
-    const ssize_t count =
-      ::write(serial_fd_, payload.data() + sent, payload.size() - sent);
+    const ssize_t count = ::write(serial_fd_, data + sent, size - sent);
     if (count > 0)
     {
       sent += static_cast<size_t>(count);
@@ -500,50 +511,164 @@ bool ScrobotSystemHardware::send_command(
   return true;
 }
 
-bool ScrobotSystemHardware::parse_state_line(const std::string & line)
+void ScrobotSystemHardware::process_rx_buffer()
 {
-  const auto fields = split_csv(line);
-  if (fields.size() != 8 || fields[0] != "STATE")
+  while (rx_buffer_.size() >= 4)
   {
-    RCLCPP_WARN_THROTTLE(
-      get_logger(), *get_clock(), 2000, "Ignoring malformed STM32 frame: '%s'",
-      line.c_str());
-    return false;
+    size_t sof = 0;
+    while (sof + 1 < rx_buffer_.size() &&
+      !(rx_buffer_[sof] == kSof1 && rx_buffer_[sof + 1] == kSof2))
+    {
+      ++sof;
+    }
+
+    if (sof > 0)
+    {
+      rx_buffer_.erase(rx_buffer_.begin(), rx_buffer_.begin() + static_cast<std::ptrdiff_t>(sof));
+    }
+
+    if (rx_buffer_.size() < 4)
+    {
+      return;
+    }
+
+    if (rx_buffer_[0] != kSof1 || rx_buffer_[1] != kSof2)
+    {
+      rx_buffer_.erase(rx_buffer_.begin());
+      continue;
+    }
+
+    const size_t frame_length = expected_frame_length(rx_buffer_[2]);
+    if (frame_length == 0)
+    {
+      // Unknown TYPE: drop one byte and search for the next SOF.
+      rx_buffer_.erase(rx_buffer_.begin());
+      continue;
+    }
+
+    if (rx_buffer_.size() < frame_length)
+    {
+      return;
+    }
+
+    const uint8_t expected_crc = crc8(&rx_buffer_[2], frame_length - 3);
+    const uint8_t received_crc = rx_buffer_[frame_length - 1];
+    if (expected_crc != received_crc)
+    {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "STM32 CRC mismatch (type 0x%02X)", rx_buffer_[2]);
+      rx_buffer_.erase(rx_buffer_.begin());
+      continue;
+    }
+
+    process_frame(rx_buffer_.data(), frame_length);
+    rx_buffer_.erase(
+      rx_buffer_.begin(),
+      rx_buffer_.begin() + static_cast<std::ptrdiff_t>(frame_length));
   }
 
-  try
+  if (rx_buffer_.size() > 1024)
   {
-    const uint32_t sequence = static_cast<uint32_t>(std::stoul(fields[1]));
-    const int64_t left_count = std::stoll(fields[2]);
-    const int64_t right_count = std::stoll(fields[3]);
-    const double left_rpm = std::stod(fields[4]);
-    const double right_rpm = std::stod(fields[5]);
-    const bool estop = std::stoi(fields[6]) != 0;
-    const uint32_t fault = static_cast<uint32_t>(std::stoul(fields[7]));
+    RCLCPP_WARN(get_logger(), "Discarding oversized STM32 receive buffer");
+    rx_buffer_.clear();
+  }
+}
 
-    const double left_position =
-      left_state_sign_ * static_cast<double>(left_count) * kTwoPi / counts_per_wheel_rev_;
-    const double right_position =
-      right_state_sign_ * static_cast<double>(right_count) * kTwoPi / counts_per_wheel_rev_;
+bool ScrobotSystemHardware::process_frame(const uint8_t * frame, size_t size)
+{
+  const uint8_t type = frame[2];
 
-    set_state("left_wheel_joint/position", left_position);
-    set_state("right_wheel_joint/position", right_position);
-    set_state("left_wheel_joint/velocity", left_state_sign_ * rpm_to_rad_s(left_rpm));
-    set_state("right_wheel_joint/velocity", right_state_sign_ * rpm_to_rad_s(right_rpm));
+  if ((type == kTypeRpmNormal || type == kTypeRpmEstop) &&
+    size == kNormalRpmFrameLength)
+  {
+    // STM32 telemetry order: WR, WL, BR, BL, CV measured RPM.
+    const double right_rpm = static_cast<double>(read_float_le(&frame[3]));
+    const double left_rpm = static_cast<double>(read_float_le(&frame[7]));
 
-    rx_sequence_ = sequence;
-    estop_ = estop;
-    fault_code_ = fault;
+    if (!std::isfinite(right_rpm) || !std::isfinite(left_rpm))
+    {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000, "Ignoring non-finite STM32 RPM telemetry");
+      return false;
+    }
+
+    set_state("right_wheel_joint/velocity", rpm_to_rad_s(right_rpm));
+    set_state("left_wheel_joint/velocity", rpm_to_rad_s(left_rpm));
+
+    estop_ = type == kTypeRpmEstop;
     connected_ = true;
+    ++rx_frame_count_;
     last_state_ = std::chrono::steady_clock::now();
     return true;
   }
-  catch (const std::exception & ex)
+
+  // PID echo (C*) and synchronized tuning telemetry (F2) belong to the tuning
+  // tools, not normal ros2_control operation. Their lengths are recognized by
+  // the stream parser so they can be skipped without losing framing.
+  return false;
+}
+
+uint8_t ScrobotSystemHardware::crc8(const uint8_t * data, size_t size)
+{
+  uint8_t crc = 0x00;
+  for (size_t i = 0; i < size; ++i)
   {
-    RCLCPP_WARN_THROTTLE(
-      get_logger(), *get_clock(), 2000, "Failed to parse STM32 STATE frame: %s",
-      ex.what());
-    return false;
+    crc ^= data[i];
+    for (uint8_t bit = 0; bit < 8; ++bit)
+    {
+      crc = (crc & 0x80U) != 0U ?
+        static_cast<uint8_t>((crc << 1U) ^ 0x07U) :
+        static_cast<uint8_t>(crc << 1U);
+    }
+  }
+  return crc;
+}
+
+float ScrobotSystemHardware::read_float_le(const uint8_t * data)
+{
+  uint32_t raw =
+    static_cast<uint32_t>(data[0]) |
+    (static_cast<uint32_t>(data[1]) << 8U) |
+    (static_cast<uint32_t>(data[2]) << 16U) |
+    (static_cast<uint32_t>(data[3]) << 24U);
+
+  float value = 0.0f;
+  std::memcpy(&value, &raw, sizeof(value));
+  return value;
+}
+
+void ScrobotSystemHardware::write_float_le(uint8_t * data, float value)
+{
+  uint32_t raw = 0;
+  std::memcpy(&raw, &value, sizeof(raw));
+
+  data[0] = static_cast<uint8_t>(raw & 0xFFU);
+  data[1] = static_cast<uint8_t>((raw >> 8U) & 0xFFU);
+  data[2] = static_cast<uint8_t>((raw >> 16U) & 0xFFU);
+  data[3] = static_cast<uint8_t>((raw >> 24U) & 0xFFU);
+}
+
+size_t ScrobotSystemHardware::expected_frame_length(uint8_t type)
+{
+  switch (type)
+  {
+    case kTypeRpmNormal:
+    case kTypeRpmEstop:
+      return kNormalRpmFrameLength;
+
+    case kTypePidWrEcho:
+    case kTypePidWlEcho:
+    case kTypePidBrEcho:
+    case kTypePidBlEcho:
+    case kTypePidCvEcho:
+      return kPidEchoFrameLength;
+
+    case kTypeTuningRpm:
+      return kTuningFrameLength;
+
+    default:
+      return 0;
   }
 }
 
@@ -577,8 +702,7 @@ void ScrobotSystemHardware::publish_status(bool force)
   scrobot_interfaces::msg::HardwareStatus msg;
   msg.connected = connected_;
   msg.estop = estop_;
-  msg.fault_code = fault_code_;
-  msg.rx_sequence = rx_sequence_;
+  msg.rx_frame_count = rx_frame_count_;
   msg.left_position_rad = get_state("left_wheel_joint/position");
   msg.right_position_rad = get_state("right_wheel_joint/position");
   msg.left_velocity_rad_s = get_state("left_wheel_joint/velocity");
@@ -586,6 +710,8 @@ void ScrobotSystemHardware::publish_status(bool force)
   msg.collector_command_fresh = collector_fresh;
   status_pub_->publish(msg);
 }
+
+uint8_t ScrobotSystemHardware::crc8(const uint8_t * data, size_t size);
 
 double ScrobotSystemHardware::rpm_to_rad_s(double rpm)
 {
