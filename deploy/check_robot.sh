@@ -6,12 +6,13 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "=== SC Robot Raspberry Pi check ==="
 
 echo
-echo "[Serial]"
-if [[ -e /dev/scrobot_mcu ]]; then
-  ls -l /dev/scrobot_mcu
+echo "[STM32 UART]"
+if [[ -e /dev/ttyAMA0 ]]; then
+  ls -l /dev/ttyAMA0
+  echo "Expected link: 1,000,000 baud, 8-N-1"
 else
-  echo "MISSING: /dev/scrobot_mcu"
-  ls -l /dev/ttyACM* /dev/ttyUSB* 2>/dev/null || true
+  echo "MISSING: /dev/ttyAMA0"
+  echo "Check enable_uart=1, dtoverlay=disable-bt, then reboot."
 fi
 
 echo
