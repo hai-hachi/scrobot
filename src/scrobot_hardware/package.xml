@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>scrobot_hardware</name>
+  <version>0.1.0</version>
+  <description>Physical hardware interfaces for the SC Robot Raspberry Pi and STM32.</description>
+  <maintainer email="hai.hachi.154@gmail.com">sea</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>hardware_interface</depend>
+  <depend>pluginlib</depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>scrobot_interfaces</depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>python3-smbus</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
