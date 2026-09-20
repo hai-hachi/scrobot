@@ -64,7 +64,7 @@ private:
 
   int serial_fd_{-1};
   std::string serial_port_{"/dev/scrobot_mcu"};
-  int baud_rate_{115200};
+  int baud_rate_{230400};
   double counts_per_wheel_rev_{3468.0};
   double left_command_sign_{1.0};
   double right_command_sign_{1.0};
