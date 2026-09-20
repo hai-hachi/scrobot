@@ -228,7 +228,7 @@ hardware_interface::CallbackReturn ScrobotSystemHardware::on_configure(
   const auto deadline =
     std::chrono::steady_clock::now() + std::chrono::milliseconds(handshake_timeout_ms_);
 
-  while (std::chrono::steady_clock::now() < deadline && !info_received_)
+  while (std::chrono::steady_clock::now() < deadline && (!info_received_ || !connected_))
   {
     if (!poll_serial())
     {
@@ -238,10 +238,10 @@ hardware_interface::CallbackReturn ScrobotSystemHardware::on_configure(
     std::this_thread::sleep_for(std::chrono::milliseconds(2));
   }
 
-  if (!info_received_)
+  if (!info_received_ || !connected_)
   {
     RCLCPP_ERROR(
-      get_logger(), "STM32 protocol handshake timed out on %s", serial_port_.c_str());
+      get_logger(), "STM32 handshake timed out waiting for INFO + FEEDBACK on %s", serial_port_.c_str());
     close_serial();
     return hardware_interface::CallbackReturn::ERROR;
   }
@@ -780,9 +780,9 @@ void ScrobotSystemHardware::handle_feedback(
   else
   {
     accumulated_wr_count_ +=
-      static_cast<int64_t>(right_count_sign_ * wrapped_count_delta(wr_count, previous_wr_count_));
+      std::llround(right_count_sign_ * wrapped_count_delta(wr_count, previous_wr_count_));
     accumulated_wl_count_ +=
-      static_cast<int64_t>(left_count_sign_ * wrapped_count_delta(wl_count, previous_wl_count_));
+      std::llround(left_count_sign_ * wrapped_count_delta(wl_count, previous_wl_count_));
     previous_wr_count_ = wr_count;
     previous_wl_count_ = wl_count;
   }
