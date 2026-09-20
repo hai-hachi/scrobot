@@ -243,7 +243,7 @@ sudo systemctl start scrobot
 journalctl -u scrobot -f
 ```
 
-The generated service only starts when `/dev/scrobot_mcu` exists.
+At boot the generated service waits up to 30 seconds for `/dev/scrobot_mcu`; if the STM32 enumerates later, systemd retries the service because it is configured with `Restart=on-failure`.
 
 ## Recommended bringup sequence
 
