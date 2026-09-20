@@ -44,16 +44,22 @@ The installer:
 1. installs rosdep/colcon/I2C tools,
 2. resolves ROS package dependencies,
 3. enables serial and I2C access,
-4. creates a stable `/dev/scrobot_mcu` udev alias from the connected STM32 VID/PID/serial,
-5. builds the workspace.
+4. enables the Raspberry Pi PL011 UART on GPIO14/15,
+5. disables the Bluetooth overlay so PL011 is available as `/dev/ttyAMA0`,
+6. removes any serial-console claim on that UART,
+7. builds the workspace.
 
-If the STM32 was not connected during setup:
+The STM32 is connected directly at 3.3 V TTL level:
 
-```bash
-SCROBOT_MCU_DEV=/dev/ttyACM0 ./deploy/install_rpi.sh
+```text
+Raspberry Pi GPIO14 TX, physical pin 8  -> STM32 PA12 RX
+Raspberry Pi GPIO15 RX, physical pin 10 <- STM32 PA11 TX
+Raspberry Pi GND                         -- STM32 GND
 ```
 
-Log out and back in after the first run so the `dialout` and `i2c` group changes take effect.
+Do not connect a 5 V UART signal to either device.
+
+Log out and back in after the first run so the `dialout` and `i2c` group changes take effect. Reboot once after the UART configuration is changed.
 
 ## Device check
 
@@ -116,62 +122,165 @@ The mission is not autostarted.
 
 ## ros2_control wheel convention
 
-The ROS controller commands wheel angular velocity in rad/s. The hardware plugin converts WR/WL to RPM and sends them to the STM32. The STM32 owns encoder CPR/sign calibration and returns measured RPM.
+The ROS controller commands left/right wheel angular velocity in rad/s. The hardware plugin converts them to logical wheel RPM and sends them in the firmware-defined order:
 
-Normal telemetry does not contain cumulative encoder counts, so the Pi integrates measured WR/WL RPM to provide the wheel position state expected by `diff_drive_controller`.
+```text
+WR, WL, BR, BL, CV
+```
+
+The STM32 firmware owns motor output signs and measured-RPM signs:
+
+```text
+APP_ENCODER_SIGN_WR = -1
+APP_ENCODER_SIGN_WL = +1
+APP_MOTOR_SIGN_WR   = -1
+APP_MOTOR_SIGN_WL   = -1
+```
+
+Therefore the Pi does **not** flip the returned RPM values. FEEDBACK also contains raw timer counts, which are not sign-corrected by the firmware. The ROS hardware plugin applies:
+
+```text
+WR raw count sign = -1
+WL raw count sign = +1
+```
+
+before converting count deltas to cumulative wheel position.
+
+For WR/WL:
+
+```text
+17 PPR x 51:1 x 4 quadrature = 3468 counts/output revolution
+```
 
 Wheel limit:
 
 ```text
-WL / WR: 200 RPM
+WR / WL: +/-200 RPM
 ```
 
-Reserved collector limits:
+Collector limits:
 
 ```text
-BL / BR: 400 RPM
-CV:      600 RPM
+BR / BL: +/-400 RPM
+CV:      +/-600 RPM
 ```
 
-## UART protocol v1
+## STM32 UART protocol v2
 
-The Raspberry Pi uses the STM32 firmware's existing binary UART protocol over USART6 at **1,000,000 baud, 8-N-1**.
+The ROS hardware plugin mirrors the protocol implemented in
+`scrobot_stm32` branch `firmware-safety-prep`.
 
-Frame format:
+Physical link:
 
 ```text
-0xAA 0x55 | TYPE | PAYLOAD | CRC8
+STM32 USART6
+1,000,000 baud
+8 data bits
+no parity
+1 stop bit
+Pi device: /dev/ttyAMA0
 ```
 
-CRC-8:
+Frame:
 
 ```text
-poly = 0x07
-init = 0x00
-coverage = TYPE + PAYLOAD
+AA 55 | VER | TYPE | SEQ(u16 LE) | LEN | PAYLOAD | CRC16(u16 LE)
 ```
 
-Normal Pi -> STM32 commands:
+Current version:
 
 ```text
-A0: WR_ref, WL_ref
-A1: BR_ref, BL_ref, CV_ref
+VER = 2
 ```
 
-All values are little-endian IEEE-754 float32 RPM references.
-
-Normal STM32 -> Pi telemetry at 100 Hz:
+CRC is CRC-16/CCITT-FALSE:
 
 ```text
-01: WR, WL, BR, BL, CV measured RPM
-00: WR, WL, BR, BL, CV measured RPM, with E-stop active
+polynomial = 0x1021
+initial    = 0xFFFF
+refin      = false
+refout     = false
+xorout     = 0x0000
+coverage   = VER through final payload byte
 ```
 
-A0 is the normal-mode heartbeat. If A0 is not received for 200 ms, the STM32 zeros the normal motor references. A1 traffic alone does not keep the previous drive command alive.
+Normal runtime packets used by ROS:
 
-The ROS hardware plugin sends A0 and A1 continuously and validates the STM32 CRC-8 on receive. It treats missing valid 00/01 telemetry for 250 ms as a hardware communication failure.
+```text
+0x10 SETPOINT
+  5 x float32 RPM:
+  WR, WL, BR, BL, CV
 
-The STM32 must implement its own watchdog; the Raspberry Pi timeout is not a substitute for MCU-side safety.
+0x11 ARM
+  no payload
+
+0x12 DISARM
+  no payload
+
+0x20 FEEDBACK
+  u32 control_tick
+  u32 status
+  u16 last_setpoint_seq
+  i32 WR_count
+  i32 WL_count
+  i32 BR_count
+  i32 BL_count
+  i32 CV_count
+  f32 WR_rpm
+  f32 WL_rpm
+  f32 BR_rpm
+  f32 BL_rpm
+  f32 CV_rpm
+
+0x50 INFO_REQUEST
+0x51 INFO_RESPONSE
+0x7F ERROR
+```
+
+The plugin performs an INFO handshake during hardware configuration and rejects a protocol version other than v2.
+
+### ARM / heartbeat behavior
+
+The STM32 always boots DISARMED.
+
+When the ros2_control hardware is activated:
+
+```text
+ROS hardware on_activate()
+       |
+       +--> ARM (0x11)
+       |
+       +<-- FEEDBACK with ARMED bit
+       |
+       +--> zero SETPOINT
+       |
+       +--> normal 100 Hz SETPOINT heartbeat
+```
+
+Normal firmware command timeout is 200 ms. Since the controller manager runs at 100 Hz, the Pi normally refreshes SETPOINT every 10 ms.
+
+E-stop behavior is owned by the STM32:
+
+- E-stop press immediately clears ARMED and disables outputs.
+- Releasing E-stop does not re-arm.
+- Communication timeout disarms the STM32.
+- ROS does not automatically re-arm after either event.
+- A new ros2_control deactivate/activate cycle is required to issue a fresh ARM.
+
+Status flags from FEEDBACK are exposed on `/hardware/status`:
+
+```text
+bit 0 ARMED
+bit 1 ESTOP
+bit 2 COMM_TIMEOUT
+bit 3 SYSID
+bit 4 UART_ERROR seen
+bit 5 INVALID_OUTPUT seen
+bit 6 TX queue drop seen
+bit 7 INVALID_COMMAND seen
+```
+
+The STM32 independent watchdog remains the final low-level safety mechanism.
 
 ## Collector command
 
@@ -233,7 +342,7 @@ sudo systemctl start scrobot
 journalctl -u scrobot -f
 ```
 
-At boot the generated service waits up to 30 seconds for `/dev/scrobot_mcu`; if the STM32 enumerates later, systemd retries the service because it is configured with `Restart=on-failure`.
+At boot the generated service waits up to 30 seconds for `/dev/ttyAMA0`; systemd retries on failure.
 
 ## Recommended bringup sequence
 
@@ -245,7 +354,7 @@ Before placing the robot on the floor:
 4. launch `scrobot_bringup robot.launch.py`;
 5. verify `/joint_states` and `/diff_drive_controller/odom`;
 6. command low wheel speed manually;
-7. verify wheel signs and encoder signs;
+7. verify WR/WL logical direction, raw count sign handling, and 3468 counts/rev;
 8. verify `/imu/data_raw`, `/imu/mag`, and `/imu/data`;
 9. verify AprilTag localization;
 10. verify the depth scan and collision monitor;
