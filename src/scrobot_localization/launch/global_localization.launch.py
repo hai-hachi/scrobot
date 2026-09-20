@@ -17,4 +17,4 @@ def generate_launch_description():
     # Tag search / approach owns /approach_tag and /cmd_vel_relocalization.
     approach_controller = Node(package='scrobot_localization', executable='tag_approach_controller.py', name='tag_approach_controller', output='screen', parameters=[params, {'use_sim_time': use_sim_time}])
 
-    return LaunchDescription([DeclareLaunchArgument('use_sim_time', default_value='true'), global_localizer, approach_controller])
+    return LaunchDescription([DeclareLaunchArgument('use_sim_time', default_value='false'), global_localizer, approach_controller])
