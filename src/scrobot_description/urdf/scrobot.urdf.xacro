@@ -24,7 +24,7 @@
   <!-- Shared description defaults to passive/simulation geometry. -->
   <xacro:arg name="use_real_hardware" default="false"/>
   <xacro:arg name="serial_port" default="/dev/scrobot_mcu"/>
-  <xacro:arg name="baud_rate" default="115200"/>
+  <xacro:arg name="baud_rate" default="230400"/>
   <xacro:arg name="counts_per_wheel_rev" default="3468.0"/>
 
   <!--
