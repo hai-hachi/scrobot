@@ -1,0 +1,9 @@
+bool connected
+bool estop
+uint32 fault_code
+uint32 rx_sequence
+float64 left_position_rad
+float64 right_position_rad
+float64 left_velocity_rad_s
+float64 right_velocity_rad_s
+bool collector_command_fresh
