@@ -151,7 +151,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'use_sim_time',
-            default_value='true'
+            default_value='false'
         ),
 
         # Order here is logical; ROS nodes can start asynchronously.
