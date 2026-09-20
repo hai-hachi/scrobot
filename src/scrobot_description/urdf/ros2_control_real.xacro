@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro
+    name="scrobot_real_ros2_control"
+    params="serial_port baud_rate counts_per_wheel_rev">
+
+    <ros2_control name="ScrobotRealSystem" type="system">
+      <hardware>
+        <plugin>scrobot_hardware/ScrobotSystemHardware</plugin>
+
+        <param name="serial_port">${serial_port}</param>
+        <param name="baud_rate">${baud_rate}</param>
+
+        <!--
+          WL/WR encoder: 17 PPR at the motor, AB quadrature x4, 51:1 gearbox:
+          17 * 4 * 51 = 3468 counts per wheel revolution.
+          Change this if the STM32 firmware uses a different edge-count convention.
+        -->
+        <param name="counts_per_wheel_rev">${counts_per_wheel_rev}</param>
+
+        <param name="left_command_sign">1.0</param>
+        <param name="right_command_sign">1.0</param>
+        <param name="left_state_sign">1.0</param>
+        <param name="right_state_sign">1.0</param>
+
+        <param name="max_wheel_rpm">200.0</param>
+        <param name="max_brush_rpm">400.0</param>
+        <param name="max_conveyor_rpm">600.0</param>
+
+        <param name="state_timeout_ms">500</param>
+        <param name="collector_timeout_ms">500</param>
+      </hardware>
+
+      <joint name="left_wheel_joint">
+        <command_interface name="velocity"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <joint name="right_wheel_joint">
+        <command_interface name="velocity"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+    </ros2_control>
+
+  </xacro:macro>
+</robot>
