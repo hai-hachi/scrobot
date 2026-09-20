@@ -3,7 +3,7 @@
 
   <xacro:macro
     name="scrobot_real_ros2_control"
-    params="serial_port baud_rate counts_per_wheel_rev">
+    params="serial_port baud_rate">
 
     <ros2_control name="ScrobotRealSystem" type="system">
       <hardware>
@@ -12,23 +12,13 @@
         <param name="serial_port">${serial_port}</param>
         <param name="baud_rate">${baud_rate}</param>
 
-        <!--
-          WL/WR encoder: 17 PPR at the motor, AB quadrature x4, 51:1 gearbox:
-          17 * 4 * 51 = 3468 counts per wheel revolution.
-          Change this if the STM32 firmware uses a different edge-count convention.
-        -->
-        <param name="counts_per_wheel_rev">${counts_per_wheel_rev}</param>
-
-        <param name="left_command_sign">1.0</param>
-        <param name="right_command_sign">1.0</param>
-        <param name="left_state_sign">1.0</param>
-        <param name="right_state_sign">1.0</param>
-
+        <!-- Motor/encoder signs and CPR are owned by the STM32 firmware. -->
         <param name="max_wheel_rpm">200.0</param>
         <param name="max_brush_rpm">400.0</param>
         <param name="max_conveyor_rpm">600.0</param>
 
-        <param name="state_timeout_ms">500</param>
+        <!-- STM32 publishes normal RPM telemetry at 100 Hz. -->
+        <param name="state_timeout_ms">250</param>
         <param name="collector_timeout_ms">500</param>
       </hardware>
 
