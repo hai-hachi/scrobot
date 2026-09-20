@@ -1,7 +1,6 @@
 bool connected
 bool estop
-uint32 fault_code
-uint32 rx_sequence
+uint32 rx_frame_count
 float64 left_position_rad
 float64 right_position_rad
 float64 left_velocity_rad_s
