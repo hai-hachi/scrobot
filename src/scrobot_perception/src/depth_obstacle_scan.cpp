@@ -81,8 +81,17 @@ private:
 
   void info_callback(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
   {
+    const bool changed =
+      !camera_info_ ||
+      camera_info_->width != msg->width ||
+      camera_info_->height != msg->height ||
+      camera_info_->k != msg->k;
+
     camera_info_ = msg;
-    rays_ready_ = false;
+
+    if (changed) {
+      rays_ready_ = false;
+    }
   }
 
   bool prepare_rays(const sensor_msgs::msg::Image & msg)
