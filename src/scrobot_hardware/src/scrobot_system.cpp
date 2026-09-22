@@ -409,8 +409,15 @@ hardware_interface::return_type ScrobotSystemHardware::write(
     wr_rpm = 0.0;
   }
 
-  wl_rpm = std::clamp(wl_rpm, -max_wheel_rpm_, max_wheel_rpm_);
-  wr_rpm = std::clamp(wr_rpm, -max_wheel_rpm_, max_wheel_rpm_);
+  // Preserve the commanded curvature if either wheel would exceed the
+  // calibrated STM32 speed limit. Independent clipping would change the turn.
+  const double peak_wheel_rpm = std::max(std::abs(wl_rpm), std::abs(wr_rpm));
+  if (peak_wheel_rpm > max_wheel_rpm_)
+  {
+    const double scale = max_wheel_rpm_ / peak_wheel_rpm;
+    wl_rpm *= scale;
+    wr_rpm *= scale;
+  }
 
   double br_rpm = 0.0;
   double bl_rpm = 0.0;
