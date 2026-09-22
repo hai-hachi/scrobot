@@ -20,4 +20,5 @@ depth_obstacle_scan:
     col_stride: 4
 
     depth_scale: 0.001
-    scan_time: 0.06666666667
+    scan_time: 0.10
+    output_rate_hz: 10.0
