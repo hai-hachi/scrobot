@@ -33,7 +33,8 @@ public:
     row_stride_(std::max(1, static_cast<int>(declare_parameter<int64_t>("row_stride", 8)))),
     col_stride_(std::max(1, static_cast<int>(declare_parameter<int64_t>("col_stride", 4)))),
     depth_scale_(declare_parameter<double>("depth_scale", 0.001)),
-    scan_time_(declare_parameter<double>("scan_time", 1.0 / 15.0)),
+    scan_time_(declare_parameter<double>("scan_time", 0.10)),
+    output_rate_hz_(declare_parameter<double>("output_rate_hz", 10.0)),
     tf_buffer_(this->get_clock()),
     tf_listener_(tf_buffer_)
   {
@@ -45,10 +46,16 @@ public:
 
     depth_sub_ = create_subscription<sensor_msgs::msg::Image>(
       "depth", sensor_qos,
-      std::bind(&DepthObstacleScan::depth_callback, this, std::placeholders::_1));
+      std::bind(&DepthObstacleScan::depth_input_callback, this, std::placeholders::_1));
 
     // Nav2 collision_monitor Scan sources use SensorDataQoS too.
     scan_pub_ = create_publisher<sensor_msgs::msg::LaserScan>("scan", sensor_qos);
+
+    const auto period = std::chrono::duration<double>(
+      1.0 / std::max(1.0, output_rate_hz_));
+    timer_ = create_wall_timer(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(period),
+      std::bind(&DepthObstacleScan::process_latest_depth, this));
 
     scan_bins_ = std::max(
       1,
@@ -147,8 +154,25 @@ private:
     return true;
   }
 
-  void depth_callback(const sensor_msgs::msg::Image::SharedPtr msg)
+  void depth_input_callback(const sensor_msgs::msg::Image::SharedPtr msg)
   {
+    latest_depth_ = msg;
+    ++depth_input_count_;
+  }
+
+  void process_latest_depth()
+  {
+    if (!latest_depth_) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000, "Waiting for depth image");
+      return;
+    }
+
+    const auto msg = latest_depth_;
+    if (msg->header.stamp == last_processed_stamp_) {
+      return;
+    }
+
     const auto start = std::chrono::steady_clock::now();
 
     if (!camera_info_) {
@@ -233,6 +257,7 @@ private:
     }
 
     scan_pub_->publish(scan);
+    last_processed_stamp_ = msg->header.stamp;
     ++scan_count_;
 
     const auto end = std::chrono::steady_clock::now();
@@ -244,7 +269,9 @@ private:
 
     RCLCPP_INFO_THROTTLE(
       get_logger(), *get_clock(), 5000,
-      "Depth scan stats: published=%lu avg_process=%.2f ms max_process=%.2f ms samples=%zu",
+      "Depth scan stats: input=%lu published=%lu avg_process=%.2f ms "
+      "max_process=%.2f ms samples=%zu",
+      static_cast<unsigned long>(depth_input_count_),
       static_cast<unsigned long>(scan_count_),
       process_ms_sum_ / static_cast<double>(scan_count_),
       process_ms_max_,
@@ -263,12 +290,16 @@ private:
   int col_stride_;
   double depth_scale_;
   double scan_time_;
+  double output_rate_hz_;
   int scan_bins_;
 
   sensor_msgs::msg::CameraInfo::SharedPtr camera_info_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr info_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depth_sub_;
   rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr scan_pub_;
+  rclcpp::TimerBase::SharedPtr timer_;
+  sensor_msgs::msg::Image::SharedPtr latest_depth_;
+  builtin_interfaces::msg::Time last_processed_stamp_;
 
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
@@ -283,6 +314,7 @@ private:
   double origin_y_{0.0};
   double origin_z_{0.0};
 
+  uint64_t depth_input_count_{0};
   uint64_t scan_count_{0};
   double process_ms_sum_{0.0};
   double process_ms_max_{0.0};
