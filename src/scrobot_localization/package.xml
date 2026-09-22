@@ -36,7 +36,9 @@
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>tf_transformations</exec_depend>
 
-  <exec_depend>imu_transformer</exec_depend>  
+  <depend>rclcpp</depend>
+  <depend>tf2</depend>
+  <depend>tf2_sensor_msgs</depend>
 
   <depend>scrobot_interfaces</depend>
 
