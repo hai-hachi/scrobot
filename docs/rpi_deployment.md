@@ -146,29 +146,29 @@ WL raw count sign = +1
 
 before converting count deltas to cumulative wheel position.
 
-For WR/WL:
+For WR/WL, use the calibrated output-shaft value from STM32 `main`:
 
 ```text
-17 PPR x 51:1 x 4 quadrature = 3468 counts/output revolution
+3264 counts/output revolution
 ```
 
 Wheel limit:
 
 ```text
-WR / WL: +/-200 RPM
+WR / WL: +/-100 RPM
 ```
 
 Collector limits:
 
 ```text
 BR / BL: +/-400 RPM
-CV:      +/-600 RPM
+CV:      +/-80 RPM
 ```
 
 ## STM32 UART protocol v2
 
 The ROS hardware plugin mirrors the protocol implemented in
-`scrobot_stm32` branch `firmware-safety-prep`.
+`scrobot_stm32` branch `main`.
 
 Physical link:
 
@@ -282,18 +282,9 @@ bit 7 INVALID_COMMAND seen
 
 The STM32 independent watchdog remains the final low-level safety mechanism.
 
-## PIDF persistence
+## PIDF defaults
 
-The current `scrobot_stm32/firmware-safety-prep` branch initializes all five PIDF controllers with zero Kp/Ki/Kd in `Core/Inc/app_config.h`.
-
-The STM32 protocol supports runtime `PID_SET` / `PID_GET`, and the tuning tools load gains successfully, but those values are RAM-only. After an STM32 reset or power cycle they return to the compile-time defaults.
-
-Before normal ROS driving, choose one of these approaches:
-
-1. write the final validated PIDF gains into `app_config.h` and reflash the STM32; or
-2. add a Pi startup step that loads the validated PID table through protocol v2 before arming.
-
-For the first integrated robot bringup, committing the final validated gains into STM32 firmware is simpler and keeps low-level motor control self-contained.
+STM32 firmware `main` version 0.2.1 now contains the validated PIDF gains directly in `Core/Inc/app_config.h` for all five motors. Runtime `PID_SET` / `PID_GET` remains available for testing, but normal ROS bringup does not need to upload gains before arming.
 
 ## Collector command
 
@@ -367,7 +358,7 @@ Before placing the robot on the floor:
 4. launch `scrobot_bringup robot.launch.py`;
 5. verify `/joint_states` and `/diff_drive_controller/odom`;
 6. command low wheel speed manually;
-7. verify WR/WL logical direction, raw count sign handling, and 3468 counts/rev;
+7. verify WR/WL logical direction, raw count sign handling, and 3264 counts/rev;
 8. verify `/imu/data_raw`, `/imu/mag`, and `/imu/data`;
 9. verify AprilTag localization;
 10. verify the depth scan and collision monitor;
