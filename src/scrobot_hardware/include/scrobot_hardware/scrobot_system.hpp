@@ -93,15 +93,15 @@ private:
   std::string serial_port_{"/dev/ttyAMA0"};
   int baud_rate_{1000000};
 
-  double counts_per_wheel_rev_{3468.0};
+  double counts_per_wheel_rev_{3264.0};
   double left_count_sign_{1.0};
   double right_count_sign_{-1.0};
   double left_command_sign_{1.0};
   double right_command_sign_{1.0};
 
-  double max_wheel_rpm_{200.0};
+  double max_wheel_rpm_{100.0};
   double max_brush_rpm_{400.0};
-  double max_conveyor_rpm_{600.0};
+  double max_conveyor_rpm_{80.0};
 
   int feedback_timeout_ms_{250};
   int collector_timeout_ms_{500};
