@@ -18,7 +18,7 @@
           Firmware APP_ENCODER_SIGN_WR=-1, APP_ENCODER_SIGN_WL=+1.
           Apply signs only to raw count deltas on the Pi.
         -->
-        <param name="counts_per_wheel_rev">3468.0</param>
+        <param name="counts_per_wheel_rev">3264.0</param>
         <param name="right_count_sign">-1.0</param>
         <param name="left_count_sign">1.0</param>
 
@@ -26,9 +26,9 @@
         <param name="right_command_sign">1.0</param>
         <param name="left_command_sign">1.0</param>
 
-        <param name="max_wheel_rpm">200.0</param>
+        <param name="max_wheel_rpm">100.0</param>
         <param name="max_brush_rpm">400.0</param>
-        <param name="max_conveyor_rpm">600.0</param>
+        <param name="max_conveyor_rpm">80.0</param>
 
         <!-- Firmware feedback is 100 Hz; firmware command timeout is 200 ms. -->
         <param name="feedback_timeout_ms">250</param>
