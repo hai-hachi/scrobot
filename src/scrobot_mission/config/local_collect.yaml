@@ -47,17 +47,16 @@ local_collect_controller:
     # ------------------------------------------------------------
     # Coupled local pursuit gains
     # ------------------------------------------------------------
-    # v_max = 0.80 m/s and full-speed distance ~= 0.50 m:
-    #   linear_kp = 0.80 / 0.50 = 1.60
-    linear_kp: 1.60
+    # v_max = 0.45 m/s and full-speed distance ~= 0.50 m:
+    #   linear_kp = 0.45 / 0.50 = 0.90
+    linear_kp: 0.90
 
     # Saturate at about 0.50 rad (28.6 deg) bearing:
     #   angular_kp = 1.60 / 0.50 = 3.20
     angular_kp: 3.20
 
-    # Hard command limits. R_min = 0.50 m at 0.80 m/s requires
-    # omega = v / R = 1.60 rad/s.
-    max_linear_speed: 0.80
+    # Hard command limits for the calibrated real drive.
+    max_linear_speed: 0.45
     max_angular_speed: 1.60
 
     # Kinematic command slew limits chosen for the project.
@@ -67,5 +66,6 @@ local_collect_controller:
     # Stop forward motion and rotate when bearing exceeds this angle.
     heading_stop_deg: 70.0
 
-    # Kinematic stopping distance at 0.80 m/s and 1.0 m/s^2 is 0.32 m.
-    slow_radius: 0.35
+    # Kinematic stopping distance at 0.45 m/s and 1.0 m/s^2 is about 0.10 m.
+    # Keep extra margin for perception/control delay.
+    slow_radius: 0.20
