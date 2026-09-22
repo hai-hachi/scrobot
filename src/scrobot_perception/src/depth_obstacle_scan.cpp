@@ -64,10 +64,22 @@ private:
   void info_callback(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
   {
     camera_info_ = msg;
+    ++camera_info_count_;
+    RCLCPP_INFO_THROTTLE(
+      get_logger(), *get_clock(), 5000,
+      "CameraInfo received: %lu messages, %ux%u",
+      static_cast<unsigned long>(camera_info_count_), msg->width, msg->height);
   }
 
   void depth_callback(const sensor_msgs::msg::Image::SharedPtr msg)
   {
+    ++depth_count_;
+    RCLCPP_INFO_THROTTLE(
+      get_logger(), *get_clock(), 5000,
+      "Depth received: %lu messages, encoding=%s, frame=%s",
+      static_cast<unsigned long>(depth_count_), msg->encoding.c_str(),
+      msg->header.frame_id.c_str());
+
     if (!camera_info_) {
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 2000, "Waiting for depth camera_info");
@@ -174,6 +186,11 @@ private:
     }
 
     scan_pub_->publish(scan);
+    ++scan_count_;
+    RCLCPP_INFO_THROTTLE(
+      get_logger(), *get_clock(), 5000,
+      "Published scan: %lu messages",
+      static_cast<unsigned long>(scan_count_));
   }
 
   std::string target_frame_;
@@ -197,6 +214,10 @@ private:
 
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
+
+  uint64_t camera_info_count_{0};
+  uint64_t depth_count_{0};
+  uint64_t scan_count_{0};
 };
 
 int main(int argc, char ** argv)
