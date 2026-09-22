@@ -16,8 +16,8 @@ depth_obstacle_scan:
     angle_increment: 0.00872664626
 
     # Subsample the 848x480 depth image to keep Pi 4B CPU use low.
-    row_stride: 4
-    col_stride: 2
+    row_stride: 8
+    col_stride: 4
 
     depth_scale: 0.001
     scan_time: 0.06666666667
