@@ -31,15 +31,31 @@ def generate_launch_description():
 
 
     # ==========================================
-    # D435i IMU -> Madgwick
+    # RealSense IMU frame conversion
     # ==========================================
     #
-    # Do not use imu_transformer here on ROS 2 Jazzy. Its message_filters
-    # subscriber uses the default reliable QoS, while RealSense motion topics
-    # use SensorDataQoS (best effort). Madgwick already subscribes with
-    # SensorDataQoS and robot_localization can transform the resulting IMU
-    # message from camera_imu_optical_frame using the URDF TF tree.
+    # RealSense publishes the combined IMU in camera_imu_optical_frame using
+    # SensorDataQoS. This project-local transformer subscribes with the same
+    # QoS and rotates the IMU into base_link before Madgwick/EKF processing.
     #
+    imu_transformer = Node(
+        package='scrobot_localization',
+        executable='imu_transformer_sensor_qos',
+        name='imu_transformer',
+        output='screen',
+        parameters=[
+            {
+                'target_frame': 'base_link',
+                'use_sim_time': use_sim_time,
+            }
+        ],
+        remappings=[
+            ('imu_in', '/camera/camera/imu'),
+            ('imu_out', '/imu/data_raw'),
+        ],
+    )
+
+
     # ==========================================
     # Madgwick IMU filter
     # ==========================================
@@ -61,7 +77,7 @@ def generate_launch_description():
         remappings=[
             (
                 'imu/data_raw',
-                '/camera/camera/imu'
+                '/imu/data_raw'
             ),
             (
                 'imu/data',
@@ -106,6 +122,7 @@ def generate_launch_description():
             default_value='false'
         ),
 
+        imu_transformer,
         imu_filter,
         ekf_node,
 
