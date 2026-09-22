@@ -23,6 +23,7 @@ def generate_launch_description():
     baud_rate = LaunchConfiguration('baud_rate')
     launch_navigation = LaunchConfiguration('launch_navigation')
     launch_global_localization = LaunchConfiguration('launch_global_localization')
+    launch_magnetometer = LaunchConfiguration('launch_magnetometer')
 
     xacro_file = PathJoinSubstitution([
         FindPackageShare('scrobot_description'),
@@ -98,6 +99,7 @@ def generate_launch_description():
             os.path.join(hardware_pkg, 'config', 'magnetometer.yaml'),
             {'use_sim_time': False},
         ],
+        condition=IfCondition(launch_magnetometer),
     )
 
     localization = IncludeLaunchDescription(
@@ -143,6 +145,12 @@ def generate_launch_description():
             'baud_rate',
             default_value='1000000',
             description='STM32 UART baud rate.',
+        ),
+        DeclareLaunchArgument(
+            'launch_magnetometer',
+            default_value='false',
+            choices=['true', 'false'],
+            description='Launch the external 5883L magnetometer when installed.',
         ),
         DeclareLaunchArgument(
             'launch_global_localization',
