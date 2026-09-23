@@ -49,6 +49,17 @@ case "${1:-}" in
   restart)
     compose up -d --force-recreate
     ;;
+  realsense-udev)
+    tmp_rules="$(mktemp)"
+    trap 'rm -f "${tmp_rules}"' EXIT
+    curl -fsSL \
+      "https://raw.githubusercontent.com/realsenseai/librealsense/v2.58.4/config/99-realsense-libusb.rules" \
+      -o "${tmp_rules}"
+    sudo install -m 0644 "${tmp_rules}" /etc/udev/rules.d/99-realsense-libusb.rules
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger
+    echo "RealSense udev rules installed. Unplug and reconnect the D435i."
+    ;;
   status)
     compose ps
     ;;
@@ -67,6 +78,8 @@ Commands:
   status      Show compose/container status
   logs        Follow container logs
   restart     Recreate the container from the current image/config
+  realsense-udev
+              Install v2.58.4 RealSense raw-USB udev rules on the host
   stop        Stop and remove the container
 EOF
     exit 2
