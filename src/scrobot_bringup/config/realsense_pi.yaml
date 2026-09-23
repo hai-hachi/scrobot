@@ -1,0 +1,32 @@
+/camera/camera:
+  ros__parameters:
+    # Raspberry Pi 4B profile: keep the streams needed by localization,
+    # AprilTags and collision avoidance, but avoid expensive RGB-D products.
+    enable_color: true
+    rgb_camera.color_profile: "1280,720,15"
+    rgb_camera.color_format: "RGB8"
+
+    enable_depth: true
+    depth_module.depth_profile: "848,480,15"
+    depth_module.depth_format: "Z16"
+
+    enable_infra: false
+    enable_infra1: false
+    enable_infra2: false
+
+    enable_gyro: true
+    enable_accel: true
+    unite_imu_method: 2
+
+    # The Pi collision path consumes raw depth directly. Do not generate
+    # aligned depth or a full PointCloud2 in the normal Pi bringup.
+    align_depth.enable: false
+    pointcloud.enable: false
+    enable_sync: false
+
+    # robot_state_publisher owns the camera TF tree.
+    publish_tf: false
+
+    initial_reset: false
+    reconnect_timeout: 6.0
+    diagnostics_period: 1.0
