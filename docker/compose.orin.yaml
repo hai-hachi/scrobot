@@ -35,6 +35,7 @@ services:
 
     volumes:
       - ${SCROBOT_WS_ROOT}:/workspace
+      - ${SCROBOT_STM32_ROOT}:/opt/scrobot_stm32:ro
       - /dev/bus/usb:/dev/bus/usb
       - /run/udev:/run/udev:ro
 
