@@ -3,7 +3,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import EnvironmentVariable, Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -85,8 +85,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'serial_port',
-            default_value='/dev/ttyAMA0',
-            description='Raspberry Pi PL011 UART connected to STM32 USART6.',
+            default_value=EnvironmentVariable('SCROBOT_SERIAL_PORT', default_value='/dev/ttyAMA0'),
+            description='STM32 UART device. Override with SCROBOT_SERIAL_PORT on non-Pi hosts.',
         ),
         DeclareLaunchArgument(
             'baud_rate',
