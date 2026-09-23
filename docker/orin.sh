@@ -47,7 +47,7 @@ case "${1:-}" in
     compose down
     ;;
   restart)
-    compose restart
+    compose up -d --force-recreate
     ;;
   status)
     compose ps
@@ -66,7 +66,7 @@ Commands:
   ws-build    Build /workspace with colcon --symlink-install
   status      Show compose/container status
   logs        Follow container logs
-  restart     Restart the container
+  restart     Recreate the container from the current image/config
   stop        Stop and remove the container
 EOF
     exit 2
