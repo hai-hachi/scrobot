@@ -26,7 +26,7 @@ services:
       - "${SCROBOT_PLUGDEV_GID:-46}"
 
     environment:
-      ROS_DOMAIN_ID: "${ROS_DOMAIN_ID:-0}"
+      ROS_DOMAIN_ID: "${ROS_DOMAIN_ID:-13}"
       ROS_LOCALHOST_ONLY: "0"
       SCROBOT_SERIAL_PORT: "/dev/ttyTHS1"
 
