@@ -2,7 +2,7 @@
 <package format="3">
   <name>scrobot_bringup</name>
   <version>0.1.0</version>
-  <description>Integrated physical-robot bringup for SC Robot on Raspberry Pi 4B.</description>
+  <description>Integrated physical-robot bringup for SC Robot on Raspberry Pi and Jetson platforms.</description>
   <maintainer email="hai.hachi.154@gmail.com">sea</maintainer>
   <license>Apache-2.0</license>
 
