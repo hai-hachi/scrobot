@@ -13,6 +13,7 @@ group_gid() {
 export SCROBOT_UID="$(id -u)"
 export SCROBOT_GID="$(id -g)"
 export SCROBOT_WS_ROOT="${WS_ROOT}"
+export SCROBOT_STM32_ROOT="${HOME}/scrobot_stm32"
 export SCROBOT_DIALOUT_GID="$(group_gid dialout)"
 export SCROBOT_I2C_GID="$(group_gid i2c)"
 export SCROBOT_VIDEO_GID="$(group_gid video)"
