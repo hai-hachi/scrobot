@@ -47,6 +47,21 @@ source /opt/ros/jazzy/setup.bash
 source /workspace/install/setup.bash
 ```
 
+The image builds librealsense 2.58.4 with the RSUSB backend under
+`/usr/local/lib`. ROS setup scripts prepend their own library directories, so
+the container shell deliberately re-prepends `/usr/local/lib` after sourcing
+ROS and the workspace. A fresh shell should therefore start with:
+
+```bash
+echo "$LD_LIBRARY_PATH"
+# /usr/local/lib:...
+```
+
+This ordering is required on the Orin: if
+`/opt/ros/jazzy/lib/aarch64-linux-gnu` appears before `/usr/local/lib`, the
+ROS-packaged librealsense can be selected instead and the D435i IMU falls back
+to the partial Jetson UVC/HID backend.
+
 ## Hardware mappings
 
 Initial bring-up uses:
