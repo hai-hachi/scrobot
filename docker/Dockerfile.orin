@@ -9,10 +9,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
+    cmake \
     curl \
     git \
     i2c-tools \
     less \
+    libssl-dev \
+    libudev-dev \
+    libusb-1.0-0-dev \
     nano \
     net-tools \
     procps \
@@ -22,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-smbus \
     python3-serial \
     python3-vcstool \
+    pkg-config \
     ros-jazzy-ros2controlcli \
     sudo \
     udev \
@@ -30,6 +35,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rosdep init 2>/dev/null || true && rosdep update
+
+# Jetson R36.5 stock UVC/HID support exposes only a partial D435i device.
+# Build the same librealsense version as the Jazzy wrapper with the kernel-
+# independent RSUSB backend. Keep this layer before COPY so normal source edits
+# do not trigger another lengthy librealsense rebuild.
+ARG LIBREALSENSE_VERSION=2.58.4
+RUN git clone --depth 1 --branch "v${LIBREALSENSE_VERSION}" \
+      https://github.com/realsenseai/librealsense.git /tmp/librealsense && \
+    cmake -S /tmp/librealsense -B /tmp/librealsense/build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DFORCE_RSUSB_BACKEND=ON \
+      -DBUILD_EXAMPLES=OFF \
+      -DBUILD_GRAPHICAL_EXAMPLES=OFF \
+      -DBUILD_PYTHON_BINDINGS=OFF \
+      -DBUILD_WITH_CUDA=OFF && \
+    cmake --build /tmp/librealsense/build --parallel 4 && \
+    cmake --install /tmp/librealsense/build && \
+    echo '/usr/local/lib' > /etc/ld.so.conf.d/librealsense-rsusb.conf && \
+    ldconfig && \
+    rm -rf /tmp/librealsense
 
 # Resolve the dependencies needed by the real-robot stack. Keep Gazebo simulation
 # out of the embedded image.
@@ -75,6 +100,7 @@ RUN set -eux; \
     echo '[ -f /workspace/install/setup.bash ] && source /workspace/install/setup.bash' >> "/home/${USER_NAME}/.bashrc"
 
 ENV HOME=/home/${USER_NAME}
+ENV LD_LIBRARY_PATH=/usr/local/lib:/opt/ros/jazzy/lib
 WORKDIR /workspace
 
 USER ${USER_NAME}
