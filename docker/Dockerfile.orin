@@ -49,13 +49,24 @@ RUN apt-get update && \
       -r -y && \
     rm -rf /var/lib/apt/lists/* /tmp/scrobot_repo
 
-# Match the host user so bind-mounted colcon build/install/log files are not
-# created as root.
+# Match the host UID/GID so bind-mounted colcon build/install/log files are
+# never created as root. The upstream ROS image may already contain UID 1000
+# (normally the Ubuntu user), so reuse that account instead of creating a
+# duplicate UID.
 RUN set -eux; \
-    if ! getent group "${GROUP_ID}" >/dev/null; then \
-      groupadd --gid "${GROUP_ID}" "${USER_NAME}"; \
+    existing_user="$(getent passwd "${USER_ID}" | cut -d: -f1 || true)"; \
+    if [ -n "${existing_user}" ] && [ "${existing_user}" != "${USER_NAME}" ]; then \
+      usermod --login "${USER_NAME}" "${existing_user}"; \
+      usermod --home "/home/${USER_NAME}" --move-home "${USER_NAME}"; \
+    elif [ -z "${existing_user}" ]; then \
+      if ! getent group "${GROUP_ID}" >/dev/null; then \
+        groupadd --gid "${GROUP_ID}" "${USER_NAME}"; \
+      fi; \
+      useradd --uid "${USER_ID}" --gid "${GROUP_ID}" --create-home --shell /bin/bash "${USER_NAME}"; \
     fi; \
-    useradd --uid "${USER_ID}" --gid "${GROUP_ID}" --create-home --shell /bin/bash "${USER_NAME}"; \
+    usermod --shell /bin/bash "${USER_NAME}"; \
+    mkdir -p "/home/${USER_NAME}"; \
+    chown "${USER_ID}:${GROUP_ID}" "/home/${USER_NAME}"; \
     echo "${USER_NAME} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${USER_NAME}"; \
     chmod 0440 "/etc/sudoers.d/${USER_NAME}"; \
     echo 'source /opt/ros/jazzy/setup.bash' >> "/home/${USER_NAME}/.bashrc"; \
