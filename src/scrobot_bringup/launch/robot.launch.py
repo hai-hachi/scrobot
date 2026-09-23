@@ -5,7 +5,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import EnvironmentVariable, Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -24,6 +24,7 @@ def generate_launch_description():
     launch_navigation = LaunchConfiguration('launch_navigation')
     launch_global_localization = LaunchConfiguration('launch_global_localization')
     launch_magnetometer = LaunchConfiguration('launch_magnetometer')
+    camera_config = LaunchConfiguration('camera_config')
 
     xacro_file = PathJoinSubstitution([
         FindPackageShare('scrobot_description'),
@@ -85,7 +86,7 @@ def generate_launch_description():
         name='camera',
         output='screen',
         parameters=[
-            os.path.join(bringup_pkg, 'config', 'realsense.yaml'),
+            camera_config,
             {'use_sim_time': False},
         ],
     )
@@ -111,11 +112,12 @@ def generate_launch_description():
 
     perception = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(perception_pkg, 'launch', 'perception.launch.py')
+            os.path.join(perception_pkg, 'launch', 'hardware_perception.launch.py')
         ),
         launch_arguments={
             'use_sim_time': 'false',
-            'cloud_topic': '/camera/camera/depth/color/points',
+            'launch_apriltag': 'true',
+            'launch_depth_scan': 'true',
         }.items(),
     )
 
@@ -138,13 +140,18 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'serial_port',
-            default_value='/dev/ttyAMA0',
-            description='Raspberry Pi hardware UART connected to STM32 USART6.',
+            default_value=EnvironmentVariable('SCROBOT_SERIAL_PORT', default_value='/dev/ttyAMA0'),
+            description='STM32 UART device. Override with SCROBOT_SERIAL_PORT on non-Pi hosts.',
         ),
         DeclareLaunchArgument(
             'baud_rate',
             default_value='1000000',
             description='STM32 UART baud rate.',
+        ),
+        DeclareLaunchArgument(
+            'camera_config',
+            default_value=os.path.join(bringup_pkg, 'config', 'realsense_pi.yaml'),
+            description='RealSense YAML profile. Pi uses the lightweight profile by default.',
         ),
         DeclareLaunchArgument(
             'launch_magnetometer',
