@@ -1,0 +1,22 @@
+magnetometer_5883l:
+  ros__parameters:
+    i2c_bus: 1
+    chip: auto
+    frame_id: base_link
+    publish_rate: 50.0
+
+    # Calibrated field = soft_iron_matrix * (mapped_raw - hard_iron_offset_t)
+    hard_iron_offset_t: [0.0, 0.0, 0.0]
+    soft_iron_matrix:
+      [1.0, 0.0, 0.0,
+       0.0, 1.0, 0.0,
+       0.0, 0.0, 1.0]
+
+    # Change these if the PCB axes are not aligned with base_link.
+    axis_map: [0, 1, 2]
+    axis_sign: [1, 1, 1]
+
+    covariance:
+      [1.0e-10, 0.0, 0.0,
+       0.0, 1.0e-10, 0.0,
+       0.0, 0.0, 1.0e-10]

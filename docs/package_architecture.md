@@ -4,6 +4,7 @@
 
 ```text
 scrobot_bringup
+scrobot_hardware
 scrobot_control
 scrobot_description
 scrobot_evaluation
@@ -29,6 +30,19 @@ base_footprint
     -> camera_depth_optical_frame
     -> camera_imu_optical_frame
 ```
+
+## `scrobot_hardware`
+Owns physical Raspberry Pi / STM32 integration.
+
+Responsibilities:
+
+- real ros2_control SystemInterface over UART
+- WL/WR encoder feedback and wheel RPM commands
+- reserved BL/BR/CV collector RPM command transport
+- STM32 E-stop/fault status
+- 5883L-compatible magnetometer over Raspberry Pi I2C
+
+The physical UART is owned by this package so multiple ROS nodes never contend for the same serial port.
 
 ## `scrobot_control`
 Owns low-level motion command handling and ROS 2 control integration.
@@ -149,7 +163,7 @@ Relocalize.action
 ```
 
 ## `scrobot_bringup`
-Reserved for integrated launch/orchestration of multiple subsystems.
+Owns integrated physical-robot orchestration on the Raspberry Pi. The real launch starts robot_state_publisher, controller_manager, D435i, 5883L, control, localization, AprilTag/depth obstacle perception, and optional Nav2. Mission motion is not autostarted.
 
 ## Dependency direction
 

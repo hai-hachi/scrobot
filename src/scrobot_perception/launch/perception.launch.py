@@ -14,6 +14,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     min_height = LaunchConfiguration('min_height')
     max_height = LaunchConfiguration('max_height')
+    cloud_topic = LaunchConfiguration('cloud_topic')
 
     apriltag = Node(
         package='apriltag_ros',
@@ -45,7 +46,7 @@ def generate_launch_description():
             },
         ],
         remappings=[
-            ('cloud_in', '/camera/camera/depth/points'),
+            ('cloud_in', cloud_topic),
             ('scan', '/camera/camera/depth/scan'),
         ],
     )
@@ -53,8 +54,13 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'use_sim_time',
-            default_value='true',
+            default_value='false',
             choices=['true', 'false'],
+        ),
+        DeclareLaunchArgument(
+            'cloud_topic',
+            default_value='/camera/camera/depth/points',
+            description='Input PointCloud2 topic. Real D435i uses /camera/camera/depth/color/points.',
         ),
         DeclareLaunchArgument(
             'min_height',

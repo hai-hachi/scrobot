@@ -1,0 +1,10 @@
+<library path="scrobot_hardware">
+  <class
+    name="scrobot_hardware/ScrobotSystemHardware"
+    type="scrobot_hardware::ScrobotSystemHardware"
+    base_class_type="hardware_interface::SystemInterface">
+    <description>
+      Serial ros2_control SystemInterface for the SC Robot STM32 motor controller.
+    </description>
+  </class>
+</library>

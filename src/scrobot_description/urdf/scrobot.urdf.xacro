@@ -21,6 +21,11 @@
   <xacro:property name="wheel_width" value="0.030"/>
   <xacro:property name="wheel_separation" value="0.420"/>
 
+  <!-- Shared description defaults to passive/simulation geometry. -->
+  <xacro:arg name="use_real_hardware" default="false"/>
+  <xacro:arg name="serial_port" default="/dev/ttyAMA0"/>
+  <xacro:arg name="baud_rate" default="1000000"/>
+
   <!--
     Collision width can be overridden by simulation while the visual and
     physical wheel dimensions remain 30 mm. Real/default description keeps
@@ -57,7 +62,7 @@
   <xacro:property name="camera_y" value="0.0"/>
   <xacro:property name="camera_z" value="0.22"/>
   <xacro:property name="camera_roll" value="0.0"/>
-  <xacro:property name="camera_pitch" value="${7.0 * pi / 180.0}"/>
+  <xacro:property name="camera_pitch" value="${15.0 * pi / 180.0}"/>
   <xacro:property name="camera_yaw" value="0.0"/>
 
   <xacro:property name="imu_x" value="-0.035"/>
@@ -73,12 +78,19 @@
   <xacro:include filename="$(find scrobot_description)/urdf/casters.xacro"/>
   <xacro:include filename="$(find scrobot_description)/urdf/collector.xacro"/>
   <xacro:include filename="$(find scrobot_description)/urdf/sensors.xacro"/>
+  <xacro:include filename="$(find scrobot_description)/urdf/ros2_control_real.xacro"/>
 
   <xacro:scrobot_base/>
   <xacro:scrobot_wheels/>
   <xacro:scrobot_casters/>
   <xacro:scrobot_collector/>
   <xacro:scrobot_sensors/>
+
+  <xacro:if value="$(arg use_real_hardware)">
+    <xacro:scrobot_real_ros2_control
+      serial_port="$(arg serial_port)"
+      baud_rate="$(arg baud_rate)"/>
+  </xacro:if>
 
   <!-- ====================================================== -->
   <!-- Gazebo-only ground truth odometry for evaluation       -->
