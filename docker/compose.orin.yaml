@@ -1,0 +1,43 @@
+services:
+  scrobot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.orin
+      args:
+        USER_ID: ${SCROBOT_UID:-1000}
+        GROUP_ID: ${SCROBOT_GID:-1000}
+    image: scrobot-core:orin-jazzy
+    container_name: scrobot-core
+
+    network_mode: host
+    ipc: host
+    runtime: nvidia
+
+    # Initial hardware bring-up intentionally starts permissive. Once UART and
+    # RealSense are proven, this can be tightened to explicit devices only.
+    privileged: true
+
+    user: "${SCROBOT_UID:-1000}:${SCROBOT_GID:-1000}"
+    group_add:
+      - "${SCROBOT_DIALOUT_GID:-20}"
+      - "${SCROBOT_I2C_GID:-999}"
+      - "${SCROBOT_VIDEO_GID:-44}"
+      - "${SCROBOT_RENDER_GID:-109}"
+      - "${SCROBOT_PLUGDEV_GID:-46}"
+
+    environment:
+      ROS_DOMAIN_ID: "${ROS_DOMAIN_ID:-0}"
+      ROS_LOCALHOST_ONLY: "0"
+      SCROBOT_SERIAL_PORT: "/dev/ttyTHS1"
+
+    devices:
+      - /dev/ttyTHS1:/dev/ttyTHS1
+
+    volumes:
+      - ${SCROBOT_WS_ROOT}:/workspace
+      - /dev/bus/usb:/dev/bus/usb
+      - /run/udev:/run/udev:ro
+
+    working_dir: /workspace
+    command: ["sleep", "infinity"]
+    restart: unless-stopped
