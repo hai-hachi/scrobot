@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-smbus \
     python3-serial \
     python3-vcstool \
+    ros-jazzy-ros2controlcli \
     sudo \
     udev \
     usbutils \
