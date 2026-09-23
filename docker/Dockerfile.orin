@@ -97,7 +97,9 @@ RUN set -eux; \
     echo "${USER_NAME} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${USER_NAME}"; \
     chmod 0440 "/etc/sudoers.d/${USER_NAME}"; \
     echo 'source /opt/ros/jazzy/setup.bash' >> "/home/${USER_NAME}/.bashrc"; \
-    echo '[ -f /workspace/install/setup.bash ] && source /workspace/install/setup.bash' >> "/home/${USER_NAME}/.bashrc"
+    echo '[ -f /workspace/install/setup.bash ] && source /workspace/install/setup.bash' >> "/home/${USER_NAME}/.bashrc"; \
+    echo 'export LD_LIBRARY_PATH="/usr/local/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"' >> "/home/${USER_NAME}/.bashrc"; \
+    echo 'export PATH="/usr/local/bin:${PATH}"' >> "/home/${USER_NAME}/.bashrc"
 
 ENV HOME=/home/${USER_NAME}
 ENV LD_LIBRARY_PATH=/usr/local/lib:/opt/ros/jazzy/lib
