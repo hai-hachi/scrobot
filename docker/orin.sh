@@ -101,12 +101,12 @@ container_check() {
   pass "scrobot-core is running"
 
   docker exec -i scrobot-core bash <<'EOS'
-set -u
-
 pass() { printf '[PASS] %s\n' "$*"; }
 warn() { printf '[WARN] %s\n' "$*"; }
 fail() { printf '[FAIL] %s\n' "$*"; }
 
+# ROS setup files are not nounset-safe: they intentionally probe variables
+# that may not exist yet. Source all setup files before enabling set -u.
 source /opt/ros/jazzy/setup.bash
 if [[ -f /opt/realsense_ros/setup.bash ]]; then
   source /opt/realsense_ros/setup.bash
@@ -114,6 +114,7 @@ else
   fail "/opt/realsense_ros/setup.bash is missing"
 fi
 [[ -f /workspace/install/setup.bash ]] && source /workspace/install/setup.bash
+set -u
 
 if [[ "${ROS_DISTRO:-}" == "jazzy" ]]; then
   pass "ROS_DISTRO=jazzy"
@@ -211,8 +212,7 @@ case "${1:-}" in
     ;;
   ws-build)
     compose up -d
-    docker exec -it scrobot-core bash -lc \
-      'source /opt/ros/jazzy/setup.bash && source /opt/realsense_ros/setup.bash && cd /workspace && colcon build --symlink-install'
+    docker exec -it scrobot-core bash -lc       'source /opt/ros/jazzy/setup.bash && source /opt/realsense_ros/setup.bash && cd /workspace && colcon build --symlink-install'
     ;;
   check)
     run_check
@@ -227,9 +227,7 @@ case "${1:-}" in
   realsense-udev)
     tmp_rules="$(mktemp)"
     trap 'rm -f "${tmp_rules}"' EXIT
-    curl -fsSL \
-      "https://raw.githubusercontent.com/realsenseai/librealsense/v2.58.4/config/99-realsense-libusb.rules" \
-      -o "${tmp_rules}"
+    curl -fsSL       "https://raw.githubusercontent.com/realsenseai/librealsense/v2.58.4/config/99-realsense-libusb.rules"       -o "${tmp_rules}"
     sudo install -m 0644 "${tmp_rules}" /etc/udev/rules.d/99-realsense-libusb.rules
     sudo udevadm control --reload-rules
     sudo udevadm trigger
