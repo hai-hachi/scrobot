@@ -7,6 +7,7 @@
 #include <cstring>
 #include <exception>
 #include <fcntl.h>
+#include <sys/file.h>
 #include <thread>
 #include <termios.h>
 #include <unistd.h>
@@ -462,6 +463,16 @@ bool ScrobotSystemHardware::open_serial()
   {
     RCLCPP_ERROR(
       get_logger(), "Cannot open %s: %s", serial_port_.c_str(), std::strerror(errno));
+    return false;
+  }
+
+  if (flock(serial_fd_, LOCK_EX | LOCK_NB) != 0)
+  {
+    RCLCPP_ERROR(
+      get_logger(),
+      "Cannot lock %s exclusively: %s. Another ROS/tuning process may already own the UART.",
+      serial_port_.c_str(), std::strerror(errno));
+    close_serial();
     return false;
   }
 
