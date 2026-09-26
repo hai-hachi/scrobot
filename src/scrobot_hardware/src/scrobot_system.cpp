@@ -228,6 +228,8 @@ hardware_interface::CallbackReturn ScrobotSystemHardware::on_configure(
 
   const auto deadline =
     std::chrono::steady_clock::now() + std::chrono::milliseconds(handshake_timeout_ms_);
+  auto next_info_request =
+    std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
 
   while (std::chrono::steady_clock::now() < deadline && (!info_received_ || !connected_))
   {
@@ -236,13 +238,33 @@ hardware_interface::CallbackReturn ScrobotSystemHardware::on_configure(
       close_serial();
       return hardware_interface::CallbackReturn::ERROR;
     }
+
+    const auto now = std::chrono::steady_clock::now();
+
+    // INFO is request/response rather than a periodic stream. Retry it during
+    // startup so one transient UART RX error does not make the whole hardware
+    // component fail to configure.
+    if (!info_received_ && now >= next_info_request)
+    {
+      if (!send_info_request())
+      {
+        close_serial();
+        return hardware_interface::CallbackReturn::ERROR;
+      }
+      next_info_request = now + std::chrono::milliseconds(100);
+    }
+
     std::this_thread::sleep_for(std::chrono::milliseconds(2));
   }
 
   if (!info_received_ || !connected_)
   {
     RCLCPP_ERROR(
-      get_logger(), "STM32 handshake timed out waiting for INFO + FEEDBACK on %s", serial_port_.c_str());
+      get_logger(),
+      "STM32 handshake timed out on %s: INFO=%s FEEDBACK=%s",
+      serial_port_.c_str(),
+      info_received_ ? "received" : "missing",
+      connected_ ? "received" : "missing");
     close_serial();
     return hardware_interface::CallbackReturn::ERROR;
   }
