@@ -324,6 +324,8 @@ hardware_interface::CallbackReturn ScrobotSystemHardware::on_activate(
 
   const auto deadline =
     std::chrono::steady_clock::now() + std::chrono::milliseconds(arm_timeout_ms_);
+  auto next_arm_request =
+    std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
 
   while (std::chrono::steady_clock::now() < deadline)
   {
@@ -350,10 +352,27 @@ hardware_interface::CallbackReturn ScrobotSystemHardware::on_activate(
       return hardware_interface::CallbackReturn::SUCCESS;
     }
 
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= next_arm_request)
+    {
+      if (!send_arm())
+      {
+        return hardware_interface::CallbackReturn::ERROR;
+      }
+      next_arm_request = now + std::chrono::milliseconds(100);
+    }
+
     std::this_thread::sleep_for(std::chrono::milliseconds(2));
   }
 
-  RCLCPP_ERROR(get_logger(), "Timed out waiting for STM32 ARMED feedback");
+  RCLCPP_ERROR(
+    get_logger(),
+    "Timed out waiting for STM32 ARMED feedback after %d ms; "
+    "last state: estop=%s comm_timeout=%s uart_error=%s",
+    arm_timeout_ms_,
+    estop_ ? "true" : "false",
+    comm_timeout_ ? "true" : "false",
+    uart_error_ ? "true" : "false");
   return hardware_interface::CallbackReturn::ERROR;
 }
 
