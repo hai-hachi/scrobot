@@ -163,3 +163,18 @@ The ROS hardware layer can use `SCROBOT_SERIAL_PORT=/dev/ttyTHS1`.
 8. Start the lightweight depth obstacle scan.
 9. Validate collision monitor.
 10. Integrate Nav2, AprilTags, then YOLO.
+
+
+## STM32 UART reliability note
+
+During hardware bring-up, the STM32 can continue publishing 100 Hz FEEDBACK while an individual Jetson -> STM32 request is lost by a USART6 receive error. This can appear as:
+
+```text
+INFO=missing FEEDBACK=received
+```
+
+or as a one-off PID request timeout. The STM32 `UART_ERROR` status is sticky history; the diagnostics `uart_errors` counter must be compared over time to determine whether errors are still occurring.
+
+On the current robot, shortening the UART wiring significantly improved request reliability. Keep the Jetson TX/RX wiring short with a solid common ground and away from motor/PWM/power wiring.
+
+The ROS hardware driver now retries both INFO_REQUEST and ARM every 100 ms during startup. The STM32 still keeps the 200 ms SETPOINT watchdog; this safety timeout must not be disabled. A `COMM_TIMEOUT` seen after ros2_control has stopped is expected because no process is maintaining the normal SETPOINT heartbeat.
