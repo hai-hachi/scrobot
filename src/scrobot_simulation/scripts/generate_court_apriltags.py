@@ -88,7 +88,7 @@ def write_model_config(output_dir):
   <version>3.0</version>
   <sdf version="1.9">model.sdf</sdf>
   <author><name>scrobot</name></author>
-  <description>Court AprilTags with REP-103 physical mount frames.</description>
+  <description>Court AprilTag 16h5 IDs 0-3, 100 mm active edge, with REP-103 physical mount frames.</description>
 </model>
 '''
     (output_dir / 'model.config').write_text(text)
@@ -166,7 +166,7 @@ def main():
     write_model_config(output_dir)
     write_model_sdf(params, output_dir, plate_size, headings)
 
-    print('Generated court AprilTag model')
+    print('Generated court AprilTag model (family=16h5, IDs=0-3)')
     print(f'  output: {output_dir}')
     print(f'  detector edge size: {tag_edge_size:.6f} m')
     print(f'  full rendered plate: {plate_size:.6f} m')
