@@ -30,9 +30,9 @@ velocity_smoother:
     feedback: "OPEN_LOOP"
     enable_stamped_cmd_vel: true
 
-    # 0.8 m/s desired mission speed, while retaining some headroom.
-    max_velocity: [1.0, 0.0, 1.6]
-    min_velocity: [-1.0, 0.0, -1.6]
+    # 0.8 m/s sweep speed; angular headroom also covers the local SMC limit.
+    max_velocity: [1.0, 0.0, 2.0]
+    min_velocity: [-1.0, 0.0, -2.0]
 
     # Match the kinematic limits chosen for the controller tune.
     max_accel: [1.00, 0.0, 1.00]
