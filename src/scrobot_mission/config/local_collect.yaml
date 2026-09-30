@@ -34,38 +34,61 @@ local_collect_controller:
     control_rate: 30.0
     tf_timeout: 0.05
     detection_max_age: 0.30
+    target_timeout: 12.0
 
     # ------------------------------------------------------------
-    # Target completion / duplicate rejection
+    # Target handling
     # ------------------------------------------------------------
     position_tolerance: 0.08
-    overrun_distance: 0.10
-    overrun_speed: 0.25
-    target_timeout: 12.0
     reacquire_exclusion_radius: 0.12
 
+    # Stage the collector center 0.50 m before the frozen shuttle, align with
+    # the shuttle, then switch to a straight collection pass.
+    precollect_distance: 0.50
+    straight_collect_speed: 0.30
+
+    # Keep the proven physical overrun after the shuttle reaches the collector.
+    overrun_distance: 0.10
+    overrun_speed: 0.25
+
     # ------------------------------------------------------------
-    # Coupled local pursuit gains
+    # Sliding-mode pose controller
     # ------------------------------------------------------------
-    # v_max = 0.80 m/s and full-speed distance ~= 0.50 m:
-    #   linear_kp = 0.80 / 0.50 = 1.60
-    linear_kp: 1.60
+    # Collector-point model:
+    #   e_x_dot     = v_R cos(e_theta) - v + e_y omega
+    #   e_y_dot     = v_R sin(e_theta) - (c + e_x) omega
+    #   e_theta_dot = omega_R - omega
+    #
+    # Sliding surface:
+    #   s = e_theta + lambda e_y
+    #
+    # Control:
+    #   omega = [omega_R + lambda v_R sin(e_theta)
+    #            + k_s s + eta sat(s/phi)]
+    #           / [1 + lambda(c + e_x)]
+    #   v = v_R cos(e_theta) + e_y omega + k_x e_x
+    smc_reference_speed: 0.50
+    smc_lambda: 2.50
+    smc_ks: 3.00
+    smc_eta: 1.00
+    smc_phi: 0.02
+    smc_kx: 2.00
+    collector_offset_c: 0.165
 
-    # Saturate at about 0.50 rad (28.6 deg) bearing:
-    #   angular_kp = 1.60 / 0.50 = 3.20
-    angular_kp: 3.20
+    # SMC command saturation used in the accepted simulation.
+    smc_min_linear_speed: -0.20
+    smc_max_linear_speed: 0.50
+    smc_max_angular_speed: 2.00
+    smc_denominator_guard: 0.10
 
-    # Hard command limits. R_min = 0.50 m at 0.80 m/s requires
-    # omega = v / R = 1.60 rad/s.
-    max_linear_speed: 0.80
-    max_angular_speed: 1.60
+    # When the moving virtual reference reaches the 0.50 m pre-pose, hold the
+    # reference fixed and require these errors continuously for 0.20 s before
+    # starting the straight 0.30 m/s collection pass.
+    prepose_ex_tolerance: 0.005
+    prepose_ey_tolerance: 0.005
+    prepose_yaw_tolerance_deg: 0.50
+    prepose_stable_time: 0.20
 
-    # Kinematic command slew limits chosen for the project.
+    # Kinematic slew limits retained from the robot controller design.
     max_linear_accel: 1.00
     max_angular_accel: 1.00
-
-    # Stop forward motion and rotate when bearing exceeds this angle.
-    heading_stop_deg: 70.0
-
-    # Kinematic stopping distance at 0.80 m/s and 1.0 m/s^2 is 0.32 m.
-    slow_radius: 0.35
