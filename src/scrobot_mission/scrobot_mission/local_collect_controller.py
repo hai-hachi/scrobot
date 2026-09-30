@@ -5,7 +5,7 @@ import threading
 import time
 
 import rclpy
-from geometry_msgs.msg import Point, TwistStamped
+from geometry_msgs.msg import Point, PointStamped, TwistStamped
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
@@ -24,6 +24,10 @@ def clamp(value, low, high):
     return max(low, min(high, value))
 
 
+def wrap_angle(angle):
+    return math.atan2(math.sin(angle), math.cos(angle))
+
+
 def detection_position(detection):
     if detection.results:
         p = detection.results[0].pose.pose.position
@@ -33,14 +37,16 @@ def detection_position(detection):
 
 
 class LocalCollectController(Node):
-    """Odom-only visual collection spree.
+    """Local shuttle collection with an SMC pre-pose and straight pickup pass.
 
-    The first current eligible detection is locked immediately. Its measured
-    point is transformed once into odom and never updated from perception while
-    that target is active. Motion drives collector_link toward the frozen odom
-    point, then continues straight by a configurable overrun distance so the
-    shuttle passes fully into the collector. When the attempt is complete, the
-    first currently visible eligible detection is locked and the process repeats.
+    The first currently eligible shuttle is frozen once in odom. A fixed
+    pre-collection pose is constructed with collector_link 0.50 m in front of
+    that shuttle and facing it. Sliding-mode control drives the collector point
+    to this pose. Once position and heading tolerances are satisfied, the robot
+    switches to the deliberately simple straight collection rule:
+        v = 0.30 m/s, omega = 0.
+    When collector_link reaches the frozen shuttle point, the controller
+    continues through it by the configured 0.10 m overrun.
     """
 
     def __init__(self):
@@ -56,21 +62,30 @@ class LocalCollectController(Node):
         self.declare_parameter('control_rate', 30.0)
         self.declare_parameter('tf_timeout', 0.05)
         self.declare_parameter('detection_max_age', 0.30)
-
-        self.declare_parameter('position_tolerance', 0.07)
-        self.declare_parameter('overrun_distance', 0.0)
-        self.declare_parameter('overrun_speed', 0.20)
         self.declare_parameter('target_timeout', 12.0)
-        self.declare_parameter('reacquire_exclusion_radius', 0.12)
 
-        self.declare_parameter('linear_kp', 0.85)
-        self.declare_parameter('angular_kp', 2.4)
-        self.declare_parameter('max_linear_speed', 0.45)
-        self.declare_parameter('max_angular_speed', 1.20)
-        self.declare_parameter('max_linear_accel', 0.65)
-        self.declare_parameter('max_angular_accel', 2.4)
+        self.declare_parameter('position_tolerance', 0.08)
+        self.declare_parameter('reacquire_exclusion_radius', 0.12)
+        self.declare_parameter('precollect_distance', 0.50)
+        self.declare_parameter('precollect_position_tolerance', 0.03)
+        self.declare_parameter('precollect_yaw_tolerance_deg', 5.0)
+        self.declare_parameter('straight_collect_speed', 0.30)
+        self.declare_parameter('overrun_distance', 0.10)
+        self.declare_parameter('overrun_speed', 0.25)
+
+        self.declare_parameter('smc_reference_speed', 0.50)
+        self.declare_parameter('smc_lambda', 2.0)
+        self.declare_parameter('smc_ks', 2.0)
+        self.declare_parameter('smc_eta', 0.8)
+        self.declare_parameter('smc_phi', 0.05)
+        self.declare_parameter('smc_krho', 0.8)
+        self.declare_parameter('collector_offset_c', 0.165)
+        self.declare_parameter('smc_max_angular_speed', 2.0)
+        self.declare_parameter('smc_max_linear_speed', 0.50)
         self.declare_parameter('heading_stop_deg', 70.0)
-        self.declare_parameter('slow_radius', 0.60)
+
+        self.declare_parameter('max_linear_accel', 1.0)
+        self.declare_parameter('max_angular_accel', 1.0)
 
         self.raw_detection_topic = str(self.get_parameter('raw_detection_topic').value)
         self.action_name = str(self.get_parameter('action_name').value)
@@ -82,26 +97,58 @@ class LocalCollectController(Node):
         self.control_rate = float(self.get_parameter('control_rate').value)
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
         self.detection_max_age = float(self.get_parameter('detection_max_age').value)
-        self.position_tolerance = float(self.get_parameter('position_tolerance').value)
-        self.overrun_distance = max(0.0, float(self.get_parameter('overrun_distance').value))
-        self.overrun_speed = max(0.0, float(self.get_parameter('overrun_speed').value))
         self.target_timeout = float(self.get_parameter('target_timeout').value)
+
+        self.position_tolerance = float(self.get_parameter('position_tolerance').value)
         self.reacquire_exclusion_radius = float(
             self.get_parameter('reacquire_exclusion_radius').value
         )
-        self.linear_kp = float(self.get_parameter('linear_kp').value)
-        self.angular_kp = float(self.get_parameter('angular_kp').value)
-        self.max_linear_speed = float(self.get_parameter('max_linear_speed').value)
-        self.max_angular_speed = float(self.get_parameter('max_angular_speed').value)
+        self.precollect_distance = float(self.get_parameter('precollect_distance').value)
+        self.precollect_position_tolerance = float(
+            self.get_parameter('precollect_position_tolerance').value
+        )
+        self.precollect_yaw_tolerance = math.radians(
+            float(self.get_parameter('precollect_yaw_tolerance_deg').value)
+        )
+        self.straight_collect_speed = max(
+            0.0, float(self.get_parameter('straight_collect_speed').value)
+        )
+        self.overrun_distance = max(
+            0.0, float(self.get_parameter('overrun_distance').value)
+        )
+        self.overrun_speed = max(
+            0.0, float(self.get_parameter('overrun_speed').value)
+        )
+
+        self.smc_reference_speed = float(
+            self.get_parameter('smc_reference_speed').value
+        )
+        self.smc_lambda = float(self.get_parameter('smc_lambda').value)
+        self.smc_ks = float(self.get_parameter('smc_ks').value)
+        self.smc_eta = float(self.get_parameter('smc_eta').value)
+        self.smc_phi = max(1e-6, float(self.get_parameter('smc_phi').value))
+        self.smc_krho = float(self.get_parameter('smc_krho').value)
+        self.collector_offset_c = float(
+            self.get_parameter('collector_offset_c').value
+        )
+        self.smc_max_angular_speed = abs(
+            float(self.get_parameter('smc_max_angular_speed').value)
+        )
+        self.smc_max_linear_speed = abs(
+            float(self.get_parameter('smc_max_linear_speed').value)
+        )
+        self.heading_stop = math.radians(
+            float(self.get_parameter('heading_stop_deg').value)
+        )
+
         self.max_linear_accel = float(self.get_parameter('max_linear_accel').value)
         self.max_angular_accel = float(self.get_parameter('max_angular_accel').value)
-        self.heading_stop = math.radians(float(self.get_parameter('heading_stop_deg').value))
-        self.slow_radius = float(self.get_parameter('slow_radius').value)
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.callback_group = ReentrantCallbackGroup()
         self.lock = threading.Lock()
+
         self.raw_points = []
         self.raw_frame = ''
         self.raw_stamp_monotonic = 0.0
@@ -110,7 +157,9 @@ class LocalCollectController(Node):
         self.last_w = 0.0
 
         reliable_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
-        self.cmd_pub = self.create_publisher(TwistStamped, self.cmd_vel_topic, reliable_qos)
+        self.cmd_pub = self.create_publisher(
+            TwistStamped, self.cmd_vel_topic, reliable_qos
+        )
         self.phase_pub = self.create_publisher(String, self.phase_topic, reliable_qos)
         self.create_subscription(
             Detection3DArray,
@@ -128,11 +177,18 @@ class LocalCollectController(Node):
             cancel_callback=self._cancel_cb,
             callback_group=self.callback_group,
         )
+
         self._phase('IDLE')
         self.get_logger().info(
-            'LocalCollect ready: first-visible eligible lock, odom-only pursuit, '
+            'LocalCollect ready: SMC pre-pose at '
+            f'{self.precollect_distance:.2f} m, straight collect '
+            f'{self.straight_collect_speed:.2f} m/s, '
             f'overrun={self.overrun_distance:.2f} m.'
         )
+
+    # ------------------------------------------------------------------
+    # Perception / action plumbing
+    # ------------------------------------------------------------------
 
     def _detections_cb(self, msg):
         points = [detection_position(d) for d in msg.detections]
@@ -166,10 +222,17 @@ class LocalCollectController(Node):
         self.last_w = 0.0
         self._publish_cmd(0.0, 0.0)
 
+    # ------------------------------------------------------------------
+    # TF / geometry
+    # ------------------------------------------------------------------
+
     def _lookup(self, target, source):
         try:
             return self.tf_buffer.lookup_transform(
-                target, source, Time(), timeout=Duration(seconds=self.tf_timeout)
+                target,
+                source,
+                Time(),
+                timeout=Duration(seconds=self.tf_timeout),
             )
         except TransformException:
             return None
@@ -181,21 +244,32 @@ class LocalCollectController(Node):
         point.x, point.y, point.z = xyz
         if source_frame == target_frame:
             return point.x, point.y, point.z
+
         tf = self._lookup(target_frame, source_frame)
         if tf is None:
             return None
-        from geometry_msgs.msg import PointStamped
+
         ps = PointStamped()
         ps.header.frame_id = source_frame
         ps.point = point
         out = do_transform_point(ps, tf)
         return float(out.point.x), float(out.point.y), float(out.point.z)
 
-    def _frame_origin_in_odom(self, frame):
+    def _frame_pose_in_odom(self, frame):
         tf = self._lookup(self.odom_frame, frame)
         if tf is None:
             return None
-        return float(tf.transform.translation.x), float(tf.transform.translation.y)
+
+        q = tf.transform.rotation
+        yaw = math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y),
+            1.0 - 2.0 * (q.y * q.y + q.z * q.z),
+        )
+        return (
+            float(tf.transform.translation.x),
+            float(tf.transform.translation.y),
+            wrap_angle(yaw),
+        )
 
     def _fresh_points_snapshot(self):
         with self.lock:
@@ -206,10 +280,12 @@ class LocalCollectController(Node):
 
     def _lock_first_target(self, attempted_odom):
         source_frame, points = self._fresh_points_snapshot()
+
         for point in points:
             odom = self._point_to_frame(self.odom_frame, source_frame, point)
             if odom is None:
                 continue
+
             duplicate = any(
                 math.hypot(odom[0] - old[0], odom[1] - old[1])
                 <= self.reacquire_exclusion_radius
@@ -217,9 +293,11 @@ class LocalCollectController(Node):
             )
             if duplicate:
                 continue
+
             local = self._point_to_frame(self.base_frame, self.odom_frame, odom)
             if local is None:
                 continue
+
             bearing = math.atan2(local[1], max(local[0], 1e-6))
             rng = math.hypot(local[0], local[1])
             self.get_logger().info(
@@ -227,82 +305,178 @@ class LocalCollectController(Node):
                 f'bearing={math.degrees(bearing):+.1f} deg.'
             )
             return odom, bearing, rng
+
         return None, 0.0, 0.0
+
+    def _build_precollect_pose(self, target_odom):
+        collector = self._frame_pose_in_odom(self.collector_frame)
+        if collector is None:
+            return None
+
+        dx = target_odom[0] - collector[0]
+        dy = target_odom[1] - collector[1]
+        if math.hypot(dx, dy) < 1e-6:
+            heading = collector[2]
+        else:
+            heading = math.atan2(dy, dx)
+
+        return (
+            target_odom[0] - self.precollect_distance * math.cos(heading),
+            target_odom[1] - self.precollect_distance * math.sin(heading),
+            wrap_angle(heading),
+        )
+
+    # ------------------------------------------------------------------
+    # Control helpers
+    # ------------------------------------------------------------------
 
     def _slew(self, current, desired, max_rate, dt):
         delta = clamp(desired - current, -max_rate * dt, max_rate * dt)
         return current + delta
 
-    def _drive_overrun(self, goal_handle, feedback):
-        if self.overrun_distance <= 0.0 or self.overrun_speed <= 0.0:
-            return True, 'collector reached target'
+    def _send_slewed(self, desired_v, desired_w, dt):
+        self.last_v = self._slew(
+            self.last_v, desired_v, self.max_linear_accel, dt
+        )
+        self.last_w = self._slew(
+            self.last_w, desired_w, self.max_angular_accel, dt
+        )
+        self._publish_cmd(self.last_v, self.last_w)
 
-        start = self._frame_origin_in_odom(self.collector_frame)
-        if start is None:
-            self._stop()
-            return True, 'collector reached target; overrun TF unavailable'
+    def _smc_command(self, pre_pose, collector_pose):
+        px, py, ptheta = pre_pose
+        x, y, theta = collector_pose
 
-        self._phase('OVERRUN')
-        feedback.phase = 'OVERRUN'
+        dx = px - x
+        dy = py - y
+        rho = math.hypot(dx, dy)
+        alpha = wrap_angle(math.atan2(dy, dx) - theta) if rho > 1e-9 else 0.0
+
+        # Lateral target error expressed in the collector/body frame.
+        e_y = -math.sin(theta) * dx + math.cos(theta) * dy
+        e_theta = wrap_angle(ptheta - theta)
+
+        s = e_theta + self.smc_lambda * e_y
+        sat = clamp(s / self.smc_phi, -1.0, 1.0)
+
+        # The pre-pose reference is straight, therefore omega_R = 0.
+        denominator = 1.0 + self.smc_lambda * self.collector_offset_c
+        omega = (
+            self.smc_lambda
+            * self.smc_reference_speed
+            * math.sin(e_theta)
+            + self.smc_ks * s
+            + self.smc_eta * sat
+        ) / denominator
+        omega = clamp(
+            omega,
+            -self.smc_max_angular_speed,
+            self.smc_max_angular_speed,
+        )
+
+        v = self.smc_krho * rho * math.cos(alpha)
+        if abs(alpha) >= self.heading_stop:
+            v = 0.0
+        v = clamp(v, 0.0, self.smc_max_linear_speed)
+
+        return v, omega, rho, alpha, e_y, e_theta, s
+
+    # ------------------------------------------------------------------
+    # Collection phases
+    # ------------------------------------------------------------------
+
+    def _drive_precollect_pose(self, pre_pose, goal_handle, feedback, deadline):
+        self._phase('SMC_POSE')
+        feedback.phase = 'SMC_POSE'
         goal_handle.publish_feedback(feedback)
+
         self.get_logger().info(
-            f'Collector reached target; overrunning {self.overrun_distance:.2f} m.'
+            'SMC pre-pose: '
+            f'x={pre_pose[0]:.3f}, y={pre_pose[1]:.3f}, '
+            f'yaw={math.degrees(pre_pose[2]):+.1f} deg.'
         )
 
         period = 1.0 / max(self.control_rate, 1.0)
         previous = time.monotonic()
-        desired_speed = min(self.overrun_speed, self.max_linear_speed)
-
-        while rclpy.ok():
-            if goal_handle.is_cancel_requested:
-                self._stop()
-                return False, 'canceled during overrun'
-
-            current = self._frame_origin_in_odom(self.collector_frame)
-            if current is None:
-                self._stop()
-                time.sleep(period)
-                continue
-
-            traveled = math.hypot(current[0] - start[0], current[1] - start[1])
-            feedback.range_m = max(0.0, self.overrun_distance - traveled)
-            goal_handle.publish_feedback(feedback)
-            if traveled >= self.overrun_distance:
-                self._stop()
-                return True, 'collector reached target + overrun'
-
-            now = time.monotonic()
-            dt = max(1e-3, now - previous)
-            previous = now
-            self.last_v = self._slew(
-                self.last_v, desired_speed, self.max_linear_accel, dt
-            )
-            self.last_w = self._slew(
-                self.last_w, 0.0, self.max_angular_accel, dt
-            )
-            self._publish_cmd(self.last_v, self.last_w)
-            time.sleep(period)
-
-        self._stop()
-        return False, 'ROS shutdown during overrun'
-
-    def _drive_target(self, target_odom, goal_handle, feedback):
-        period = 1.0 / max(self.control_rate, 1.0)
-        started = time.monotonic()
-        previous = started
         self.last_v = 0.0
         self.last_w = 0.0
 
         while rclpy.ok():
             if goal_handle.is_cancel_requested:
                 self._stop()
-                return False, 'canceled'
-            now = time.monotonic()
-            if now - started >= self.target_timeout:
-                self._stop()
-                return True, 'target timeout'
+                return False, 'canceled during SMC pose'
 
-            local = self._point_to_frame(self.collector_frame, self.odom_frame, target_odom)
+            now = time.monotonic()
+            if now >= deadline:
+                self._stop()
+                return True, 'target timeout during SMC pose'
+
+            collector = self._frame_pose_in_odom(self.collector_frame)
+            if collector is None:
+                self._stop()
+                time.sleep(period)
+                continue
+
+            desired_v, desired_w, rho, alpha, e_y, e_theta, s = self._smc_command(
+                pre_pose, collector
+            )
+
+            feedback.range_m = float(rho)
+            feedback.bearing_deg = float(math.degrees(alpha))
+            goal_handle.publish_feedback(feedback)
+
+            if (
+                rho <= self.precollect_position_tolerance
+                and abs(e_theta) <= self.precollect_yaw_tolerance
+            ):
+                self._stop()
+                self.get_logger().info(
+                    'SMC pre-pose reached: '
+                    f'rho={rho:.4f} m, e_y={e_y:+.4f} m, '
+                    f'e_theta={math.degrees(e_theta):+.2f} deg, '
+                    f's={s:+.4f}.'
+                )
+                return True, 'pre-pose reached'
+
+            dt = max(1e-3, now - previous)
+            previous = now
+            self._send_slewed(desired_v, desired_w, dt)
+            time.sleep(period)
+
+        self._stop()
+        return False, 'ROS shutdown during SMC pose'
+
+    def _drive_straight_to_target(self, target_odom, goal_handle, feedback, deadline):
+        self._phase('STRAIGHT_COLLECT')
+        feedback.phase = 'STRAIGHT_COLLECT'
+        goal_handle.publish_feedback(feedback)
+
+        self.get_logger().info(
+            f'Straight collection: v={self.straight_collect_speed:.2f} m/s, omega=0.'
+        )
+
+        period = 1.0 / max(self.control_rate, 1.0)
+        previous = time.monotonic()
+        desired_speed = min(
+            self.straight_collect_speed,
+            self.smc_max_linear_speed,
+        )
+
+        while rclpy.ok():
+            if goal_handle.is_cancel_requested:
+                self._stop()
+                return False, 'canceled during straight collection'
+
+            now = time.monotonic()
+            if now >= deadline:
+                self._stop()
+                return True, 'target timeout during straight collection'
+
+            local = self._point_to_frame(
+                self.collector_frame,
+                self.odom_frame,
+                target_odom,
+            )
             if local is None:
                 self._stop()
                 time.sleep(period)
@@ -311,40 +485,109 @@ class LocalCollectController(Node):
             x, y, _ = local
             distance = math.hypot(x, y)
             bearing = math.atan2(y, max(x, 1e-6))
-            feedback.bearing_deg = float(math.degrees(bearing))
             feedback.range_m = float(distance)
+            feedback.bearing_deg = float(math.degrees(bearing))
             goal_handle.publish_feedback(feedback)
 
             if distance <= self.position_tolerance:
-                return self._drive_overrun(goal_handle, feedback)
-
-            heading_gate = max(0.0, math.cos(bearing)) ** 2
-            if abs(bearing) >= self.heading_stop or x <= 0.0:
-                heading_gate = 0.0
-            distance_gate = clamp(distance / max(self.slow_radius, 1e-6), 0.15, 1.0)
-            desired_v = clamp(self.linear_kp * distance, 0.0, self.max_linear_speed)
-            desired_v *= heading_gate * distance_gate
-            desired_w = clamp(
-                self.angular_kp * bearing,
-                -self.max_angular_speed,
-                self.max_angular_speed,
-            )
+                self._stop()
+                return True, 'collector reached target'
 
             dt = max(1e-3, now - previous)
             previous = now
-            self.last_v = self._slew(self.last_v, desired_v, self.max_linear_accel, dt)
-            self.last_w = self._slew(self.last_w, desired_w, self.max_angular_accel, dt)
-            self._publish_cmd(self.last_v, self.last_w)
+            self._send_slewed(desired_speed, 0.0, dt)
             time.sleep(period)
 
         self._stop()
-        return False, 'ROS shutdown'
+        return False, 'ROS shutdown during straight collection'
+
+    def _drive_overrun(self, goal_handle, feedback, deadline):
+        if self.overrun_distance <= 0.0 or self.overrun_speed <= 0.0:
+            return True, 'collector reached target'
+
+        start = self._frame_pose_in_odom(self.collector_frame)
+        if start is None:
+            self._stop()
+            return True, 'collector reached target; overrun TF unavailable'
+
+        self._phase('OVERRUN')
+        feedback.phase = 'OVERRUN'
+        goal_handle.publish_feedback(feedback)
+
+        self.get_logger().info(
+            f'Collector reached target; overrunning {self.overrun_distance:.2f} m.'
+        )
+
+        period = 1.0 / max(self.control_rate, 1.0)
+        previous = time.monotonic()
+        desired_speed = min(self.overrun_speed, self.smc_max_linear_speed)
+
+        while rclpy.ok():
+            if goal_handle.is_cancel_requested:
+                self._stop()
+                return False, 'canceled during overrun'
+
+            now = time.monotonic()
+            if now >= deadline:
+                self._stop()
+                return True, 'target timeout during overrun'
+
+            current = self._frame_pose_in_odom(self.collector_frame)
+            if current is None:
+                self._stop()
+                time.sleep(period)
+                continue
+
+            traveled = math.hypot(current[0] - start[0], current[1] - start[1])
+            feedback.range_m = max(0.0, self.overrun_distance - traveled)
+            feedback.bearing_deg = 0.0
+            goal_handle.publish_feedback(feedback)
+
+            if traveled >= self.overrun_distance:
+                self._stop()
+                return True, 'collector reached target + overrun'
+
+            dt = max(1e-3, now - previous)
+            previous = now
+            self._send_slewed(desired_speed, 0.0, dt)
+            time.sleep(period)
+
+        self._stop()
+        return False, 'ROS shutdown during overrun'
+
+    def _drive_target(self, target_odom, goal_handle, feedback):
+        deadline = time.monotonic() + self.target_timeout
+
+        pre_pose = self._build_precollect_pose(target_odom)
+        if pre_pose is None:
+            self._stop()
+            return True, 'pre-pose TF unavailable'
+
+        completed, reason = self._drive_precollect_pose(
+            pre_pose, goal_handle, feedback, deadline
+        )
+        if not completed or reason.startswith('target timeout'):
+            return completed, reason
+
+        completed, reason = self._drive_straight_to_target(
+            target_odom, goal_handle, feedback, deadline
+        )
+        if not completed or reason.startswith('target timeout'):
+            return completed, reason
+
+        return self._drive_overrun(goal_handle, feedback, deadline)
+
+    # ------------------------------------------------------------------
+    # Action execution
+    # ------------------------------------------------------------------
 
     def _execute(self, goal_handle):
         result = LocalCollect.Result()
         feedback = LocalCollect.Feedback()
+
         with self.lock:
             self.action_active = True
+
         attempted_odom = []
         attempted_count = 0
         spree_started = time.monotonic()
@@ -354,6 +597,7 @@ class LocalCollectController(Node):
 
         try:
             self._phase('SELECT')
+
             while rclpy.ok():
                 if goal_handle.is_cancel_requested:
                     self._stop()
@@ -363,6 +607,7 @@ class LocalCollectController(Node):
                     result.targets_attempted = attempted_count
                     result.message = 'Local collection canceled.'
                     return result
+
                 if time.monotonic() - spree_started >= overall_timeout:
                     self._stop()
                     self._phase('DONE')
@@ -387,11 +632,15 @@ class LocalCollectController(Node):
                 feedback.target_index = attempted_count
                 feedback.bearing_deg = float(math.degrees(bearing))
                 feedback.range_m = float(rng)
-                feedback.phase = 'TRACK'
+                feedback.phase = 'SMC_POSE'
                 goal_handle.publish_feedback(feedback)
-                self._phase('TRACK')
 
-                completed, reason = self._drive_target(target, goal_handle, feedback)
+                completed, reason = self._drive_target(
+                    target,
+                    goal_handle,
+                    feedback,
+                )
+
                 if not completed:
                     self._phase('CANCELED')
                     goal_handle.canceled()
@@ -405,6 +654,7 @@ class LocalCollectController(Node):
                     'checking current FOV for the first next eligible shuttle.'
                 )
                 self._phase('SELECT')
+
         finally:
             self._stop()
             with self.lock:
@@ -421,6 +671,7 @@ def main(args=None):
     node = LocalCollectController()
     executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
+
     try:
         executor.spin()
     except KeyboardInterrupt:
