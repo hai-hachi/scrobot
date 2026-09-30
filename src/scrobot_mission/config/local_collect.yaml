@@ -42,53 +42,46 @@ local_collect_controller:
     position_tolerance: 0.08
     reacquire_exclusion_radius: 0.12
 
-    # Stage the collector center 0.50 m before the frozen shuttle, align with
-    # the shuttle, then switch to a straight collection pass.
+    # Pose the collector center 0.50 m in front of the frozen shuttle, aligned
+    # toward it, before starting the straight collection pass.
     precollect_distance: 0.50
+    precollect_position_tolerance: 0.03
+    precollect_yaw_tolerance_deg: 5.0
+
+    # After the pose phase, collection is intentionally straight.
     straight_collect_speed: 0.30
 
-    # Keep the proven physical overrun after the shuttle reaches the collector.
+    # Continue through the target so the shuttle fully enters the collector.
     overrun_distance: 0.10
     overrun_speed: 0.25
 
     # ------------------------------------------------------------
     # Sliding-mode pose controller
     # ------------------------------------------------------------
-    # Collector-point model:
-    #   e_x_dot     = v_R cos(e_theta) - v + e_y omega
-    #   e_y_dot     = v_R sin(e_theta) - (c + e_x) omega
-    #   e_theta_dot = omega_R - omega
-    #
     # Sliding surface:
-    #   s = e_theta + lambda e_y
+    #   s = e_theta + lambda * e_y
     #
-    # Control:
-    #   omega = [omega_R + lambda v_R sin(e_theta)
-    #            + k_s s + eta sat(s/phi)]
-    #           / [1 + lambda(c + e_x)]
-    #   v = v_R cos(e_theta) + e_y omega + k_x e_x
+    # Angular control:
+    #   omega = [omega_R + lambda*v_R*sin(e_theta)
+    #            + k_s*s + eta*sat(s/phi)] / [1 + lambda*c]
+    #
+    # The pre-collection reference is straight, so omega_R = 0.
+    # Translation:
+    #   v = k_rho * rho * cos(alpha)
     smc_reference_speed: 0.50
-    smc_lambda: 2.50
-    smc_ks: 3.00
-    smc_eta: 1.00
-    smc_phi: 0.02
-    smc_kx: 2.00
+    smc_lambda: 2.00
+    smc_ks: 2.00
+    smc_eta: 0.80
+    smc_phi: 0.05
+    smc_krho: 0.80
     collector_offset_c: 0.165
-
-    # SMC command saturation used in the accepted simulation.
-    smc_min_linear_speed: -0.20
-    smc_max_linear_speed: 0.50
     smc_max_angular_speed: 2.00
-    smc_denominator_guard: 0.10
+    smc_max_linear_speed: 0.50
 
-    # When the moving virtual reference reaches the 0.50 m pre-pose, hold the
-    # reference fixed and require these errors continuously for 0.20 s before
-    # starting the straight 0.30 m/s collection pass.
-    prepose_ex_tolerance: 0.005
-    prepose_ey_tolerance: 0.005
-    prepose_yaw_tolerance_deg: 0.50
-    prepose_stable_time: 0.20
+    # Rotate first for large position-heading error, matching the previous
+    # local-collect behavior.
+    heading_stop_deg: 70.0
 
-    # Kinematic slew limits retained from the robot controller design.
+    # Kinematic command slew limits retained from the robot design.
     max_linear_accel: 1.00
     max_angular_accel: 1.00
