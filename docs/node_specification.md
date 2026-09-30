@@ -48,8 +48,8 @@ Provides planning, behavior-tree execution, path following, recovery, and local/
 
 ## scrobot_mission
 
-### `patrol_manager`
-Mission state machine.
+### `sweep_mission_manager`
+Final autonomous mission state machine.
 
 Current flow:
 
@@ -57,14 +57,47 @@ Current flow:
 initial tag approach
  -> initial /relocalize
  -> start Nav2
- -> navigate patrol point
- -> 360 degree scan
- -> next patrol point
+ -> join four-pass sweep
+ -> fixed-station AprilTag relocalization when reached
+ -> shuttle diversion when an eligible shuttle is visible
+ -> local collection spree
+ -> return to saved sweep checkpoint
+ -> resume sweep
 ```
 
-Runtime shuttle diversion/collection is the next mission-stage integration after tracker validation.
+The sweep checkpoint stores both robot pose and sweep-path progress so a local
+collection diversion does not lose coverage progress.
 
-`scrobot_mission` is installed with `ament_cmake` + `ament_cmake_python` so both normal and `--symlink-install` builds expose its launch/config/executable correctly.
+### `shuttle_collection_filter`
+Mission-specific shuttle eligibility filter.
+
+- Input: `/perception/shuttle_detections_3d`
+- Output: `/perception/collectable_shuttle_detections_3d`
+- Accepts only shuttles within 2.0 m of the robot.
+- Rejects shuttles within 0.60 m of either net pole.
+
+### `local_collect_controller`
+Action server: `/local_collect` using `scrobot_interfaces/action/LocalCollect`.
+
+For each frozen eligible shuttle:
+
+```text
+construct collector pre-pose 0.50 m before shuttle
+ -> SMC pose control
+ -> position error <= 0.03 m and yaw error <= 5 deg
+ -> straight collection at 0.30 m/s, omega = 0
+ -> collector reaches shuttle
+ -> 0.10 m overrun
+ -> select next eligible visible shuttle
+```
+
+The SMC sliding surface is `s = e_theta + lambda*e_y` with the accepted
+parameters `lambda=2.0`, `k_s=2.0`, `eta=0.8`, `phi=0.05`,
+`v_R=0.50 m/s`, `k_rho=0.8`, collector offset `c=0.165 m`, and
+`|omega| <= 2.0 rad/s`.
+
+`scrobot_mission` is installed with `ament_cmake` + `ament_cmake_python`
+so both normal and `--symlink-install` builds expose its launch/config/executable correctly.
 
 ## scrobot_perception
 
