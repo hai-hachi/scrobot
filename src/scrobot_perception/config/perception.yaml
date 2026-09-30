@@ -3,6 +3,7 @@ apriltag:
     image_transport: raw
     qos_profile: sensor_data
 
+    # Final court fiducials: AprilTag 16h5, IDs 0-3, 100 mm active edge.
     family: "16h5"
     size: 0.100
     max_hamming: 0
