@@ -40,6 +40,7 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         self.declare_parameter('test_goal_topic', '/mission/test_goal')
         self.declare_parameter('accept_rviz_goal_topic', True)
         self.declare_parameter('rviz_goal_topic', '/goal_pose')
+        self.declare_parameter('tag_recovery_max_attempts', 3)
 
         self.join_acceptance_distance = float(
             self.get_parameter('join_acceptance_distance').value
@@ -62,6 +63,12 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         self.rviz_goal_topic = str(
             self.get_parameter('rviz_goal_topic').value
         )
+        self.tag_recovery_max_attempts = max(
+            1, int(self.get_parameter('tag_recovery_max_attempts').value)
+        )
+
+        self.last_good_localization_pose = None
+        self.tag_recovery_attempts = 0
 
         self.test_goal_pose = None
         self.test_active = False
@@ -404,6 +411,59 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             self._finish_abort()
 
     # ------------------------------------------------------------------
+    # AprilTag acquisition recovery
+    # ------------------------------------------------------------------
+
+    def _approach_result(self, future):
+        wrapped = future.result()
+
+        if (
+            wrapped.status == GoalStatus.STATUS_SUCCEEDED
+            and wrapped.result.success
+        ):
+            self.tag_recovery_attempts = 0
+            super()._approach_result(future)
+            return
+
+        self.approach_goal_handle = None
+        self.tag_recovery_attempts += 1
+
+        if self.tag_recovery_attempts >= self.tag_recovery_max_attempts:
+            self._fail(
+                'Initial AprilTag acquisition failed after '
+                f'{self.tag_recovery_attempts} full-search attempt(s): '
+                f'{wrapped.result.message}'
+            )
+            return
+
+        if self.last_good_localization_pose is not None:
+            self.get_logger().warn(
+                'AprilTag search failed. Returning to the last successful '
+                'localization pose before retrying the full tag search '
+                f'(attempt {self.tag_recovery_attempts + 1}/'
+                f'{self.tag_recovery_max_attempts}).'
+            )
+            self._set_state(MissionState.TAG_RECOVERY_RETURN)
+            self._send_navigation(
+                copy.deepcopy(self.last_good_localization_pose),
+                'tag_recovery_return',
+            )
+            return
+
+        # At cold startup there is no previously trusted map pose yet.
+        # The approach controller searches by rotating in place; with the
+        # configured 0.45 rad/s and 18 s timeout a no-detection attempt covers
+        # more than one complete 360-degree rotation.
+        self.get_logger().warn(
+            'AprilTag search failed and no previous localization pose exists. '
+            'Retrying a full in-place search '
+            f'(attempt {self.tag_recovery_attempts + 1}/'
+            f'{self.tag_recovery_max_attempts}).'
+        )
+        self._set_state(MissionState.INITIAL_TAG_APPROACH)
+        self._send_initial_approach()
+
+    # ------------------------------------------------------------------
     # Action result overrides for test controls
     # ------------------------------------------------------------------
 
@@ -465,6 +525,12 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             self._start_test_return()
         elif purpose == 'test_return':
             self._finish_test_return()
+        elif purpose == 'tag_recovery_return':
+            self.get_logger().info(
+                'Reached last successful localization pose; retrying AprilTag search.'
+            )
+            self._set_state(MissionState.INITIAL_TAG_APPROACH)
+            self._send_initial_approach()
         else:
             self._fail(f'Unknown navigation purpose {purpose!r}.')
 
@@ -488,6 +554,17 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             self.relocalize_goal_handle = None
             self._finish_control_cancel()
             return
+
+        if (
+            wrapped.status == GoalStatus.STATUS_SUCCEEDED
+            and wrapped.result.success
+        ):
+            pose_info = self._robot_pose()
+            if pose_info is not None:
+                pose, _ = pose_info
+                self.last_good_localization_pose = copy.deepcopy(pose)
+            self.tag_recovery_attempts = 0
+
         super()._relocalize_result(future, initial)
 
     # ------------------------------------------------------------------
