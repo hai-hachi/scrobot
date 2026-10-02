@@ -29,25 +29,6 @@
 
 
     <!-- ====================================================== -->
-    <!-- Separate 5883L magnetometer                            -->
-    <!-- ====================================================== -->
-
-    <gazebo reference="mag_link">
-      <sensor name="magnetometer_5883l" type="magnetometer">
-        <always_on>true</always_on>
-
-        <!-- Keep the previous project simulation rate. -->
-        <update_rate>50.0</update_rate>
-
-        <visualize>false</visualize>
-
-        <topic>/imu/mag</topic>
-        <gz_frame_id>mag_link</gz_frame_id>
-      </sensor>
-    </gazebo>
-
-
-    <!-- ====================================================== -->
     <!-- D435i COLOR CAMERA                                     -->
     <!-- ====================================================== -->
 
