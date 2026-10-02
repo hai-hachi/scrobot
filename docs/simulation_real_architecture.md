@@ -1,13 +1,14 @@
 # Simulation vs Real Robot Architecture
 
-The downstream ROS interfaces should remain identical between simulation and the real robot.
+Simulation and the real robot should converge on the same downstream shuttle
+measurement and mission interfaces.
 
 ## Simulation
 
 ```text
-Gazebo D435i-like sensors
-Gazebo wheel odometry / IMU
-Gazebo shuttle-only ground truth
+Gazebo D435i-like camera + IMU
+Gazebo wheel odometry
+Gazebo shuttle ground truth
         |
         +--> fake_shuttle_detector
                  |
@@ -15,47 +16,60 @@ Gazebo shuttle-only ground truth
 /perception/shuttle_detections_3d
                  |
                  v
-           shuttle_tracker
+        collection filter
                  |
                  v
-/perception/tracked_shuttles
+          local SMC / mission
 ```
 
-Simulation-only topics include:
+The fake detector uses the actual simulated camera transform/FOV and a useful
+range of 0.17-1.68 m.
+
+Simulation-only topics:
 
 - `/evaluation/ground_truth_odom`
 - `/evaluation/ground_truth_tf`
 - `/evaluation/shuttle_ground_truth`
-
-The fake detector may use simulation truth. No downstream mission or navigation component should use it directly.
+- `/evaluation/shuttle_collected`
 
 ## Real robot
 
-```text
-D435i RGB
-   -> YOLO
-   -> /perception/detections_2d
+Current compute/control platform:
 
-D435i aligned depth + CameraInfo
-   + 2D detections
-   -> depth_localizer
-   -> /perception/shuttle_detections_3d
-   -> shuttle_tracker
-   -> /perception/tracked_shuttles
+```text
+Jetson Orin Nano
+  ROS 2 Jazzy in Docker
+        |
+        |  UART 1 Mbaud
+        v
+STM32F411 low-level controller
 ```
 
-## Shared downstream stack
+Current localization sensors are wheel odometry and the D435i integrated IMU.
+The external HMC5883L is no longer part of the current design.
 
-Both environments feed the same tracker output into mission and navigation:
+The next perception integration step is:
 
 ```text
-/perception/tracked_shuttles
-        -> mission logic
-        -> Nav2
+D435i RGB
+   -> YOLO 2D shuttle detection
+
+D435i aligned depth + camera intrinsics
+   + YOLO detection
+   -> shuttle XYZ
+   -> /perception/shuttle_detections_3d
+```
+
+## Shared mission behavior
+
+```text
+/perception/shuttle_detections_3d
+        -> collection eligibility filter
+        -> sweep mission / local SMC
+        -> Nav2 or local velocity command
         -> command pipeline
         -> differential drive
 ```
 
-## Localization
-
-Both simulation and real operation use the same conceptual localization stack: local wheel/IMU odometry plus AprilTag global correction. `/relocalize` establishes or corrects `map -> odom`.
+Both environments use wheel/IMU local odometry plus AprilTag 16h5 global
+correction.
