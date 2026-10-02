@@ -50,7 +50,7 @@ tag_approach_controller:
     min_decision_margin: 10.0
     max_detection_distance: 9.0
     default_target_distance: 1.70
-    default_timeout: 60.0
+    default_timeout: 18.0
     tag_lost_timeout: 1.0
 
     selection_settle_time: 0.18
