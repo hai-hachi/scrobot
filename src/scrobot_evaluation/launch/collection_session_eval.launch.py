@@ -52,7 +52,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'pole_exclusion_radius',
-            default_value='0.60',
+            default_value='0.10',
             description='Radius [m] around each net pole intentionally excluded from collection.',
         ),
         evaluator,
