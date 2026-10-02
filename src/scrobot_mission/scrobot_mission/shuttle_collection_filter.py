@@ -44,10 +44,10 @@ class ShuttleCollectionFilter(Node):
         self.declare_parameter('base_frame', 'base_link')
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('tf_timeout', 0.05)
-        self.declare_parameter('max_target_range', 2.0)
+        self.declare_parameter('max_target_range', 1.68)
         self.declare_parameter('pole_x', 0.0)
         self.declare_parameter('pole_y_positions', [3.05, -3.05])
-        self.declare_parameter('pole_exclusion_radius', 0.60)
+        self.declare_parameter('pole_exclusion_radius', 0.10)
 
         self.input_topic = str(self.get_parameter('input_topic').value)
         self.output_topic = str(self.get_parameter('output_topic').value)
