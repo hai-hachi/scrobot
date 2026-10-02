@@ -75,12 +75,12 @@ class LocalCollectController(Node):
 
         self.declare_parameter('smc_reference_speed', 0.50)
         self.declare_parameter('smc_lambda', 2.0)
-        self.declare_parameter('smc_ks', 2.0)
-        self.declare_parameter('smc_eta', 0.8)
-        self.declare_parameter('smc_phi', 0.05)
+        self.declare_parameter('smc_ks', 1.4)
+        self.declare_parameter('smc_eta', 0.35)
+        self.declare_parameter('smc_phi', 0.10)
         self.declare_parameter('smc_krho', 0.8)
         self.declare_parameter('collector_offset_c', 0.165)
-        self.declare_parameter('smc_max_angular_speed', 2.0)
+        self.declare_parameter('smc_max_angular_speed', 1.60)
         self.declare_parameter('smc_max_linear_speed', 0.50)
         self.declare_parameter('heading_stop_deg', 70.0)
 
