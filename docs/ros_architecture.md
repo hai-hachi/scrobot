@@ -1,25 +1,25 @@
 # SC Robot ROS 2 Architecture
 
-Updated for ROS 2 Jazzy + Gazebo Harmonic and the shuttle perception/tracking pipeline.
-
-## System flow
+## Current system flow
 
 ```text
-Gazebo / real hardware
+Gazebo / Jetson + STM32 hardware
         |
-        +--> sensors / odometry
+        +--> wheel odometry
+        +--> D435i IMU
+        +--> D435i RGB-D
         |
-        +--> localization --------------------+
-        |                                     |
-        |                                     v
-        |                                map -> odom
-        |                                     |
-        +--> perception --> shuttle tracker --+
-        |                         |
-        |                         v
-        |             /perception/tracked_shuttles
-        |                         |
-        +--> Nav2 <--- mission manager <-------+
+        +--> localization ----------------------+
+        |                                       |
+        |                                  map -> odom
+        |                                       |
+        +--> shuttle perception ----------------+
+        |                                       |
+        +--> mission manager <------------------+
+                    |
+                    +--> Nav2 / RPP
+                    |
+                    +--> local SMC collection
                     |
                     v
                command pipeline
@@ -30,67 +30,94 @@ Gazebo / real hardware
 
 ## Frames
 
-Primary chain:
-
 ```text
 map -> odom -> base_footprint -> base_link
                          |
                          +--> wheels / casters / collector
-                         +--> camera_link
-                               +--> camera_color_optical_frame
-                               +--> camera_depth_optical_frame
-                               +--> camera_imu_optical_frame
+                         +--> camera_bottom_screw_frame
+                              -> camera_link
+                              -> camera_color_optical_frame
+                              -> camera_depth_optical_frame
+                              -> camera_imu_optical_frame
 ```
 
-`map -> odom` is owned by global localization. `odom -> base_footprint` comes from the local odometry / EKF chain.
+The D435i screw mount is at +0.110 m X, 0 m Y, +0.2275 m Z from `base_link`,
+with 15 deg downward pitch.
 
-## Simulation-only truth
+## Localization
 
-Simulation exposes three evaluation/perception references:
+Local estimation:
 
 ```text
-/evaluation/ground_truth_odom
-/evaluation/ground_truth_tf
-/evaluation/shuttle_ground_truth
+wheel odometry + D435i IMU
+            -> EKF
+            -> odom -> base_footprint
 ```
 
-`/evaluation/shuttle_ground_truth` is a shuttle-only `geometry_msgs/msg/PoseArray` generated from Gazebo. It exists only to drive fake shuttle perception and does not replace the odometry evaluation topics.
+Madgwick runs without a magnetometer. AprilTag 16h5 IDs 0-3 provide global
+`map -> odom` correction.
+
+Initial tag acquisition rotates in place to search the court. With the current
+0.45 rad/s search rate and 18 s timeout, a no-detection attempt covers more than
+one full turn before retry/recovery.
+
+## Coverage mission
+
+```text
+initial relocalization
+ -> four-pass serpentine sweep
+ -> fixed relocalization stations
+ -> eligible shuttle <= 1.68 m
+ -> save sweep checkpoint
+ -> SMC local collection
+ -> return to checkpoint
+ -> resume sweep
+```
+
+Four passes are retained deliberately for FOV overlap and redundancy.
 
 ## Shuttle perception
 
 Simulation:
 
 ```text
-Gazebo shuttle poses
-      -> /evaluation/shuttle_ground_truth
-      -> fake_shuttle_detector
-      -> /perception/shuttle_detections_3d
-      -> shuttle_tracker
-      -> /perception/tracked_shuttles
+Gazebo shuttle truth
+ -> fake_shuttle_detector
+ -> /perception/shuttle_detections_3d
 ```
 
-Real robot target architecture:
+The simulation adapter applies camera FOV and a 0.17-1.68 m useful range.
+
+Real RGB-D perception is the next integration step:
 
 ```text
-RGB -> YOLO -> /perception/detections_2d
-                   +
-aligned depth + CameraInfo
-                   -> depth_localizer
-                   -> /perception/shuttle_detections_3d
-                   -> shuttle_tracker
-                   -> /perception/tracked_shuttles
+D435i RGB -> YOLO
+                +
+D435i aligned depth + intrinsics
+                -> shuttle 3D position
+                -> /perception/shuttle_detections_3d
 ```
 
-The detector owns measurements. The tracker owns persistent shuttle IDs.
+## Local collection
 
-## Localization and mission interaction
+```text
+target detected
+ -> freeze target in odom
+ -> 0.50 m pre-collection pose
+ -> sliding-mode pose control
+ -> straight 0.30 m/s collection
+ -> 0.10 m overrun
+```
 
-The global-localization stack provides `/approach_tag` and `/relocalize`. The patrol mission uses them during initial acquisition before starting Nav2. The shuttle tracker does not command localization; it waits until a valid transform to `map` is available.
+Targets closer than 0.10 m to a net pole are excluded from autonomous collection.
 
-## Navigation and control
+## Simulation-only truth
 
-Nav2 plans and tracks paths. The current path-following controller is Regulated Pure Pursuit. Velocity commands pass through the command pipeline and then the differential-drive controller.
+```text
+/evaluation/ground_truth_odom
+/evaluation/ground_truth_tf
+/evaluation/shuttle_ground_truth
+/evaluation/shuttle_collected
+```
 
-## Design rule
-
-Simulation-specific truth must stop at adapters such as `fake_shuttle_detector`. Mission, tracking, navigation, and control should use the same ROS interfaces intended for the real robot.
+Ground truth is restricted to simulation adapters and evaluation.
