@@ -112,10 +112,6 @@ def generate_launch_description():
                 'imu/data',
                 '/imu/data'
             ),
-            (
-                'imu/mag',
-                '/imu/mag'
-            ),
         ],
     )
 
