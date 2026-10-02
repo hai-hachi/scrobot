@@ -63,6 +63,7 @@ class LocalCollectController(Node):
         self.declare_parameter('tf_timeout', 0.05)
         self.declare_parameter('detection_max_age', 0.30)
         self.declare_parameter('target_timeout', 12.0)
+        self.declare_parameter('smc_debug_period', 1.0)
 
         self.declare_parameter('position_tolerance', 0.08)
         self.declare_parameter('reacquire_exclusion_radius', 0.12)
@@ -98,6 +99,9 @@ class LocalCollectController(Node):
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
         self.detection_max_age = float(self.get_parameter('detection_max_age').value)
         self.target_timeout = float(self.get_parameter('target_timeout').value)
+        self.smc_debug_period = max(
+            0.1, float(self.get_parameter('smc_debug_period').value)
+        )
 
         self.position_tolerance = float(self.get_parameter('position_tolerance').value)
         self.reacquire_exclusion_radius = float(
@@ -151,7 +155,7 @@ class LocalCollectController(Node):
 
         self.raw_points = []
         self.raw_frame = ''
-        self.raw_stamp_monotonic = 0.0
+        self.raw_stamp_ros_s = 0.0
         self.action_active = False
         self.last_v = 0.0
         self.last_w = 0.0
@@ -190,12 +194,16 @@ class LocalCollectController(Node):
     # Perception / action plumbing
     # ------------------------------------------------------------------
 
+    def _now_ros_s(self):
+        """Return ROS time in seconds so simulation obeys /clock."""
+        return self.get_clock().now().nanoseconds / 1e9
+
     def _detections_cb(self, msg):
         points = [detection_position(d) for d in msg.detections]
         with self.lock:
             self.raw_points = points
             self.raw_frame = msg.header.frame_id
-            self.raw_stamp_monotonic = time.monotonic()
+            self.raw_stamp_ros_s = self._now_ros_s()
 
     def _goal_cb(self, _request):
         with self.lock:
@@ -273,7 +281,7 @@ class LocalCollectController(Node):
 
     def _fresh_points_snapshot(self):
         with self.lock:
-            age = time.monotonic() - self.raw_stamp_monotonic
+            age = max(0.0, self._now_ros_s() - self.raw_stamp_ros_s)
             if age > self.detection_max_age:
                 return '', []
             return self.raw_frame, list(self.raw_points)
@@ -397,7 +405,9 @@ class LocalCollectController(Node):
         )
 
         period = 1.0 / max(self.control_rate, 1.0)
-        previous = time.monotonic()
+        previous = self._now_ros_s()
+        next_debug = previous
+        last_metrics = None
         self.last_v = 0.0
         self.last_w = 0.0
 
@@ -406,10 +416,24 @@ class LocalCollectController(Node):
                 self._stop()
                 return False, 'canceled during SMC pose'
 
-            now = time.monotonic()
+            now = self._now_ros_s()
             if now >= deadline:
                 self._stop()
-                return True, 'target timeout during SMC pose'
+                if last_metrics is None:
+                    self.get_logger().error(
+                        'SMC target timeout before a valid collector pose was available.'
+                    )
+                else:
+                    rho, alpha, e_y, e_theta, s, desired_v, desired_w = last_metrics
+                    self.get_logger().error(
+                        'SMC target timeout: '
+                        f'rho={rho:.4f} m, alpha={math.degrees(alpha):+.2f} deg, '
+                        f'e_y={e_y:+.4f} m, '
+                        f'e_theta={math.degrees(e_theta):+.2f} deg, '
+                        f's={s:+.4f}, v_cmd={desired_v:+.3f} m/s, '
+                        f'w_cmd={desired_w:+.3f} rad/s.'
+                    )
+                return False, 'target timeout during SMC pose'
 
             collector = self._frame_pose_in_odom(self.collector_frame)
             if collector is None:
@@ -420,10 +444,24 @@ class LocalCollectController(Node):
             desired_v, desired_w, rho, alpha, e_y, e_theta, s = self._smc_command(
                 pre_pose, collector
             )
+            last_metrics = (
+                rho, alpha, e_y, e_theta, s, desired_v, desired_w
+            )
 
             feedback.range_m = float(rho)
             feedback.bearing_deg = float(math.degrees(alpha))
             goal_handle.publish_feedback(feedback)
+
+            if now >= next_debug:
+                self.get_logger().info(
+                    'SMC state: '
+                    f'rho={rho:.4f} m, alpha={math.degrees(alpha):+.2f} deg, '
+                    f'e_y={e_y:+.4f} m, '
+                    f'e_theta={math.degrees(e_theta):+.2f} deg, '
+                    f's={s:+.4f}, v_cmd={desired_v:+.3f} m/s, '
+                    f'w_cmd={desired_w:+.3f} rad/s.'
+                )
+                next_debug = now + self.smc_debug_period
 
             if (
                 rho <= self.precollect_position_tolerance
@@ -438,7 +476,7 @@ class LocalCollectController(Node):
                 )
                 return True, 'pre-pose reached'
 
-            dt = max(1e-3, now - previous)
+            dt = max(0.0, now - previous)
             previous = now
             self._send_slewed(desired_v, desired_w, dt)
             time.sleep(period)
@@ -456,7 +494,7 @@ class LocalCollectController(Node):
         )
 
         period = 1.0 / max(self.control_rate, 1.0)
-        previous = time.monotonic()
+        previous = self._now_ros_s()
         desired_speed = min(
             self.straight_collect_speed,
             self.smc_max_linear_speed,
@@ -467,10 +505,11 @@ class LocalCollectController(Node):
                 self._stop()
                 return False, 'canceled during straight collection'
 
-            now = time.monotonic()
+            now = self._now_ros_s()
             if now >= deadline:
                 self._stop()
-                return True, 'target timeout during straight collection'
+                self.get_logger().error('Target timeout during straight collection.')
+                return False, 'target timeout during straight collection'
 
             local = self._point_to_frame(
                 self.collector_frame,
@@ -493,7 +532,7 @@ class LocalCollectController(Node):
                 self._stop()
                 return True, 'collector reached target'
 
-            dt = max(1e-3, now - previous)
+            dt = max(0.0, now - previous)
             previous = now
             self._send_slewed(desired_speed, 0.0, dt)
             time.sleep(period)
@@ -505,10 +544,22 @@ class LocalCollectController(Node):
         if self.overrun_distance <= 0.0 or self.overrun_speed <= 0.0:
             return True, 'collector reached target'
 
-        start = self._frame_pose_in_odom(self.collector_frame)
-        if start is None:
-            self._stop()
-            return True, 'collector reached target; overrun TF unavailable'
+        period = 1.0 / max(self.control_rate, 1.0)
+        start = None
+        while rclpy.ok() and start is None:
+            if goal_handle.is_cancel_requested:
+                self._stop()
+                return False, 'canceled before overrun'
+            if self._now_ros_s() >= deadline:
+                self._stop()
+                self.get_logger().error(
+                    'Target timeout while waiting for collector TF before overrun.'
+                )
+                return False, 'target timeout before overrun'
+            start = self._frame_pose_in_odom(self.collector_frame)
+            if start is None:
+                self._stop()
+                time.sleep(period)
 
         self._phase('OVERRUN')
         feedback.phase = 'OVERRUN'
@@ -518,8 +569,7 @@ class LocalCollectController(Node):
             f'Collector reached target; overrunning {self.overrun_distance:.2f} m.'
         )
 
-        period = 1.0 / max(self.control_rate, 1.0)
-        previous = time.monotonic()
+        previous = self._now_ros_s()
         desired_speed = min(self.overrun_speed, self.smc_max_linear_speed)
 
         while rclpy.ok():
@@ -527,10 +577,11 @@ class LocalCollectController(Node):
                 self._stop()
                 return False, 'canceled during overrun'
 
-            now = time.monotonic()
+            now = self._now_ros_s()
             if now >= deadline:
                 self._stop()
-                return True, 'target timeout during overrun'
+                self.get_logger().error('Target timeout during overrun.')
+                return False, 'target timeout during overrun'
 
             current = self._frame_pose_in_odom(self.collector_frame)
             if current is None:
@@ -547,7 +598,7 @@ class LocalCollectController(Node):
                 self._stop()
                 return True, 'collector reached target + overrun'
 
-            dt = max(1e-3, now - previous)
+            dt = max(0.0, now - previous)
             previous = now
             self._send_slewed(desired_speed, 0.0, dt)
             time.sleep(period)
@@ -556,12 +607,12 @@ class LocalCollectController(Node):
         return False, 'ROS shutdown during overrun'
 
     def _drive_target(self, target_odom, goal_handle, feedback):
-        deadline = time.monotonic() + self.target_timeout
+        deadline = self._now_ros_s() + self.target_timeout
 
         pre_pose = self._build_precollect_pose(target_odom)
         if pre_pose is None:
             self._stop()
-            return True, 'pre-pose TF unavailable'
+            return False, 'pre-pose TF unavailable'
 
         completed, reason = self._drive_precollect_pose(
             pre_pose, goal_handle, feedback, deadline
@@ -590,7 +641,7 @@ class LocalCollectController(Node):
 
         attempted_odom = []
         attempted_count = 0
-        spree_started = time.monotonic()
+        spree_started = self._now_ros_s()
         overall_timeout = float(goal_handle.request.timeout_sec)
         if overall_timeout <= 0.0:
             overall_timeout = 120.0
@@ -608,7 +659,7 @@ class LocalCollectController(Node):
                     result.message = 'Local collection canceled.'
                     return result
 
-                if time.monotonic() - spree_started >= overall_timeout:
+                if self._now_ros_s() - spree_started >= overall_timeout:
                     self._stop()
                     self._phase('DONE')
                     goal_handle.succeed()
@@ -642,11 +693,20 @@ class LocalCollectController(Node):
                 )
 
                 if not completed:
-                    self._phase('CANCELED')
-                    goal_handle.canceled()
+                    self._stop()
                     result.success = False
                     result.targets_attempted = attempted_count
                     result.message = reason
+
+                    if reason.startswith('canceled'):
+                        self._phase('CANCELED')
+                        goal_handle.canceled()
+                    else:
+                        self._phase('FAILED')
+                        goal_handle.abort()
+                        self.get_logger().error(
+                            f'Local target {attempted_count} failed: {reason}.'
+                        )
                     return result
 
                 self.get_logger().info(
