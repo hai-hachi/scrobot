@@ -98,8 +98,8 @@ class FakeShuttleDetector(Node):
         super().__init__('fake_shuttle_detector')
 
         self.declare_parameter('update_rate', 15.0)
-        self.declare_parameter('min_range', 0.20)
-        self.declare_parameter('max_range', 3.00)
+        self.declare_parameter('min_range', 0.17)
+        self.declare_parameter('max_range', 1.68)
         self.declare_parameter('class_id', 'shuttle')
         self.declare_parameter('bbox_size_x', 0.08)
         self.declare_parameter('bbox_size_y', 0.08)
