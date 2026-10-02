@@ -32,6 +32,7 @@ from scrobot_mission.patrol_sweep_path import (
 class MissionState(Enum):
     IDLE = auto()
     INITIAL_TAG_APPROACH = auto()
+    TAG_RECOVERY_RETURN = auto()
     INITIAL_RELOCALIZATION = auto()
     STARTING_NAV2 = auto()
     JOIN_SWEEP = auto()
