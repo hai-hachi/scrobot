@@ -38,7 +38,9 @@ sweep_mission_manager:
 
     initial_tag_id: -1
     tag_approach_distance: 1.70
+    # At 0.45 rad/s, 18 s covers > 360 deg if no tag is detected.
     tag_approach_timeout: 18.0
+    tag_recovery_max_attempts: 3
     relocalize_sample_count: 15
     relocalize_timeout: 15.0
 
