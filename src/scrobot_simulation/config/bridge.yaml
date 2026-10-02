@@ -1,6 +1,6 @@
 # ============================================================
 # Gazebo Harmonic -> ROS 2 Jazzy bridge
-# D435i-like simulation + separate 5883L magnetometer
+# D435i-like simulation using the integrated IMU
 # ============================================================
 
 - ros_topic_name: "/clock"
@@ -19,17 +19,6 @@
   gz_type_name: "gz.msgs.IMU"
   direction: GZ_TO_ROS
   frame_id: "camera_imu_optical_frame"
-
-# ============================================================
-# Separate 5883L magnetometer
-# ============================================================
-- ros_topic_name: "/imu/mag"
-  gz_topic_name: "/imu/mag"
-  ros_type_name: "sensor_msgs/msg/MagneticField"
-  gz_type_name: "gz.msgs.Magnetometer"
-  direction: GZ_TO_ROS
-  qos_profile: SENSOR_DATA
-  frame_id: "mag_link"
 
 # ============================================================
 # Color camera
