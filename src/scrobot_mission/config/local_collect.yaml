@@ -8,12 +8,12 @@ shuttle_collection_filter:
 
     # Only leave the sweep for nearby shuttles. Farther shuttles will be picked
     # up naturally on a later sweep pass instead of causing long out-and-back trips.
-    max_target_range: 2.00
+    max_target_range: 1.68
 
     # Ignore shuttles close to either badminton-net pole.
     pole_x: 0.0
     pole_y_positions: [3.05, -3.05]
-    pole_exclusion_radius: 0.60
+    pole_exclusion_radius: 0.10
 
 local_collect_controller:
   ros__parameters:
@@ -70,12 +70,12 @@ local_collect_controller:
     #   v = k_rho * rho * cos(alpha)
     smc_reference_speed: 0.50
     smc_lambda: 2.00
-    smc_ks: 1.60
-    smc_eta: 0.50
-    smc_phi: 0.08
+    smc_ks: 1.40
+    smc_eta: 0.35
+    smc_phi: 0.10
     smc_krho: 0.80
     collector_offset_c: 0.165
-    smc_max_angular_speed: 1.80
+    smc_max_angular_speed: 1.60
     smc_max_linear_speed: 0.50
 
     # Rotate first for large position-heading error, matching the previous
