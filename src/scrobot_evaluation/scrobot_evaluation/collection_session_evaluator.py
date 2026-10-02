@@ -87,11 +87,28 @@ class CollectionSessionEvaluator(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         self.latest_gt = None
+
+        # Shuttle accounting is based on the periodic Gazebo ground-truth
+        # snapshot, not on one-shot collection events.  This avoids the old
+        # race where an event could increment collected_count before the next
+        # ground-truth snapshot reduced remaining_shuttles, temporarily making
+        # a 50-shuttle run look like 51.
         self.remaining_shuttles = 0
         self.remaining_near_poles = 0
         self.total_shuttles_seen = 0
         self.initial_near_poles = None
         self.collected_count = 0
+
+        # Before the mission starts, remember the largest complete shuttle
+        # snapshot observed.  The baseline is frozen when the mission becomes
+        # active.  A late spawn can still expand the baseline deterministically.
+        self.pre_mission_max_shuttles = 0
+        self.pre_mission_near_poles = 0
+        self.shuttle_baseline_initialized = False
+
+        # /evaluation/shuttle_collected is retained only as a diagnostic
+        # cross-check.  It is a one-shot event stream and is not authoritative.
+        self.collection_event_count = 0
 
         self.state = 'UNKNOWN'
         self.local_collect_phase = 'IDLE'
@@ -127,7 +144,8 @@ class CollectionSessionEvaluator(Node):
             'gt_x', 'gt_y', 'est_x', 'est_y', 'position_error_m',
             'gt_distance_total_m', 'est_distance_total_m',
             'remaining_shuttles', 'remaining_near_poles', 'remaining_eligible',
-            'collected_shuttles', 'total_shuttles_seen', 'eligible_shuttles',
+            'collected_shuttles', 'collection_events_received',
+            'total_shuttles_seen', 'eligible_shuttles',
             'overall_collection_rate_percent', 'eligible_collection_rate_percent',
         ])
 
@@ -231,29 +249,93 @@ class CollectionSessionEvaluator(Node):
             for pole_y in self.pole_y_positions
         )
 
+    def _initialize_shuttle_baseline(self, reason):
+        if self.shuttle_baseline_initialized:
+            return
+
+        # Prefer the largest pre-mission snapshot because shuttle spawning can
+        # happen in parallel and the first PoseArray may contain only a subset.
+        baseline = max(self.pre_mission_max_shuttles, self.remaining_shuttles)
+        if baseline <= 0:
+            return
+
+        self.total_shuttles_seen = baseline
+        if self.pre_mission_max_shuttles >= self.remaining_shuttles:
+            self.initial_near_poles = self.pre_mission_near_poles
+        else:
+            self.initial_near_poles = self.remaining_near_poles
+
+        self.shuttle_baseline_initialized = True
+        self.collected_count = max(
+            0, self.total_shuttles_seen - self.remaining_shuttles
+        )
+        self.get_logger().info(
+            'Shuttle GT baseline initialized '
+            f'({reason}): total={self.total_shuttles_seen}, '
+            f'near_poles={self.initial_near_poles}.'
+        )
+
     def shuttle_gt_callback(self, msg):
+        previous_collected = self.collected_count
+
         self.remaining_shuttles = len(msg.poses)
         self.remaining_near_poles = sum(
             1 for pose in msg.poses
             if self._near_pole(pose.position.x, pose.position.y)
         )
 
-        candidate_total = self.remaining_shuttles + self.collected_count
-        self.total_shuttles_seen = max(self.total_shuttles_seen, candidate_total)
+        if not self.active and not self.finalized:
+            # Capture the largest complete snapshot before mission motion.
+            # Use >= so the associated near-pole count follows the latest
+            # full-size snapshot.
+            if self.remaining_shuttles >= self.pre_mission_max_shuttles:
+                self.pre_mission_max_shuttles = self.remaining_shuttles
+                self.pre_mission_near_poles = self.remaining_near_poles
 
-        # The first complete ground-truth snapshot is the cleanest count of
-        # permanently excluded pole-adjacent shuttles.
-        if self.initial_near_poles is None and self.remaining_shuttles > 0:
-            self.initial_near_poles = self.remaining_near_poles
+            # Keep these fields meaningful for live monitoring before start.
+            self.total_shuttles_seen = self.pre_mission_max_shuttles
+            self.initial_near_poles = self.pre_mission_near_poles
+            self.collected_count = 0
+            return
+
+        if self.active and not self.shuttle_baseline_initialized:
+            self._initialize_shuttle_baseline(
+                'first ground-truth snapshot after mission start'
+            )
+
+        if not self.shuttle_baseline_initialized:
+            return
+
+        # Ground truth is authoritative:
+        #   collected = session_total - remaining
+        #
+        # If shuttles are spawned after the mission starts, expand the
+        # baseline by the amount implied by the current remaining count plus
+        # the number already known to have disappeared.
+        candidate_total = self.remaining_shuttles + previous_collected
+        if candidate_total > self.total_shuttles_seen:
+            added = candidate_total - self.total_shuttles_seen
+            self.total_shuttles_seen = candidate_total
+            self.initial_near_poles = max(
+                0 if self.initial_near_poles is None else self.initial_near_poles,
+                self.remaining_near_poles,
+            )
+            self.get_logger().warning(
+                'Shuttle baseline expanded during mission by '
+                f'{added}: total={self.total_shuttles_seen}. '
+                'For the cleanest evaluation, spawn all shuttles before mission start.'
+            )
+
+        self.collected_count = max(
+            0, self.total_shuttles_seen - self.remaining_shuttles
+        )
 
     def shuttle_collected_callback(self, msg):
+        # Diagnostic only.  This event stream can be BEST_EFFORT and therefore
+        # must not drive the official collection count.
         if not msg.poses:
             return
-        self.collected_count += len(msg.poses)
-        self.total_shuttles_seen = max(
-            self.total_shuttles_seen,
-            self.remaining_shuttles + self.collected_count,
-        )
+        self.collection_event_count += len(msg.poses)
 
     def eligible_shuttles(self):
         excluded = 0 if self.initial_near_poles is None else self.initial_near_poles
@@ -307,6 +389,9 @@ class CollectionSessionEvaluator(Node):
             self.active = True
             self.start_time = now
             self.state_enter_time = now
+            self._initialize_shuttle_baseline(
+                f'mission start at state {new_state}'
+            )
             self.get_logger().info(f'Evaluation started at mission state {new_state}.')
 
         if self.active and new_state != previous:
@@ -415,6 +500,7 @@ class CollectionSessionEvaluator(Node):
             self.remaining_near_poles,
             self.remaining_eligible(),
             self.collected_count,
+            self.collection_event_count,
             self.total_shuttles_seen,
             self.eligible_shuttles(),
             self.overall_collection_rate_percent(),
@@ -520,7 +606,8 @@ class CollectionSessionEvaluator(Node):
             writer.writerow([
                 'terminal_state', 'duration_s',
                 'total_shuttles_seen', 'ignored_near_poles', 'eligible_shuttles',
-                'collected_shuttles', 'remaining_shuttles',
+                'collected_shuttles', 'collection_events_received',
+                'collection_event_delta', 'remaining_shuttles',
                 'remaining_near_poles', 'remaining_eligible',
                 'overall_collection_rate_percent', 'eligible_collection_rate_percent',
                 'collection_passes',
@@ -536,6 +623,8 @@ class CollectionSessionEvaluator(Node):
                 0 if self.initial_near_poles is None else self.initial_near_poles,
                 self.eligible_shuttles(),
                 self.collected_count,
+                self.collection_event_count,
+                self.collected_count - self.collection_event_count,
                 self.remaining_shuttles,
                 self.remaining_near_poles,
                 self.remaining_eligible(),
@@ -556,12 +645,15 @@ class CollectionSessionEvaluator(Node):
             ])
 
         self.publish_paths()
+        event_delta = self.collected_count - self.collection_event_count
         self.get_logger().info(
             'Collection evaluation complete: '
             f't={duration:.1f}s, collected={self.collected_count}/'
             f'{self.eligible_shuttles()} eligible, '
             f'eligible_rate={self.eligible_collection_rate_percent():.1f}%, '
-            f'GT distance={self.gt_distance:.1f}m.'
+            f'GT distance={self.gt_distance:.1f}m, '
+            f'event_crosscheck={self.collection_event_count} '
+            f'(delta={event_delta:+d}).'
         )
 
     def destroy_node(self):
