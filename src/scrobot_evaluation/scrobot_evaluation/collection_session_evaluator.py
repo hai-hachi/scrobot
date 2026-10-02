@@ -46,7 +46,7 @@ class CollectionSessionEvaluator(Node):
         # ignored pole-adjacent shuttles from actual collection misses.
         self.declare_parameter('pole_x', 0.0)
         self.declare_parameter('pole_y_positions', [3.05, -3.05])
-        self.declare_parameter('pole_exclusion_radius', 0.60)
+        self.declare_parameter('pole_exclusion_radius', 0.10)
 
         self.declare_parameter(
             'output_root',
