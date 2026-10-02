@@ -54,7 +54,8 @@ Final autonomous mission state machine.
 Current flow:
 
 ```text
-initial tag approach
+full-spin tag search / approach
+ -> retry or recovery if no tag
  -> initial /relocalize
  -> start Nav2
  -> join four-pass sweep
@@ -73,8 +74,8 @@ Mission-specific shuttle eligibility filter.
 
 - Input: `/perception/shuttle_detections_3d`
 - Output: `/perception/collectable_shuttle_detections_3d`
-- Accepts only shuttles within 2.0 m of the robot.
-- Rejects shuttles within 0.60 m of either net pole.
+- Accepts only shuttles within 1.68 m of the robot.
+- Rejects shuttles within 0.10 m of either net pole.
 
 ### `local_collect_controller`
 Action server: `/local_collect` using `scrobot_interfaces/action/LocalCollect`.
@@ -92,9 +93,9 @@ construct collector pre-pose 0.50 m before shuttle
 ```
 
 The SMC sliding surface is `s = e_theta + lambda*e_y` with the accepted
-parameters `lambda=2.0`, `k_s=2.0`, `eta=0.8`, `phi=0.05`,
+parameters `lambda=2.0`, `k_s=1.4`, `eta=0.35`, `phi=0.10`,
 `v_R=0.50 m/s`, `k_rho=0.8`, collector offset `c=0.165 m`, and
-`|omega| <= 2.0 rad/s`.
+`|omega| <= 1.60 rad/s`.
 
 `scrobot_mission` is installed with `ament_cmake` + `ament_cmake_python`
 so both normal and `--symlink-install` builds expose its launch/config/executable correctly.
