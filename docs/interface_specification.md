@@ -72,7 +72,7 @@ Purpose: estimate/correct `map -> odom` while stationary using AprilTag observat
 ### `/camera/camera/color/camera_info`
 Type: `sensor_msgs/msg/CameraInfo`
 
-Used by the fake detector for RGB field-of-view projection and by the future real RGB-D localization path.
+Used by the fake detector for RGB field-of-view projection and by the planned real RGB-D shuttle-localization path.
 
 ### `/camera/camera/depth/points`
 Type: `sensor_msgs/msg/PointCloud2`
@@ -86,7 +86,7 @@ Type: `vision_msgs/msg/Detection2DArray`
 
 Frame: `camera_color_optical_frame`
 
-Future real YOLO output. Sensor-data QoS.
+Planned next-step real YOLO output. Sensor-data QoS.
 
 ### `/perception/shuttle_detections_3d`
 Type: `vision_msgs/msg/Detection3DArray`
@@ -96,7 +96,7 @@ Frame: `camera_depth_optical_frame`
 Publisher:
 
 - simulation: `fake_shuttle_detector`
-- real robot: future `depth_localizer`
+- real robot: planned YOLO + depth-localizer path
 
 Subscriber: `shuttle_tracker`
 
