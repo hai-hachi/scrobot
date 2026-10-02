@@ -3,8 +3,8 @@ fake_shuttle_detector:
     use_sim_time: true
 
     update_rate: 15.0
-    min_range: 0.20
-    max_range: 3.00
+    min_range: 0.17
+    max_range: 1.68
 
     class_id: shuttle
 
