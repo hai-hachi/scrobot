@@ -78,9 +78,13 @@ local_collect_controller:
     smc_max_angular_speed: 1.60
     smc_max_linear_speed: 0.50
 
-    # Rotate first for large position-heading error, matching the previous
-    # local-collect behavior.
-    heading_stop_deg: 70.0
+    # Hysteretic terminal turn for large residual position-bearing error.
+    # Enter at 70 deg, rotate in place with a gentle P law, and only return
+    # to normal SMC translation once alpha falls below 35 deg.
+    terminal_turn_enter_deg: 70.0
+    terminal_turn_exit_deg: 35.0
+    terminal_turn_kp: 1.0
+    terminal_turn_max_omega: 0.80
 
     # Kinematic command slew limits retained from the robot design.
     max_linear_accel: 1.00
