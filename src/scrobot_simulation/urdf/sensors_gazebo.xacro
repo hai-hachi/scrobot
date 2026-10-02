@@ -90,7 +90,7 @@
           </image>
 
           <clip>
-            <near>0.20</near>
+            <near>0.17</near>
             <far>6.0</far>
           </clip>
 
