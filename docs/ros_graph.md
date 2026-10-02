@@ -5,58 +5,59 @@
 ```text
 Gazebo / hardware
   |
-  +--> /joint_states ------------------------------+
-  +--> /diff_drive_controller/odom                |
-  +--> /imu/data_raw                              |
-  +--> camera topics                              |
-  |                                                v
-  |                                      localization / EKF
-  |                                                |
-  |                                                v
-  |                                         odom -> base_footprint
+  +--> /diff_drive_controller/odom ------------------+
+  +--> D435i /camera/camera/imu                     |
+  |                                                  v
+  |                                        localization / EKF
+  |                                                  |
+  |                                                  v
+  |                                           odom -> base_footprint
   |
-  +--> AprilTag detections -> tag_global_localizer -> map -> odom
-  |                           tag_approach_controller
-  |                              |        |
-  |                              |        +--> /relocalize
-  |                              +----------> /approach_tag
+  +--> AprilTag detections
+  |       -> tag_approach_controller
+  |       -> tag_global_localizer
+  |                |
+  |                v
+  |             map -> odom
   |
-  +--> /evaluation/shuttle_ground_truth
-             |
-             v
-      fake_shuttle_detector
-             |
-             v
+  +--> shuttle perception
+          |
+          v
 /perception/shuttle_detections_3d
-             |
-             v
-       shuttle_tracker
-             |
-             v
- /perception/tracked_shuttles
-             |
-             v
-        mission manager
-             |
-             v
-            Nav2
-             |
-             v
-       command pipeline
-             |
-             v
-  diff_drive_controller
+          |
+          v
+ shuttle_collection_filter
+          |
+          v
+/perception/collectable_shuttle_detections_3d
+          |
+          +-------------------------+
+          |                         |
+          v                         v
+  sweep_mission_manager      local_collect_controller
+          |                         |
+          +-----------+-------------+
+                      v
+              command pipeline
+                      |
+                      v
+             diff_drive_controller
 ```
 
 ## Important nodes
 
-- `fake_shuttle_detector`: simulation adapter; publishes camera-frame shuttle measurements.
-- `shuttle_tracker`: transforms measurements to `map`, associates detections, and assigns stable IDs.
 - `tag_global_localizer`: owns `/relocalize` and `map -> odom`.
-- `tag_approach_controller`: owns `/approach_tag` and relocalization motion command output.
-- `patrol_manager`: mission state machine for initial localization, Nav2 startup, patrol-point navigation, and scans.
-- Nav2 controller: Regulated Pure Pursuit.
+- `tag_approach_controller`: searches for and approaches a visible AprilTag.
+- `sweep_mission_manager`: owns the four-pass coverage, fixed relocalization
+  stations, shuttle diversions, checkpoint return, and recovery flow.
+- `shuttle_collection_filter`: limits collection to targets within 1.68 m and
+  outside the 0.10 m pole exclusion.
+- `local_collect_controller`: uses SMC to reach the 0.50 m pre-pose, then a
+  straight 0.30 m/s collection pass.
+- Nav2 controller: Regulated Pure Pursuit at 0.80 m/s desired sweep speed.
 
-## Evaluation graph
+## Evaluation
 
-`scrobot_evaluation` uses `/evaluation/ground_truth_odom` as the primary local-odometry reference. The new shuttle-only ground-truth topic is independent of that evaluation path.
+`scrobot_evaluation` uses Gazebo ground truth only for measurement. Shuttle
+collection totals are derived from the periodic remaining-shuttle truth stream;
+one-shot collection events are a cross-check only.
