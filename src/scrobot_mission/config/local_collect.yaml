@@ -70,12 +70,12 @@ local_collect_controller:
     #   v = k_rho * rho * cos(alpha)
     smc_reference_speed: 0.50
     smc_lambda: 2.00
-    smc_ks: 2.00
-    smc_eta: 0.80
-    smc_phi: 0.05
+    smc_ks: 1.60
+    smc_eta: 0.50
+    smc_phi: 0.08
     smc_krho: 0.80
     collector_offset_c: 0.165
-    smc_max_angular_speed: 2.00
+    smc_max_angular_speed: 1.80
     smc_max_linear_speed: 0.50
 
     # Rotate first for large position-heading error, matching the previous
