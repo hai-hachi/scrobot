@@ -110,7 +110,7 @@ class TagApproachController(Node):
         self.declare_parameter('min_decision_margin', 10.0)
         self.declare_parameter('max_detection_distance', 6.0)
         self.declare_parameter('default_target_distance', 1.70)
-        self.declare_parameter('default_timeout', 20.0)
+        self.declare_parameter('default_timeout', 18.0)
         self.declare_parameter('tag_lost_timeout', 0.50)
 
         self.declare_parameter('selection_settle_time', 0.30)
@@ -118,7 +118,7 @@ class TagApproachController(Node):
         self.declare_parameter('selection_min_samples', 4)
         self.declare_parameter('pending_detection_max_age', 0.25)
 
-        self.declare_parameter('search_angular_velocity', 0.25)
+        self.declare_parameter('search_angular_velocity', 0.45)
         self.declare_parameter('max_linear_velocity', 0.25)
         self.declare_parameter('max_angular_velocity', 0.60)
         self.declare_parameter('k_position', 0.80)
