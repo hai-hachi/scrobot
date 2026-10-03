@@ -3,8 +3,8 @@ court_visualizer:
 
     frame_id: map
 
-    floor_length: 18.0
-    floor_width: 10.0
+    floor_length: 20.0
+    floor_width: 12.0
     floor_thickness: 0.02
 
     court_length: 13.40
