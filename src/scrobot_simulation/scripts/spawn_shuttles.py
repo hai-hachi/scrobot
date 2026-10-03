@@ -323,7 +323,7 @@ def main():
 
     sx = args.x if args.x is not None else float(get_nested(config, ['single', 'x'], 0.0))
     sy = args.y if args.y is not None else float(get_nested(config, ['single', 'y'], 0.0))
-    sz = args.z if args.z is not None else float(get_nested(config, ['single', 'z'], 0.034))
+    sz = args.z if args.z is not None else float(get_nested(config, ['single', 'z'], 0.050))
     sroll = args.roll if args.roll is not None else float(get_nested(config, ['single', 'roll'], 0.0))
     spitch = args.pitch if args.pitch is not None else float(get_nested(config, ['single', 'pitch'], math.pi / 2.0))
     syaw = args.yaw if args.yaw is not None else float(get_nested(config, ['single', 'yaw'], 0.0))
@@ -358,7 +358,7 @@ def main():
         get_nested(config, ['court', 'margin'], 0.15)
     )
     spawn_height = args.spawn_height if args.spawn_height is not None else float(
-        get_nested(config, ['spawn', 'height'], 0.034)
+        get_nested(config, ['spawn', 'height'], 0.050)
     )
     parallel_workers = args.parallel_workers if args.parallel_workers is not None else int(
         get_nested(config, ['spawn', 'parallel_workers'], 8)
