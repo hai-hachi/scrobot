@@ -19,8 +19,8 @@
     </plugin>
 
     <!-- Publish shuttle GT for range testing, but never remove a shuttle. -->
-    <plugin filename="libshuttle_activity_system.so"
-            name="scrobot_simulation::ShuttleActivitySystem">
+    <plugin filename="libshuttle_manager_system.so"
+            name="scrobot_simulation::ShuttleManagerSystem">
       <robot_model>scrobot</robot_model>
       <update_rate>30.0</update_rate>
       <ground_truth_topic>/evaluation/shuttle_ground_truth_gz</ground_truth_topic>
