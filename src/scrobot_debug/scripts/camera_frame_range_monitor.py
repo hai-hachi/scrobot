@@ -111,6 +111,7 @@ class CameraFrameRangeMonitor(Node):
         self.color_info_reported = False
         self.depth_info_reported = False
         self.missing_warned = set()
+        self.last_wait_status = None
 
         self.create_subscription(
             CameraInfo,
@@ -380,12 +381,21 @@ class CameraFrameRangeMonitor(Node):
         return values[len(values) // 2]
 
     def _report_target(self):
-        if (
-            self.robot_pose is None
-            or not self.shuttles
-            or self.color_info is None
-            or self.depth_info is None
-        ):
+        missing = []
+        if self.robot_pose is None:
+            missing.append('ground_truth_odom')
+        if not self.shuttles:
+            missing.append('shuttle_ground_truth')
+        if self.color_info is None:
+            missing.append('color_camera_info')
+        if self.depth_info is None:
+            missing.append('depth_camera_info')
+
+        if missing:
+            status = 'WAITING missing=' + ','.join(missing)
+            if status != self.last_wait_status:
+                self._emit(status)
+                self.last_wait_status = status
             return
 
         pose = self.shuttles[0]
@@ -399,8 +409,14 @@ class CameraFrameRangeMonitor(Node):
             depth_point = self._base_to_optical(
                 center_base, self.depth_frame
             )
-        except Exception:
+        except Exception as exc:
+            status = f'WAITING tf={type(exc).__name__}: {exc}'
+            if status != self.last_wait_status:
+                self._emit(status)
+                self.last_wait_status = status
             return
+
+        self.last_wait_status = None
 
         color_proj = self._project(
             color_point, self.color_info
