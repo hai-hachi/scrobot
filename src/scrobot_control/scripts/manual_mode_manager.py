@@ -13,11 +13,13 @@ from std_srvs.srv import SetBool
 class ManualModeManager(Node):
     """Own the AUTO/MANUAL control mode and gate manual velocity commands.
 
-    The final command mux already gives /cmd_vel_manual higher priority than
-    autonomous commands. This node makes that override persistent and explicit:
-    while MANUAL is active it continuously publishes the latest manual command,
-    or zero if the operator is not commanding motion. Autonomous commands can
-    therefore never leak through between keyboard key presses.
+    The control-mode mux gives /cmd_vel_manual higher priority than autonomous
+    commands. This node makes that override persistent and explicit: while
+    MANUAL is active it continuously publishes the latest manual command, or
+    zero if the operator is not commanding motion. Autonomous commands can
+    therefore never leak through between keyboard key presses. The selected
+    command then passes through the normal velocity smoother and collision
+    monitor before reaching the drive controller.
 
     /control/manual_mode is transient-local so mission nodes that start later
     immediately learn the current mode and can pause/resume their actions.
