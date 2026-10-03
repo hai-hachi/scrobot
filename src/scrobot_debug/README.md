@@ -7,8 +7,8 @@ Production behavior stays in the package that owns it:
 
 - `scrobot_control`: command arbitration, manual mode manager, safe manual teleop
 - `scrobot_mission`: autonomous mission state machine
-- `scrobot_simulation`: Gazebo runtime, world, sensors, shuttle models/plugins
-- `scrobot_debug`: test composition, telemetry, visualization, and unsafe/raw test tools
+- `scrobot_simulation`: Gazebo runtime, production world, sensors, shuttle model, and simulation plugins
+- `scrobot_debug`: test composition, test-only Gazebo fixtures/models, telemetry, visualization, and unsafe/raw test tools
 
 Production packages must never depend on `scrobot_debug`.
 
