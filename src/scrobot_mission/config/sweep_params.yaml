@@ -52,6 +52,12 @@ sweep_mission_manager:
     join_acceptance_distance: 0.40
     enable_shuttle_interrupts: true
 
+    # AUTO/MANUAL resume behavior. Small operator corrections resume the saved
+    # mission phase directly; larger displacement returns to the interruption
+    # checkpoint with Nav2 before continuing.
+    manual_resume_return_distance: 0.15
+    manual_resume_return_yaw_deg: 10.0
+
     # Keep the existing test controls available while integrating collection.
     enable_test_controls: true
     test_command_topic: /mission/test_command
