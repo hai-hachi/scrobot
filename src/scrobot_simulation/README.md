@@ -9,8 +9,8 @@ This package owns only normal simulation behavior:
 - badminton-court world and lighting
 - production robot Gazebo wrapper
 - D435i-like RGB, depth, IMU, and optional magnetometer sensors
-- Gazebo / ROS bridges
-- depth-to-color registration
+- Gazebo / ROS bridges (`config/ros_gz_bridge.yaml`)
+- depth-to-color registration (`launch/depth_to_color_registration.launch.py`)
 - production dynamic shuttle model and distribution spawning
 - build-generated court AprilTags
 - shuttle ground truth and collection management
@@ -94,6 +94,10 @@ The collector pose is therefore not duplicated as a hard-coded +0.165 m world
 plugin parameter.
 
 ## Camera bridge
+
+The main bridge nodes are named `simulation_bridge` and
+`camera_image_bridge` so the ROS graph describes their role rather than only
+their implementation package.
 
 The native Gazebo depth point cloud remains bridged as:
 
