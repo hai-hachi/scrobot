@@ -13,6 +13,7 @@ endif()
 install(
   PROGRAMS
     scripts/shuttle_sim_monitor.py
+    scripts/telemetry_monitor.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
