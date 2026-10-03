@@ -9,7 +9,6 @@ from launch.actions import (
     IncludeLaunchDescription,
     TimerAction,
 )
-from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
@@ -25,7 +24,6 @@ def generate_launch_description():
     )
 
     use_sim_time = LaunchConfiguration('use_sim_time')
-    launch_rviz = LaunchConfiguration('rviz')
     world = LaunchConfiguration('world')
     gz_verbosity = LaunchConfiguration('gz_verbosity')
     world_name = LaunchConfiguration('world_name')
@@ -112,32 +110,12 @@ def generate_launch_description():
         }.items(),
     )
 
-    rviz = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                simulation_pkg,
-                'launch',
-                'rviz.launch.py',
-            )
-        ),
-        launch_arguments={
-            'use_sim_time': use_sim_time,
-        }.items(),
-        condition=IfCondition(launch_rviz),
-    )
-
     return LaunchDescription([
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='true',
             choices=['true', 'false'],
             description='Use Gazebo simulation time.',
-        ),
-        DeclareLaunchArgument(
-            'rviz',
-            default_value='false',
-            choices=['true', 'false'],
-            description='Launch RViz.',
         ),
         DeclareLaunchArgument(
             'world',
@@ -201,5 +179,4 @@ def generate_launch_description():
         gazebo,
         delayed_spawn_robot,
         realsense_processing,
-        rviz,
     ])
