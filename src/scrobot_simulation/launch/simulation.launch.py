@@ -83,12 +83,12 @@ def generate_launch_description():
         actions=[spawn_robot],
     )
 
-    realsense_processing = IncludeLaunchDescription(
+    depth_to_color_registration = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
                 simulation_pkg,
                 'launch',
-                'depth_registration.launch.py',
+                'depth_to_color_registration.launch.py',
             )
         ),
         launch_arguments={
@@ -171,5 +171,5 @@ def generate_launch_description():
 
         gazebo,
         delayed_spawn_robot,
-        realsense_processing,
+        depth_to_color_registration,
     ])
