@@ -106,6 +106,13 @@ install(
 )
 
 install(
+  PROGRAMS
+    scripts/camera_test_ctl.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME camera_test_ctl
+)
+
+install(
   DIRECTORY
     launch
     config
