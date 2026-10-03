@@ -59,6 +59,15 @@ This starts Gazebo, the robot, the low-level diff-drive controllers, the
 collection monitor, and central debug telemetry. The shuttle is controlled
 separately so Gazebo does not need to restart between tests.
 
+The test now spawns the same production dynamic shuttle model used by normal
+mission simulation:
+
+```text
+scrobot_simulation/models/shuttle/model.sdf
+```
+
+This keeps physics and collection validation synchronized with production.
+
 ## 3. Open a command terminal
 
 ```bash
