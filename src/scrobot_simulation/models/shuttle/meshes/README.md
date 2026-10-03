@@ -1,9 +1,9 @@
-# Shuttle meshes
+# Shuttle mesh
 
-Place the two shuttle meshes in this directory with exactly these names:
+The simulation uses one detailed shuttle mesh:
 
-- `shuttle.STL` - visual mesh
-- `shuttle_collision.STL` - simplified collision mesh
+- `shuttle.STL` - detailed visual mesh used for Gazebo rendering and future
+  YOLO-on-simulated-RGB validation.
 
 Mesh frame convention expected by `model.sdf`:
 
@@ -11,4 +11,7 @@ Mesh frame convention expected by `model.sdf`:
 - +Z axis along the shuttle longitudinal axis toward the skirt
 - mesh dimensions in metres
 
-The default spawner orientation uses `pitch = pi/2`, so the shuttle starts on its side and drops a short distance onto the court.
+The simplified `shuttle_collision.STL` / fast-model path was removed because
+it changed both appearance and physics. The validation shuttle now uses simple
+SDF collision primitives plus the detailed visual mesh, and remains static after
+spawning so simplified feather contact cannot create nonphysical rolling.
