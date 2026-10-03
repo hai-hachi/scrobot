@@ -41,6 +41,7 @@ class MissionState(Enum):
     RESTORE_SWEEP_HEADING = auto()
     LOCAL_COLLECT = auto()
     RETURN_TO_SWEEP = auto()
+    PAUSED = auto()
     COMPLETE = auto()
     ERROR = auto()
 
