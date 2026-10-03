@@ -65,6 +65,17 @@ def generate_launch_description():
         parameters=[{'config_file': bridge_config}],
     )
 
+    telemetry = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(debug_share, 'launch', 'telemetry.launch.py')
+        ),
+        launch_arguments={
+            'use_sim_time': 'true',
+            'summary_rate': '0.0',
+            'min_rosout_level': '30',
+        }.items(),
+    )
+
     monitor = Node(
         package='scrobot_debug',
         executable='shuttle_physics_monitor',
@@ -145,6 +156,7 @@ def generate_launch_description():
 
         gazebo,
         bridge,
+        telemetry,
         monitor,
         TimerAction(period=spawn_delay, actions=[spawner]),
         TimerAction(period=spawn_delay, actions=[impulse]),
