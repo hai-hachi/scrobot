@@ -61,7 +61,7 @@ def grid_points(count, spacing):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Spawn candidate dynamic shuttle models for physics testing.'
+        description='Spawn the production dynamic shuttle model for physics testing.'
     )
     parser.add_argument('--world', default='shuttle_physics_test')
     parser.add_argument('--count', type=int, default=1)
