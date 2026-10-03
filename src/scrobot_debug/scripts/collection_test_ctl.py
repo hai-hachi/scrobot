@@ -207,11 +207,11 @@ def spawn_model(args):
 
     roll, pitch, yaw = rpy_from_quaternion(q_world)
 
-    simulation_share = get_package_share_directory(
-        'scrobot_simulation'
+    debug_share = get_package_share_directory(
+        'scrobot_debug'
     )
     model_file = os.path.join(
-        simulation_share,
+        debug_share,
         'models',
         'shuttle',
         'model_physics_test.sdf',
