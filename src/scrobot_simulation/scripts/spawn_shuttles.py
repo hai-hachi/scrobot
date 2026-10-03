@@ -306,8 +306,8 @@ def main():
     config = load_yaml(config_path)
 
     model_dir = os.path.join(share, 'models', 'shuttle')
-    # One detailed model is used for both physics validation and future
-    # YOLO-on-simulated-RGB tests.
+    # Normal simulation always spawns the production shuttle model.
+    # Camera / physics validation variants live in scrobot_debug.
     sdf_file = os.path.join(model_dir, 'model.sdf')
     visual_mesh = os.path.join(model_dir, 'meshes', 'shuttle.STL')
 
