@@ -92,9 +92,12 @@ construct collector pre-pose 0.50 m before shuttle
  -> select next eligible visible shuttle
 ```
 
-The SMC sliding surface is `s = e_theta + lambda*e_y` with the accepted
-parameters `lambda=2.0`, `k_s=1.6`, `eta=0.50`, `phi=0.08`,
-`v_R=0.50 m/s`, `k_rho=0.8`, collector offset `c=0.165 m`, and
+The SMC sliding surface is `s = e_theta + lambda*e_y`. Because the
+pre-collection reference is a fixed pose, `v_R = 0` and `omega_R = 0`,
+so the angular law is
+`omega = [k_s*s + eta*sat(s/phi)] / [1 + lambda*c]`.
+Current parameters are `lambda=2.0`, `k_s=1.6`, `eta=0.50`,
+`phi=0.08`, `k_rho=0.8`, collector offset `c=0.165 m`, and
 `|omega| <= 1.80 rad/s`. The turn-first gate at 70 deg is used only while
 `rho > 0.15 m`; near the pre-pose, normal SMC remains active.
 
