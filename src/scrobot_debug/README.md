@@ -109,10 +109,9 @@ R
  -> saved autonomous phase resumes
 ```
 
-The debug launch currently defaults `enable_magnetometer:=true` only because
-the historical localization configuration on this branch still has
-`use_mag: true`. Once the localization package is rehauled to the final
-D435i-only configuration, this debug default should become false.
+The HMC5883L path remains optional by design. Simulation exposes
+`enable_magnetometer:=true|false`, so tests can switch the separate
+magnetometer on when required while the default simulation remains D435i-only.
 
 Optional shuttle mission test:
 
