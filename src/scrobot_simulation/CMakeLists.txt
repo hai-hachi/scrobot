@@ -25,15 +25,15 @@ if(BUILD_TESTING)
 endif()
 
 add_library(
-  shuttle_activity_system
+  shuttle_manager_system
   SHARED
-  src/shuttle_activity_system.cpp
+  src/shuttle_manager_system.cpp
 )
 
-set_property(TARGET shuttle_activity_system PROPERTY CXX_STANDARD 17)
+set_property(TARGET shuttle_manager_system PROPERTY CXX_STANDARD 17)
 
 target_link_libraries(
-  shuttle_activity_system
+  shuttle_manager_system
   PRIVATE
     gz-plugin${GZ_PLUGIN_VER}::gz-plugin${GZ_PLUGIN_VER}
     gz-sim8::gz-sim8
@@ -43,7 +43,7 @@ target_link_libraries(
 
 install(
   TARGETS
-    shuttle_activity_system
+    shuttle_manager_system
   LIBRARY DESTINATION lib
 )
 
