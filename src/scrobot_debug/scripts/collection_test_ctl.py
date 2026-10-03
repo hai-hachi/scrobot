@@ -9,6 +9,7 @@ import time
 
 import rclpy
 from ament_index_python.packages import get_package_share_directory
+from geometry_msgs.msg import TwistStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
@@ -247,6 +248,56 @@ def spawn_model(args):
     )
 
 
+def drive_straight(args):
+    if args.delay > 0.0:
+        print(
+            f'[collection_test_ctl] straight drive starts in '
+            f'{args.delay:.1f} s...',
+            flush=True,
+        )
+        time.sleep(args.delay)
+
+    rclpy.init(args=None)
+    node = Node('collection_test_straight_drive')
+    publisher = node.create_publisher(
+        TwistStamped,
+        '/diff_drive_controller/cmd_vel',
+        10,
+    )
+
+    period = 1.0 / max(1.0, args.rate)
+    deadline = time.monotonic() + max(0.0, args.duration)
+
+    try:
+        while rclpy.ok() and time.monotonic() < deadline:
+            msg = TwistStamped()
+            msg.header.stamp = node.get_clock().now().to_msg()
+            msg.header.frame_id = 'base_link'
+            msg.twist.linear.x = float(args.speed)
+            msg.twist.angular.z = 0.0
+            publisher.publish(msg)
+            rclpy.spin_once(node, timeout_sec=0.0)
+            time.sleep(period)
+
+        # Publish zero several times so the test always leaves the base stopped.
+        for _ in range(5):
+            msg = TwistStamped()
+            msg.header.stamp = node.get_clock().now().to_msg()
+            msg.header.frame_id = 'base_link'
+            publisher.publish(msg)
+            rclpy.spin_once(node, timeout_sec=0.0)
+            time.sleep(period)
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+    print(
+        f'[collection_test_ctl] straight drive complete: '
+        f'v={args.speed:.3f} m/s duration={args.duration:.3f} s',
+        flush=True,
+    )
+
+
 def add_spawn_args(parser):
     parser.add_argument('--world', default=WORLD)
     parser.add_argument('--name', default=MODEL_NAME)
@@ -306,6 +357,15 @@ def main():
     add_spawn_args(respawn)
     respawn.add_argument('--delete-wait', type=float, default=0.5)
 
+    drive = sub.add_parser(
+        'drive',
+        help='Drive the robot straight through the test shuttle.',
+    )
+    drive.add_argument('--speed', type=float, default=0.10)
+    drive.add_argument('--duration', type=float, default=3.0)
+    drive.add_argument('--rate', type=float, default=20.0)
+    drive.add_argument('--delay', type=float, default=2.0)
+
     args = parser.parse_args()
 
     try:
@@ -325,6 +385,8 @@ def main():
             )
             time.sleep(max(0.0, args.delete_wait))
             spawn_model(args)
+        elif args.command == 'drive':
+            drive_straight(args)
     except Exception as exc:
         print(
             f'[collection_test_ctl] ERROR: {exc}',
