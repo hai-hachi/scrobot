@@ -45,10 +45,11 @@ class LocalCollectController(Node):
     to this pose. Once position and heading tolerances are satisfied, the robot
     switches to the deliberately simple straight collection rule:
         v = 0.30 m/s, omega = 0.
-    A hysteretic terminal-turn mode handles large residual position-bearing
-    errors without allowing the controller to settle at v=0, omega=0 outside
-    the position tolerance. When collector_link reaches the frozen shuttle
-    point, the controller continues through it by the configured 0.10 m overrun.
+    A turn-first gate is used only while the collector is still meaningfully
+    far from the pre-pose; near the goal, normal SMC remains active so the
+    position-bearing angle cannot create a zero-command deadlock. When
+    collector_link reaches the frozen shuttle point, the controller continues
+    through it by the configured 0.10 m overrun.
     """
 
     def __init__(self):
@@ -78,21 +79,19 @@ class LocalCollectController(Node):
 
         self.declare_parameter('smc_reference_speed', 0.50)
         self.declare_parameter('smc_lambda', 2.0)
-        self.declare_parameter('smc_ks', 1.4)
-        self.declare_parameter('smc_eta', 0.35)
-        self.declare_parameter('smc_phi', 0.10)
+        self.declare_parameter('smc_ks', 1.60)
+        self.declare_parameter('smc_eta', 0.50)
+        self.declare_parameter('smc_phi', 0.08)
         self.declare_parameter('smc_krho', 0.8)
         self.declare_parameter('collector_offset_c', 0.165)
-        self.declare_parameter('smc_max_angular_speed', 1.60)
+        self.declare_parameter('smc_max_angular_speed', 1.80)
         self.declare_parameter('smc_max_linear_speed', 0.50)
 
-        # Terminal-turn hysteresis prevents the old deadlock where alpha
-        # crossed the stop threshold while the SMC angular law had already
-        # converged near zero.
-        self.declare_parameter('terminal_turn_enter_deg', 70.0)
-        self.declare_parameter('terminal_turn_exit_deg', 35.0)
-        self.declare_parameter('terminal_turn_kp', 1.0)
-        self.declare_parameter('terminal_turn_max_omega', 0.80)
+        # Preserve the old turn-first behavior only while the collector is
+        # still far enough from the pre-pose for alpha to be geometrically
+        # meaningful. Near the goal, continue normal SMC.
+        self.declare_parameter('heading_stop_deg', 70.0)
+        self.declare_parameter('heading_stop_min_rho', 0.15)
 
         self.declare_parameter('max_linear_accel', 1.0)
         self.declare_parameter('max_angular_accel', 1.0)
@@ -150,23 +149,12 @@ class LocalCollectController(Node):
         self.smc_max_linear_speed = abs(
             float(self.get_parameter('smc_max_linear_speed').value)
         )
-        self.terminal_turn_enter = math.radians(
-            float(self.get_parameter('terminal_turn_enter_deg').value)
+        self.heading_stop = math.radians(
+            float(self.get_parameter('heading_stop_deg').value)
         )
-        self.terminal_turn_exit = math.radians(
-            float(self.get_parameter('terminal_turn_exit_deg').value)
+        self.heading_stop_min_rho = max(
+            0.0, float(self.get_parameter('heading_stop_min_rho').value)
         )
-        self.terminal_turn_kp = max(
-            0.0, float(self.get_parameter('terminal_turn_kp').value)
-        )
-        self.terminal_turn_max_omega = abs(
-            float(self.get_parameter('terminal_turn_max_omega').value)
-        )
-        if self.terminal_turn_exit >= self.terminal_turn_enter:
-            raise ValueError(
-                'terminal_turn_exit_deg must be smaller than '
-                'terminal_turn_enter_deg'
-            )
 
         self.max_linear_accel = float(self.get_parameter('max_linear_accel').value)
         self.max_angular_accel = float(self.get_parameter('max_angular_accel').value)
@@ -406,6 +394,16 @@ class LocalCollectController(Node):
         )
 
         v = self.smc_krho * rho * math.cos(alpha)
+
+        # Far from the pre-pose, rotate first when the target lies too far
+        # off-axis. Close to the pre-pose, alpha becomes highly sensitive to
+        # millimetre-scale position error, so do not let it disable translation.
+        if (
+            rho > self.heading_stop_min_rho
+            and abs(alpha) >= self.heading_stop
+        ):
+            v = 0.0
+
         v = clamp(v, 0.0, self.smc_max_linear_speed)
 
         return v, omega, rho, alpha, e_y, e_theta, s
@@ -429,7 +427,6 @@ class LocalCollectController(Node):
         previous = self._now_ros_s()
         next_debug = previous
         last_metrics = None
-        terminal_turn_active = False
         self.last_v = 0.0
         self.last_w = 0.0
 
@@ -454,11 +451,14 @@ class LocalCollectController(Node):
                         s,
                         desired_v,
                         desired_w,
-                        terminal_turn_active,
                     ) = last_metrics
+                    turn_first = (
+                        rho > self.heading_stop_min_rho
+                        and abs(alpha) >= self.heading_stop
+                    )
                     self.get_logger().error(
                         'SMC target timeout: '
-                        f'mode={"TERMINAL_TURN" if terminal_turn_active else "SMC"}, '
+                        f'mode={"TURN_FIRST" if turn_first else "SMC"}, '
                         f'rho={rho:.4f} m, alpha={math.degrees(alpha):+.2f} deg, '
                         f'e_y={e_y:+.4f} m, '
                         f'e_theta={math.degrees(e_theta):+.2f} deg, '
@@ -477,36 +477,6 @@ class LocalCollectController(Node):
                 pre_pose, collector
             )
 
-            abs_alpha = abs(alpha)
-            if (
-                not terminal_turn_active
-                and abs_alpha >= self.terminal_turn_enter
-            ):
-                terminal_turn_active = True
-                self.get_logger().info(
-                    'Entering terminal turn: '
-                    f'alpha={math.degrees(alpha):+.2f} deg, '
-                    f'rho={rho:.4f} m.'
-                )
-            elif (
-                terminal_turn_active
-                and abs_alpha <= self.terminal_turn_exit
-            ):
-                terminal_turn_active = False
-                self.get_logger().info(
-                    'Leaving terminal turn: '
-                    f'alpha={math.degrees(alpha):+.2f} deg, '
-                    'resuming normal SMC translation.'
-                )
-
-            if terminal_turn_active:
-                desired_v = 0.0
-                desired_w = clamp(
-                    self.terminal_turn_kp * alpha,
-                    -self.terminal_turn_max_omega,
-                    self.terminal_turn_max_omega,
-                )
-
             last_metrics = (
                 rho,
                 alpha,
@@ -515,7 +485,6 @@ class LocalCollectController(Node):
                 s,
                 desired_v,
                 desired_w,
-                terminal_turn_active,
             )
 
             feedback.range_m = float(rho)
@@ -523,9 +492,13 @@ class LocalCollectController(Node):
             goal_handle.publish_feedback(feedback)
 
             if now >= next_debug:
+                turn_first = (
+                    rho > self.heading_stop_min_rho
+                    and abs(alpha) >= self.heading_stop
+                )
                 self.get_logger().info(
                     'SMC state: '
-                    f'mode={"TERMINAL_TURN" if terminal_turn_active else "SMC"}, '
+                    f'mode={"TURN_FIRST" if turn_first else "SMC"}, '
                     f'rho={rho:.4f} m, alpha={math.degrees(alpha):+.2f} deg, '
                     f'e_y={e_y:+.4f} m, '
                     f'e_theta={math.degrees(e_theta):+.2f} deg, '
