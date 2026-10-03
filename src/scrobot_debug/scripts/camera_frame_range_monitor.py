@@ -410,9 +410,18 @@ class CameraFrameRangeMonitor(Node):
         color_text = 'color=BEHIND'
         if color_proj is not None:
             cu, cv, cz, cin = color_proj
+            color_h = math.degrees(math.atan2(color_point[0], color_point[2]))
+            color_v = math.degrees(math.atan2(color_point[1], color_point[2]))
+            color_left = cu
+            color_right = float(self.color_info.width - 1) - cu
+            color_top = cv
+            color_bottom = float(self.color_info.height - 1) - cv
             color_text = (
                 f'color_z={cz:.3f}m '
                 f'uv=({cu:.1f},{cv:.1f}) '
+                f'angle=({color_h:+.2f},{color_v:+.2f})deg '
+                f'margin_px=(L{color_left:+.1f},R{color_right:+.1f},'
+                f'T{color_top:+.1f},B{color_bottom:+.1f}) '
                 f'in={"YES" if cin else "NO"}'
             )
 
@@ -431,9 +440,18 @@ class CameraFrameRangeMonitor(Node):
             error_text = ''
             if sample is not None:
                 error_text = f' err={sample - dz:+.3f}m'
+            depth_h = math.degrees(math.atan2(depth_point[0], depth_point[2]))
+            depth_v = math.degrees(math.atan2(depth_point[1], depth_point[2]))
+            depth_left = du
+            depth_right = float(self.depth_info.width - 1) - du
+            depth_top = dv
+            depth_bottom = float(self.depth_info.height - 1) - dv
             depth_text = (
                 f'depth_z={dz:.3f}m '
                 f'uv=({du:.1f},{dv:.1f}) '
+                f'angle=({depth_h:+.2f},{depth_v:+.2f})deg '
+                f'margin_px=(L{depth_left:+.1f},R{depth_right:+.1f},'
+                f'T{depth_top:+.1f},B{depth_bottom:+.1f}) '
                 f'in={"YES" if din else "NO"} '
                 f'sample={sample_text}{error_text}'
             )
