@@ -11,18 +11,6 @@ import numpy as np
 import yaml
 
 
-SHUTTLE_ACTIVITY_UPDATE_RATE = 10.0
-SHUTTLE_ACTIVATION_DISTANCE = 0.35
-SHUTTLE_FREEZE_DISTANCE = 0.55
-SHUTTLE_SETTLE_TIME = 0.75
-SHUTTLE_GROUND_TRUTH_TOPIC = '/evaluation/shuttle_ground_truth_gz'
-SHUTTLE_COLLECTED_TOPIC = '/evaluation/shuttle_collected_gz'
-PICKUP_OFFSET_X = 0.165
-PICKUP_HALF_LENGTH = 0.030
-PICKUP_HALF_WIDTH = 0.150
-SHUTTLE_COLLISION_RADIUS = 0.068
-
-
 def load_params(config_path):
     data = yaml.safe_load(Path(config_path).read_text())
     return data['tag_global_localizer']['ros__parameters']
@@ -112,28 +100,11 @@ def write_model_sdf(params, output_dir, plate_size, headings):
     </link>
 ''')
 
-    plugin = f'''
-    <plugin filename="libshuttle_activity_system.so"
-            name="scrobot_simulation::ShuttleActivitySystem">
-      <robot_model>scrobot</robot_model>
-      <update_rate>{SHUTTLE_ACTIVITY_UPDATE_RATE:.1f}</update_rate>
-      <activation_distance>{SHUTTLE_ACTIVATION_DISTANCE:.2f}</activation_distance>
-      <freeze_distance>{SHUTTLE_FREEZE_DISTANCE:.2f}</freeze_distance>
-      <settle_time>{SHUTTLE_SETTLE_TIME:.2f}</settle_time>
-      <ground_truth_topic>{SHUTTLE_GROUND_TRUTH_TOPIC}</ground_truth_topic>
-      <collected_topic>{SHUTTLE_COLLECTED_TOPIC}</collected_topic>
-      <pickup_offset_x>{PICKUP_OFFSET_X:.3f}</pickup_offset_x>
-      <pickup_half_length>{PICKUP_HALF_LENGTH:.3f}</pickup_half_length>
-      <pickup_half_width>{PICKUP_HALF_WIDTH:.3f}</pickup_half_width>
-      <shuttle_collision_radius>{SHUTTLE_COLLISION_RADIUS:.3f}</shuttle_collision_radius>
-    </plugin>
-'''
-
     sdf = f'''<?xml version="1.0"?>
 <sdf version="1.9">
   <model name="court_apriltags">
     <static>true</static>
-{plugin}{''.join(links)}
+{''.join(links)}
   </model>
 </sdf>
 '''
@@ -171,13 +142,7 @@ def main():
     print(f'  detector edge size: {tag_edge_size:.6f} m')
     print(f'  full rendered plate: {plate_size:.6f} m')
     print(f'  inward angle: {float(params["inward_angle_deg"]):.1f} deg')
-    print(
-        f'  shuttle: activate={SHUTTLE_ACTIVATION_DISTANCE:.2f} m, '
-        f'freeze={SHUTTLE_FREEZE_DISTANCE:.2f} m, '
-        f'pickup x={PICKUP_OFFSET_X:.3f} m, '
-        f'half-size=({PICKUP_HALF_LENGTH:.3f}, {PICKUP_HALF_WIDTH:.3f}) m, '
-        f'collision-radius={SHUTTLE_COLLISION_RADIUS:.3f} m'
-    )
+
 
 
 if __name__ == '__main__':
