@@ -4,11 +4,25 @@ Updated for the current ROS 2 Jazzy / Gazebo Harmonic stack.
 
 ## scrobot_control
 
-### `wasd_teleop`
-Manual keyboard driving utility.
+### `manual_mode_manager`
+Production AUTO/MANUAL arbitration state owner.
 
-- Publishes: `/cmd_vel_manual`
-- Purpose: operator driving and low-level testing.
+- Service: `/control/set_manual_mode` (`std_srvs/srv/SetBool`)
+- Publishes latched state on `/control/manual_mode` and `/control/mode`.
+- Input: `/cmd_vel_manual_input`.
+- Output: `/cmd_vel_manual`.
+- While MANUAL is active, keeps the high-priority manual path alive with the
+  latest operator command or zero so autonomous motion cannot leak through
+  between keyboard commands.
+
+### `manual_teleop`
+Interactive keyboard client for the manual-mode manager.
+
+- `M`: enter MANUAL.
+- `R`: return to AUTO.
+- `W/S/A/D`: drive.
+- Publishes only to `/cmd_vel_manual_input`; it does not own the final command
+  mux directly.
 
 ### `diff_drive_controller`
 ROS 2 control differential-drive controller.
@@ -67,6 +81,10 @@ initial tag approach
 
 The sweep checkpoint stores both robot pose and sweep-path progress so a local
 collection diversion does not lose coverage progress.
+
+The runtime manager also observes `/control/manual_mode`. MANUAL cancels the
+active autonomous action and enters `PAUSED`. AUTO returns to the saved
+interrupt checkpoint when required, then recreates the saved autonomous phase.
 
 ### `shuttle_collection_filter`
 Mission-specific shuttle eligibility filter.
@@ -153,7 +171,10 @@ Default gate is 0.30 m, smoothing alpha 0.50, stale timeout 1.50 s. Exact measur
 ## scrobot_simulation
 
 ### `shuttle_activity_system`
-Gazebo system plugin that manages shuttle dynamic/static behavior and publishes shuttle-only ground truth.
+Gazebo world plugin that publishes shuttle-only ground truth and removes a
+shuttle when its geometry intersects the collector pickup envelope. Shuttle
+models remain static after spawning so simplified feather collisions cannot
+produce nonphysical rolling.
 
 Gazebo output:
 
@@ -166,7 +187,26 @@ ROS bridge output:
 This stream is separate from normal robot ground truth used by evaluation.
 
 ### Shuttle spawner
-Spawns `single`, `random`, `cluster`, or `mixed` shuttle distributions from `shuttle_spawn.yaml`.
+Spawns `single`, `random`, `cluster`, or `mixed` distributions using one
+detailed shuttle model suitable for future YOLO-on-simulated-RGB testing.
+
+## scrobot_debug
+
+### `telemetry_monitor`
+Debug-only consolidated terminal monitor.
+
+- Output topic: `/debug/telemetry`.
+- Observes AUTO/MANUAL state, mission state, local collection phase,
+  perception counts, shuttle ground truth/collection events, odometry versus
+  Gazebo truth, and selected `/rosout` streams.
+
+### `shuttle_sim_monitor`
+Measures shuttle drift and collector-envelope clearance during isolated shuttle
+physics/collision tests.
+
+### `court_visualizer`
+RViz MarkerArray-only court visualization. This node and RViz launch ownership
+were moved out of `scrobot_simulation`.
 
 ## scrobot_evaluation
 
