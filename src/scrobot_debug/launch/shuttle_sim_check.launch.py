@@ -11,12 +11,11 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     simulation_pkg = get_package_share_directory('scrobot_simulation')
-    control_pkg = get_package_share_directory('scrobot_control')
     debug_pkg = get_package_share_directory('scrobot_debug')
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     rviz = LaunchConfiguration('rviz')
-    start_control = LaunchConfiguration('start_control')
+    start_drive_base = LaunchConfiguration('start_drive_base')
     start_shuttle = LaunchConfiguration('start_shuttle')
     start_monitor = LaunchConfiguration('start_monitor')
 
@@ -47,14 +46,32 @@ def generate_launch_description():
         }.items(),
     )
 
-    control = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(control_pkg, 'launch', 'control_stack.launch.py')
-        ),
-        launch_arguments={
-            'use_sim_time': use_sim_time,
-        }.items(),
-        condition=IfCondition(start_control),
+    # Shuttle physics tests need only the low-level diff-drive controllers.
+    # Do not start the production command pipeline here: collision monitoring
+    # would intentionally stop the robot before the collector can contact a
+    # shuttle, which would invalidate this collision-boundary test.
+    joint_state_broadcaster = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=[
+            'joint_state_broadcaster',
+            '--controller-manager',
+            '/controller_manager',
+        ],
+        output='screen',
+        condition=IfCondition(start_drive_base),
+    )
+
+    diff_drive_controller = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=[
+            'diff_drive_controller',
+            '--controller-manager',
+            '/controller_manager',
+        ],
+        output='screen',
+        condition=IfCondition(start_drive_base),
     )
 
     spawn_shuttle = IncludeLaunchDescription(
@@ -118,10 +135,13 @@ def generate_launch_description():
             description='Launch RViz with the simulation.',
         ),
         DeclareLaunchArgument(
-            'start_control',
+            'start_drive_base',
             default_value='true',
             choices=['true', 'false'],
-            description='Start ros2_control and the command pipeline.',
+            description=(
+                'Spawn only joint_state_broadcaster and diff_drive_controller '
+                'for direct shuttle collision testing.'
+            ),
         ),
         DeclareLaunchArgument(
             'start_shuttle',
@@ -164,7 +184,10 @@ def generate_launch_description():
         simulation,
         rviz_debug,
         telemetry,
-        TimerAction(period=control_delay, actions=[control]),
+        TimerAction(
+            period=control_delay,
+            actions=[joint_state_broadcaster, diff_drive_controller],
+        ),
         TimerAction(period=shuttle_delay, actions=[spawn_shuttle]),
         TimerAction(period=monitor_delay, actions=[monitor]),
     ])
