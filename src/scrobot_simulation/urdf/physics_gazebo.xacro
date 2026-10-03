@@ -6,15 +6,16 @@
     params="drive_contact_mu:=5.0 caster_contact_mu:=0.05">
 
     <!-- ============================================================ -->
-    <!-- Physical-width drive-wheel contact tuned for stable traction -->
+    <!-- Effective drive-wheel contact tuned for stable traction       -->
     <!-- ============================================================ -->
     <!--
-      Normal simulation keeps the real 30 mm tire collision width.
-      Gazebo previously showed excessive wheel skid with ordinary
-      contact settings, so both contact directions use a deliberately
-      elevated friction coefficient while force-dependent slip remains
-      disabled. These are simulation-stability values, not measured
-      tire/material coefficients.
+      The physical tire remains 30 mm wide in scrobot_description, while
+      scrobot_simulation uses a 1 mm effective collision/contact width. A flat
+      30 mm Gazebo cylinder was measured to turn about 5.6% too tightly on a
+      nominal 1 m radius arc; the 1 mm contact approximation reduced that bias
+      to about 0.6%. Both friction directions use a deliberately elevated
+      coefficient while force-dependent slip remains disabled. These are
+      simulation-stability values, not measured tire/material coefficients.
 
       fdir1 follows the wheel rolling direction (link +X).
     -->
