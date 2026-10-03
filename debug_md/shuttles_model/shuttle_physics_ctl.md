@@ -57,8 +57,16 @@ scrobot_debug shuttle_physics_ctl
 scrobot_debug shuttle_physics_monitor
 scrobot_debug shuttle_impulse_test
 scrobot_debug spawn_shuttle_physics
-scrobot_debug shuttle_sim_monitor
 ```
+
+The physics harness now spawns the production shuttle directly from:
+
+```text
+scrobot_simulation/models/shuttle/model.sdf
+```
+
+so the isolated test and mission simulation use exactly the same dynamic
+physics model.
 
 ## 3. Start the persistent shuttle physics world
 
