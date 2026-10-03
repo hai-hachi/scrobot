@@ -79,12 +79,12 @@ def main():
     spacing = max(0.09, args.spacing)
     workers = max(1, min(args.workers, count))
 
-    debug_share = get_package_share_directory('scrobot_debug')
+    simulation_share = get_package_share_directory('scrobot_simulation')
     model_file = os.path.join(
-        debug_share,
+        simulation_share,
         'models',
         'shuttle',
-        'model_physics_test.sdf',
+        'model.sdf',
     )
     if not os.path.isfile(model_file):
         raise FileNotFoundError(model_file)
