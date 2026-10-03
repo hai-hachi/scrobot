@@ -176,23 +176,29 @@ Default gate is 0.30 m, smoothing alpha 0.50, stale timeout 1.50 s. Exact measur
 
 ### `shuttle_manager_system`
 Gazebo world plugin that publishes shuttle-only ground truth and removes a
-shuttle when its geometry intersects the collector pickup envelope. Shuttle
-models remain static after spawning so simplified feather collisions cannot
-produce nonphysical rolling.
+shuttle when its orientation-aware collection-center point enters the pickup
+rectangle centered on the robot's actual `collector_link`.
 
-Gazebo output:
+The production shuttle is dynamic. Its detailed visual mesh is used for camera
+rendering, while the accepted octagonal collision mesh provides court/robot
+physics.
+
+Gazebo outputs:
 
 - `/evaluation/shuttle_ground_truth_gz` (`gz.msgs.Pose_V`)
+- `/evaluation/shuttle_collected_gz` (`gz.msgs.Pose_V`)
 
-ROS bridge output:
+ROS bridge outputs:
 
 - `/evaluation/shuttle_ground_truth` (`geometry_msgs/msg/PoseArray`)
+- `/evaluation/shuttle_collected` (`geometry_msgs/msg/PoseArray`)
 
-This stream is separate from normal robot ground truth used by evaluation.
+These streams are separate from robot ground truth used by evaluation.
 
 ### Shuttle spawner
-Spawns `single`, `random`, `cluster`, or `mixed` distributions using one
-detailed shuttle model suitable for future YOLO-on-simulated-RGB testing.
+Spawns `single`, `random`, `cluster`, or `mixed` distributions using the
+same production dynamic shuttle model. Normal spawns start at z = 0.050 m so
+the shuttle settles naturally onto the court.
 
 ## scrobot_debug
 
