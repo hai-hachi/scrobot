@@ -29,6 +29,7 @@ SPACE : stop
 Q     : quit teleop (robot stays in MANUAL if MANUAL is active)
 
 Manual driving is accepted only after M succeeds.
+Normal MANUAL commands still pass through velocity smoothing and collision monitoring.
 Use R explicitly when you want autonomous operation to resume.
 ------------------------------------------------
 """
