@@ -166,8 +166,9 @@
         </visual>
 
         <visual name="badminton_mat_visual">
-          <pose>0 0 0.011 0 0 0</pose>
-          <geometry><box><size>15.4 7.2 0.003</size></box></geometry>
+          <!-- Top surface is z=0 so the white court lines remain visible above it. -->
+          <pose>0 0 0.0095 0 0 0</pose>
+          <geometry><box><size>15.4 7.2 0.001</size></box></geometry>
           <material>
             <ambient>0.045 0.265 0.145 1</ambient>
             <diffuse>0.055 0.345 0.185 1</diffuse>
