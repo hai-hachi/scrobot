@@ -120,14 +120,14 @@ def generate_launch_description():
             choices=['sideways', 'upright'],
         ),
         DeclareLaunchArgument('workers', default_value='8'),
-        DeclareLaunchArgument('spawn_delay', default_value='1.5'),
+        DeclareLaunchArgument('spawn_delay', default_value='5.0'),
 
         DeclareLaunchArgument(
             'apply_impulse',
             default_value='false',
             choices=['true', 'false'],
         ),
-        DeclareLaunchArgument('impulse_delay', default_value='3.0'),
+        DeclareLaunchArgument('impulse_delay', default_value='5.0'),
         DeclareLaunchArgument('impulse_duration', default_value='0.05'),
         DeclareLaunchArgument('force_x', default_value='0.0'),
         DeclareLaunchArgument('force_y', default_value='0.03'),
