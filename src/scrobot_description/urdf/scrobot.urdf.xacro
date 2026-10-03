@@ -31,7 +31,7 @@
   <xacro:property name="wheel_collision_width" value="$(arg wheel_collision_width)"/>
 
   <xacro:property name="base_front_x" value="0.325"/>
-  <xacro:property name="base_rear_x" value="-0.450"/>
+  <xacro:property name="base_rear_x" value="-0.420"/>
   <xacro:property name="base_left_y" value="0.225"/>
   <xacro:property name="base_right_y" value="-0.225"/>
 
