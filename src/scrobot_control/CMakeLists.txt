@@ -23,7 +23,8 @@ install(
 
 install(
   PROGRAMS
-    scripts/wasd_teleop.py
+    scripts/manual_mode_manager.py
+    scripts/manual_teleop.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
