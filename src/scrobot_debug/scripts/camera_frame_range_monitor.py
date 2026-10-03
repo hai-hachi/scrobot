@@ -181,6 +181,7 @@ class CameraFrameRangeMonitor(Node):
         self.robot_pose = (
             float(p.x),
             float(p.y),
+            float(p.z),
             yaw_from_quaternion(q),
         )
 
@@ -300,7 +301,7 @@ class CameraFrameRangeMonitor(Node):
         )
 
     def _world_to_base(self, p):
-        rx, ry, yaw = self.robot_pose
+        rx, ry, rz, yaw = self.robot_pose
         dx = p[0] - rx
         dy = p[1] - ry
         c = math.cos(yaw)
@@ -308,7 +309,7 @@ class CameraFrameRangeMonitor(Node):
         return (
             c * dx + s * dy,
             -s * dx + c * dy,
-            p[2],
+            p[2] - rz,
         )
 
     def _base_to_optical(self, p, frame):
