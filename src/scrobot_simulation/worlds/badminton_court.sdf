@@ -59,8 +59,8 @@
       local +Z from the shuttle model origin. The pickup rectangle is
       300 mm wide x 60 mm long and centered directly on collector_link.
     -->
-    <plugin filename="libshuttle_activity_system.so"
-            name="scrobot_simulation::ShuttleActivitySystem">
+    <plugin filename="libshuttle_manager_system.so"
+            name="scrobot_simulation::ShuttleManagerSystem">
       <robot_model>scrobot</robot_model>
       <update_rate>30.0</update_rate>
       <ground_truth_topic>/evaluation/shuttle_ground_truth_gz</ground_truth_topic>
