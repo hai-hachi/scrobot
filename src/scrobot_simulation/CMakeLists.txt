@@ -49,12 +49,6 @@ install(
 
 install(
   PROGRAMS
-    scripts/generate_court_apriltags.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-install(
-  PROGRAMS
     scripts/spawn_shuttles.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME spawn_shuttles
@@ -102,13 +96,19 @@ install(
   DIRECTORY
     launch
     config
-    models
     worlds
     urdf
   DESTINATION share/${PROJECT_NAME}
 )
 
-# Generated files overwrite the checked-in preview model in the install space.
+# Install only the authored production shuttle model from source. Court
+# AprilTags are generated from court_landmarks.yaml below, so there is no
+# second checked-in copy that can drift from localization.
+install(
+  DIRECTORY models/shuttle
+  DESTINATION share/${PROJECT_NAME}/models
+)
+
 install(
   DIRECTORY "${GENERATED_TAG_MODEL_DIR}/"
   DESTINATION "share/${PROJECT_NAME}/models/court_apriltags"
