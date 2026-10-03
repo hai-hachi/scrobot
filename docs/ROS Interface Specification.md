@@ -81,7 +81,6 @@ fallback_to_latest_tf true
 ## Simulation-only truth
 
 - `/evaluation/ground_truth_odom`: `nav_msgs/msg/Odometry`; primary robot truth for evaluation.
-- `/evaluation/ground_truth_tf`: `tf2_msgs/msg/TFMessage`; generic Gazebo dynamic-pose bridge, evaluation/debug only.
 - `/evaluation/shuttle_ground_truth_gz`: `gz.msgs.Pose_V`; shuttle-only Gazebo truth.
 - `/evaluation/shuttle_ground_truth`: `geometry_msgs/msg/PoseArray`; shuttle-only ROS truth consumed only by fake perception.
 
