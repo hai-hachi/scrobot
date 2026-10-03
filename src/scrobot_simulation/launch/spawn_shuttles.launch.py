@@ -43,6 +43,10 @@ def generate_launch_description():
             'visual',
             default_value='detail',
             choices=['detail', 'fast'],
+            description=(
+                'Compatibility argument. The detailed shuttle model is always '
+                'used so perception and mission tests share identical physics.'
+            ),
         ),
         DeclareLaunchArgument(
             'batch',
