@@ -38,7 +38,7 @@ def model_name(prefix, index):
 def delete_model(world, name, ignore_missing=False):
     cmd = [
         'gz', 'service',
-        '-s', f'/world/{world}/remove',
+        '-s', f'/world/{world}/remove/blocking',
         '--reqtype', 'gz.msgs.Entity',
         '--reptype', 'gz.msgs.Boolean',
         '--timeout', '3000',
