@@ -137,13 +137,6 @@ Purpose: robot pose reference for simulation evaluation and fake-perception geom
 
 This remains the primary truth source used by `scrobot_evaluation` local-odometry tests.
 
-### `/evaluation/ground_truth_tf`
-Type: `tf2_msgs/msg/TFMessage`
-
-Source: Gazebo dynamic pose bridge.
-
-Purpose: evaluation/debug only. Gazebo entity names may be lost by the `Pose_V -> TFMessage` bridge and therefore this topic is not used to identify shuttles.
-
 ### `/evaluation/shuttle_ground_truth_gz`
 Gazebo type: `gz.msgs.Pose_V`
 
