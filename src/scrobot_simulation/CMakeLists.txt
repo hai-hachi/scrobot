@@ -6,10 +6,6 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(visualization_msgs REQUIRED)
 find_package(gz-plugin2 REQUIRED COMPONENTS register)
 find_package(gz-sim8 REQUIRED)
 find_package(gz-msgs10 REQUIRED)
@@ -28,19 +24,6 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-add_executable(
-  court_visualizer
-  src/court_visualizer.cpp
-)
-
-ament_target_dependencies(
-  court_visualizer
-  rclcpp
-  geometry_msgs
-  std_msgs
-  visualization_msgs
-)
-
 add_library(
   shuttle_activity_system
   SHARED
@@ -56,12 +39,6 @@ target_link_libraries(
     gz-sim8::gz-sim8
     gz-msgs${GZ_MSGS_VER}::gz-msgs${GZ_MSGS_VER}
     gz-transport${GZ_TRANSPORT_VER}::gz-transport${GZ_TRANSPORT_VER}
-)
-
-install(
-  TARGETS
-    court_visualizer
-  DESTINATION lib/${PROJECT_NAME}
 )
 
 install(
