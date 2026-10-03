@@ -141,6 +141,59 @@ velocity smoothing, and collision monitoring. Use it only for controlled
 simulation and bench tests such as wheel direction, encoder response, turning
 geometry, or collector collision checks.
 
+## Shuttle physics check
+
+Keep one Gazebo physics world running and manipulate shuttle models repeatedly
+without restarting the simulator:
+
+```bash
+ros2 launch scrobot_debug shuttle_physics_check.launch.py
+```
+
+The launch starts an empty isolated physics world, the shuttle-physics monitor,
+and the central telemetry relay. In another terminal:
+
+```bash
+# Spawn one side-resting shuttle after the default 5 s countdown.
+ros2 run scrobot_debug shuttle_physics_ctl spawn
+
+# Delete it without stopping Gazebo.
+ros2 run scrobot_debug shuttle_physics_ctl delete
+
+# Delete and recreate it. The new run gets fresh monitor state.
+ros2 run scrobot_debug shuttle_physics_ctl respawn
+
+# Apply the default test impulse after a 5 s countdown.
+ros2 run scrobot_debug shuttle_physics_ctl impulse
+
+# Stronger example.
+ros2 run scrobot_debug shuttle_physics_ctl impulse \
+  --force-y 0.06 --duration 0.05
+
+# Spawn many shuttles for RTF/performance testing.
+ros2 run scrobot_debug shuttle_physics_ctl spawn \
+  --count 50 --spacing 0.15 --delay 0
+
+# Delete the same batch.
+ros2 run scrobot_debug shuttle_physics_ctl delete --count 50
+```
+
+The default spawn and impulse delays are both 5 s. Use `--delay 0` when an
+immediate action is preferred.
+
+Monitor output is relayed through:
+
+```text
+/debug/shuttle_physics
+/debug/telemetry
+```
+
+so a clean telemetry-only terminal can use:
+
+```bash
+ros2 topic echo /debug/telemetry
+```
+
 ## Shuttle simulation check
 
 Launch:
