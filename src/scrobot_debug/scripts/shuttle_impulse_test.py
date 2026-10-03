@@ -15,6 +15,7 @@ class ShuttleImpulseTest(Node):
 
         self.declare_parameter('world', 'shuttle_physics_test')
         self.declare_parameter('model_name', 'shuttle_physics_000')
+        self.declare_parameter('link_name', 'shuttle_link')
         self.declare_parameter('delay', 2.0)
         self.declare_parameter('duration', 0.05)
         self.declare_parameter('force_x', 0.0)
@@ -26,6 +27,8 @@ class ShuttleImpulseTest(Node):
 
         self.world = str(self.get_parameter('world').value)
         self.model_name = str(self.get_parameter('model_name').value)
+        self.link_name = str(self.get_parameter('link_name').value)
+        self.entity_name = f'{self.model_name}::{self.link_name}'
         self.delay = max(0.0, float(self.get_parameter('delay').value))
         self.duration = max(0.001, float(self.get_parameter('duration').value))
 
@@ -50,7 +53,7 @@ class ShuttleImpulseTest(Node):
         impulse = tuple(component * self.duration for component in self.force)
         self.get_logger().info(
             'Impulse test armed: '
-            f'model={self.model_name}, force={self.force} N, '
+            f'link={self.entity_name}, force={self.force} N, '
             f'duration={self.duration:.3f} s, '
             f'nominal impulse=({impulse[0]:.6f}, '
             f'{impulse[1]:.6f}, {impulse[2]:.6f}) N*s.'
@@ -63,7 +66,7 @@ class ShuttleImpulseTest(Node):
     def _publish_wrench(self):
         topic = f'/world/{self.world}/wrench/persistent'
         payload = (
-            f'entity: {{name: "{self.model_name}", type: MODEL}}, '
+            f'entity: {{name: "{self.entity_name}", type: LINK}}, '
             'wrench: {'
             f'force: {{x: {self.force[0]}, y: {self.force[1]}, z: {self.force[2]}}}, '
             f'torque: {{x: {self.torque[0]}, y: {self.torque[1]}, z: {self.torque[2]}}}'
@@ -90,7 +93,7 @@ class ShuttleImpulseTest(Node):
 
     def _clear_wrench(self):
         topic = f'/world/{self.world}/wrench/clear'
-        payload = f'name: "{self.model_name}", type: MODEL'
+        payload = f'name: "{self.entity_name}", type: LINK'
         result = subprocess.run(
             [
                 'gz', 'topic',
