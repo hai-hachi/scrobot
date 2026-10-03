@@ -5,10 +5,12 @@ visualization, and terminal-friendly telemetry.
 
 Production behavior stays in the package that owns it:
 
-- `scrobot_control`: command arbitration, manual mode manager, manual teleop
+- `scrobot_control`: command arbitration, manual mode manager, safe manual teleop
 - `scrobot_mission`: autonomous mission state machine
 - `scrobot_simulation`: Gazebo runtime, world, sensors, shuttle models/plugins
-- `scrobot_debug`: test composition and observation only
+- `scrobot_debug`: test composition, telemetry, visualization, and unsafe/raw test tools
+
+Production packages must never depend on `scrobot_debug`.
 
 A debug launch may include nodes or launch files from any other ROS 2 package.
 The debug package therefore starts all dependencies required by each test
@@ -62,14 +64,18 @@ Q     quit teleop; does not silently resume AUTO
 ```
 
 `manual_mode_manager` is part of the normal control stack. While MANUAL is
-active it continuously owns the high-priority manual mux input, publishing
-either the latest operator command or zero. Autonomous commands therefore
-cannot leak through between key presses.
+active it continuously owns the high-priority control-mode mux input,
+publishing either the latest operator command or zero. Autonomous commands
+therefore cannot leak through between key presses.
+
+The selected AUTO or MANUAL command then passes through the same velocity
+smoother and collision monitor before reaching the diff-drive controller.
 
 The mission manager subscribes to `/control/manual_mode`. When MANUAL is
 selected it cancels the current autonomous action and stores its mission
-context. When AUTO is restored it returns to the interruption checkpoint when
-needed, then resumes the saved autonomous phase.
+context. When AUTO is restored, displacement smaller than 0.15 m and 10 deg
+resumes the saved phase directly. Larger displacement returns to the saved
+interruption checkpoint with Nav2 before the phase resumes.
 
 ## Autonomous/manual override check
 
@@ -115,6 +121,26 @@ ros2 launch scrobot_debug autonomy_manual_override_check.launch.py \
   spawn_shuttles:=true shuttle_mode:=mixed shuttle_count:=20
 ```
 
+## Raw drive debug check
+
+This is intentionally separate from production MANUAL mode.
+
+```bash
+ros2 launch scrobot_debug raw_drive_check.launch.py
+```
+
+Then in a real terminal:
+
+```bash
+ros2 run scrobot_debug debug_raw_teleop.py
+```
+
+`debug_raw_teleop.py` publishes directly to
+`/diff_drive_controller/cmd_vel`. It bypasses AUTO/MANUAL arbitration,
+velocity smoothing, and collision monitoring. Use it only for controlled
+simulation and bench tests such as wheel direction, encoder response, turning
+geometry, or collector collision checks.
+
 ## Shuttle simulation check
 
 Launch:
@@ -131,13 +157,18 @@ Default test layout:
 - ros2_control and command pipeline enabled
 - shuttle ground-truth/collision monitor enabled
 
-Drive from another terminal:
+The shuttle collision test deliberately starts only the low-level
+`joint_state_broadcaster` and `diff_drive_controller`. It does **not** start
+the production command pipeline, because collision monitoring should not stop
+the robot before the collector reaches the shuttle during this particular test.
+
+Drive from another terminal with the debug-only raw teleop:
 
 ```bash
-ros2 run scrobot_control manual_teleop.py
+ros2 run scrobot_debug debug_raw_teleop.py
 ```
 
-Press `M` before driving. The shuttle monitor reports:
+The shuttle monitor reports:
 
 - shuttle ground-truth count
 - initial single-shuttle position
