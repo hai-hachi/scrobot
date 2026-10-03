@@ -76,7 +76,8 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': use_sim_time,
             'center_offset_z': 0.045,
-            'pickup_offset_x': 0.165,
+            'base_frame': 'base_footprint',
+            'collector_frame': 'collector_link',
             'pickup_half_length': 0.030,
             'pickup_half_width': 0.150,
             'report_rate': 2.0,
