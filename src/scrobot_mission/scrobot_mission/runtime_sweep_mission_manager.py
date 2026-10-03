@@ -44,6 +44,8 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         self.declare_parameter('accept_rviz_goal_topic', True)
         self.declare_parameter('rviz_goal_topic', '/goal_pose')
         self.declare_parameter('manual_mode_topic', '/control/manual_mode')
+        self.declare_parameter('manual_resume_return_distance', 0.15)
+        self.declare_parameter('manual_resume_return_yaw_deg', 10.0)
 
         self.join_acceptance_distance = float(
             self.get_parameter('join_acceptance_distance').value
@@ -68,6 +70,16 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         )
         self.manual_mode_topic = str(
             self.get_parameter('manual_mode_topic').value
+        )
+        self.manual_resume_return_distance = max(
+            0.0,
+            float(self.get_parameter('manual_resume_return_distance').value),
+        )
+        self.manual_resume_return_yaw = math.radians(
+            max(
+                0.0,
+                float(self.get_parameter('manual_resume_return_yaw_deg').value),
+            )
         )
 
         self.test_goal_pose = None
@@ -255,16 +267,22 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             MissionState.RESTORE_SWEEP_HEADING,
             MissionState.LOCAL_COLLECT,
         ) and self.manual_checkpoint_pose is not None:
+            if self._manual_checkpoint_requires_return():
+                self.get_logger().info(
+                    'Returning to the manual-interrupt checkpoint before '
+                    f'resuming {resume_state.name}.'
+                )
+                self._set_state(MissionState.RETURN_TO_SWEEP)
+                self._send_navigation(
+                    copy.deepcopy(self.manual_checkpoint_pose),
+                    'manual_resume_checkpoint',
+                )
+                return
+
             self.get_logger().info(
-                'Returning to the manual-interrupt checkpoint before '
-                f'resuming {resume_state.name}.'
+                'Manual displacement stayed inside the resume tolerance; '
+                f'resuming {resume_state.name} without a Nav2 return.'
             )
-            self._set_state(MissionState.RETURN_TO_SWEEP)
-            self._send_navigation(
-                copy.deepcopy(self.manual_checkpoint_pose),
-                'manual_resume_checkpoint',
-            )
-            return
 
         if self._resume_saved_manual_phase():
             return
@@ -283,6 +301,51 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             return
 
         self._fail(f'Unsupported manual resume state: {resume_state.name}')
+
+    @staticmethod
+    def _yaw_from_pose(pose):
+        q = pose.pose.orientation
+        return math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y),
+            1.0 - 2.0 * (q.y * q.y + q.z * q.z),
+        )
+
+    @staticmethod
+    def _angle_error(a, b):
+        return math.atan2(math.sin(a - b), math.cos(a - b))
+
+    def _manual_checkpoint_requires_return(self):
+        if self.manual_checkpoint_pose is None:
+            return False
+
+        pose_info = self._robot_pose()
+        if pose_info is None:
+            # Be conservative if TF is temporarily unavailable.
+            return True
+
+        current_pose, current_yaw = pose_info
+        checkpoint = self.manual_checkpoint_pose
+
+        dx = current_pose.pose.position.x - checkpoint.pose.position.x
+        dy = current_pose.pose.position.y - checkpoint.pose.position.y
+        distance = math.hypot(dx, dy)
+
+        checkpoint_yaw = self._yaw_from_pose(checkpoint)
+        yaw_error = abs(self._angle_error(current_yaw, checkpoint_yaw))
+
+        self.get_logger().info(
+            'Manual resume displacement: '
+            f'distance={distance:.3f} m, '
+            f'yaw={math.degrees(yaw_error):.1f} deg '
+            f'(return thresholds '
+            f'{self.manual_resume_return_distance:.3f} m / '
+            f'{math.degrees(self.manual_resume_return_yaw):.1f} deg).'
+        )
+
+        return (
+            distance > self.manual_resume_return_distance
+            or yaw_error > self.manual_resume_return_yaw
+        )
 
     def _resume_saved_manual_phase(self):
         resume_state = self.manual_resume_state
