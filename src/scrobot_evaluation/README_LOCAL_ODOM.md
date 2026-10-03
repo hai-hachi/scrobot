@@ -11,7 +11,7 @@ This overlay extends the existing `scrobot_evaluation` package with an isolated 
 - `odom -> base_footprint` TF consistency
 - `/joint_states` left/right wheel feedback
 - requested `/cmd_vel_manual` versus final `/diff_drive_controller/cmd_vel`
-- Gazebo `/evaluation/ground_truth_tf` as an evaluation-only reference
+- Gazebo `/evaluation/ground_truth_odom` as the evaluation-only robot pose reference
 - message rate, jitter, and header age for local-odometry topics
 
 No AprilTag/map/global-localization data are used in the local-odom metrics.
