@@ -41,12 +41,12 @@ public:
     this->pickupOffsetX_ = _sdf->Get<double>("pickup_offset_x", this->pickupOffsetX_).first;
     this->pickupHalfLength_ = _sdf->Get<double>("pickup_half_length", this->pickupHalfLength_).first;
     this->pickupHalfWidth_ = _sdf->Get<double>("pickup_half_width", this->pickupHalfWidth_).first;
-    this->shuttleCollisionRadius_ = _sdf->Get<double>("shuttle_collision_radius", this->shuttleCollisionRadius_).first;
+    this->shuttleCenterOffsetZ_ = _sdf->Get<double>(
+      "shuttle_center_offset_z", this->shuttleCenterOffsetZ_).first;
 
     if (this->updateRate_ <= 0.0) this->updateRate_ = 10.0;
     if (this->pickupHalfLength_ <= 0.0) this->pickupHalfLength_ = 0.030;
     if (this->pickupHalfWidth_ <= 0.0) this->pickupHalfWidth_ = 0.150;
-    if (this->shuttleCollisionRadius_ < 0.0) this->shuttleCollisionRadius_ = 0.0;
 
     this->updatePeriod_ = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
       std::chrono::duration<double>(1.0 / this->updateRate_));
@@ -100,19 +100,29 @@ public:
           return true;
 
         const auto shuttlePose = gz::sim::worldPose(_entity, _ecm);
-        const double worldDx = shuttlePose.Pos().X() - robotPose.Pos().X();
-        const double worldDy = shuttlePose.Pos().Y() - robotPose.Pos().Y();
+
+        // Collection reference point:
+        //   shuttle model origin + 45 mm along the shuttle's local +Z axis.
+        // This point follows the shuttle orientation and approximates the
+        // geometric middle of the 90 mm shuttle body.
+        const auto shuttleCenterOffsetWorld = shuttlePose.Rot().RotateVector(
+          gz::math::Vector3d(0.0, 0.0, this->shuttleCenterOffsetZ_));
+        const auto shuttleCollectCenter =
+          shuttlePose.Pos() + shuttleCenterOffsetWorld;
+
+        const double worldDx = shuttleCollectCenter.X() - robotPose.Pos().X();
+        const double worldDy = shuttleCollectCenter.Y() - robotPose.Pos().Y();
         const double localX = cosYaw * worldDx + sinYaw * worldDy;
         const double localY = -sinYaw * worldDx + cosYaw * worldDy;
 
-        const double dx = std::max(
-          std::abs(localX - this->pickupOffsetX_) - this->pickupHalfLength_, 0.0);
-        const double dy = std::max(
-          std::abs(localY) - this->pickupHalfWidth_, 0.0);
-        const bool touchesPickupZone =
-          dx * dx + dy * dy <= this->shuttleCollisionRadius_ * this->shuttleCollisionRadius_;
+        // A shuttle is collected only when its collection-center point is
+        // inside the 300 mm x 60 mm rectangle centered at collector_link:
+        //   x = +0.165 m, y = 0 in the robot frame.
+        const bool centerInsidePickupZone =
+          std::abs(localX - this->pickupOffsetX_) <= this->pickupHalfLength_ &&
+          std::abs(localY) <= this->pickupHalfWidth_;
 
-        if (touchesPickupZone)
+        if (centerInsidePickupZone)
         {
           auto *collectedPose = collectedMsg.add_pose();
           this->FillPoseMessage(*collectedPose, _entity, _nameComp->Data(), shuttlePose);
@@ -123,11 +133,9 @@ public:
         auto *poseMsg = shuttleGroundTruthMsg.add_pose();
         this->FillPoseMessage(*poseMsg, _entity, _nameComp->Data(), shuttlePose);
 
-        // Shuttle models are intentionally static after spawning. This keeps the
-        // visible shuttle pose deterministic for perception tests and prevents
-        // nonphysical rolling caused by approximating the feather skirt with
-        // simple collision primitives. Collection is represented by intersection
-        // with the physical collector pickup envelope above.
+        // Ground truth always reports the actual shuttle model pose. The
+        // collection decision above is orientation-aware because it derives the
+        // collection-center point from the shuttle's local +Z axis.
         return true;
       });
 
@@ -176,7 +184,7 @@ private:
   double pickupOffsetX_{0.165};
   double pickupHalfLength_{0.030};
   double pickupHalfWidth_{0.150};
-  double shuttleCollisionRadius_{0.034};
+  double shuttleCenterOffsetZ_{0.045};
 
   std::chrono::steady_clock::duration updatePeriod_{};
   std::chrono::steady_clock::duration lastUpdate_{};
