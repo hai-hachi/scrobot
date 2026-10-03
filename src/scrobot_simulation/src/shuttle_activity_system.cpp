@@ -5,6 +5,7 @@
 #include <string>
 
 #include <gz/msgs/pose_v.pb.h>
+#include <gz/math/Vector3.hh>
 #include <gz/plugin/Register.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/System.hh>
