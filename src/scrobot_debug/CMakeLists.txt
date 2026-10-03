@@ -72,6 +72,13 @@ install(
 
 install(
   PROGRAMS
+    scripts/shuttle_physics_ctl.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME shuttle_physics_ctl
+)
+
+install(
+  PROGRAMS
     scripts/shuttle_physics_monitor.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME shuttle_physics_monitor
