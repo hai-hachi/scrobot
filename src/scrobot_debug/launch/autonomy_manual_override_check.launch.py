@@ -26,6 +26,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     rviz = LaunchConfiguration('rviz')
     spawn_shuttles = LaunchConfiguration('spawn_shuttles')
+    enable_magnetometer = LaunchConfiguration('enable_magnetometer')
     shuttle_mode = LaunchConfiguration('shuttle_mode')
     shuttle_count = LaunchConfiguration('shuttle_count')
 
@@ -45,7 +46,7 @@ def generate_launch_description():
             'x': robot_x,
             'y': robot_y,
             'yaw': robot_yaw,
-            'enable_magnetometer': 'false',
+            'enable_magnetometer': enable_magnetometer,
         },
     )
 
@@ -112,6 +113,15 @@ def generate_launch_description():
             'rviz',
             default_value='false',
             choices=['true', 'false'],
+        ),
+        DeclareLaunchArgument(
+            'enable_magnetometer',
+            default_value='true',
+            choices=['true', 'false'],
+            description=(
+                'Temporary compatibility switch: the current baseline '
+                'localization config still expects magnetometer input.'
+            ),
         ),
         DeclareLaunchArgument(
             'spawn_shuttles',
