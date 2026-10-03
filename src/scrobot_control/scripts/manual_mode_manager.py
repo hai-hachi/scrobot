@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import time
+
 import rclpy
 from geometry_msgs.msg import TwistStamped
 from rclpy.node import Node
@@ -88,7 +90,7 @@ class ManualModeManager(Node):
 
         self.last_manual_command = TwistStamped()
         self.last_manual_command.header.frame_id = 'base_link'
-        self.last_input_time = None
+        self.last_input_monotonic = None
 
         self.create_timer(1.0 / self.publish_rate, self._tick)
         self._publish_mode_state()
@@ -102,7 +104,7 @@ class ManualModeManager(Node):
 
     def _manual_input_cb(self, msg):
         self.last_manual_command = msg
-        self.last_input_time = self.get_clock().now()
+        self.last_input_monotonic = time.monotonic()
 
     def _set_manual_mode_cb(self, request, response):
         requested = bool(request.data)
@@ -113,7 +115,7 @@ class ManualModeManager(Node):
         # suppresses autonomous motion; leaving MANUAL never carries a stale
         # operator command into the mux timeout window.
         self._publish_manual(0.0, 0.0)
-        self.last_input_time = None
+        self.last_input_monotonic = None
         self.last_manual_command = TwistStamped()
         self.last_manual_command.header.frame_id = 'base_link'
 
@@ -149,11 +151,13 @@ class ManualModeManager(Node):
             return
 
         now = self.get_clock().now()
-        if self.last_input_time is None:
+        if self.last_input_monotonic is None:
             self._publish_manual(0.0, 0.0)
             return
 
-        age = (now - self.last_input_time).nanoseconds / 1.0e9
+        # Operator deadman timing deliberately uses wall-clock monotonic time.
+        # It must expire even if Gazebo /clock is paused.
+        age = time.monotonic() - self.last_input_monotonic
         if age > self.command_timeout:
             self._publish_manual(0.0, 0.0)
             return
