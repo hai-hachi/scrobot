@@ -46,12 +46,12 @@ map -> odom -> base_footprint -> base_link
 
 ## Simulation-only truth
 
-Simulation exposes three evaluation/perception references:
+Simulation exposes dedicated evaluation/perception references:
 
 ```text
 /evaluation/ground_truth_odom
-/evaluation/ground_truth_tf
 /evaluation/shuttle_ground_truth
+/evaluation/shuttle_collected
 ```
 
 `/evaluation/shuttle_ground_truth` is a shuttle-only `geometry_msgs/msg/PoseArray` generated from Gazebo. It exists only to drive fake shuttle perception and does not replace the odometry evaluation topics.
