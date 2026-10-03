@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="scrobot_gazebo_sensors">
+  <xacro:macro name="scrobot_gazebo_sensors" params="enable_magnetometer:=false">
 
     <!-- ====================================================== -->
     <!-- D435i combined IMU                                     -->
@@ -32,19 +32,17 @@
     <!-- Separate 5883L magnetometer                            -->
     <!-- ====================================================== -->
 
-    <gazebo reference="mag_link">
-      <sensor name="magnetometer_5883l" type="magnetometer">
-        <always_on>true</always_on>
-
-        <!-- Keep the previous project simulation rate. -->
-        <update_rate>50.0</update_rate>
-
-        <visualize>false</visualize>
-
-        <topic>/imu/mag</topic>
-        <gz_frame_id>mag_link</gz_frame_id>
-      </sensor>
-    </gazebo>
+    <xacro:if value="${enable_magnetometer}">
+      <gazebo reference="mag_link">
+        <sensor name="magnetometer_5883l" type="magnetometer">
+          <always_on>true</always_on>
+          <update_rate>50.0</update_rate>
+          <visualize>false</visualize>
+          <topic>/imu/mag</topic>
+          <gz_frame_id>mag_link</gz_frame_id>
+        </sensor>
+      </gazebo>
+    </xacro:if>
 
 
     <!-- ====================================================== -->
@@ -61,8 +59,13 @@
         <gz_frame_id>camera_color_optical_frame</gz_frame_id>
 
         <camera name="d435i_color_camera">
-          <!-- D435i RGB HFOV ~= 69.4 deg -->
-          <horizontal_fov>1.2112585008840648</horizontal_fov>
+          <!--
+            Use the measured robot RGB calibration rather than the generic
+            D435i datasheet FOV. At 1280 px width, fx=1024.2141 px gives
+            exactly 64 deg horizontal FOV. cx=640 and cy=360 are centered,
+            and the measured distortion coefficients are zero.
+          -->
+          <horizontal_fov>1.117010720035761</horizontal_fov>
 
           <camera_info_topic>/camera/color/camera_info</camera_info_topic>
 
