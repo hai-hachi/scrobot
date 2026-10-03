@@ -87,6 +87,8 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         self.manual_spin_purpose = ''
         self.manual_relocalize_tag_id = None
         self.manual_relocalize_initial = False
+        self.manual_checkpoint_pose = None
+        self.manual_checkpoint_index = 0
 
         self.test_phase_pub = self.create_publisher(
             String, '/mission/test_phase', 10
@@ -152,8 +154,23 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         self.manual_resume_state = self.state
         self.control_cancel_reason = 'manual_pause'
 
+        # Save where autonomous control was interrupted. For phases that assume
+        # the robot is at a specific place (sweep, tag stop, local collection),
+        # AUTO first returns here after the operator has driven elsewhere.
+        self.manual_checkpoint_pose = None
+        pose_info = self._robot_pose()
+        if pose_info is not None:
+            pose, _ = pose_info
+            self.manual_checkpoint_pose = copy.deepcopy(pose)
+
         if self.state == MissionState.SWEEPING:
             self._update_sweep_progress()
+            self.manual_checkpoint_index = self.current_path_index
+            if self.manual_checkpoint_pose is not None and self.sweep_points:
+                self.manual_checkpoint_pose = self._checkpoint_with_sweep_heading(
+                    self.manual_checkpoint_pose,
+                    self.manual_checkpoint_index,
+                )
 
         self.get_logger().info(
             f'MANUAL requested while mission state={self.state.name}; '
@@ -231,37 +248,25 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             self._join_sweep()
             return
 
-        if resume_state == MissionState.SWEEPING:
-            self._start_sweep_follow()
-            return
-
         if resume_state in (
+            MissionState.SWEEPING,
             MissionState.TURN_TO_TAG,
+            MissionState.RELOCALIZING,
             MissionState.RESTORE_SWEEP_HEADING,
-        ):
-            if self.manual_spin_target_yaw is None:
-                self._fail('Cannot resume paused turn: target yaw was not preserved.')
-                return
-            self._set_state(resume_state)
-            self._send_spin_to_absolute(
-                self.manual_spin_target_yaw,
-                self.manual_spin_purpose,
+            MissionState.LOCAL_COLLECT,
+        ) and self.manual_checkpoint_pose is not None:
+            self.get_logger().info(
+                'Returning to the manual-interrupt checkpoint before '
+                f'resuming {resume_state.name}.'
+            )
+            self._set_state(MissionState.RETURN_TO_SWEEP)
+            self._send_navigation(
+                copy.deepcopy(self.manual_checkpoint_pose),
+                'manual_resume_checkpoint',
             )
             return
 
-        if resume_state == MissionState.RELOCALIZING:
-            if self.manual_relocalize_tag_id is None:
-                self._fail('Cannot resume relocalization: tag ID was not preserved.')
-                return
-            self._set_state(MissionState.RELOCALIZING)
-            self._send_relocalize(
-                self.manual_relocalize_tag_id,
-                initial=self.manual_relocalize_initial,
-            )
-            return
-
-        if resume_state == MissionState.LOCAL_COLLECT:
-            self._start_local_collect()
+        if self._resume_saved_manual_phase():
             return
 
         if resume_state == MissionState.RETURN_TO_SWEEP:
@@ -278,6 +283,45 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             return
 
         self._fail(f'Unsupported manual resume state: {resume_state.name}')
+
+    def _resume_saved_manual_phase(self):
+        resume_state = self.manual_resume_state
+
+        if resume_state == MissionState.SWEEPING:
+            self.current_path_index = self.manual_checkpoint_index
+            self._start_sweep_follow()
+            return True
+
+        if resume_state in (
+            MissionState.TURN_TO_TAG,
+            MissionState.RESTORE_SWEEP_HEADING,
+        ):
+            if self.manual_spin_target_yaw is None:
+                self._fail('Cannot resume paused turn: target yaw was not preserved.')
+                return True
+            self._set_state(resume_state)
+            self._send_spin_to_absolute(
+                self.manual_spin_target_yaw,
+                self.manual_spin_purpose,
+            )
+            return True
+
+        if resume_state == MissionState.RELOCALIZING:
+            if self.manual_relocalize_tag_id is None:
+                self._fail('Cannot resume relocalization: tag ID was not preserved.')
+                return True
+            self._set_state(MissionState.RELOCALIZING)
+            self._send_relocalize(
+                self.manual_relocalize_tag_id,
+                initial=self.manual_relocalize_initial,
+            )
+            return True
+
+        if resume_state == MissionState.LOCAL_COLLECT:
+            self._start_local_collect()
+            return True
+
+        return False
 
     # Save enough context to recreate cancellable actions after MANUAL mode.
 
@@ -730,6 +774,14 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             self._start_test_return()
         elif purpose == 'test_return':
             self._finish_test_return()
+        elif purpose == 'manual_resume_checkpoint':
+            self.get_logger().info(
+                'Manual-interrupt checkpoint reached; resuming saved autonomous phase.'
+            )
+            if not self._resume_saved_manual_phase():
+                self._fail(
+                    f'No resume handler for {self.manual_resume_state.name}.'
+                )
         else:
             self._fail(f'Unknown navigation purpose {purpose!r}.')
 
