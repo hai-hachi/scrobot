@@ -6,7 +6,7 @@ import math
 import rclpy
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 from scrobot_mission.patrol_sweep_path import nearest_path_index
 from scrobot_mission.sweep_mission_manager import MissionState, SweepMissionManager
@@ -23,7 +23,9 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         the exact departure XY checkpoint, aligns to the sweep tangent heading,
         then resumes the sweep;
       * unconditional fixed-stop relocalization at every generated station;
-      * ABORT / RESTART_SWEEP runtime commands for repeatable controller tests.
+      * ABORT / RESTART_SWEEP runtime commands for repeatable controller tests;
+      * manual-mode pause/resume that cancels active autonomous actions and
+        continues from the saved mission context when AUTO is restored.
 
     There is intentionally no traveled-distance threshold for fixed-stop
     relocalization in this runtime manager. Every fixed station is visited once
@@ -40,6 +42,7 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         self.declare_parameter('test_goal_topic', '/mission/test_goal')
         self.declare_parameter('accept_rviz_goal_topic', True)
         self.declare_parameter('rviz_goal_topic', '/goal_pose')
+        self.declare_parameter('manual_mode_topic', '/control/manual_mode')
 
         self.join_acceptance_distance = float(
             self.get_parameter('join_acceptance_distance').value
@@ -62,6 +65,9 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         self.rviz_goal_topic = str(
             self.get_parameter('rviz_goal_topic').value
         )
+        self.manual_mode_topic = str(
+            self.get_parameter('manual_mode_topic').value
+        )
 
         self.test_goal_pose = None
         self.test_active = False
@@ -69,6 +75,17 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         self.restart_pending = False
         self.abort_pending = False
         self.control_cancel_reason = ''
+
+        # Manual override state. The control package owns AUTO/MANUAL mode;
+        # the mission manager only reacts by pausing/resuming autonomous actions.
+        self.manual_paused = False
+        self.manual_resume_state = MissionState.IDLE
+        self.manual_nav_pose = None
+        self.manual_nav_purpose = ''
+        self.manual_spin_target_yaw = None
+        self.manual_spin_purpose = ''
+        self.manual_relocalize_tag_id = None
+        self.manual_relocalize_initial = False
 
         self.test_phase_pub = self.create_publisher(
             String, '/mission/test_phase', 10
@@ -102,6 +119,168 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             f'commands={self.test_command_topic}, goals={self.test_goal_topic}'
             + (f' + {self.rviz_goal_topic}' if self.accept_rviz_goal_topic else '')
         )
+
+    # ------------------------------------------------------------------
+    # Manual override integration
+    # ------------------------------------------------------------------
+
+    def _manual_mode_cb(self, msg):
+        if bool(msg.data):
+            self._request_manual_pause()
+        else:
+            self._resume_from_manual()
+
+    def _request_manual_pause(self):
+        if self.manual_paused:
+            return
+
+        self.manual_paused = True
+        self.manual_resume_state = self.state
+        self.control_cancel_reason = 'manual_pause'
+
+        if self.state == MissionState.SWEEPING:
+            self._update_sweep_progress()
+
+        self.get_logger().info(
+            f'MANUAL requested while mission state={self.state.name}; '
+            'canceling autonomous action and preserving mission context.'
+        )
+
+        if self.follow_goal_handle is not None:
+            self._cancel_follow('manual_pause')
+            return
+        if self.navigate_goal_handle is not None:
+            self._cancel_navigation('manual_pause')
+            return
+        if self.spin_goal_handle is not None:
+            self.spin_goal_handle.cancel_goal_async()
+            return
+        if self.relocalize_goal_handle is not None:
+            self.relocalize_goal_handle.cancel_goal_async()
+            return
+        if self.collect_goal_handle is not None:
+            self.collect_goal_handle.cancel_goal_async()
+            return
+        if self.approach_goal_handle is not None:
+            self.approach_goal_handle.cancel_goal_async()
+            return
+
+        self._manual_pause_complete()
+
+    def _manual_pause_complete(self):
+        self.control_cancel_reason = ''
+        self._set_state(MissionState.PAUSED)
+        self.get_logger().info(
+            'Autonomous mission paused. Manual command path owns the drive base.'
+        )
+
+    def _resume_from_manual(self):
+        if not self.manual_paused:
+            return
+
+        resume_state = self.manual_resume_state
+        self.manual_paused = False
+        self.control_cancel_reason = ''
+
+        self.get_logger().info(
+            f'AUTO requested; resuming mission from {resume_state.name}.'
+        )
+
+        if resume_state in (
+            MissionState.IDLE,
+            MissionState.COMPLETE,
+            MissionState.ERROR,
+        ):
+            self._set_state(resume_state)
+            return
+
+        if resume_state == MissionState.INITIAL_TAG_APPROACH:
+            self._set_state(MissionState.INITIAL_TAG_APPROACH)
+            self._send_initial_approach()
+            return
+
+        if resume_state == MissionState.INITIAL_RELOCALIZATION:
+            self._set_state(MissionState.INITIAL_RELOCALIZATION)
+            tag_id = (
+                self.start_tag_id
+                if self.manual_relocalize_tag_id is None
+                else self.manual_relocalize_tag_id
+            )
+            self._send_relocalize(tag_id, initial=True)
+            return
+
+        if resume_state == MissionState.STARTING_NAV2:
+            self._start_nav2()
+            return
+
+        if resume_state == MissionState.JOIN_SWEEP:
+            self._join_sweep()
+            return
+
+        if resume_state == MissionState.SWEEPING:
+            self._start_sweep_follow()
+            return
+
+        if resume_state in (
+            MissionState.TURN_TO_TAG,
+            MissionState.RESTORE_SWEEP_HEADING,
+        ):
+            if self.manual_spin_target_yaw is None:
+                self._fail('Cannot resume paused turn: target yaw was not preserved.')
+                return
+            self._set_state(resume_state)
+            self._send_spin_to_absolute(
+                self.manual_spin_target_yaw,
+                self.manual_spin_purpose,
+            )
+            return
+
+        if resume_state == MissionState.RELOCALIZING:
+            if self.manual_relocalize_tag_id is None:
+                self._fail('Cannot resume relocalization: tag ID was not preserved.')
+                return
+            self._set_state(MissionState.RELOCALIZING)
+            self._send_relocalize(
+                self.manual_relocalize_tag_id,
+                initial=self.manual_relocalize_initial,
+            )
+            return
+
+        if resume_state == MissionState.LOCAL_COLLECT:
+            self._start_local_collect()
+            return
+
+        if resume_state == MissionState.RETURN_TO_SWEEP:
+            if self.manual_nav_pose is None or not self.manual_nav_purpose:
+                self._fail(
+                    'Cannot resume paused navigation: target pose/purpose was not preserved.'
+                )
+                return
+            self._set_state(MissionState.RETURN_TO_SWEEP)
+            self._send_navigation(
+                copy.deepcopy(self.manual_nav_pose),
+                self.manual_nav_purpose,
+            )
+            return
+
+        self._fail(f'Unsupported manual resume state: {resume_state.name}')
+
+    # Save enough context to recreate cancellable actions after MANUAL mode.
+
+    def _send_navigation(self, pose, purpose):
+        self.manual_nav_pose = copy.deepcopy(pose)
+        self.manual_nav_purpose = str(purpose)
+        super()._send_navigation(pose, purpose)
+
+    def _send_spin_to_absolute(self, target_yaw, purpose):
+        self.manual_spin_target_yaw = float(target_yaw)
+        self.manual_spin_purpose = str(purpose)
+        super()._send_spin_to_absolute(target_yaw, purpose)
+
+    def _send_relocalize(self, tag_id, initial):
+        self.manual_relocalize_tag_id = int(tag_id)
+        self.manual_relocalize_initial = bool(initial)
+        super()._send_relocalize(tag_id, initial)
 
     # ------------------------------------------------------------------
     # Checkpoint heading helper
@@ -412,12 +591,14 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         reason = self.follow_cancel_reason
 
         if wrapped.status == GoalStatus.STATUS_CANCELED and reason in (
-            'test_goal', 'restart_sweep', 'abort'
+            'test_goal', 'restart_sweep', 'abort', 'manual_pause'
         ):
             self.follow_goal_handle = None
             self.follow_cancel_reason = ''
             if reason == 'test_goal':
                 self._start_test_outbound()
+            elif reason == 'manual_pause':
+                self._manual_pause_complete()
             else:
                 self._finish_control_cancel()
             return
@@ -441,6 +622,9 @@ class RuntimeSweepMissionManager(SweepMissionManager):
                 return
             if reason in ('restart_sweep', 'abort'):
                 self._finish_control_cancel()
+                return
+            if reason == 'manual_pause':
+                self._manual_pause_complete()
                 return
             self._fail(
                 f'Navigation canceled unexpectedly ({purpose}), reason={reason!r}.'
@@ -472,10 +656,13 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         wrapped = future.result()
         if (
             wrapped.status == GoalStatus.STATUS_CANCELED
-            and self.control_cancel_reason in ('restart_sweep', 'abort')
+            and self.control_cancel_reason in ('restart_sweep', 'abort', 'manual_pause')
         ):
             self.spin_goal_handle = None
-            self._finish_control_cancel()
+            if self.control_cancel_reason == 'manual_pause':
+                self._manual_pause_complete()
+            else:
+                self._finish_control_cancel()
             return
         super()._spin_result(future, purpose)
 
@@ -483,18 +670,46 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         wrapped = future.result()
         if (
             wrapped.status == GoalStatus.STATUS_CANCELED
-            and self.control_cancel_reason in ('restart_sweep', 'abort')
+            and self.control_cancel_reason in ('restart_sweep', 'abort', 'manual_pause')
         ):
             self.relocalize_goal_handle = None
-            self._finish_control_cancel()
+            if self.control_cancel_reason == 'manual_pause':
+                self._manual_pause_complete()
+            else:
+                self._finish_control_cancel()
             return
         super()._relocalize_result(future, initial)
+
+    def _approach_result(self, future):
+        wrapped = future.result()
+        if (
+            wrapped.status == GoalStatus.STATUS_CANCELED
+            and self.control_cancel_reason == 'manual_pause'
+        ):
+            self.approach_goal_handle = None
+            self._manual_pause_complete()
+            return
+        super()._approach_result(future)
+
+    def _collect_result(self, future):
+        wrapped = future.result()
+        if (
+            wrapped.status == GoalStatus.STATUS_CANCELED
+            and self.control_cancel_reason == 'manual_pause'
+        ):
+            self.collect_goal_handle = None
+            self._manual_pause_complete()
+            return
+        super()._collect_result(future)
 
     # ------------------------------------------------------------------
     # Runtime tick
     # ------------------------------------------------------------------
 
     def _tick(self):
+        if self.manual_paused:
+            return
+
         if self.state == MissionState.JOIN_SWEEP:
             self._maybe_accept_join()
             return
