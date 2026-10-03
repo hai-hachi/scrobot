@@ -71,6 +71,50 @@ selected it cancels the current autonomous action and stores its mission
 context. When AUTO is restored it returns to the interruption checkpoint when
 needed, then resumes the saved autonomous phase.
 
+## Autonomous/manual override check
+
+This launch assembles the current full simulation stack in the correct
+dependency order specifically to test MANUAL interruption and AUTO resume:
+
+```bash
+ros2 launch scrobot_debug autonomy_manual_override_check.launch.py
+```
+
+Then, from a separate interactive terminal:
+
+```bash
+ros2 run scrobot_control manual_teleop.py
+```
+
+During autonomous motion:
+
+```text
+M
+ -> manual_mode_manager locks the final mux in MANUAL
+ -> mission cancels its active autonomous action
+ -> mission state becomes PAUSED
+
+W/A/S/D
+ -> operator may drive anywhere
+
+R
+ -> control mode returns to AUTO
+ -> mission returns to the saved interrupt checkpoint where required
+ -> saved autonomous phase resumes
+```
+
+The debug launch currently defaults `enable_magnetometer:=true` only because
+the historical localization configuration on this branch still has
+`use_mag: true`. Once the localization package is rehauled to the final
+D435i-only configuration, this debug default should become false.
+
+Optional shuttle mission test:
+
+```bash
+ros2 launch scrobot_debug autonomy_manual_override_check.launch.py \
+  spawn_shuttles:=true shuttle_mode:=mixed shuttle_count:=20
+```
+
 ## Shuttle simulation check
 
 Launch:
