@@ -147,7 +147,7 @@ Purpose: evaluation/debug only. Gazebo entity names may be lost by the `Pose_V -
 ### `/evaluation/shuttle_ground_truth_gz`
 Gazebo type: `gz.msgs.Pose_V`
 
-Publisher: `shuttle_activity_system`.
+Publisher: `shuttle_manager_system`.
 
 Contains only shuttle model world poses.
 
