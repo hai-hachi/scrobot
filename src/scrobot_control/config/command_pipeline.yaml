@@ -2,8 +2,7 @@ twist_mux:
   ros__parameters:
     use_stamped: true
 
-    # Autonomous command sources only. Manual teleop is intentionally kept
-    # out of this mux so it can bypass collision_monitor for emergency/backout.
+    # Autonomous command sources only.
     topics:
       navigation:
         topic: /cmd_vel_nav
@@ -19,6 +18,28 @@ twist_mux:
         topic: /cmd_vel_relocalization
         timeout: 0.5
         priority: 60
+
+
+# Production AUTO/MANUAL arbitration.
+#
+# manual_mode_manager owns /cmd_vel_manual. While MANUAL is active it
+# continuously publishes either the latest operator command or zero, so AUTO
+# commands cannot leak through between key presses. Both AUTO and MANUAL then
+# pass through the same smoother and collision monitor.
+control_mode_mux:
+  ros__parameters:
+    use_stamped: true
+
+    topics:
+      autonomous:
+        topic: /cmd_vel_auto
+        timeout: 0.5
+        priority: 10
+
+      manual:
+        topic: /cmd_vel_manual
+        timeout: 0.25
+        priority: 100
 
 
 velocity_smoother:
@@ -55,7 +76,7 @@ collision_monitor:
     base_shift_correction: true
 
     cmd_vel_in_topic: /cmd_vel_smoothed
-    cmd_vel_out_topic: /cmd_vel_safe_auto
+    cmd_vel_out_topic: /diff_drive_controller/cmd_vel
     enable_stamped_cmd_vel: true
 
     state_topic: /collision_monitor_state
@@ -98,30 +119,3 @@ collision_monitor:
       topic: /camera/camera/depth/scan
       source_timeout: 0.3
       enabled: true
-
-
-# Final arbitration after collision monitoring.
-# Autonomous motion is protected by collision_monitor.
-#
-# /cmd_vel_manual is NOT written directly by keyboard teleop. It is owned by
-# manual_mode_manager, which keeps this high-priority source alive with either
-# the latest operator command or zero while MANUAL mode is active. This prevents
-# autonomous commands from leaking through between key presses.
-#
-# Manual override intentionally bypasses collision_monitor so the operator can
-# back the robot out of a stop condition. Use manual mode deliberately: manual
-# motion is not collision-protected.
-manual_override_mux:
-  ros__parameters:
-    use_stamped: true
-
-    topics:
-      safe_auto:
-        topic: /cmd_vel_safe_auto
-        timeout: 0.5
-        priority: 10
-
-      manual:
-        topic: /cmd_vel_manual
-        timeout: 0.25
-        priority: 100
