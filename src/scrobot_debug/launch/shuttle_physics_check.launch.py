@@ -34,6 +34,7 @@ def generate_launch_description():
     orientation = LaunchConfiguration('orientation')
     workers = LaunchConfiguration('workers')
     spawn_delay = LaunchConfiguration('spawn_delay')
+    auto_spawn = LaunchConfiguration('auto_spawn')
 
     apply_impulse = LaunchConfiguration('apply_impulse')
     impulse_delay = LaunchConfiguration('impulse_delay')
@@ -132,6 +133,15 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument('workers', default_value='8'),
         DeclareLaunchArgument('spawn_delay', default_value='5.0'),
+        DeclareLaunchArgument(
+            'auto_spawn',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'Automatically spawn the configured shuttles after spawn_delay. '
+                'Leave false for interactive spawn/delete/respawn testing.'
+            ),
+        ),
 
         DeclareLaunchArgument(
             'apply_impulse',
@@ -158,6 +168,10 @@ def generate_launch_description():
         bridge,
         telemetry,
         monitor,
-        TimerAction(period=spawn_delay, actions=[spawner]),
+        TimerAction(
+            period=spawn_delay,
+            actions=[spawner],
+            condition=IfCondition(auto_spawn),
+        ),
         TimerAction(period=spawn_delay, actions=[impulse]),
     ])
