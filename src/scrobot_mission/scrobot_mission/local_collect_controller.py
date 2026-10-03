@@ -45,9 +45,8 @@ class LocalCollectController(Node):
     to this pose. Once position and heading tolerances are satisfied, the robot
     switches to the deliberately simple straight collection rule:
         v = 0.30 m/s, omega = 0.
-    A turn-first gate is used only while the collector is still meaningfully
-    far from the pre-pose; near the goal, normal SMC remains active so the
-    position-bearing angle cannot create a zero-command deadlock. When
+    The validated SMC law includes the reference-speed heading term and the
+    original turn-first gate for large position-bearing error. When
     collector_link reaches the frozen shuttle point, the controller continues
     through it by the configured 0.10 m overrun.
     """
@@ -77,6 +76,7 @@ class LocalCollectController(Node):
         self.declare_parameter('overrun_distance', 0.10)
         self.declare_parameter('overrun_speed', 0.25)
 
+        self.declare_parameter('smc_reference_speed', 0.50)
         self.declare_parameter('smc_lambda', 2.0)
         self.declare_parameter('smc_ks', 1.60)
         self.declare_parameter('smc_eta', 0.50)
@@ -90,7 +90,6 @@ class LocalCollectController(Node):
         # still far enough from the pre-pose for alpha to be geometrically
         # meaningful. Near the goal, continue normal SMC.
         self.declare_parameter('heading_stop_deg', 70.0)
-        self.declare_parameter('heading_stop_min_rho', 0.15)
 
         self.declare_parameter('max_linear_accel', 1.0)
         self.declare_parameter('max_angular_accel', 1.0)
@@ -131,6 +130,9 @@ class LocalCollectController(Node):
             0.0, float(self.get_parameter('overrun_speed').value)
         )
 
+        self.smc_reference_speed = float(
+            self.get_parameter('smc_reference_speed').value
+        )
         self.smc_lambda = float(self.get_parameter('smc_lambda').value)
         self.smc_ks = float(self.get_parameter('smc_ks').value)
         self.smc_eta = float(self.get_parameter('smc_eta').value)
@@ -147,9 +149,6 @@ class LocalCollectController(Node):
         )
         self.heading_stop = math.radians(
             float(self.get_parameter('heading_stop_deg').value)
-        )
-        self.heading_stop_min_rho = max(
-            0.0, float(self.get_parameter('heading_stop_min_rho').value)
         )
 
         self.max_linear_accel = float(self.get_parameter('max_linear_accel').value)
@@ -374,12 +373,14 @@ class LocalCollectController(Node):
         s = e_theta + self.smc_lambda * e_y
         sat = clamp(s / self.smc_phi, -1.0, 1.0)
 
-        # The pre-pose is a fixed pose, not a moving trajectory:
-        # v_R = 0 and omega_R = 0. Therefore the moving-reference
-        # feedforward term lambda*v_R*sin(e_theta) must be zero.
+        # Accepted SMC law used by the validated simulation controller.
+        # The reference heading is straight, so omega_R = 0.
         denominator = 1.0 + self.smc_lambda * self.collector_offset_c
         omega = (
-            self.smc_ks * s
+            self.smc_lambda
+            * self.smc_reference_speed
+            * math.sin(e_theta)
+            + self.smc_ks * s
             + self.smc_eta * sat
         ) / denominator
         omega = clamp(
@@ -390,13 +391,7 @@ class LocalCollectController(Node):
 
         v = self.smc_krho * rho * math.cos(alpha)
 
-        # Far from the pre-pose, rotate first when the target lies too far
-        # off-axis. Close to the pre-pose, alpha becomes highly sensitive to
-        # millimetre-scale position error, so do not let it disable translation.
-        if (
-            rho > self.heading_stop_min_rho
-            and abs(alpha) >= self.heading_stop
-        ):
+        if abs(alpha) >= self.heading_stop:
             v = 0.0
 
         v = clamp(v, 0.0, self.smc_max_linear_speed)
@@ -447,10 +442,7 @@ class LocalCollectController(Node):
                         desired_v,
                         desired_w,
                     ) = last_metrics
-                    turn_first = (
-                        rho > self.heading_stop_min_rho
-                        and abs(alpha) >= self.heading_stop
-                    )
+                    turn_first = abs(alpha) >= self.heading_stop
                     self.get_logger().error(
                         'SMC target timeout: '
                         f'mode={"TURN_FIRST" if turn_first else "SMC"}, '
@@ -487,10 +479,7 @@ class LocalCollectController(Node):
             goal_handle.publish_feedback(feedback)
 
             if now >= next_debug:
-                turn_first = (
-                    rho > self.heading_stop_min_rho
-                    and abs(alpha) >= self.heading_stop
-                )
+                turn_first = abs(alpha) >= self.heading_stop
                 self.get_logger().info(
                     'SMC state: '
                     f'mode={"TURN_FIRST" if turn_first else "SMC"}, '
