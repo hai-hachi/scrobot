@@ -78,7 +78,7 @@
 # Evaluation / simulation ground truth
 # ============================================================
 
-# Dedicated shuttle-only ground truth produced by ShuttleActivitySystem.
+# Dedicated shuttle-only ground truth produced by ShuttleManagerSystem.
 - ros_topic_name: /evaluation/shuttle_ground_truth
   gz_topic_name: /evaluation/shuttle_ground_truth_gz
   ros_type_name: geometry_msgs/msg/PoseArray
@@ -89,7 +89,7 @@
   lazy: false
 
 # One-shot physical collection events. Each pose is the world pose of a shuttle
-# immediately before ShuttleActivitySystem requests removal from Gazebo.
+# immediately before ShuttleManagerSystem requests removal from Gazebo.
 - ros_topic_name: /evaluation/shuttle_collected
   gz_topic_name: /evaluation/shuttle_collected_gz
   ros_type_name: geometry_msgs/msg/PoseArray
