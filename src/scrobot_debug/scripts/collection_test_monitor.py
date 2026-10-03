@@ -5,18 +5,47 @@ import math
 import rclpy
 from geometry_msgs.msg import PoseArray
 from nav_msgs.msg import Odometry
+from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
+from rclpy.time import Time
 from std_msgs.msg import String
+from tf2_ros import Buffer, TransformListener
+
+
+def rotate_vector(q, vector):
+    x = float(q.x)
+    y = float(q.y)
+    z = float(q.z)
+    w = float(q.w)
+    vx, vy, vz = vector
+    return (
+        (1.0 - 2.0 * (y * y + z * z)) * vx
+        + 2.0 * (x * y - z * w) * vy
+        + 2.0 * (x * z + y * w) * vz,
+        2.0 * (x * y + z * w) * vx
+        + (1.0 - 2.0 * (x * x + z * z)) * vy
+        + 2.0 * (y * z - x * w) * vz,
+        2.0 * (x * z - y * w) * vx
+        + 2.0 * (y * z + x * w) * vy
+        + (1.0 - 2.0 * (x * x + y * y)) * vz,
+    )
+
+
+def inverse_rotate_vector(q, vector):
+    class Q:
+        pass
+
+    qi = Q()
+    qi.x = -float(q.x)
+    qi.y = -float(q.y)
+    qi.z = -float(q.z)
+    qi.w = float(q.w)
+    return rotate_vector(qi, vector)
 
 
 def rotate_local_z(q, distance):
-    """Rotate (0, 0, distance) by quaternion q."""
-    # Third column of the quaternion rotation matrix.
-    x = 2.0 * (q.x * q.z + q.w * q.y) * distance
-    y = 2.0 * (q.y * q.z - q.w * q.x) * distance
-    z = (1.0 - 2.0 * (q.x * q.x + q.y * q.y)) * distance
-    return x, y, z
+    return rotate_vector(q, (0.0, 0.0, distance))
 
 
 def yaw_from_quaternion(q):
@@ -33,7 +62,8 @@ class CollectionTestMonitor(Node):
         super().__init__('collection_test_monitor')
 
         self.declare_parameter('center_offset_z', 0.045)
-        self.declare_parameter('pickup_offset_x', 0.165)
+        self.declare_parameter('base_frame', 'base_footprint')
+        self.declare_parameter('collector_frame', 'collector_link')
         self.declare_parameter('pickup_half_length', 0.030)
         self.declare_parameter('pickup_half_width', 0.150)
         self.declare_parameter('report_rate', 2.0)
@@ -42,8 +72,11 @@ class CollectionTestMonitor(Node):
         self.center_offset_z = float(
             self.get_parameter('center_offset_z').value
         )
-        self.pickup_offset_x = float(
-            self.get_parameter('pickup_offset_x').value
+        self.base_frame = str(
+            self.get_parameter('base_frame').value
+        )
+        self.collector_frame = str(
+            self.get_parameter('collector_frame').value
         )
         self.pickup_half_length = float(
             self.get_parameter('pickup_half_length').value
@@ -60,6 +93,13 @@ class CollectionTestMonitor(Node):
 
         self.publisher = self.create_publisher(
             String, self.event_topic, 50
+        )
+
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(
+            self.tf_buffer,
+            self,
+            spin_thread=False,
         )
 
         self.create_subscription(
@@ -92,7 +132,7 @@ class CollectionTestMonitor(Node):
             'READY '
             'center=origin+local_Z*0.045m '
             'pickup=0.300x0.060m '
-            'collector_center=(+0.165,0.000)m'
+            f'collector_frame={self.collector_frame}'
         )
 
     def _emit(self, text):
@@ -106,6 +146,7 @@ class CollectionTestMonitor(Node):
         self.robot_pose = (
             float(p.x),
             float(p.y),
+            float(p.z),
             yaw_from_quaternion(q),
         )
 
@@ -119,11 +160,11 @@ class CollectionTestMonitor(Node):
             float(pose.position.z) + offset[2],
         )
 
-    def _center_robot(self, center):
+    def _center_base(self, center):
         if self.robot_pose is None:
             return None
 
-        rx, ry, ryaw = self.robot_pose
+        rx, ry, rz, ryaw = self.robot_pose
         dx = center[0] - rx
         dy = center[1] - ry
         c = math.cos(ryaw)
@@ -132,22 +173,39 @@ class CollectionTestMonitor(Node):
         return (
             c * dx + s * dy,
             -s * dx + c * dy,
-            center[2],
+            center[2] - rz,
         )
+
+    def _base_to_collector(self, point):
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                self.base_frame,
+                self.collector_frame,
+                Time(),
+                timeout=Duration(seconds=0.02),
+            )
+        except Exception:
+            return None
+
+        t = tf.transform.translation
+        delta = (
+            point[0] - float(t.x),
+            point[1] - float(t.y),
+            point[2] - float(t.z),
+        )
+        return inverse_rotate_vector(tf.transform.rotation, delta)
 
     def _inside(self, local):
         return (
-            abs(local[0] - self.pickup_offset_x)
-            <= self.pickup_half_length
+            abs(local[0]) <= self.pickup_half_length
             and abs(local[1]) <= self.pickup_half_width
         )
 
     def _margins(self, local):
-        x_margin = self.pickup_half_length - abs(
-            local[0] - self.pickup_offset_x
+        return (
+            self.pickup_half_length - abs(local[0]),
+            self.pickup_half_width - abs(local[1]),
         )
-        y_margin = self.pickup_half_width - abs(local[1])
-        return x_margin, y_margin
 
     def _shuttle_cb(self, msg):
         self.shuttles = list(msg.poses)
@@ -159,48 +217,48 @@ class CollectionTestMonitor(Node):
     def _collected_cb(self, msg):
         for pose in msg.poses:
             center = self._center_world(pose)
-            local = self._center_robot(center)
+            base = self._center_base(center)
+            local = None if base is None else self._base_to_collector(base)
             self.total_collected += 1
 
             if local is None:
                 self._emit(
                     f'COLLECTED total={self.total_collected} '
-                    'robot_pose=UNKNOWN'
+                    'collector_tf=UNKNOWN'
                 )
                 continue
 
             self._emit(
                 f'COLLECTED total={self.total_collected} '
-                f'center_robot=({local[0]:+.4f},'
+                f'center_collector=({local[0]:+.4f},'
                 f'{local[1]:+.4f},{local[2]:+.4f})m'
             )
 
     def _report(self):
-        if self.robot_pose is None:
-            return
-
-        if not self.shuttles:
+        if self.robot_pose is None or not self.shuttles:
             return
 
         candidates = []
         for pose in self.shuttles:
             center = self._center_world(pose)
-            local = self._center_robot(center)
+            base = self._center_base(center)
+            if base is None:
+                continue
+            local = self._base_to_collector(base)
             if local is None:
                 continue
 
             distance_to_pickup_center = math.hypot(
-                local[0] - self.pickup_offset_x,
-                local[1],
+                local[0], local[1]
             )
             candidates.append(
-                (distance_to_pickup_center, pose, center, local)
+                (distance_to_pickup_center, pose, base, local)
             )
 
         if not candidates:
             return
 
-        _, pose, center, local = min(
+        _, pose, base, local = min(
             candidates, key=lambda item: item[0]
         )
         x_margin, y_margin = self._margins(local)
@@ -208,7 +266,9 @@ class CollectionTestMonitor(Node):
 
         q = pose.orientation
         self._emit(
-            f'GEOM center_robot=({local[0]:+.4f},'
+            f'GEOM center_base=({base[0]:+.4f},'
+            f'{base[1]:+.4f},{base[2]:+.4f})m '
+            f'center_collector=({local[0]:+.4f},'
             f'{local[1]:+.4f},{local[2]:+.4f})m '
             f'origin_world=({pose.position.x:+.4f},'
             f'{pose.position.y:+.4f},{pose.position.z:+.4f})m '
