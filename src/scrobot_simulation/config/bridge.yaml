@@ -1,6 +1,6 @@
 # ============================================================
 # Gazebo Harmonic -> ROS 2 Jazzy bridge
-# D435i-like simulation + separate 5883L magnetometer
+# D435i-like simulation + optional legacy 5883L magnetometer
 # ============================================================
 
 - ros_topic_name: "/clock"
@@ -21,7 +21,9 @@
   frame_id: "camera_imu_optical_frame"
 
 # ============================================================
-# Separate 5883L magnetometer
+# Optional legacy 5883L magnetometer.
+# The bridge can remain present when the simulated sensor is disabled; no
+# /imu/mag messages will be produced in that configuration.
 # ============================================================
 - ros_topic_name: "/imu/mag"
   gz_topic_name: "/imu/mag"
