@@ -61,14 +61,12 @@ local_collect_controller:
     # Sliding surface:
     #   s = e_theta + lambda * e_y
     #
-    # Angular control:
-    #   omega = [omega_R + lambda*v_R*sin(e_theta)
-    #            + k_s*s + eta*sat(s/phi)] / [1 + lambda*c]
+    # Fixed-pose angular control:
+    #   omega = [k_s*s + eta*sat(s/phi)] / [1 + lambda*c]
     #
-    # The pre-collection reference is straight, so omega_R = 0.
-    # Translation:
+    # The pre-collection reference pose is stationary, so v_R = 0 and
+    # omega_R = 0. Translation:
     #   v = k_rho * rho * cos(alpha)
-    smc_reference_speed: 0.50
     smc_lambda: 2.00
     smc_ks: 1.60
     smc_eta: 0.50
