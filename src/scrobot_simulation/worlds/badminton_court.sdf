@@ -57,7 +57,7 @@
       removes a shuttle when its collection-center point enters the collector
       pickup rectangle. The shuttle collection center is defined 45 mm along
       local +Z from the shuttle model origin. The pickup rectangle is
-      300 mm wide x 60 mm long and centered at collector_link x=+165 mm.
+      300 mm wide x 60 mm long and centered directly on collector_link.
     -->
     <plugin filename="libshuttle_activity_system.so"
             name="scrobot_simulation::ShuttleActivitySystem">
@@ -65,7 +65,7 @@
       <update_rate>30.0</update_rate>
       <ground_truth_topic>/evaluation/shuttle_ground_truth_gz</ground_truth_topic>
       <collected_topic>/evaluation/shuttle_collected_gz</collected_topic>
-      <pickup_offset_x>0.165</pickup_offset_x>
+      <collector_link>collector_link</collector_link>
       <pickup_half_length>0.030</pickup_half_length>
       <pickup_half_width>0.150</pickup_half_width>
       <shuttle_center_offset_z>0.045</shuttle_center_offset_z>
@@ -249,43 +249,6 @@
       </link>
     </model>
 
-    <!-- <model name="test_box">
-
-      <static>true</static>
-
-      <pose>3 0 0.5 0 0 0</pose>
-
-      <link name="link">
-
-        <collision name="collision">
-
-          <geometry>
-            <box>
-              <size>0.5 0.5 1.0</size>
-            </box>
-          </geometry>
-
-        </collision>
-
-
-        <visual name="visual">
-
-          <geometry>
-            <box>
-              <size>0.5 0.5 1.0</size>
-            </box>
-          </geometry>
-
-          <material>
-            <ambient>0.8 0.2 0.2 1</ambient>
-            <diffuse>0.8 0.2 0.2 1</diffuse>
-          </material>
-
-        </visual>
-
-      </link>
-
-    </model> -->
 
     <model name="court_markings">
 
