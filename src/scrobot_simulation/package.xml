@@ -18,6 +18,7 @@
   <build_depend>gz-sim8</build_depend>
   <build_depend>gz-msgs10</build_depend>
   <build_depend>gz-transport13</build_depend>
+  <build_depend>scrobot_localization</build_depend>
   <exec_depend>gz-plugin2</exec_depend>
   <exec_depend>gz-sim8</exec_depend>
   <exec_depend>gz-msgs10</exec_depend>
@@ -28,6 +29,7 @@
   <exec_depend>launch_ros</exec_depend>
 
   <exec_depend>scrobot_description</exec_depend>
+  <exec_depend>scrobot_localization</exec_depend>
   <exec_depend>scrobot_control</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
