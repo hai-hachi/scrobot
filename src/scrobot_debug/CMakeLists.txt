@@ -85,6 +85,20 @@ install(
 )
 
 install(
+  PROGRAMS
+    scripts/collection_test_ctl.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME collection_test_ctl
+)
+
+install(
+  PROGRAMS
+    scripts/collection_test_monitor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME collection_test_monitor
+)
+
+install(
   DIRECTORY
     launch
     config
