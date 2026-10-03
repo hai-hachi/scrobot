@@ -60,12 +60,11 @@
 
         <camera name="d435i_color_camera">
           <!--
-            Use the measured robot RGB calibration rather than the generic
-            D435i datasheet FOV. At 1280 px width, fx=1024.2141 px gives
-            exactly 64 deg horizontal FOV. cx=640 and cy=360 are centered,
-            and the measured distortion coefficients are zero.
+            Match the factory calibration of the project's physical D435i
+            at 1280x720.  fx=906.940246582031 px gives HFOV=70.418899 deg.
+            Keep the simulated stream at 15 Hz for current system testing.
           -->
-          <horizontal_fov>1.117010720035761</horizontal_fov>
+          <horizontal_fov>1.229041640167034</horizontal_fov>
 
           <camera_info_topic>/camera/color/camera_info</camera_info_topic>
 
@@ -100,8 +99,12 @@
         <gz_frame_id>camera_depth_optical_frame</gz_frame_id>
 
         <camera name="d435i_depth_camera">
-          <!-- D435i depth HFOV ~= 87 deg -->
-          <horizontal_fov>1.5184364492350666</horizontal_fov>
+          <!--
+            Match the factory calibration of the project's physical D435i
+            depth stream at 848x480.  fx=420.289855957031 px gives
+            HFOV=90.503557 deg.  Keep the simulated stream at 15 Hz.
+          -->
+          <horizontal_fov>1.5795850624055896</horizontal_fov>
 
           <camera_info_topic>/camera/depth/camera_info</camera_info_topic>
 
