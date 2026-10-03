@@ -266,13 +266,6 @@ def build_parser():
         default='single',
     )
     parser.add_argument('--world', default=None)
-    parser.add_argument(
-        '--visual',
-        choices=['detail', 'fast'],
-        default='detail',
-        help='Deprecated compatibility option; the detailed model is always used.',
-    )
-
     parser.add_argument('--name', default='')
     parser.add_argument('--batch', default=None)
 
@@ -313,9 +306,8 @@ def main():
     config = load_yaml(config_path)
 
     model_dir = os.path.join(share, 'models', 'shuttle')
-    # Use one physically consistent detailed shuttle for all validation runs.
-    # The old "fast" mode changed mass, collision and damping as well as visuals,
-    # making A/B mission results incomparable.
+    # One detailed model is used for both physics validation and future
+    # YOLO-on-simulated-RGB tests.
     sdf_file = os.path.join(model_dir, 'model.sdf')
     visual_mesh = os.path.join(model_dir, 'meshes', 'shuttle.STL')
 
@@ -331,7 +323,7 @@ def main():
 
     sx = args.x if args.x is not None else float(get_nested(config, ['single', 'x'], 0.0))
     sy = args.y if args.y is not None else float(get_nested(config, ['single', 'y'], 0.0))
-    sz = args.z if args.z is not None else float(get_nested(config, ['single', 'z'], 0.08))
+    sz = args.z if args.z is not None else float(get_nested(config, ['single', 'z'], 0.034))
     sroll = args.roll if args.roll is not None else float(get_nested(config, ['single', 'roll'], 0.0))
     spitch = args.pitch if args.pitch is not None else float(get_nested(config, ['single', 'pitch'], math.pi / 2.0))
     syaw = args.yaw if args.yaw is not None else float(get_nested(config, ['single', 'yaw'], 0.0))
@@ -366,7 +358,7 @@ def main():
         get_nested(config, ['court', 'margin'], 0.15)
     )
     spawn_height = args.spawn_height if args.spawn_height is not None else float(
-        get_nested(config, ['spawn', 'height'], 0.08)
+        get_nested(config, ['spawn', 'height'], 0.034)
     )
     parallel_workers = args.parallel_workers if args.parallel_workers is not None else int(
         get_nested(config, ['spawn', 'parallel_workers'], 8)
@@ -388,7 +380,7 @@ def main():
         spawn_entity(world, name, sdf_file, sx, sy, sz, sroll, spitch, syaw)
         print(
             f'Spawned {name} at ({sx:.3f}, {sy:.3f}, {sz:.3f}) '
-            f'RPY=({sroll:.3f}, {spitch:.3f}, {syaw:.3f}), visual=detail'
+            f'RPY=({sroll:.3f}, {spitch:.3f}, {syaw:.3f})'
         )
         return 0
 
@@ -453,7 +445,7 @@ def main():
 
     print(
         f'Spawning {count} shuttles: mode={args.mode}, seed={seed}, batch={batch}, '
-        f'visual=detail, workers={min(parallel_workers, count)}, '
+        f'workers={min(parallel_workers, count)}, '
         f'court={court_length:.2f}x{court_width:.2f} m'
     )
 
