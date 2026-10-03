@@ -233,6 +233,56 @@ def spawn_target(args):
     )
 
 
+def run_scan(args, axis):
+    values = [float(v) for v in args.values]
+    print(
+        f'[camera_test_ctl] {axis} scan: {len(values)} positions, '
+        f'hold={args.hold:.2f}s',
+        flush=True,
+    )
+
+    for index, value in enumerate(values, start=1):
+        delete_target(args.world, args.name, ignore_missing=True)
+        time.sleep(max(0.0, args.delete_wait))
+
+        if axis == 'horizontal':
+            args.center_y = value
+        elif axis == 'vertical':
+            args.center_z = value
+        elif axis == 'ground':
+            args.center_x = value
+        else:
+            raise ValueError(axis)
+
+        args.delay = 0.0
+        print(
+            f'[camera_test_ctl] scan {index}/{len(values)} '
+            f'{axis}={value:+.3f} m',
+            flush=True,
+        )
+        spawn_target(args)
+        time.sleep(max(0.1, args.hold))
+
+    print(
+        f'[camera_test_ctl] {axis} scan complete; '
+        'last target remains spawned.',
+        flush=True,
+    )
+
+
+def add_scan_common(parser):
+    parser.add_argument('--world', default=WORLD)
+    parser.add_argument('--name', default=MODEL_NAME)
+    parser.add_argument('--center-x', type=float, default=1.0)
+    parser.add_argument('--center-y', type=float, default=0.0)
+    parser.add_argument('--center-z', type=float, default=0.0367)
+    parser.add_argument('--roll-deg', type=float, default=0.0)
+    parser.add_argument('--pitch-deg', type=float, default=90.0)
+    parser.add_argument('--yaw-deg', type=float, default=0.0)
+    parser.add_argument('--hold', type=float, default=2.0)
+    parser.add_argument('--delete-wait', type=float, default=0.2)
+
+
 def add_spawn_args(parser):
     parser.add_argument('--world', default=WORLD)
     parser.add_argument('--name', default=MODEL_NAME)
@@ -271,6 +321,42 @@ def main():
     add_spawn_args(respawn)
     respawn.add_argument('--delete-wait', type=float, default=0.2)
 
+    horizontal = sub.add_parser(
+        'horizontal-scan',
+        help='Sweep target laterally across the camera frame.',
+    )
+    add_scan_common(horizontal)
+    horizontal.add_argument(
+        '--values',
+        nargs='+',
+        type=float,
+        default=[-1.0, -0.75, -0.50, -0.25, 0.0, 0.25, 0.50, 0.75, 1.0],
+    )
+
+    vertical = sub.add_parser(
+        'vertical-scan',
+        help='Sweep target height across the camera frame.',
+    )
+    add_scan_common(vertical)
+    vertical.add_argument(
+        '--values',
+        nargs='+',
+        type=float,
+        default=[0.04, 0.10, 0.20, 0.30, 0.40, 0.50, 0.65, 0.80],
+    )
+
+    ground = sub.add_parser(
+        'ground-scan',
+        help='Sweep a floor-level shuttle target through near/far image range.',
+    )
+    add_scan_common(ground)
+    ground.add_argument(
+        '--values',
+        nargs='+',
+        type=float,
+        default=[0.20, 0.30, 0.40, 0.50, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0],
+    )
+
     args = parser.parse_args()
 
     try:
@@ -290,6 +376,12 @@ def main():
             )
             time.sleep(max(0.0, args.delete_wait))
             spawn_target(args)
+        elif args.command == 'horizontal-scan':
+            run_scan(args, 'horizontal')
+        elif args.command == 'vertical-scan':
+            run_scan(args, 'vertical')
+        elif args.command == 'ground-scan':
+            run_scan(args, 'ground')
     except Exception as exc:
         print(f'[camera_test_ctl] ERROR: {exc}', file=sys.stderr)
         return 1
