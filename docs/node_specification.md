@@ -174,7 +174,7 @@ Default gate is 0.30 m, smoothing alpha 0.50, stale timeout 1.50 s. Exact measur
 
 ## scrobot_simulation
 
-### `shuttle_activity_system`
+### `shuttle_manager_system`
 Gazebo world plugin that publishes shuttle-only ground truth and removes a
 shuttle when its geometry intersects the collector pickup envelope. Shuttle
 models remain static after spawning so simplified feather collisions cannot
