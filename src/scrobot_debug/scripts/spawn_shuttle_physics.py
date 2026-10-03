@@ -79,9 +79,9 @@ def main():
     spacing = max(0.09, args.spacing)
     workers = max(1, min(args.workers, count))
 
-    simulation_share = get_package_share_directory('scrobot_simulation')
+    debug_share = get_package_share_directory('scrobot_debug')
     model_file = os.path.join(
-        simulation_share,
+        debug_share,
         'models',
         'shuttle',
         'model_physics_test.sdf',
