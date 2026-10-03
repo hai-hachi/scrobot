@@ -57,9 +57,31 @@ install(
 )
 
 install(
+  PROGRAMS
+    scripts/spawn_shuttle_physics.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME spawn_shuttle_physics
+)
+
+install(
+  PROGRAMS
+    scripts/shuttle_impulse_test.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME shuttle_impulse_test
+)
+
+install(
+  PROGRAMS
+    scripts/shuttle_physics_monitor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME shuttle_physics_monitor
+)
+
+install(
   DIRECTORY
     launch
     config
+    worlds
   DESTINATION share/${PROJECT_NAME}
 )
 
