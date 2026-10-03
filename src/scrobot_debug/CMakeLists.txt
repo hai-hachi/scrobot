@@ -31,11 +31,22 @@ install(
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# Python debug tools are created through the GitHub API, which does not
+# preserve an executable file mode for new files. Install each one with RENAME
+# so CMake materializes it with PROGRAM permissions instead of symlinking a
+# non-executable source file when --symlink-install is used.
 install(
   PROGRAMS
     scripts/shuttle_sim_monitor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME shuttle_sim_monitor
+)
+
+install(
+  PROGRAMS
     scripts/telemetry_monitor.py
   DESTINATION lib/${PROJECT_NAME}
+  RENAME telemetry_monitor
 )
 
 install(
