@@ -249,7 +249,7 @@ def run_scan(args, axis):
             args.center_y = value
         elif axis == 'vertical':
             args.center_z = value
-        elif axis == 'ground':
+        elif axis in ('ground', 'depth'):
             args.center_x = value
         else:
             raise ValueError(axis)
@@ -357,6 +357,22 @@ def main():
         default=[0.20, 0.30, 0.40, 0.50, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0],
     )
 
+    depth = sub.add_parser(
+        'depth-scan',
+        help=(
+            'Sweep a floor-level shuttle through the RGB/depth overlap '
+            'range while the monitor compares rendered depth with '
+            'ground-truth optical Z.'
+        ),
+    )
+    add_scan_common(depth)
+    depth.add_argument(
+        '--values',
+        nargs='+',
+        type=float,
+        default=[0.46, 0.50, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 5.5, 5.9],
+    )
+
     args = parser.parse_args()
 
     try:
@@ -382,6 +398,8 @@ def main():
             run_scan(args, 'vertical')
         elif args.command == 'ground-scan':
             run_scan(args, 'ground')
+        elif args.command == 'depth-scan':
+            run_scan(args, 'depth')
     except Exception as exc:
         print(f'[camera_test_ctl] ERROR: {exc}', file=sys.stderr)
         return 1
