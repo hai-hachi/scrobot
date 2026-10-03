@@ -77,7 +77,6 @@ class LocalCollectController(Node):
         self.declare_parameter('overrun_distance', 0.10)
         self.declare_parameter('overrun_speed', 0.25)
 
-        self.declare_parameter('smc_reference_speed', 0.50)
         self.declare_parameter('smc_lambda', 2.0)
         self.declare_parameter('smc_ks', 1.60)
         self.declare_parameter('smc_eta', 0.50)
@@ -132,9 +131,6 @@ class LocalCollectController(Node):
             0.0, float(self.get_parameter('overrun_speed').value)
         )
 
-        self.smc_reference_speed = float(
-            self.get_parameter('smc_reference_speed').value
-        )
         self.smc_lambda = float(self.get_parameter('smc_lambda').value)
         self.smc_ks = float(self.get_parameter('smc_ks').value)
         self.smc_eta = float(self.get_parameter('smc_eta').value)
@@ -378,13 +374,12 @@ class LocalCollectController(Node):
         s = e_theta + self.smc_lambda * e_y
         sat = clamp(s / self.smc_phi, -1.0, 1.0)
 
-        # The pre-pose reference is straight, therefore omega_R = 0.
+        # The pre-pose is a fixed pose, not a moving trajectory:
+        # v_R = 0 and omega_R = 0. Therefore the moving-reference
+        # feedforward term lambda*v_R*sin(e_theta) must be zero.
         denominator = 1.0 + self.smc_lambda * self.collector_offset_c
         omega = (
-            self.smc_lambda
-            * self.smc_reference_speed
-            * math.sin(e_theta)
-            + self.smc_ks * s
+            self.smc_ks * s
             + self.smc_eta * sat
         ) / denominator
         omega = clamp(
