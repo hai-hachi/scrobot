@@ -85,7 +85,8 @@ For each frozen eligible shuttle:
 ```text
 construct collector pre-pose 0.50 m before shuttle
  -> SMC pose control
- -> position error <= 0.03 m and yaw error <= 5 deg
+ -> ideal handoff at position error <= 0.03 m and yaw error <= 5 deg
+ -> practical handoff also accepted at position error <= 0.08 m and yaw error <= 8 deg
  -> straight collection at 0.30 m/s, omega = 0
  -> collector reaches shuttle
  -> 0.10 m overrun
