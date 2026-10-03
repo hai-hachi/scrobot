@@ -70,21 +70,19 @@ local_collect_controller:
     #   v = k_rho * rho * cos(alpha)
     smc_reference_speed: 0.50
     smc_lambda: 2.00
-    smc_ks: 1.40
-    smc_eta: 0.35
-    smc_phi: 0.10
+    smc_ks: 1.60
+    smc_eta: 0.50
+    smc_phi: 0.08
     smc_krho: 0.80
     collector_offset_c: 0.165
-    smc_max_angular_speed: 1.60
+    smc_max_angular_speed: 1.80
     smc_max_linear_speed: 0.50
 
-    # Hysteretic terminal turn for large residual position-bearing error.
-    # Enter at 70 deg, rotate in place with a gentle P law, and only return
-    # to normal SMC translation once alpha falls below 35 deg.
-    terminal_turn_enter_deg: 70.0
-    terminal_turn_exit_deg: 35.0
-    terminal_turn_kp: 1.0
-    terminal_turn_max_omega: 0.80
+    # Old proven turn-first rule, but only while the collector is still
+    # farther than 0.15 m from the pre-pose. Near the goal, alpha becomes
+    # very sensitive to millimetre-scale position error, so normal SMC remains active.
+    heading_stop_deg: 70.0
+    heading_stop_min_rho: 0.15
 
     # Kinematic command slew limits retained from the robot design.
     max_linear_accel: 1.00
