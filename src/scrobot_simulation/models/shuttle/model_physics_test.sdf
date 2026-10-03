@@ -43,7 +43,7 @@
       <collision name="shuttle_collision_octagonal">
         <max_contacts>8</max_contacts>
         <geometry>
-          <mesh><uri>model://shuttle/meshes/shuttle_collision_octagonal.STL</uri></mesh>
+          <mesh><uri>model://shuttle/meshes/shuttle_collision_octagonal.stl</uri></mesh>
         </geometry>
         <surface>
           <friction>
