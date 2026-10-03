@@ -78,6 +78,16 @@ def generate_launch_description():
         condition=IfCondition(rviz),
     )
 
+    telemetry = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(debug_pkg, 'launch', 'telemetry.launch.py')
+        ),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+            'summary_rate': '1.0',
+        }.items(),
+    )
+
     monitor = Node(
         package='scrobot_debug',
         executable='shuttle_sim_monitor.py',
@@ -153,6 +163,7 @@ def generate_launch_description():
 
         simulation,
         rviz_debug,
+        telemetry,
         TimerAction(period=control_delay, actions=[control]),
         TimerAction(period=shuttle_delay, actions=[spawn_shuttle]),
         TimerAction(period=monitor_delay, actions=[monitor]),
