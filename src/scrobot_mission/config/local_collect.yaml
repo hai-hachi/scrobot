@@ -61,12 +61,14 @@ local_collect_controller:
     # Sliding surface:
     #   s = e_theta + lambda * e_y
     #
-    # Fixed-pose angular control:
-    #   omega = [k_s*s + eta*sat(s/phi)] / [1 + lambda*c]
+    # Angular control:
+    #   omega = [omega_R + lambda*v_R*sin(e_theta)
+    #            + k_s*s + eta*sat(s/phi)] / [1 + lambda*c]
     #
-    # The pre-collection reference pose is stationary, so v_R = 0 and
-    # omega_R = 0. Translation:
+    # The pre-collection reference is straight, so omega_R = 0.
+    # Translation:
     #   v = k_rho * rho * cos(alpha)
+    smc_reference_speed: 0.50
     smc_lambda: 2.00
     smc_ks: 1.60
     smc_eta: 0.50
@@ -76,11 +78,9 @@ local_collect_controller:
     smc_max_angular_speed: 1.80
     smc_max_linear_speed: 0.50
 
-    # Old proven turn-first rule, but only while the collector is still
-    # farther than 0.15 m from the pre-pose. Near the goal, alpha becomes
-    # very sensitive to millimetre-scale position error, so normal SMC remains active.
+    # Rotate first for large position-heading error, matching the validated
+    # local-collect controller behavior.
     heading_stop_deg: 70.0
-    heading_stop_min_rho: 0.15
 
     # Kinematic command slew limits retained from the robot design.
     max_linear_accel: 1.00
