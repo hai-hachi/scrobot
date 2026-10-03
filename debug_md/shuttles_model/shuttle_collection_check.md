@@ -11,22 +11,16 @@ The shuttle collection point is defined as:
 shuttle model origin + 0.045 m along shuttle local +Z
 ```
 
-The collector pickup rectangle is fixed in the robot frame:
+The collector pickup rectangle is centered directly on `collector_link`:
 
 ```text
-center x = +0.165 m
-center y =  0.000 m
-
 size X = 0.060 m
 size Y = 0.300 m
 ```
 
-Therefore the shuttle collection-center point is collected when:
-
-```text
-0.135 m <= center_x <= 0.195 m
--0.150 m <= center_y <= +0.150 m
-```
+The plugin resolves the actual `collector_link` pose from the robot model, so
+there is no duplicate hard-coded +0.165 m pickup offset in the world file.
+With the current robot URDF, `collector_link` is at x = +0.165 m, y = 0.
 
 Shuttle orientation matters because the 45 mm center offset follows the
 shuttle's local +Z axis.
@@ -93,7 +87,8 @@ Useful output includes:
 
 ```text
 GEOM
-center_robot
+center_base
+center_collector
 origin_world
 shuttle quaternion
 x_margin
