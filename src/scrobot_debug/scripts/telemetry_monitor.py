@@ -150,6 +150,12 @@ class TelemetryMonitor(Node):
             self._drive_cmd_cb,
             reliable_qos,
         )
+        self.create_subscription(
+            String,
+            '/debug/shuttle_physics',
+            self._shuttle_physics_cb,
+            reliable_qos,
+        )
 
         if self.relay_rosout:
             self.create_subscription(
@@ -273,6 +279,9 @@ class TelemetryMonitor(Node):
 
     def _drive_cmd_cb(self, msg):
         self.drive_cmd = self._twist_pair(msg)
+
+    def _shuttle_physics_cb(self, msg):
+        self._emit('SHUTTLE_PHYS', str(msg.data))
 
     def _rosout_cb(self, msg):
         logger_name = str(msg.name).lstrip('/')
