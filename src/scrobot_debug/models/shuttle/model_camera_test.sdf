@@ -5,7 +5,7 @@
     <link name="shuttle_link">
       <!--
         Visual-only, non-colliding shuttle used for camera frame/range tests.
-        ShuttleActivitySystem still sees shuttle_link and publishes its ground
+        ShuttleManagerSystem still sees shuttle_link and publishes its ground
         truth, but the target cannot be pushed by the robot or floor.
       -->
       <visual name="shuttle_visual">
