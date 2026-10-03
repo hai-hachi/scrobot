@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <model name="shuttle_physics_test">
+    <static>false</static>
+    <self_collide>false</self_collide>
+    <allow_auto_disable>true</allow_auto_disable>
+
+    <link name="shuttle_link">
+      <!--
+        Candidate dynamic shuttle physics model.
+        Geometry convention: small 25 mm octagon at z=0, skirt grows toward +Z.
+        The 90 mm extrusion with 15 deg outward draft gives a large-end
+        diameter of 0.073230855 m.
+      -->
+      <inertial>
+        <!-- Retain the project COM estimate as the first physics-test baseline.
+             The real shuttle is cork-heavy, so a uniform-frustum COM would be
+             unrealistically far toward the skirt. -->
+        <pose>0 0 0.0296 0 0 0</pose>
+        <mass>0.0052</mass>
+        <inertia>
+          <ixx>6.8328e-6</ixx>
+          <iyy>6.8328e-6</iyy>
+          <izz>7.6648e-6</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+
+      <visual name="shuttle_visual">
+        <geometry>
+          <mesh><uri>model://shuttle/meshes/shuttle.STL</uri></mesh>
+        </geometry>
+        <material>
+          <ambient>0.78 0.78 0.78 1</ambient>
+          <diffuse>0.92 0.92 0.92 1</diffuse>
+          <specular>0.02 0.02 0.02 1</specular>
+          <pbr><metal><metalness>0.0</metalness><roughness>0.92</roughness></metal></pbr>
+        </material>
+      </visual>
+
+      <collision name="shuttle_collision_octagonal">
+        <max_contacts>8</max_contacts>
+        <geometry>
+          <mesh><uri>model://shuttle/meshes/shuttle_collision_octagonal.STL</uri></mesh>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>0.8</mu>
+              <mu2>0.8</mu2>
+            </ode>
+          </friction>
+          <bounce>
+            <restitution_coefficient>0.0</restitution_coefficient>
+            <threshold>1000000.0</threshold>
+          </bounce>
+        </surface>
+      </collision>
+    </link>
+  </model>
+</sdf>
