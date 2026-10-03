@@ -35,6 +35,7 @@ def generate_launch_description():
     y = LaunchConfiguration('y')
     z = LaunchConfiguration('z')
     yaw = LaunchConfiguration('yaw')
+    enable_magnetometer = LaunchConfiguration('enable_magnetometer')
 
     spawn_delay = LaunchConfiguration('spawn_delay')
 
@@ -89,6 +90,7 @@ def generate_launch_description():
             'y': y,
             'z': z,
             'yaw': yaw,
+            'enable_magnetometer': enable_magnetometer,
         }.items(),
     )
 
@@ -185,6 +187,12 @@ def generate_launch_description():
             'spawn_delay',
             default_value='2.0',
             description='Delay before spawning robot [s].',
+        ),
+        DeclareLaunchArgument(
+            'enable_magnetometer',
+            default_value='false',
+            choices=['true', 'false'],
+            description='Enable the optional legacy HMC5883L simulation sensor.',
         ),
 
         add_description_resources,
