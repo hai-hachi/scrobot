@@ -35,6 +35,7 @@ install(
   PROGRAMS
     scripts/shuttle_sim_monitor.py
     scripts/telemetry_monitor.py
+    scripts/debug_raw_teleop.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
