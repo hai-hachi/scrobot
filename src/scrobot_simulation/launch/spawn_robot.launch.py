@@ -30,6 +30,7 @@ def generate_launch_description():
     y = LaunchConfiguration('y')
     z = LaunchConfiguration('z')
     yaw = LaunchConfiguration('yaw')
+    enable_magnetometer = LaunchConfiguration('enable_magnetometer')
 
     # ==========================================================
     # Simulation robot Xacro
@@ -58,6 +59,8 @@ def generate_launch_description():
             ' ',
             xacro_file,
             ' wheel_collision_width:=0.001',
+            ' enable_magnetometer:=',
+            enable_magnetometer,
         ]),
         value_type=str,
     )
@@ -141,6 +144,13 @@ def generate_launch_description():
             'yaw',
             default_value='0.0',
             description='Initial robot yaw [rad].',
+        ),
+
+        DeclareLaunchArgument(
+            'enable_magnetometer',
+            default_value='false',
+            choices=['true', 'false'],
+            description='Enable the optional legacy HMC5883L simulation sensor.',
         ),
 
         robot_state_publisher,
