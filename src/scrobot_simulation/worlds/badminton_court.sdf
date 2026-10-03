@@ -157,7 +157,10 @@
         </collision>
 
         <visual name="venue_floor_visual">
-          <geometry><box><size>20.0 12.0 0.02</size></box></geometry>
+          <!-- Keep the dark venue surface 2 mm below the court-mat surface.
+               This removes coplanar black/green z-fighting in Ogre2. -->
+          <pose>0 0 -0.001 0 0 0</pose>
+          <geometry><box><size>20.0 12.0 0.018</size></box></geometry>
           <material>
             <ambient>0.055 0.060 0.065 1</ambient>
             <diffuse>0.075 0.080 0.085 1</diffuse>
@@ -166,9 +169,10 @@
         </visual>
 
         <visual name="badminton_mat_visual">
-          <!-- Top surface is z=0 so the white court lines remain visible above it. -->
-          <pose>0 0 0.0095 0 0 0</pose>
-          <geometry><box><size>15.4 7.2 0.001</size></box></geometry>
+          <!-- Mat top surface is exactly z=0. Court lines start at z=0 and
+               extend upward, so they render cleanly without z-fighting. -->
+          <pose>0 0 0.009 0 0 0</pose>
+          <geometry><box><size>15.4 7.2 0.002</size></box></geometry>
           <material>
             <ambient>0.045 0.265 0.145 1</ambient>
             <diffuse>0.055 0.345 0.185 1</diffuse>
@@ -177,6 +181,71 @@
         </visual>
       </link>
       <pose>0 0 -0.01 0 0 0</pose>
+    </model>
+
+    <!--
+      Simulation safety boundary. These walls are outside the badminton mat
+      and are not part of the regulation court geometry; they only prevent the
+      robot from driving off the finite simulated venue floor.
+      Interior clear area: approximately 19.8 x 11.8 m.
+    -->
+    <model name="simulation_safety_boundary">
+      <static>true</static>
+      <link name="boundary_link">
+
+        <collision name="wall_x_positive_collision">
+          <pose>9.95 0 0.20 0 0 0</pose>
+          <geometry><box><size>0.10 12.0 0.40</size></box></geometry>
+        </collision>
+        <visual name="wall_x_positive_visual">
+          <pose>9.95 0 0.20 0 0 0</pose>
+          <geometry><box><size>0.10 12.0 0.40</size></box></geometry>
+          <material>
+            <ambient>0.10 0.10 0.11 1</ambient>
+            <diffuse>0.14 0.14 0.15 1</diffuse>
+          </material>
+        </visual>
+
+        <collision name="wall_x_negative_collision">
+          <pose>-9.95 0 0.20 0 0 0</pose>
+          <geometry><box><size>0.10 12.0 0.40</size></box></geometry>
+        </collision>
+        <visual name="wall_x_negative_visual">
+          <pose>-9.95 0 0.20 0 0 0</pose>
+          <geometry><box><size>0.10 12.0 0.40</size></box></geometry>
+          <material>
+            <ambient>0.10 0.10 0.11 1</ambient>
+            <diffuse>0.14 0.14 0.15 1</diffuse>
+          </material>
+        </visual>
+
+        <collision name="wall_y_positive_collision">
+          <pose>0 5.95 0.20 0 0 0</pose>
+          <geometry><box><size>19.8 0.10 0.40</size></box></geometry>
+        </collision>
+        <visual name="wall_y_positive_visual">
+          <pose>0 5.95 0.20 0 0 0</pose>
+          <geometry><box><size>19.8 0.10 0.40</size></box></geometry>
+          <material>
+            <ambient>0.10 0.10 0.11 1</ambient>
+            <diffuse>0.14 0.14 0.15 1</diffuse>
+          </material>
+        </visual>
+
+        <collision name="wall_y_negative_collision">
+          <pose>0 -5.95 0.20 0 0 0</pose>
+          <geometry><box><size>19.8 0.10 0.40</size></box></geometry>
+        </collision>
+        <visual name="wall_y_negative_visual">
+          <pose>0 -5.95 0.20 0 0 0</pose>
+          <geometry><box><size>19.8 0.10 0.40</size></box></geometry>
+          <material>
+            <ambient>0.10 0.10 0.11 1</ambient>
+            <diffuse>0.14 0.14 0.15 1</diffuse>
+          </material>
+        </visual>
+
+      </link>
     </model>
 
     <!-- <model name="test_box">
