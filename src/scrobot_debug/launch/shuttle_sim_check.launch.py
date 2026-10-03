@@ -107,7 +107,7 @@ def generate_launch_description():
 
     monitor = Node(
         package='scrobot_debug',
-        executable='shuttle_sim_monitor.py',
+        executable='shuttle_sim_monitor',
         name='shuttle_sim_monitor',
         output='screen',
         parameters=[{
