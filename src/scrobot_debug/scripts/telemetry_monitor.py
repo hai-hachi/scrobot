@@ -162,6 +162,12 @@ class TelemetryMonitor(Node):
             self._collection_test_cb,
             reliable_qos,
         )
+        self.create_subscription(
+            String,
+            '/debug/camera_test',
+            self._camera_test_cb,
+            reliable_qos,
+        )
 
         if self.relay_rosout:
             self.create_subscription(
@@ -291,6 +297,9 @@ class TelemetryMonitor(Node):
 
     def _collection_test_cb(self, msg):
         self._emit('COLLECTION_TEST', str(msg.data))
+
+    def _camera_test_cb(self, msg):
+        self._emit('CAMERA_TEST', str(msg.data))
 
     def _rosout_cb(self, msg):
         logger_name = str(msg.name).lstrip('/')
