@@ -22,10 +22,10 @@
   <xacro:property name="wheel_separation" value="0.420"/>
 
   <!--
-    Collision width can be overridden by simulation while the visual and
-    physical wheel dimensions remain 30 mm. Real/default description keeps
-    the full wheel width; Gazebo uses a narrow line-contact approximation
-    for ideal differential-drive odometry evaluation.
+    Collision width can be overridden by a simulator while the visual and
+    physical wheel dimensions remain 30 mm. The hardware-neutral description
+    keeps the real 30 mm collision width by default; scrobot_simulation may
+    substitute an effective contact width for stable differential-drive motion.
   -->
   <xacro:arg name="wheel_collision_width" default="0.030"/>
   <xacro:property name="wheel_collision_width" value="$(arg wheel_collision_width)"/>
