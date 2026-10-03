@@ -54,9 +54,10 @@
 
     <!--
       World-level shuttle manager. It publishes shuttle-only ground truth and
-      removes a shuttle when its 68 mm diameter intersects the 300 mm collector
-      pickup envelope. Shuttle models themselves remain static, which prevents
-      simplified feather collisions from producing nonphysical rolling.
+      removes a shuttle when its collection-center point enters the collector
+      pickup rectangle. The shuttle collection center is defined 45 mm along
+      local +Z from the shuttle model origin. The pickup rectangle is
+      300 mm wide x 60 mm long and centered at collector_link x=+165 mm.
     -->
     <plugin filename="libshuttle_activity_system.so"
             name="scrobot_simulation::ShuttleActivitySystem">
@@ -67,7 +68,7 @@
       <pickup_offset_x>0.165</pickup_offset_x>
       <pickup_half_length>0.030</pickup_half_length>
       <pickup_half_width>0.150</pickup_half_width>
-      <shuttle_collision_radius>0.034</shuttle_collision_radius>
+      <shuttle_center_offset_z>0.045</shuttle_center_offset_z>
     </plugin>
 
     <!--
