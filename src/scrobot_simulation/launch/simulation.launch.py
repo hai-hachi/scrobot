@@ -4,7 +4,6 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import (
-    AppendEnvironmentVariable,
     DeclareLaunchArgument,
     IncludeLaunchDescription,
     TimerAction,
@@ -17,10 +16,6 @@ def generate_launch_description():
 
     simulation_pkg = get_package_share_directory(
         'scrobot_simulation'
-    )
-
-    description_pkg = get_package_share_directory(
-        'scrobot_description'
     )
 
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -36,19 +31,6 @@ def generate_launch_description():
     enable_magnetometer = LaunchConfiguration('enable_magnetometer')
 
     spawn_delay = LaunchConfiguration('spawn_delay')
-
-    description_share_parent = os.path.dirname(description_pkg)
-    simulation_models = os.path.join(simulation_pkg, 'models')
-
-    add_description_resources = AppendEnvironmentVariable(
-        name='GZ_SIM_RESOURCE_PATH',
-        value=description_share_parent,
-    )
-
-    add_simulation_models = AppendEnvironmentVariable(
-        name='GZ_SIM_RESOURCE_PATH',
-        value=simulation_models,
-    )
 
     # gazebo.launch.py provides:
     #   RGB image   -> ros_gz_image -> /camera/camera/color/image_raw
@@ -172,9 +154,6 @@ def generate_launch_description():
             choices=['true', 'false'],
             description='Enable the optional legacy HMC5883L simulation sensor.',
         ),
-
-        add_description_resources,
-        add_simulation_models,
 
         gazebo,
         delayed_spawn_robot,
