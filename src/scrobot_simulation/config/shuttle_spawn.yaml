@@ -13,7 +13,7 @@ single:
   #   mode:=single batch:=101 x:=-4.225 y:=-1.525
   x: 0.0
   y: 0.0
-  z: 0.034
+  z: 0.0367
   roll: 0.0
   pitch: 1.57079632679
   yaw: 0.0
@@ -61,5 +61,5 @@ court:
   margin: 0.15
 
 spawn:
-  height: 0.034
+  height: 0.0367
   parallel_workers: 8
