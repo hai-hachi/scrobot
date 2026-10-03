@@ -152,6 +152,7 @@ class ShuttlePhysicsMonitor(Node):
                     'omega': 0.0,
                     'still_since': self.sim_time,
                     'settled_announced': False,
+                    'missing_frames': 0,
                 }
                 continue
 
@@ -200,6 +201,21 @@ class ShuttlePhysicsMonitor(Node):
             state['time'] = self.sim_time
             state['pos'] = pos
             state['quat'] = q
+
+        # The bridged dynamic-pose message is a world snapshot. Remove state for
+        # models that have disappeared so deleting and respawning the same model
+        # name starts a fresh measurement instead of inheriting the old path and
+        # settling history. A short grace period avoids reacting to one dropped
+        # bridge update.
+        for model_name in list(self.states.keys()):
+            if model_name in seen:
+                self.states[model_name]['missing_frames'] = 0
+                continue
+
+            self.states[model_name]['missing_frames'] += 1
+            if self.states[model_name]['missing_frames'] >= 3:
+                del self.states[model_name]
+                self._emit(f'REMOVED {model_name}')
 
         entity_count = len(self.states)
         if entity_count != self.last_entity_count:
