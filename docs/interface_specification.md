@@ -151,7 +151,21 @@ Bridge of `/evaluation/shuttle_ground_truth_gz`.
 
 Subscriber: simulation-only `fake_shuttle_detector`.
 
-This topic does not replace `/evaluation/ground_truth_odom` or alter `scrobot_evaluation`.
+### `/evaluation/shuttle_collected_gz`
+Gazebo type: `gz.msgs.Pose_V`
+
+Publisher: `shuttle_manager_system`.
+
+One-shot collection events containing the shuttle pose immediately before
+Gazebo removal.
+
+### `/evaluation/shuttle_collected`
+ROS type: `geometry_msgs/msg/PoseArray`
+
+Bridge of `/evaluation/shuttle_collected_gz`.
+
+These shuttle-only topics do not replace `/evaluation/ground_truth_odom` or
+alter `scrobot_evaluation`.
 
 ## Timing rule
 
