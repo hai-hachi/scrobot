@@ -55,6 +55,7 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': use_sim_time,
             'base_frame': 'base_footprint',
+            'mount_frame': 'base_link',
             'color_frame': 'camera_color_optical_frame',
             'depth_frame': 'camera_depth_optical_frame',
             'center_offset_z': 0.045,
