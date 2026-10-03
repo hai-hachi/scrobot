@@ -13,6 +13,7 @@ def generate_launch_description():
     debug_pkg = get_package_share_directory('scrobot_debug')
 
     use_sim_time = LaunchConfiguration('use_sim_time')
+    world = os.path.join(debug_pkg, 'worlds', 'camera_test.sdf')
     robot_x = LaunchConfiguration('robot_x')
     robot_y = LaunchConfiguration('robot_y')
     robot_z = LaunchConfiguration('robot_z')
@@ -25,6 +26,8 @@ def generate_launch_description():
         ),
         launch_arguments={
             'use_sim_time': use_sim_time,
+            'world': world,
+            'world_name': 'camera_test',
             'x': robot_x,
             'y': robot_y,
             'z': robot_z,
