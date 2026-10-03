@@ -35,6 +35,7 @@
   <exec_depend>gz_ros2_control</exec_depend>
 
   <exec_depend>rosgraph_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>tf2_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
