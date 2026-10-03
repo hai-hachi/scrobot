@@ -52,6 +52,8 @@ def generate_launch_description():
         executable='camera_frame_range_monitor',
         name='camera_frame_range_monitor',
         output='screen',
+        respawn=True,
+        respawn_delay=1.0,
         parameters=[{
             'use_sim_time': use_sim_time,
             'base_frame': 'base_footprint',
