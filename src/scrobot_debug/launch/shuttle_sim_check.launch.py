@@ -12,6 +12,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     simulation_pkg = get_package_share_directory('scrobot_simulation')
     control_pkg = get_package_share_directory('scrobot_control')
+    debug_pkg = get_package_share_directory('scrobot_debug')
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     rviz = LaunchConfiguration('rviz')
@@ -38,7 +39,6 @@ def generate_launch_description():
         ),
         launch_arguments={
             'use_sim_time': use_sim_time,
-            'rviz': rviz,
             'x': robot_x,
             'y': robot_y,
             'z': robot_z,
@@ -63,12 +63,19 @@ def generate_launch_description():
         ),
         launch_arguments={
             'mode': 'single',
-            'visual': 'detail',
             'batch': shuttle_batch,
             'x': shuttle_x,
             'y': shuttle_y,
         }.items(),
         condition=IfCondition(start_shuttle),
+    )
+
+    rviz_debug = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(debug_pkg, 'launch', 'rviz.launch.py')
+        ),
+        launch_arguments={'use_sim_time': use_sim_time}.items(),
+        condition=IfCondition(rviz),
     )
 
     monitor = Node(
@@ -145,6 +152,7 @@ def generate_launch_description():
         DeclareLaunchArgument('monitor_delay', default_value='5.0'),
 
         simulation,
+        rviz_debug,
         TimerAction(period=control_delay, actions=[control]),
         TimerAction(period=shuttle_delay, actions=[spawn_shuttle]),
         TimerAction(period=monitor_delay, actions=[monitor]),
