@@ -24,7 +24,6 @@ Gazebo shuttle-only ground truth
 Simulation-only topics include:
 
 - `/evaluation/ground_truth_odom`
-- `/evaluation/ground_truth_tf`
 - `/evaluation/shuttle_ground_truth`
 
 The fake detector may use simulation truth. No downstream mission or navigation component should use it directly.
