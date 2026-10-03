@@ -3,7 +3,7 @@
 import math
 
 import rclpy
-from geometry_msgs.msg import PoseArray
+from geometry_msgs.msg import PoseArray, TwistStamped
 from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import Log
 from rclpy.node import Node
@@ -132,6 +132,24 @@ class TelemetryMonitor(Node):
             self._ground_truth_odom_cb,
             qos_profile_sensor_data,
         )
+        self.create_subscription(
+            TwistStamped,
+            '/cmd_vel_auto',
+            self._auto_cmd_cb,
+            reliable_qos,
+        )
+        self.create_subscription(
+            TwistStamped,
+            '/cmd_vel_selected',
+            self._selected_cmd_cb,
+            reliable_qos,
+        )
+        self.create_subscription(
+            TwistStamped,
+            '/diff_drive_controller/cmd_vel',
+            self._drive_cmd_cb,
+            reliable_qos,
+        )
 
         if self.relay_rosout:
             self.create_subscription(
@@ -147,6 +165,9 @@ class TelemetryMonitor(Node):
         self.collected_count = 0
         self.odom = None
         self.gt_odom = None
+        self.auto_cmd = None
+        self.selected_cmd = None
+        self.drive_cmd = None
 
         if self.summary_rate > 0.0:
             self.create_timer(
@@ -237,6 +258,22 @@ class TelemetryMonitor(Node):
         q = msg.pose.pose.orientation
         self.gt_odom = (float(p.x), float(p.y), self._yaw(q))
 
+    @staticmethod
+    def _twist_pair(msg):
+        return (
+            float(msg.twist.linear.x),
+            float(msg.twist.angular.z),
+        )
+
+    def _auto_cmd_cb(self, msg):
+        self.auto_cmd = self._twist_pair(msg)
+
+    def _selected_cmd_cb(self, msg):
+        self.selected_cmd = self._twist_pair(msg)
+
+    def _drive_cmd_cb(self, msg):
+        self.drive_cmd = self._twist_pair(msg)
+
     def _rosout_cb(self, msg):
         logger_name = str(msg.name).lstrip('/')
         if logger_name not in self.rosout_nodes:
@@ -273,11 +310,29 @@ class TelemetryMonitor(Node):
                 f'{math.degrees(yaw_err):+.2f}deg)'
             )
 
+        cmd_text = ''
+        if self.drive_cmd is not None:
+            cmd_text = (
+                f' drive=({self.drive_cmd[0]:+.2f}m/s,'
+                f'{self.drive_cmd[1]:+.2f}rad/s)'
+            )
+        elif self.selected_cmd is not None:
+            cmd_text = (
+                f' selected=({self.selected_cmd[0]:+.2f}m/s,'
+                f'{self.selected_cmd[1]:+.2f}rad/s)'
+            )
+        elif self.auto_cmd is not None:
+            cmd_text = (
+                f' auto=({self.auto_cmd[0]:+.2f}m/s,'
+                f'{self.auto_cmd[1]:+.2f}rad/s)'
+            )
+
         self._emit(
             'SUMMARY',
             f'mode={self.control_mode} mission={self.mission_state} '
             f'local={self.local_collect_phase} raw={raw} eligible={eligible} '
-            f'gt={gt} collected={self.collected_count} {pose_text}{error_text}',
+            f'gt={gt} collected={self.collected_count} '
+            f'{pose_text}{error_text}{cmd_text}',
         )
 
 
