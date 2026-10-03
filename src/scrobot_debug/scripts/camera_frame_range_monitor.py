@@ -492,6 +492,21 @@ class CameraFrameRangeMonitor(Node):
             f'{color_text} | {depth_text}'
         )
 
+        if depth_proj is not None:
+            du, dv, dz, din = depth_proj
+            sample = self._sample_depth(du, dv) if din else None
+            sample_text = '?' if sample is None else f'{sample:.4f}'
+            error_text = '?' if sample is None else f'{sample - dz:+.4f}'
+            self._emit(
+                f'DEPTH_TEST base_x={center_base[0]:.3f}m '
+                f'base_y={center_base[1]:+.3f}m '
+                f'gt_optical_z={dz:.4f}m '
+                f'pixel=({du:.1f},{dv:.1f}) '
+                f'in_frame={"YES" if din else "NO"} '
+                f'sample={sample_text}m '
+                f'error={error_text}m'
+            )
+
     def _report(self):
         self._update_rates()
         self._report_tf()
