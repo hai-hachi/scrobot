@@ -266,7 +266,12 @@ def build_parser():
         default='single',
     )
     parser.add_argument('--world', default=None)
-    parser.add_argument('--visual', choices=['detail', 'fast'], default='detail')
+    parser.add_argument(
+        '--visual',
+        choices=['detail', 'fast'],
+        default='detail',
+        help='Deprecated compatibility option; the detailed model is always used.',
+    )
 
     parser.add_argument('--name', default='')
     parser.add_argument('--batch', default=None)
@@ -308,15 +313,13 @@ def main():
     config = load_yaml(config_path)
 
     model_dir = os.path.join(share, 'models', 'shuttle')
-    sdf_file = os.path.join(
-        model_dir,
-        'model_fast.sdf' if args.visual == 'fast' else 'model.sdf',
-    )
+    # Use one physically consistent detailed shuttle for all validation runs.
+    # The old "fast" mode changed mass, collision and damping as well as visuals,
+    # making A/B mission results incomparable.
+    sdf_file = os.path.join(model_dir, 'model.sdf')
     visual_mesh = os.path.join(model_dir, 'meshes', 'shuttle.STL')
-    fast_visual_mesh = os.path.join(model_dir, 'meshes', 'shuttle_collision.STL')
 
-    required = [sdf_file]
-    required.append(fast_visual_mesh if args.visual == 'fast' else visual_mesh)
+    required = [sdf_file, visual_mesh]
     missing = [path for path in required if not os.path.exists(path)]
     if missing:
         print('Missing shuttle model files:', file=sys.stderr)
@@ -385,7 +388,7 @@ def main():
         spawn_entity(world, name, sdf_file, sx, sy, sz, sroll, spitch, syaw)
         print(
             f'Spawned {name} at ({sx:.3f}, {sy:.3f}, {sz:.3f}) '
-            f'RPY=({sroll:.3f}, {spitch:.3f}, {syaw:.3f}), visual={args.visual}'
+            f'RPY=({sroll:.3f}, {spitch:.3f}, {syaw:.3f}), visual=detail'
         )
         return 0
 
@@ -450,7 +453,7 @@ def main():
 
     print(
         f'Spawning {count} shuttles: mode={args.mode}, seed={seed}, batch={batch}, '
-        f'visual={args.visual}, workers={min(parallel_workers, count)}, '
+        f'visual=detail, workers={min(parallel_workers, count)}, '
         f'court={court_length:.2f}x{court_width:.2f} m'
     )
 
