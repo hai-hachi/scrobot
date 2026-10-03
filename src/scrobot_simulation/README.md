@@ -33,9 +33,16 @@ drive_contact_mu    := 5.0
 caster_contact_mu   := 0.05
 ```
 
-The normal simulation uses the physical 30 mm drive-wheel collision width.
-The contact coefficients above are Gazebo tuning parameters used to reduce
-excessive simulated skid; they are not measured material coefficients.
+The physical drive wheel remains 30 mm wide in `scrobot_description`.
+Normal Gazebo simulation deliberately overrides only the drive-wheel collision
+contact width to 1 mm. The flat 30 mm cylindrical collision produced a
+repeatable tight-turn bias (about 0.944 m ground-truth radius for a commanded
+1.000 m arc), while the 1 mm contact approximation produced about 1.006 m.
+This is an effective simulation contact model, not a claim that the real tire
+is 1 mm wide.
+
+The contact coefficients above are Gazebo tuning parameters; they are not
+measured material coefficients.
 
 The optional HMC5883L path remains a boolean switch:
 
