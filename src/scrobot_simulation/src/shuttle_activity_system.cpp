@@ -36,10 +36,11 @@ public:
       this->worldEntity_ = _entity;
 
     this->robotName_ = _sdf->Get<std::string>("robot_model", this->robotName_).first;
+    this->collectorLinkName_ = _sdf->Get<std::string>(
+      "collector_link", this->collectorLinkName_).first;
     this->updateRate_ = _sdf->Get<double>("update_rate", this->updateRate_).first;
     this->groundTruthTopic_ = _sdf->Get<std::string>("ground_truth_topic", this->groundTruthTopic_).first;
     this->collectedTopic_ = _sdf->Get<std::string>("collected_topic", this->collectedTopic_).first;
-    this->pickupOffsetX_ = _sdf->Get<double>("pickup_offset_x", this->pickupOffsetX_).first;
     this->pickupHalfLength_ = _sdf->Get<double>("pickup_half_length", this->pickupHalfLength_).first;
     this->pickupHalfWidth_ = _sdf->Get<double>("pickup_half_width", this->pickupHalfWidth_).first;
     this->shuttleCenterOffsetZ_ = _sdf->Get<double>(
@@ -56,7 +57,7 @@ public:
 
     this->groundTruthPublisher_ = this->transportNode_.Advertise<gz::msgs::Pose_V>(this->groundTruthTopic_);
     this->collectedPublisher_ = this->transportNode_.Advertise<gz::msgs::Pose_V>(this->collectedTopic_);
-    this->ResolveRobot(_ecm);
+    this->ResolveRobotAndCollector(_ecm);
   }
 
   void PreUpdate(
@@ -77,15 +78,20 @@ public:
       return;
     this->lastUpdate_ = _info.simTime;
 
-    if (this->robotEntity_ == gz::sim::kNullEntity || !_ecm.HasEntity(this->robotEntity_))
-      this->ResolveRobot(_ecm);
-    if (this->robotEntity_ == gz::sim::kNullEntity)
+    if (this->robotEntity_ == gz::sim::kNullEntity ||
+        this->collectorEntity_ == gz::sim::kNullEntity ||
+        !_ecm.HasEntity(this->robotEntity_) ||
+        !_ecm.HasEntity(this->collectorEntity_))
+    {
+      this->ResolveRobotAndCollector(_ecm);
+    }
+    if (this->robotEntity_ == gz::sim::kNullEntity ||
+        this->collectorEntity_ == gz::sim::kNullEntity)
+    {
       return;
+    }
 
-    const auto robotPose = gz::sim::worldPose(this->robotEntity_, _ecm);
-    const double robotYaw = robotPose.Rot().Yaw();
-    const double cosYaw = std::cos(robotYaw);
-    const double sinYaw = std::sin(robotYaw);
+    const auto collectorPose = gz::sim::worldPose(this->collectorEntity_, _ecm);
 
     gz::msgs::Pose_V shuttleGroundTruthMsg;
     gz::msgs::Pose_V collectedMsg;
@@ -113,17 +119,20 @@ public:
         const auto shuttleCollectCenter =
           shuttlePose.Pos() + shuttleCenterOffsetWorld;
 
-        const double worldDx = shuttleCollectCenter.X() - robotPose.Pos().X();
-        const double worldDy = shuttleCollectCenter.Y() - robotPose.Pos().Y();
-        const double localX = cosYaw * worldDx + sinYaw * worldDy;
-        const double localY = -sinYaw * worldDx + cosYaw * worldDy;
+        // Express the shuttle collection center directly in collector_link.
+        // This removes the duplicated +0.165 m robot-frame offset from the
+        // world/plugin configuration: moving collector_link in the URDF now
+        // moves the pickup zone automatically.
+        const auto collectorToShuttleWorld =
+          shuttleCollectCenter - collectorPose.Pos();
+        const auto shuttleCenterCollector =
+          collectorPose.Rot().Inverse().RotateVector(collectorToShuttleWorld);
 
         // A shuttle is collected only when its collection-center point is
-        // inside the 300 mm x 60 mm rectangle centered at collector_link:
-        //   x = +0.165 m, y = 0 in the robot frame.
+        // inside the 300 mm x 60 mm rectangle centered on collector_link.
         const bool centerInsidePickupZone =
-          std::abs(localX - this->pickupOffsetX_) <= this->pickupHalfLength_ &&
-          std::abs(localY) <= this->pickupHalfWidth_;
+          std::abs(shuttleCenterCollector.X()) <= this->pickupHalfLength_ &&
+          std::abs(shuttleCenterCollector.Y()) <= this->pickupHalfWidth_;
 
         if (this->enableCollection_ && centerInsidePickupZone)
         {
@@ -166,25 +175,34 @@ private:
     _poseMsg.mutable_orientation()->set_w(_pose.Rot().W());
   }
 
-  void ResolveRobot(gz::sim::EntityComponentManager &_ecm)
+  void ResolveRobotAndCollector(gz::sim::EntityComponentManager &_ecm)
   {
     this->robotEntity_ = _ecm.EntityByComponents(
       gz::sim::components::Model(),
       gz::sim::components::Name(this->robotName_));
+
+    this->collectorEntity_ = gz::sim::kNullEntity;
+    if (this->robotEntity_ != gz::sim::kNullEntity)
+    {
+      gz::sim::Model robotModel(this->robotEntity_);
+      this->collectorEntity_ = robotModel.LinkByName(
+        _ecm, this->collectorLinkName_);
+    }
   }
 
   gz::sim::Entity worldEntity_{gz::sim::kNullEntity};
   gz::sim::Entity robotEntity_{gz::sim::kNullEntity};
+  gz::sim::Entity collectorEntity_{gz::sim::kNullEntity};
 
   gz::transport::Node transportNode_;
   gz::transport::Node::Publisher groundTruthPublisher_;
   gz::transport::Node::Publisher collectedPublisher_;
 
   std::string robotName_{"scrobot"};
+  std::string collectorLinkName_{"collector_link"};
   std::string groundTruthTopic_{"/evaluation/shuttle_ground_truth_gz"};
   std::string collectedTopic_{"/evaluation/shuttle_collected_gz"};
   double updateRate_{10.0};
-  double pickupOffsetX_{0.165};
   double pickupHalfLength_{0.030};
   double pickupHalfWidth_{0.150};
   double shuttleCenterOffsetZ_{0.045};
