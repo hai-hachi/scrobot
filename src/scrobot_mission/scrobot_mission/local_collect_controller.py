@@ -72,6 +72,8 @@ class LocalCollectController(Node):
         self.declare_parameter('precollect_distance', 0.50)
         self.declare_parameter('precollect_position_tolerance', 0.03)
         self.declare_parameter('precollect_yaw_tolerance_deg', 5.0)
+        self.declare_parameter('handoff_position_tolerance', 0.08)
+        self.declare_parameter('handoff_yaw_tolerance_deg', 8.0)
         self.declare_parameter('straight_collect_speed', 0.30)
         self.declare_parameter('overrun_distance', 0.10)
         self.declare_parameter('overrun_speed', 0.25)
@@ -119,6 +121,16 @@ class LocalCollectController(Node):
         )
         self.precollect_yaw_tolerance = math.radians(
             float(self.get_parameter('precollect_yaw_tolerance_deg').value)
+        )
+        self.handoff_position_tolerance = max(
+            self.precollect_position_tolerance,
+            float(self.get_parameter('handoff_position_tolerance').value),
+        )
+        self.handoff_yaw_tolerance = max(
+            self.precollect_yaw_tolerance,
+            math.radians(
+                float(self.get_parameter('handoff_yaw_tolerance_deg').value)
+            ),
         )
         self.straight_collect_speed = max(
             0.0, float(self.get_parameter('straight_collect_speed').value)
@@ -503,6 +515,25 @@ class LocalCollectController(Node):
                     f's={s:+.4f}.'
                 )
                 return True, 'pre-pose reached'
+
+            # The 0.30 m-wide collector does not need millimetre-perfect pose
+            # convergence before the straight pickup pass. If SMC is already
+            # within this practical handoff envelope, stop regulating the
+            # pre-pose and let the straight collector pass take over.
+            if (
+                rho <= self.handoff_position_tolerance
+                and abs(e_theta) <= self.handoff_yaw_tolerance
+            ):
+                self._stop()
+                self.get_logger().info(
+                    'SMC practical handoff accepted: '
+                    f'rho={rho:.4f} m <= {self.handoff_position_tolerance:.4f} m, '
+                    f'e_y={e_y:+.4f} m, '
+                    f'e_theta={math.degrees(e_theta):+.2f} deg <= '
+                    f'{math.degrees(self.handoff_yaw_tolerance):.2f} deg; '
+                    'switching to straight collection.'
+                )
+                return True, 'practical pre-pose handoff'
 
             dt = max(0.0, now - previous)
             previous = now
