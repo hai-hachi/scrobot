@@ -24,7 +24,17 @@ def yaw_from_quaternion(q):
 
 
 def rotate_vector(q, v):
-    x, y, z, w = q
+    # Accept either a geometry_msgs/Quaternion-like object or an
+    # iterable (x, y, z, w). TF and Pose messages provide objects,
+    # while a few local helpers use tuples.
+    if hasattr(q, 'x'):
+        x = float(q.x)
+        y = float(q.y)
+        z = float(q.z)
+        w = float(q.w)
+    else:
+        x, y, z, w = q
+
     vx, vy, vz = v
     return (
         (1.0 - 2.0 * (y * y + z * z)) * vx
