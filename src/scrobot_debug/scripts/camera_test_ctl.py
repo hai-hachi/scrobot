@@ -201,7 +201,7 @@ def spawn_target(args):
 
     roll, pitch, yaw = rpy_from_quaternion(world_q)
 
-    share = get_package_share_directory('scrobot_simulation')
+    share = get_package_share_directory('scrobot_debug')
     model_file = os.path.join(
         share, 'models', 'shuttle', 'model_camera_test.sdf'
     )
