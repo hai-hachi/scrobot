@@ -6,6 +6,7 @@ import math
 import rclpy
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, String
 
 from scrobot_mission.patrol_sweep_path import nearest_path_index
@@ -102,6 +103,19 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             self._test_goal_cb,
             10,
         )
+
+        manual_state_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.create_subscription(
+            Bool,
+            self.manual_mode_topic,
+            self._manual_mode_cb,
+            manual_state_qos,
+        )
+
         if self.accept_rviz_goal_topic and self.rviz_goal_topic != self.test_goal_topic:
             self.create_subscription(
                 PoseStamped,
@@ -281,6 +295,63 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         self.manual_relocalize_tag_id = int(tag_id)
         self.manual_relocalize_initial = bool(initial)
         super()._send_relocalize(tag_id, initial)
+
+    # Keep a late action goal from escaping into autonomous motion if MANUAL
+    # was selected while the goal request was still in flight.
+
+    def _approach_goal_response(self, future):
+        super()._approach_goal_response(future)
+        if self.manual_paused and self.approach_goal_handle is not None:
+            self.control_cancel_reason = 'manual_pause'
+            self.approach_goal_handle.cancel_goal_async()
+
+    def _navigation_goal_response(self, future, purpose):
+        super()._navigation_goal_response(future, purpose)
+        if self.manual_paused and self.navigate_goal_handle is not None:
+            self.control_cancel_reason = 'manual_pause'
+            self._cancel_navigation('manual_pause')
+
+    def _follow_goal_response(self, future):
+        super()._follow_goal_response(future)
+        if self.manual_paused and self.follow_goal_handle is not None:
+            self.control_cancel_reason = 'manual_pause'
+            self._cancel_follow('manual_pause')
+
+    def _spin_goal_response(self, future, purpose):
+        super()._spin_goal_response(future, purpose)
+        if self.manual_paused and self.spin_goal_handle is not None:
+            self.control_cancel_reason = 'manual_pause'
+            self.spin_goal_handle.cancel_goal_async()
+
+    def _relocalize_goal_response(self, future, initial):
+        super()._relocalize_goal_response(future, initial)
+        if self.manual_paused and self.relocalize_goal_handle is not None:
+            self.control_cancel_reason = 'manual_pause'
+            self.relocalize_goal_handle.cancel_goal_async()
+
+    def _collect_goal_response(self, future):
+        super()._collect_goal_response(future)
+        if self.manual_paused and self.collect_goal_handle is not None:
+            self.control_cancel_reason = 'manual_pause'
+            self.collect_goal_handle.cancel_goal_async()
+
+    def _start_once(self):
+        # If the operator selected MANUAL before mission autostart, leave the
+        # base start timer alive. It will start normally after AUTO is restored.
+        if self.manual_paused:
+            return
+        super()._start_once()
+
+    def _nav2_started(self, future):
+        if not self.manual_paused:
+            super()._nav2_started(future)
+            return
+
+        response = future.result()
+        if response is None or not response.success:
+            self._fail('Nav2 startup failed while entering MANUAL mode.')
+            return
+        self._manual_pause_complete()
 
     # ------------------------------------------------------------------
     # Checkpoint heading helper
@@ -590,6 +661,12 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         wrapped = future.result()
         reason = self.follow_cancel_reason
 
+        if self.manual_paused and wrapped.status != GoalStatus.STATUS_CANCELED:
+            self.follow_goal_handle = None
+            self.follow_cancel_reason = ''
+            self._manual_pause_complete()
+            return
+
         if wrapped.status == GoalStatus.STATUS_CANCELED and reason in (
             'test_goal', 'restart_sweep', 'abort', 'manual_pause'
         ):
@@ -610,6 +687,10 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         self.navigate_goal_handle = None
         reason = self.nav_cancel_reason
         self.nav_cancel_reason = ''
+
+        if self.manual_paused and wrapped.status != GoalStatus.STATUS_CANCELED:
+            self._manual_pause_complete()
+            return
 
         if wrapped.status == GoalStatus.STATUS_CANCELED:
             if reason == 'join_accepted' and purpose == 'join':
@@ -654,6 +735,10 @@ class RuntimeSweepMissionManager(SweepMissionManager):
 
     def _spin_result(self, future, purpose):
         wrapped = future.result()
+        if self.manual_paused and wrapped.status != GoalStatus.STATUS_CANCELED:
+            self.spin_goal_handle = None
+            self._manual_pause_complete()
+            return
         if (
             wrapped.status == GoalStatus.STATUS_CANCELED
             and self.control_cancel_reason in ('restart_sweep', 'abort', 'manual_pause')
@@ -668,6 +753,10 @@ class RuntimeSweepMissionManager(SweepMissionManager):
 
     def _relocalize_result(self, future, initial):
         wrapped = future.result()
+        if self.manual_paused and wrapped.status != GoalStatus.STATUS_CANCELED:
+            self.relocalize_goal_handle = None
+            self._manual_pause_complete()
+            return
         if (
             wrapped.status == GoalStatus.STATUS_CANCELED
             and self.control_cancel_reason in ('restart_sweep', 'abort', 'manual_pause')
@@ -682,6 +771,10 @@ class RuntimeSweepMissionManager(SweepMissionManager):
 
     def _approach_result(self, future):
         wrapped = future.result()
+        if self.manual_paused and wrapped.status != GoalStatus.STATUS_CANCELED:
+            self.approach_goal_handle = None
+            self._manual_pause_complete()
+            return
         if (
             wrapped.status == GoalStatus.STATUS_CANCELED
             and self.control_cancel_reason == 'manual_pause'
@@ -693,6 +786,10 @@ class RuntimeSweepMissionManager(SweepMissionManager):
 
     def _collect_result(self, future):
         wrapped = future.result()
+        if self.manual_paused and wrapped.status != GoalStatus.STATUS_CANCELED:
+            self.collect_goal_handle = None
+            self._manual_pause_complete()
+            return
         if (
             wrapped.status == GoalStatus.STATUS_CANCELED
             and self.control_cancel_reason == 'manual_pause'
