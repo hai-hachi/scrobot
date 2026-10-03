@@ -38,6 +38,14 @@ def generate_launch_description():
         output='screen',
     )
 
+    manual_mode_manager = Node(
+        package='scrobot_control',
+        executable='manual_mode_manager.py',
+        name='manual_mode_manager',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
+    )
+
     # Stage 1: autonomous command arbitration only.
     twist_mux = Node(
         package='twist_mux',
@@ -100,6 +108,7 @@ def generate_launch_description():
         ),
         joint_state_broadcaster_spawner,
         diff_drive_controller_spawner,
+        manual_mode_manager,
         twist_mux,
         velocity_smoother,
         collision_monitor,
