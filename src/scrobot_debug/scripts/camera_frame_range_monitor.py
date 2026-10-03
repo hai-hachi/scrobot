@@ -57,6 +57,7 @@ class CameraFrameRangeMonitor(Node):
         super().__init__('camera_frame_range_monitor')
 
         self.declare_parameter('base_frame', 'base_footprint')
+        self.declare_parameter('mount_frame', 'base_link')
         self.declare_parameter(
             'color_frame', 'camera_color_optical_frame'
         )
@@ -70,6 +71,7 @@ class CameraFrameRangeMonitor(Node):
         self.declare_parameter('report_rate', 1.0)
 
         self.base_frame = str(self.get_parameter('base_frame').value)
+        self.mount_frame = str(self.get_parameter('mount_frame').value)
         self.color_frame = str(self.get_parameter('color_frame').value)
         self.depth_frame = str(self.get_parameter('depth_frame').value)
         self.event_topic = str(self.get_parameter('event_topic').value)
@@ -233,13 +235,13 @@ class CameraFrameRangeMonitor(Node):
 
         try:
             color_tf = self.tf_buffer.lookup_transform(
-                self.base_frame,
+                self.mount_frame,
                 self.color_frame,
                 Time(),
                 timeout=Duration(seconds=0.05),
             )
             depth_tf = self.tf_buffer.lookup_transform(
-                self.base_frame,
+                self.mount_frame,
                 self.depth_frame,
                 Time(),
                 timeout=Duration(seconds=0.05),
@@ -264,7 +266,7 @@ class CameraFrameRangeMonitor(Node):
                 math.atan2(forward[1], forward[0])
             )
             self._emit(
-                f'{label} {self.base_frame}->{tf.child_frame_id} '
+                f'{label} {self.mount_frame}->{tf.child_frame_id} '
                 f'xyz=({t.x:+.5f},{t.y:+.5f},{t.z:+.5f})m '
                 f'optical_forward_base='
                 f'({forward[0]:+.5f},{forward[1]:+.5f},'
