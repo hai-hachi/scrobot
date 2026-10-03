@@ -5,9 +5,9 @@ runtime and by debug-only validation models.
 
 - `shuttle.STL` - detailed visual mesh used for Gazebo rendering and future
   synthetic RGB / YOLO dataset generation.
-- `shuttle_collision_octagonal.stl` - low-poly octagonal collision mesh
-  retained as a shared physical asset. Debug physics / collection test models
-  in `scrobot_debug` currently reference this mesh.
+- `shuttle_collision_octagonal.stl` - accepted low-poly octagonal collision
+  mesh used directly by the production dynamic shuttle model. The debug physics
+  and collection harnesses spawn that same production model.
 
 Mesh frame convention:
 
@@ -15,7 +15,7 @@ Mesh frame convention:
 - +Z axis along the shuttle longitudinal axis toward the skirt
 - mesh dimensions in metres
 
-The production `model.sdf` remains the normal shuttle entry point used by
-`spawn_shuttles`. Test-only SDF wrappers do not belong in
-`scrobot_simulation/models`; they live under
+The production `model.sdf` is the normal shuttle entry point used by
+`spawn_shuttles` and by the debug physics / collection harnesses. Only
+camera-specific non-colliding wrappers live under
 `scrobot_debug/models/shuttle`.
