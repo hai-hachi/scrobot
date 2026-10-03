@@ -48,6 +48,12 @@ local_collect_controller:
     precollect_position_tolerance: 0.03
     precollect_yaw_tolerance_deg: 5.0
 
+    # Practical handoff to the 0.30 m-wide collector. The strict 0.03 m / 5 deg
+    # condition is still accepted first, but this envelope prevents SMC from
+    # stalling a few centimetres from the pre-pose when straight pickup is safe.
+    handoff_position_tolerance: 0.08
+    handoff_yaw_tolerance_deg: 8.0
+
     # After the pose phase, collection is intentionally straight.
     straight_collect_speed: 0.30
 
