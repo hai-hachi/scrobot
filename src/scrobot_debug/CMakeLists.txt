@@ -37,13 +37,6 @@ install(
 # non-executable source file when --symlink-install is used.
 install(
   PROGRAMS
-    scripts/shuttle_sim_monitor.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME shuttle_sim_monitor
-)
-
-install(
-  PROGRAMS
     scripts/telemetry_monitor.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME telemetry_monitor
