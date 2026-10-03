@@ -44,6 +44,8 @@ public:
     this->pickupHalfWidth_ = _sdf->Get<double>("pickup_half_width", this->pickupHalfWidth_).first;
     this->shuttleCenterOffsetZ_ = _sdf->Get<double>(
       "shuttle_center_offset_z", this->shuttleCenterOffsetZ_).first;
+    this->enableCollection_ = _sdf->Get<bool>(
+      "enable_collection", this->enableCollection_).first;
 
     if (this->updateRate_ <= 0.0) this->updateRate_ = 10.0;
     if (this->pickupHalfLength_ <= 0.0) this->pickupHalfLength_ = 0.030;
@@ -123,7 +125,7 @@ public:
           std::abs(localX - this->pickupOffsetX_) <= this->pickupHalfLength_ &&
           std::abs(localY) <= this->pickupHalfWidth_;
 
-        if (centerInsidePickupZone)
+        if (this->enableCollection_ && centerInsidePickupZone)
         {
           auto *collectedPose = collectedMsg.add_pose();
           this->FillPoseMessage(*collectedPose, _entity, _nameComp->Data(), shuttlePose);
@@ -186,6 +188,7 @@ private:
   double pickupHalfLength_{0.030};
   double pickupHalfWidth_{0.150};
   double shuttleCenterOffsetZ_{0.045};
+  bool enableCollection_{true};
 
   std::chrono::steady_clock::duration updatePeriod_{};
   std::chrono::steady_clock::duration lastUpdate_{};
