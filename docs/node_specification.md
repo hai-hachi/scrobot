@@ -14,6 +14,8 @@ Production AUTO/MANUAL arbitration state owner.
 - While MANUAL is active, keeps the high-priority manual path alive with the
   latest operator command or zero so autonomous motion cannot leak through
   between keyboard commands.
+- AUTO/MANUAL selection occurs before velocity smoothing and collision
+  monitoring, so normal manual driving remains collision-protected.
 
 ### `manual_teleop`
 Interactive keyboard client for the manual-mode manager.
@@ -83,8 +85,10 @@ The sweep checkpoint stores both robot pose and sweep-path progress so a local
 collection diversion does not lose coverage progress.
 
 The runtime manager also observes `/control/manual_mode`. MANUAL cancels the
-active autonomous action and enters `PAUSED`. AUTO returns to the saved
-interrupt checkpoint when required, then recreates the saved autonomous phase.
+active autonomous action and enters `PAUSED`. AUTO resumes directly when the
+robot remained within 0.15 m and 10 deg of the interruption checkpoint;
+otherwise Nav2 first returns to that checkpoint, then recreates the saved
+autonomous phase.
 
 ### `shuttle_collection_filter`
 Mission-specific shuttle eligibility filter.
@@ -198,7 +202,13 @@ Debug-only consolidated terminal monitor.
 - Output topic: `/debug/telemetry`.
 - Observes AUTO/MANUAL state, mission state, local collection phase,
   perception counts, shuttle ground truth/collection events, odometry versus
-  Gazebo truth, and selected `/rosout` streams.
+  Gazebo truth, command-path velocity, and selected `/rosout` streams.
+
+### `debug_raw_teleop`
+Debug-only keyboard driver that publishes directly to
+`/diff_drive_controller/cmd_vel`. It intentionally bypasses command
+arbitration, velocity smoothing, and collision monitoring and must not be used
+as the production manual-control path.
 
 ### `shuttle_sim_monitor`
 Measures shuttle drift and collector-envelope clearance during isolated shuttle
