@@ -194,61 +194,20 @@ so a clean telemetry-only terminal can use:
 ros2 topic echo /debug/telemetry
 ```
 
-## Shuttle simulation check
+## Shuttle collection check
 
-Launch:
+The old `shuttle_sim_check.launch.py` / `shuttle_sim_monitor.py` path was
+removed because it duplicated older circle-radius pickup logic.
 
-```bash
-ros2 launch scrobot_debug shuttle_sim_check.launch.py
-```
-
-Default test layout:
-
-- robot: x = -1.0 m, y = 0.0 m, yaw = 0
-- one detailed static shuttle: x = 0.0 m, y = 0.0 m
-- simulated magnetometer disabled
-- ros2_control and command pipeline enabled
-- shuttle ground-truth/collision monitor enabled
-
-The shuttle collision test deliberately starts only the low-level
-`joint_state_broadcaster` and `diff_drive_controller`. It does **not** start
-the production command pipeline, because collision monitoring should not stop
-the robot before the collector reaches the shuttle during this particular test.
-
-Drive from another terminal with the debug-only raw teleop:
+Use the current collection-center test instead:
 
 ```bash
-ros2 run scrobot_debug debug_raw_teleop.py
+ros2 launch scrobot_debug collection_check.launch.py
 ```
 
-The shuttle monitor reports:
-
-- shuttle ground-truth count
-- initial single-shuttle position
-- shuttle movement/drift
-- nearest shuttle position in the robot frame
-- signed clearance to the configured collector pickup envelope
-- whether the geometry predicts a pickup
-- actual `/evaluation/shuttle_collected` events
-
-### Lateral collector boundary tests
-
-The collector half-width is 0.150 m and the shuttle radius is 0.034 m, so the
-ideal lateral center limit on the straight side of the pickup envelope is:
-
-```text
-0.150 + 0.034 = 0.184 m
-```
-
-Examples:
-
-```bash
-ros2 launch scrobot_debug shuttle_sim_check.launch.py shuttle_y:=0.140
-ros2 launch scrobot_debug shuttle_sim_check.launch.py shuttle_y:=0.184
-ros2 launch scrobot_debug shuttle_sim_check.launch.py shuttle_y:=0.220
-```
-
-Restart Gazebo between boundary cases so each run starts from a clean world.
+The collection harness uses the same production dynamic shuttle model as normal
+mission simulation and validates the current 45 mm local +Z shuttle collection
+center against the 300 x 60 mm collector rectangle.
 
 ## RViz
 
