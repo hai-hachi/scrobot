@@ -31,6 +31,8 @@ def generate_launch_description():
     z = LaunchConfiguration('z')
     yaw = LaunchConfiguration('yaw')
     enable_magnetometer = LaunchConfiguration('enable_magnetometer')
+    drive_contact_mu = LaunchConfiguration('drive_contact_mu')
+    caster_contact_mu = LaunchConfiguration('caster_contact_mu')
 
     # ==========================================================
     # Simulation robot Xacro
@@ -60,6 +62,10 @@ def generate_launch_description():
             xacro_file,
             ' enable_magnetometer:=',
             enable_magnetometer,
+            ' drive_contact_mu:=',
+            drive_contact_mu,
+            ' caster_contact_mu:=',
+            caster_contact_mu,
         ]),
         value_type=str,
     )
@@ -150,6 +156,21 @@ def generate_launch_description():
             default_value='false',
             choices=['true', 'false'],
             description='Enable the optional legacy HMC5883L simulation sensor.',
+        ),
+        DeclareLaunchArgument(
+            'drive_contact_mu',
+            default_value='5.0',
+            description=(
+                'Gazebo drive-wheel contact friction coefficient. '
+                'Tuned value; not a measured material coefficient.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'caster_contact_mu',
+            default_value='0.05',
+            description=(
+                'Gazebo passive-caster contact friction coefficient.'
+            ),
         ),
 
         robot_state_publisher,
