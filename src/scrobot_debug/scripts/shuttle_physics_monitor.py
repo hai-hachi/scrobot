@@ -7,6 +7,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rosgraph_msgs.msg import Clock
+from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
 
 
@@ -33,6 +34,7 @@ class ShuttlePhysicsMonitor(Node):
         self.declare_parameter('linear_settle_threshold', 0.01)
         self.declare_parameter('angular_settle_threshold', 0.20)
         self.declare_parameter('settle_hold_time', 1.0)
+        self.declare_parameter('event_topic', '/debug/shuttle_physics')
 
         self.pose_topic = str(self.get_parameter('pose_topic').value)
         self.name_prefix = str(self.get_parameter('name_prefix').value)
@@ -46,6 +48,9 @@ class ShuttlePhysicsMonitor(Node):
         self.settle_hold_time = max(
             0.0, float(self.get_parameter('settle_hold_time').value)
         )
+        self.event_topic = str(self.get_parameter('event_topic').value)
+
+        self.event_pub = self.create_publisher(String, self.event_topic, 50)
 
         self.sim_time = None
         self.last_clock_sim = None
@@ -63,12 +68,17 @@ class ShuttlePhysicsMonitor(Node):
         )
         self.create_timer(1.0 / self.report_rate, self._report)
 
-        self.get_logger().info(
-            'Shuttle physics monitor ready: '
-            f'v_settle<{self.linear_settle_threshold:.3f} m/s, '
-            f'w_settle<{self.angular_settle_threshold:.3f} rad/s, '
-            f'hold={self.settle_hold_time:.2f} s.'
+        self._emit(
+            'READY '
+            f'v_settle<{self.linear_settle_threshold:.3f} m/s '
+            f'w_settle<{self.angular_settle_threshold:.3f} rad/s '
+            f'hold={self.settle_hold_time:.2f} s'
         )
+
+    def _emit(self, text):
+        msg = String()
+        msg.data = str(text)
+        self.event_pub.publish(msg)
 
     @staticmethod
     def _clock_seconds(msg):
@@ -175,13 +185,13 @@ class ShuttlePhysicsMonitor(Node):
                 ):
                     state['settled_announced'] = True
                     displacement = math.dist(pos, state['initial_pos'])
-                    self.get_logger().info(
-                        f'{model_name} SETTLED at t={self.sim_time:.3f}s: '
-                        f'pos=({pos[0]:+.4f},{pos[1]:+.4f},{pos[2]:+.4f}) m, '
-                        f'path={state["path"]:.4f} m, '
-                        f'net_displacement={displacement:.4f} m, '
-                        f'max_speed={state["max_speed"]:.3f} m/s, '
-                        f'max_omega={state["max_omega"]:.2f} rad/s.'
+                    self._emit(
+                        f'SETTLED {model_name} t={self.sim_time:.3f}s '
+                        f'pos=({pos[0]:+.4f},{pos[1]:+.4f},{pos[2]:+.4f})m '
+                        f'path={state["path"]:.4f}m '
+                        f'net={displacement:.4f}m '
+                        f'max_v={state["max_speed"]:.3f}m/s '
+                        f'max_w={state["max_omega"]:.2f}rad/s'
                     )
             else:
                 state['still_since'] = None
@@ -193,9 +203,7 @@ class ShuttlePhysicsMonitor(Node):
 
         entity_count = len(self.states)
         if entity_count != self.last_entity_count:
-            self.get_logger().info(
-                f'Tracked dynamic shuttles: {entity_count}'
-            )
+            self._emit(f'COUNT entities={entity_count}')
             self.last_entity_count = entity_count
 
     def _report(self):
@@ -223,12 +231,12 @@ class ShuttlePhysicsMonitor(Node):
         first = self.states[first_name]
         p = first['pos']
 
-        self.get_logger().info(
+        self._emit(
             f'PERF entities={len(self.states)} moving={moving} '
             f'RTF={rtf_text} '
-            f'max_v={max_speed:.3f} m/s max_w={max_omega:.2f} rad/s | '
+            f'max_v={max_speed:.3f}m/s max_w={max_omega:.2f}rad/s '
             f'{first_name} pos=({p[0]:+.3f},{p[1]:+.3f},{p[2]:+.3f}) '
-            f'v={first["speed"]:.3f} w={first["omega"]:.2f}'
+            f'v={first["speed"]:.3f}m/s w={first["omega"]:.2f}rad/s'
         )
 
 
