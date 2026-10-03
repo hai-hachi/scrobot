@@ -3,7 +3,6 @@
 #include <cmath>
 #include <memory>
 #include <string>
-#include <unordered_map>
 
 #include <gz/msgs/pose_v.pb.h>
 #include <gz/plugin/Register.hh>
@@ -12,7 +11,6 @@
 #include <gz/sim/Util.hh>
 #include <gz/sim/components/Model.hh>
 #include <gz/sim/components/Name.hh>
-#include <gz/sim/components/Static.hh>
 #include <gz/transport/Node.hh>
 
 #include <sdf/Element.hh>
@@ -25,15 +23,6 @@ class ShuttleActivitySystem:
   public gz::sim::ISystemConfigure,
   public gz::sim::ISystemPreUpdate
 {
-private:
-  struct ShuttleState
-  {
-    std::chrono::steady_clock::duration lastProtectedTime{};
-    bool initialized{false};
-    bool requestedStatic{false};
-    bool removalRequested{false};
-  };
-
 public:
   void Configure(
     const gz::sim::Entity &_entity,
@@ -47,9 +36,6 @@ public:
 
     this->robotName_ = _sdf->Get<std::string>("robot_model", this->robotName_).first;
     this->updateRate_ = _sdf->Get<double>("update_rate", this->updateRate_).first;
-    this->activationDistance_ = _sdf->Get<double>("activation_distance", this->activationDistance_).first;
-    this->freezeDistance_ = _sdf->Get<double>("freeze_distance", this->freezeDistance_).first;
-    this->settleTime_ = _sdf->Get<double>("settle_time", this->settleTime_).first;
     this->groundTruthTopic_ = _sdf->Get<std::string>("ground_truth_topic", this->groundTruthTopic_).first;
     this->collectedTopic_ = _sdf->Get<std::string>("collected_topic", this->collectedTopic_).first;
     this->pickupOffsetX_ = _sdf->Get<double>("pickup_offset_x", this->pickupOffsetX_).first;
@@ -58,17 +44,12 @@ public:
     this->shuttleCollisionRadius_ = _sdf->Get<double>("shuttle_collision_radius", this->shuttleCollisionRadius_).first;
 
     if (this->updateRate_ <= 0.0) this->updateRate_ = 10.0;
-    if (this->activationDistance_ < 0.0) this->activationDistance_ = 0.0;
-    if (this->freezeDistance_ < this->activationDistance_) this->freezeDistance_ = this->activationDistance_;
-    if (this->settleTime_ < 0.0) this->settleTime_ = 0.0;
     if (this->pickupHalfLength_ <= 0.0) this->pickupHalfLength_ = 0.030;
     if (this->pickupHalfWidth_ <= 0.0) this->pickupHalfWidth_ = 0.150;
     if (this->shuttleCollisionRadius_ < 0.0) this->shuttleCollisionRadius_ = 0.0;
 
     this->updatePeriod_ = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
       std::chrono::duration<double>(1.0 / this->updateRate_));
-    this->settleDuration_ = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-      std::chrono::duration<double>(this->settleTime_));
 
     this->groundTruthPublisher_ = this->transportNode_.Advertise<gz::msgs::Pose_V>(this->groundTruthTopic_);
     this->collectedPublisher_ = this->transportNode_.Advertise<gz::msgs::Pose_V>(this->collectedTopic_);
@@ -118,15 +99,6 @@ public:
         if (model.LinkByName(_ecm, "shuttle_link") == gz::sim::kNullEntity)
           return true;
 
-        auto &state = this->states_[_entity];
-        if (state.removalRequested)
-          return true;
-        if (!state.initialized)
-        {
-          state.lastProtectedTime = _info.simTime;
-          state.initialized = true;
-        }
-
         const auto shuttlePose = gz::sim::worldPose(_entity, _ecm);
         const double worldDx = shuttlePose.Pos().X() - robotPose.Pos().X();
         const double worldDy = shuttlePose.Pos().Y() - robotPose.Pos().Y();
@@ -144,7 +116,6 @@ public:
         {
           auto *collectedPose = collectedMsg.add_pose();
           this->FillPoseMessage(*collectedPose, _entity, _nameComp->Data(), shuttlePose);
-          state.removalRequested = true;
           _ecm.RequestRemoveEntity(_entity);
           return true;
         }
@@ -152,31 +123,11 @@ public:
         auto *poseMsg = shuttleGroundTruthMsg.add_pose();
         this->FillPoseMessage(*poseMsg, _entity, _nameComp->Data(), shuttlePose);
 
-        const double distance = std::hypot(worldDx, worldDy);
-        const bool staticNow = state.requestedStatic || model.Static(_ecm);
-
-        if (staticNow)
-        {
-          if (distance <= this->activationDistance_)
-          {
-            this->SetModelStatic(_entity, false, _ecm);
-            state.requestedStatic = false;
-            state.lastProtectedTime = _info.simTime;
-          }
-          return true;
-        }
-
-        if (distance <= this->freezeDistance_)
-        {
-          state.lastProtectedTime = _info.simTime;
-          return true;
-        }
-
-        if (_info.simTime - state.lastProtectedTime >= this->settleDuration_)
-        {
-          this->SetModelStatic(_entity, true, _ecm);
-          state.requestedStatic = true;
-        }
+        // Shuttle models are intentionally static after spawning. This keeps the
+        // visible shuttle pose deterministic for perception tests and prevents
+        // nonphysical rolling caused by approximating the feather skirt with
+        // simple collision primitives. Collection is represented by intersection
+        // with the physical collector pickup envelope above.
         return true;
       });
 
@@ -204,27 +155,6 @@ private:
     _poseMsg.mutable_orientation()->set_w(_pose.Rot().W());
   }
 
-  void SetModelStatic(
-    const gz::sim::Entity &_entity,
-    const bool _static,
-    gz::sim::EntityComponentManager &_ecm)
-  {
-    auto staticComp = _ecm.Component<gz::sim::components::Static>(_entity);
-    if (staticComp)
-    {
-      staticComp->SetData(
-        _static,
-        [](const bool &_oldValue, const bool &_newValue)
-        {
-          return _oldValue != _newValue;
-        });
-    }
-    else
-    {
-      _ecm.CreateComponent(_entity, gz::sim::components::Static(_static));
-    }
-  }
-
   void ResolveRobot(gz::sim::EntityComponentManager &_ecm)
   {
     this->robotEntity_ = _ecm.EntityByComponents(
@@ -234,7 +164,6 @@ private:
 
   gz::sim::Entity worldEntity_{gz::sim::kNullEntity};
   gz::sim::Entity robotEntity_{gz::sim::kNullEntity};
-  std::unordered_map<gz::sim::Entity, ShuttleState> states_;
 
   gz::transport::Node transportNode_;
   gz::transport::Node::Publisher groundTruthPublisher_;
@@ -244,16 +173,12 @@ private:
   std::string groundTruthTopic_{"/evaluation/shuttle_ground_truth_gz"};
   std::string collectedTopic_{"/evaluation/shuttle_collected_gz"};
   double updateRate_{10.0};
-  double activationDistance_{0.35};
-  double freezeDistance_{0.55};
-  double settleTime_{0.75};
   double pickupOffsetX_{0.165};
   double pickupHalfLength_{0.030};
   double pickupHalfWidth_{0.150};
-  double shuttleCollisionRadius_{0.050};
+  double shuttleCollisionRadius_{0.034};
 
   std::chrono::steady_clock::duration updatePeriod_{};
-  std::chrono::steady_clock::duration settleDuration_{};
   std::chrono::steady_clock::duration lastUpdate_{};
   bool timeInitialized_{false};
 };
