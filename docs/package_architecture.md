@@ -5,6 +5,7 @@
 ```text
 scrobot_bringup
 scrobot_control
+scrobot_debug
 scrobot_description
 scrobot_evaluation
 scrobot_interfaces
@@ -16,7 +17,8 @@ scrobot_simulation
 ```
 
 ## `scrobot_description`
-Owns the robot model, meshes, links, joints, sensors, and static frame relationships.
+Owns the robot model, meshes, links, joints, sensors, and static frame
+relationships.
 
 Important frame family:
 
@@ -31,23 +33,50 @@ base_footprint
 ```
 
 ## `scrobot_control`
-Owns low-level motion command handling and ROS 2 control integration.
+Owns low-level motion command handling, ROS 2 control integration, and the
+production AUTO/MANUAL mode.
 
 Responsibilities:
 
 - differential-drive controller
 - wheel feedback
-- manual command source
-- command arbitration/pipeline
+- autonomous command arbitration
+- velocity smoothing and autonomous collision monitoring
+- explicit AUTO/MANUAL mode
+- manual command gating
+- keyboard manual-teleop client
 
-Important topics:
+Command flow:
 
 ```text
-/cmd_vel_manual
-/diff_drive_controller/cmd_vel
-/diff_drive_controller/odom
-/joint_states
+Nav2 / local collection / relocalization
+ -> autonomous twist_mux
+ -> velocity_smoother
+ -> collision_monitor
+ -> /cmd_vel_safe_auto
+                       \
+                        -> manual_override_mux
+                       /
+manual_teleop
+ -> /cmd_vel_manual_input
+ -> manual_mode_manager
+ -> /cmd_vel_manual
 ```
+
+`manual_mode_manager` owns `/cmd_vel_manual`. While MANUAL is active it
+keeps the high-priority manual source alive with the latest operator command or
+zero, so autonomous motion cannot reappear between key presses.
+
+Control-mode interfaces:
+
+```text
+/control/set_manual_mode   std_srvs/srv/SetBool
+/control/manual_mode       std_msgs/msg/Bool
+/control/mode              std_msgs/msg/String
+```
+
+Manual motion currently bypasses collision_monitor intentionally so an operator
+can back out of an autonomous stop condition.
 
 ## `scrobot_localization`
 Owns local state estimation and AprilTag global correction.
@@ -75,30 +104,36 @@ Responsibilities:
 - global/local costmaps
 - planner
 - behavior tree
-- controller
+- Regulated Pure Pursuit path controller
 - recovery behaviors
 
-Current path-following controller: Regulated Pure Pursuit.
-
 ## `scrobot_mission`
-Owns task-level behavior.
+Owns task-level autonomous behavior.
 
-Current implementation:
+Current flow:
 
 ```text
 initial tag approach
  -> initial relocalization
  -> start Nav2
- -> patrol points
- -> 360 degree scan at each point
+ -> join four-pass sweep
+ -> fixed AprilTag relocalization stops
+ -> shuttle diversion
+ -> local collection spree
+ -> return to saved sweep checkpoint
+ -> resume sweep
 ```
 
-Packaging uses `ament_cmake` + `ament_cmake_python`. Launch/config files and `patrol_manager` are installed explicitly so `colcon build --symlink-install` is supported.
+The mission listens to `/control/manual_mode`. Entering MANUAL cancels the
+active autonomous action and preserves mission context. Returning to AUTO
+restores the interruption checkpoint where needed and resumes the saved phase.
+
+Debug/telemetry monitors are not owned or launched by this package.
 
 ## `scrobot_perception`
 Owns shuttle perception adapters and tracking.
 
-### Simulation path
+Simulation path:
 
 ```text
 /evaluation/shuttle_ground_truth
@@ -108,20 +143,29 @@ Owns shuttle perception adapters and tracking.
  -> /perception/tracked_shuttles
 ```
 
-### Future real path
+Future real path:
 
 ```text
-RGB -> YOLO -> /perception/detections_2d
+RGB -> YOLO -> detections_2d
 aligned depth + CameraInfo + detections_2d
  -> depth_localizer
  -> /perception/shuttle_detections_3d
  -> shuttle_tracker
 ```
 
-The tracker is environment-independent.
-
 ## `scrobot_simulation`
-Owns Gazebo world/model setup, sensors, bridge configuration, shuttle spawning, and simulation-only plugins.
+Owns Gazebo runtime functionality only:
+
+- badminton world and safety boundary
+- robot spawning
+- Gazebo sensor definitions and ROS bridges
+- depth registration
+- detailed shuttle model and distributions
+- shuttle collection/ground-truth Gazebo plugin
+- generated AprilTag court model
+
+RViz, MarkerArray court visualization, and test monitors are not part of this
+package.
 
 Important simulation truth topics:
 
@@ -129,31 +173,39 @@ Important simulation truth topics:
 /evaluation/ground_truth_odom
 /evaluation/ground_truth_tf
 /evaluation/shuttle_ground_truth
+/evaluation/shuttle_collected
 ```
 
-The shuttle-only stream is produced by `shuttle_activity_system` and bridged from `gz.msgs.Pose_V` to `geometry_msgs/msg/PoseArray`.
+Simulation ground truth is for perception adapters, evaluation, and debug only;
+it must not feed mission/navigation decision logic directly.
+
+## `scrobot_debug`
+Owns test orchestration and observation.
+
+Responsibilities:
+
+- subsystem-specific debug launch files
+- centralized terminal telemetry
+- shuttle collision/physics monitor
+- RViz and court MarkerArray visualization
+- launching the production dependencies needed for each isolated test
+
+It must not contain the production implementation of manual control, mission
+logic, localization, or perception.
 
 ## `scrobot_evaluation`
-Owns repeatable test runners, loggers, and result analysis.
+Owns repeatable experiment runners, loggers, metrics, and result analysis.
 
-Its local-odometry reference remains `/evaluation/ground_truth_odom`; the shuttle ground-truth change does not alter that evaluation interface.
+Evaluation observes production behavior; it does not arbitrate robot control.
 
 ## `scrobot_interfaces`
-Owns project-specific action definitions.
-
-Currently:
-
-```text
-ApproachTag.action
-Relocalize.action
-```
+Owns project-specific ROS action definitions.
 
 ## `scrobot_bringup`
-Reserved for integrated launch/orchestration of multiple subsystems.
+Owns integrated production orchestration across multiple subsystems. Debug/test
+composition belongs in `scrobot_debug`, not here.
 
 ## Dependency direction
-
-Preferred architecture:
 
 ```text
 description
@@ -166,7 +218,8 @@ navigation
    |
 mission
    |
-evaluation observes the system without controlling production behavior
-```
+bringup composes production subsystems
 
-Simulation-specific ground truth must not leak directly into mission/navigation logic.
+debug/evaluation observe or exercise the public interfaces
+without owning production behavior
+```
