@@ -12,7 +12,6 @@ def generate_launch_description():
 
     config = LaunchConfiguration('config')
     mode = LaunchConfiguration('mode')
-    visual = LaunchConfiguration('visual')
     batch = LaunchConfiguration('batch')
     count = LaunchConfiguration('count')
     x = LaunchConfiguration('x')
@@ -23,7 +22,6 @@ def generate_launch_description():
             'ros2', 'run', 'scrobot_simulation', 'spawn_shuttles',
             '--config', config,
             '--mode', mode,
-            '--visual', visual,
             '--batch', batch,
             '--count', count,
             '--x', x,
@@ -38,15 +36,6 @@ def generate_launch_description():
             'mode',
             default_value='single',
             choices=['single', 'random', 'cluster', 'mixed'],
-        ),
-        DeclareLaunchArgument(
-            'visual',
-            default_value='detail',
-            choices=['detail', 'fast'],
-            description=(
-                'Compatibility argument. The detailed shuttle model is always '
-                'used so perception and mission tests share identical physics.'
-            ),
         ),
         DeclareLaunchArgument(
             'batch',
