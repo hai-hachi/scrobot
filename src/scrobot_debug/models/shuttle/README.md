@@ -1,23 +1,19 @@
 # Debug shuttle models
 
-These SDF files are validation fixtures, not normal simulation models.
+This directory contains only test-specific shuttle wrappers.
 
-- `model_physics_test.sdf` - dynamic shuttle used by the isolated physics and
-  collection tests.
 - `model_camera_test.sdf` - static, non-colliding visual target used by camera
   frame/range tests.
 
-Both reuse meshes from:
-
-```text
-scrobot_simulation/models/shuttle/meshes
-```
-
-Normal mission simulation must spawn:
+The accepted dynamic shuttle physics model is now the production model:
 
 ```text
 scrobot_simulation/models/shuttle/model.sdf
 ```
 
-This keeps `scrobot_simulation` limited to runtime simulation assets while
-`scrobot_debug` owns test-specific wrappers and fixtures.
+Both the isolated shuttle-physics harness and the collection harness test that
+production model directly. This avoids maintaining a second physics SDF that
+could drift from mission simulation.
+
+The camera test keeps its own static wrapper because it intentionally disables
+collision and motion while preserving the same detailed shuttle visual mesh.
