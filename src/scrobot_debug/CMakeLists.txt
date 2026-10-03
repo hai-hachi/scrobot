@@ -99,6 +99,13 @@ install(
 )
 
 install(
+  PROGRAMS
+    scripts/camera_frame_range_monitor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME camera_frame_range_monitor
+)
+
+install(
   DIRECTORY
     launch
     config
