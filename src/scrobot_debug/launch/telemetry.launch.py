@@ -11,7 +11,7 @@ def generate_launch_description():
 
     telemetry = Node(
         package='scrobot_debug',
-        executable='telemetry_monitor.py',
+        executable='telemetry_monitor',
         name='telemetry_monitor',
         output='screen',
         parameters=[{
