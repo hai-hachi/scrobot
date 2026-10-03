@@ -18,6 +18,8 @@ def generate_launch_description():
     robot_x = LaunchConfiguration('robot_x')
     robot_y = LaunchConfiguration('robot_y')
     robot_yaw = LaunchConfiguration('robot_yaw')
+    drive_contact_mu = LaunchConfiguration('drive_contact_mu')
+    caster_contact_mu = LaunchConfiguration('caster_contact_mu')
     controller_delay = LaunchConfiguration('controller_delay')
 
     simulation = IncludeLaunchDescription(
@@ -30,6 +32,8 @@ def generate_launch_description():
             'y': robot_y,
             'yaw': robot_yaw,
             'enable_magnetometer': 'false',
+            'drive_contact_mu': drive_contact_mu,
+            'caster_contact_mu': caster_contact_mu,
         }.items(),
     )
 
@@ -84,6 +88,16 @@ def generate_launch_description():
         DeclareLaunchArgument('robot_x', default_value='0.0'),
         DeclareLaunchArgument('robot_y', default_value='0.0'),
         DeclareLaunchArgument('robot_yaw', default_value='0.0'),
+        DeclareLaunchArgument(
+            'drive_contact_mu',
+            default_value='5.0',
+            description='Drive-wheel Gazebo contact friction for skid tuning.',
+        ),
+        DeclareLaunchArgument(
+            'caster_contact_mu',
+            default_value='0.05',
+            description='Caster Gazebo contact friction for skid tuning.',
+        ),
         DeclareLaunchArgument('controller_delay', default_value='4.0'),
 
         simulation,
