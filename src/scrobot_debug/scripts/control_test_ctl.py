@@ -9,6 +9,7 @@ import time
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import TwistStamped
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from std_srvs.srv import SetBool
@@ -38,6 +39,9 @@ class ControlTest(Node):
         self.pub_manual_input = self.create_publisher(
             TwistStamped, '/cmd_vel_manual_input', qos
         )
+        self.pub_raw = self.create_publisher(
+            TwistStamped, '/diff_drive_controller/cmd_vel', qos
+        )
 
         self.create_subscription(
             TwistStamped, '/cmd_vel_auto', self._auto_cb, qos
@@ -54,6 +58,12 @@ class ControlTest(Node):
             self._final_cb,
             qos,
         )
+        self.create_subscription(
+            Odometry,
+            '/diff_drive_controller/odom',
+            self._odom_cb,
+            qos,
+        )
 
         self.manual_client = self.create_client(
             SetBool, '/control/set_manual_mode'
@@ -63,6 +73,7 @@ class ControlTest(Node):
         self.selected = None
         self.smoothed = None
         self.final = None
+        self.odom = None
 
     @staticmethod
     def pair(msg):
@@ -82,6 +93,12 @@ class ControlTest(Node):
 
     def _final_cb(self, msg):
         self.final = self.pair(msg)
+
+    def _odom_cb(self, msg):
+        self.odom = (
+            float(msg.pose.pose.position.x),
+            float(msg.pose.pose.position.y),
+        )
 
     def msg(self, vx=0.0, wz=0.0):
         msg = TwistStamped()
@@ -141,6 +158,31 @@ class ControlTest(Node):
             response is not None and response.success,
             f'set manual={enabled}',
         )
+
+    def test_raw(self):
+        print('[control_test] raw diff-drive controller test', flush=True)
+
+        self.spin_sleep(0.5)
+        self.require(self.odom is not None, 'wheel odometry available')
+        start = self.odom
+
+        self.publish_for(self.pub_raw, 0.20, 0.0, 1.2)
+        self.spin_sleep(0.2)
+        self.require(self.odom is not None, 'wheel odometry remains available')
+
+        dx = self.odom[0] - start[0]
+        dy = self.odom[1] - start[1]
+        distance = math.hypot(dx, dy)
+        self.require(
+            distance > 0.10,
+            'raw forward command moves wheel odometry',
+            f'distance={distance:.3f} m',
+        )
+
+        for _ in range(6):
+            self.pub_raw.publish(self.msg())
+            rclpy.spin_once(self, timeout_sec=0.0)
+            time.sleep(0.05)
 
     def test_mux(self):
         print('[control_test] mux priority test', flush=True)
@@ -403,7 +445,11 @@ class ControlTest(Node):
         )
         self.spin_sleep(self.startup_wait)
 
-        if self.test == 'mux':
+        if self.test == 'raw':
+            self.test_raw()
+        elif self.test == 'manual':
+            self.test_manual()
+        elif self.test == 'mux':
             self.test_mux()
         elif self.test == 'smoother':
             self.test_smoother()
@@ -415,11 +461,6 @@ class ControlTest(Node):
             self.test_smoother()
             self.test_limits()
             self.test_collision()
-        else:
-            raise RuntimeError(
-                f'Automated control_test_ctl does not handle {self.test}'
-            )
-
         print(
             f'[control_test] ALL PASS test={self.test}',
             flush=True,
