@@ -234,29 +234,6 @@ class ControlStackMonitor(Node):
             angle += msg.angle_increment
         return points
 
-    def make_fill(self, marker_id, name, points, z, rgba):
-        marker = Marker()
-        marker.header.frame_id = 'base_footprint'
-        marker.header.stamp = self.get_clock().now().to_msg()
-        marker.ns = name
-        marker.id = marker_id
-        marker.type = Marker.TRIANGLE_LIST
-        marker.action = Marker.ADD
-        marker.pose.orientation.w = 1.0
-        marker.scale.x = 1.0
-        marker.scale.y = 1.0
-        marker.scale.z = 1.0
-        marker.color.r = rgba[0]
-        marker.color.g = rgba[1]
-        marker.color.b = rgba[2]
-        marker.color.a = rgba[3]
-
-        anchor = points[0]
-        for i in range(1, len(points) - 1):
-            for x, y in (anchor, points[i], points[i + 1]):
-                marker.points.append(self.point(x, y, z))
-        return marker
-
     def make_outline(self, marker_id, name, points, z, rgba, width=0.025):
         marker = Marker()
         marker.header.frame_id = 'base_footprint'
@@ -297,17 +274,21 @@ class ControlStackMonitor(Node):
             marker.points.append(self.point(x, y, 0.08))
         return marker
 
+    def make_delete_all(self):
+        marker = Marker()
+        marker.action = Marker.DELETEALL
+        return marker
+
     def publish_markers(self):
         scan_points = self.scan_points()
 
         msg = MarkerArray()
         msg.markers.extend([
-            self.make_fill(1, 'slowdown_zone_fill', self.slowdown_zone, 0.012, (1.0, 0.75, 0.0, 0.18)),
-            self.make_outline(2, 'slowdown_zone_outline', self.slowdown_zone, 0.018, (1.0, 0.85, 0.0, 1.0)),
-            self.make_fill(3, 'stop_zone_fill', self.stop_zone, 0.025, (1.0, 0.0, 0.0, 0.28)),
-            self.make_outline(4, 'stop_zone_outline', self.stop_zone, 0.032, (1.0, 0.0, 0.0, 1.0)),
-            self.make_outline(5, 'base_footprint_outline', self.base_footprint, 0.045, (0.2, 0.8, 1.0, 1.0), 0.018),
-            self.make_scan_marker(6, scan_points),
+            self.make_delete_all(),
+            self.make_outline(1, 'slowdown_zone_outline', self.slowdown_zone, 0.006, (1.0, 0.85, 0.0, 1.0), 0.008),
+            self.make_outline(2, 'stop_zone_outline', self.stop_zone, 0.010, (1.0, 0.0, 0.0, 1.0), 0.010),
+            self.make_outline(3, 'base_footprint_outline', self.base_footprint, 0.014, (0.2, 0.8, 1.0, 1.0), 0.008),
+            self.make_scan_marker(4, scan_points),
         ])
         self.marker_pub.publish(msg)
 
