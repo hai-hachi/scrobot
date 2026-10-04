@@ -4,6 +4,8 @@ import csv
 import hashlib
 import math
 import os
+import random
+import subprocess
 import struct
 import time
 from pathlib import Path
@@ -140,10 +142,23 @@ class YoloDatasetCapture(Node):
         self.declare_parameter('ground_truth_odom_topic', '/evaluation/ground_truth_odom')
         self.declare_parameter('base_frame', 'base_footprint')
         self.declare_parameter('camera_frame', 'camera_color_optical_frame')
-        self.declare_parameter('capture_rate', 2.0)
+        self.declare_parameter('capture_rate', 10.0)
         self.declare_parameter('min_focus_range', 0.50)
         self.declare_parameter('max_focus_range', 1.68)
-        self.declare_parameter('negative_keep_probability', 0.20)
+        self.declare_parameter('target_images', 1200)
+        self.declare_parameter('positive_pose_fraction', 0.85)
+        self.declare_parameter('settle_time', 0.40)
+        self.declare_parameter('random_seed', 42)
+        self.declare_parameter('yaw_jitter_deg', 25.0)
+        self.declare_parameter('negative_keep_probability', 0.35)
+        self.declare_parameter('world_name', 'badminton_court')
+        self.declare_parameter('robot_name', 'scrobot')
+        self.declare_parameter('robot_z', 0.003)
+        self.declare_parameter('court_length', 13.40)
+        self.declare_parameter('court_width', 6.10)
+        self.declare_parameter('court_margin_x', 0.60)
+        self.declare_parameter('court_margin_y', 0.45)
+        self.declare_parameter('net_exclusion_x', 0.55)
         self.declare_parameter('min_box_pixels', 3.0)
         self.declare_parameter('jpeg_quality', 95)
         self.declare_parameter('position_group_m', 0.50)
@@ -151,10 +166,23 @@ class YoloDatasetCapture(Node):
         self.declare_parameter('session_name', '')
 
         self.output_dir = Path(str(self.get_parameter('output_dir').value)).expanduser().resolve()
-        self.capture_rate = max(0.1, float(self.get_parameter('capture_rate').value))
+        self.capture_rate = max(1.0, float(self.get_parameter('capture_rate').value))
+        self.target_images = max(1, int(self.get_parameter('target_images').value))
+        self.positive_pose_fraction = min(1.0, max(0.0, float(self.get_parameter('positive_pose_fraction').value)))
+        self.settle_time = max(0.05, float(self.get_parameter('settle_time').value))
+        self.rng = random.Random(int(self.get_parameter('random_seed').value))
+        self.yaw_jitter_rad = math.radians(max(0.0, float(self.get_parameter('yaw_jitter_deg').value)))
         self.min_focus_range = float(self.get_parameter('min_focus_range').value)
         self.max_focus_range = float(self.get_parameter('max_focus_range').value)
         self.negative_keep_probability = min(1.0, max(0.0, float(self.get_parameter('negative_keep_probability').value)))
+        self.world_name = str(self.get_parameter('world_name').value)
+        self.robot_name = str(self.get_parameter('robot_name').value)
+        self.robot_z = float(self.get_parameter('robot_z').value)
+        self.court_length = float(self.get_parameter('court_length').value)
+        self.court_width = float(self.get_parameter('court_width').value)
+        self.court_margin_x = max(0.0, float(self.get_parameter('court_margin_x').value))
+        self.court_margin_y = max(0.0, float(self.get_parameter('court_margin_y').value))
+        self.net_exclusion_x = max(0.0, float(self.get_parameter('net_exclusion_x').value))
         self.min_box_pixels = max(1.0, float(self.get_parameter('min_box_pixels').value))
         self.jpeg_quality = int(self.get_parameter('jpeg_quality').value)
         self.position_group_m = max(0.05, float(self.get_parameter('position_group_m').value))
@@ -173,6 +201,13 @@ class YoloDatasetCapture(Node):
         self.received_shuttle_gt = False
         self.base_to_camera = None
         self.frame_index = 0
+        self.saved_images = 0
+        self.pose_attempts = 0
+        self.pose_kind = 'waiting'
+        self.waiting_for_fresh_frame = False
+        self.teleport_stamp_ns = 0
+        self.settle_until_ns = 0
+        self.finished = False
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -205,7 +240,10 @@ class YoloDatasetCapture(Node):
         )
 
         self.create_timer(1.0 / self.capture_rate, self.capture)
-        self.get_logger().info(f'Writing synthetic YOLO dataset to {self.output_dir}')
+        self.get_logger().info(
+            f'Automatic synthetic YOLO capture: target={self.target_images} images, '
+            f'positive_pose_fraction={self.positive_pose_fraction:.2f}, output={self.output_dir}'
+        )
 
     def _prepare_output(self):
         for split in ('train', 'val', 'test'):
@@ -274,6 +312,125 @@ class YoloDatasetCapture(Node):
             split = 'test'
         return split, key, yaw
 
+    def _pose_is_safe(self, x, y):
+        half_l = self.court_length * 0.5 - self.court_margin_x
+        half_w = self.court_width * 0.5 - self.court_margin_y
+        if not (-half_l <= x <= half_l and -half_w <= y <= half_w):
+            return False
+        if abs(x) < self.net_exclusion_x:
+            return False
+        return True
+
+    def _sample_random_pose(self):
+        half_l = self.court_length * 0.5 - self.court_margin_x
+        half_w = self.court_width * 0.5 - self.court_margin_y
+        for _ in range(64):
+            x = self.rng.uniform(-half_l, half_l)
+            y = self.rng.uniform(-half_w, half_w)
+            if self._pose_is_safe(x, y):
+                return (x, y, self.rng.uniform(-math.pi, math.pi), 'random')
+        return (2.0, 0.0, self.rng.uniform(-math.pi, math.pi), 'random')
+
+    def _sample_target_biased_pose(self):
+        if not self.shuttle_poses_world or self.base_to_camera is None:
+            return None
+
+        base_cam_t, _ = self.base_to_camera
+        camera_height = float(base_cam_t[2])
+
+        for _ in range(96):
+            shuttle_t, _ = self.rng.choice(self.shuttle_poses_world)
+            desired_range = self.rng.uniform(self.min_focus_range, self.max_focus_range)
+
+            dz = max(0.0, camera_height - float(shuttle_t[2]))
+            horizontal = math.sqrt(max(0.05 * 0.05, desired_range * desired_range - dz * dz))
+
+            bearing = self.rng.uniform(-math.pi, math.pi)
+            dir_x = math.cos(bearing)
+            dir_y = math.sin(bearing)
+
+            # Desired camera position lies 'horizontal' metres behind the target.
+            cam_x = float(shuttle_t[0]) - horizontal * dir_x
+            cam_y = float(shuttle_t[1]) - horizontal * dir_y
+
+            # Base yaw points roughly toward the target, with jitter to distribute
+            # the shuttle across the horizontal RGB FOV.
+            yaw = bearing + self.rng.uniform(-self.yaw_jitter_rad, self.yaw_jitter_rad)
+
+            cy = math.cos(yaw)
+            sy = math.sin(yaw)
+            cam_off_x = cy * float(base_cam_t[0]) - sy * float(base_cam_t[1])
+            cam_off_y = sy * float(base_cam_t[0]) + cy * float(base_cam_t[1])
+
+            base_x = cam_x - cam_off_x
+            base_y = cam_y - cam_off_y
+
+            if self._pose_is_safe(base_x, base_y):
+                return (base_x, base_y, yaw, 'target')
+
+        return None
+
+    def _teleport_robot(self, x, y, yaw):
+        half = 0.5 * yaw
+        qz = math.sin(half)
+        qw = math.cos(half)
+
+        request = (
+            f'name: "{self.robot_name}", '
+            f'position: {{x: {x:.9f}, y: {y:.9f}, z: {self.robot_z:.9f}}}, '
+            f'orientation: {{x: 0, y: 0, z: {qz:.12f}, w: {qw:.12f}}}'
+        )
+        cmd = [
+            'gz', 'service',
+            '-s', f'/world/{self.world_name}/set_pose',
+            '--reqtype', 'gz.msgs.Pose',
+            '--reptype', 'gz.msgs.Boolean',
+            '--timeout', '2000',
+            '--req', request,
+        ]
+        result = subprocess.run(
+            cmd,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        if result.returncode != 0:
+            self.get_logger().error(
+                'Gazebo set_pose failed: ' + result.stdout.strip()
+            )
+            return False
+
+        now_ns = self.get_clock().now().nanoseconds
+        self.teleport_stamp_ns = now_ns
+        self.settle_until_ns = now_ns + int(self.settle_time * 1e9)
+        self.waiting_for_fresh_frame = True
+        return True
+
+    def _next_randomized_view(self):
+        self.pose_attempts += 1
+        choose_target = (
+            self.shuttle_poses_world
+            and self.rng.random() < self.positive_pose_fraction
+        )
+
+        pose = self._sample_target_biased_pose() if choose_target else None
+        if pose is None:
+            pose = self._sample_random_pose()
+
+        x, y, yaw, kind = pose
+        if self._teleport_robot(x, y, yaw):
+            self.pose_kind = kind
+            if self.pose_attempts % 25 == 0:
+                self.get_logger().info(
+                    f'pose_attempt={self.pose_attempts} kind={kind} '
+                    f'x={x:.2f} y={y:.2f} yaw={math.degrees(yaw):.1f}deg '
+                    f'saved={self.saved_images}/{self.target_images}'
+                )
+
+    def _image_stamp_ns(self, msg):
+        return int(msg.header.stamp.sec) * 1_000_000_000 + int(msg.header.stamp.nanosec)
+
     def _project_shuttle(self, shuttle_t, shuttle_q, camera_t, camera_q):
         info = self.camera_info
         fx, fy, cx, cy = float(info.k[0]), float(info.k[4]), float(info.k[2]), float(info.k[5])
@@ -320,6 +477,9 @@ class YoloDatasetCapture(Node):
         return (xc, yc, nw, nh, center_range)
 
     def capture(self):
+        if self.finished:
+            return
+
         if (
             self.latest_image is None
             or self.camera_info is None
@@ -327,6 +487,16 @@ class YoloDatasetCapture(Node):
             or not self.received_shuttle_gt
             or not self._lookup_camera()
         ):
+            return
+
+        if not self.waiting_for_fresh_frame:
+            self._next_randomized_view()
+            return
+
+        now_ns = self.get_clock().now().nanoseconds
+        if now_ns < self.settle_until_ns:
+            return
+        if self._image_stamp_ns(self.latest_image) <= self.teleport_stamp_ns:
             return
 
         robot_t, robot_q = self.robot_pose_world
@@ -344,17 +514,20 @@ class YoloDatasetCapture(Node):
             if self.min_focus_range <= distance <= self.max_focus_range:
                 focus_boxes += 1
 
-        # Positive frames are always useful. Negative frames are deterministically
-        # subsampled so repeated empty views do not dominate the dataset.
+        # A target-biased pose is useful only when at least one focus-range
+        # shuttle actually projects into the RGB image. Retry immediately if
+        # physics/occlusion/FOV made the sampled pose unhelpful.
+        if self.pose_kind == 'target' and focus_boxes <= 0:
+            self.waiting_for_fresh_frame = False
+            return
+
+        # Random court views provide negatives/background coverage, but repeated
+        # empty views are subsampled so they do not dominate the dataset.
         if not boxes:
-            digest = int(hashlib.sha1(str(self.frame_index).encode()).hexdigest()[:8], 16)
-            if (digest % 10000) / 10000.0 >= self.negative_keep_probability:
-                self.frame_index += 1
+            if self.rng.random() >= self.negative_keep_probability:
+                self.waiting_for_fresh_frame = False
                 return
 
-        # Prefer frames containing at least one shuttle in the operating range.
-        # Out-of-focus positive frames are still retained because unlabeled visible
-        # shuttles would be harmful training data.
         split, group_key, yaw = self._split_for_pose()
         stem = f'{self.session_name}_gazebo_{self.frame_index:07d}'
         img_path = self.output_dir / 'images' / split / f'{stem}.jpg'
@@ -364,6 +537,7 @@ class YoloDatasetCapture(Node):
             bgr = image_to_bgr(self.latest_image)
         except RuntimeError as exc:
             self.get_logger().error(str(exc))
+            self.waiting_for_fresh_frame = False
             return
 
         ok = cv2.imwrite(
@@ -373,6 +547,7 @@ class YoloDatasetCapture(Node):
         )
         if not ok:
             self.get_logger().error(f'Failed to write {img_path}')
+            self.waiting_for_fresh_frame = False
             return
 
         with label_path.open('w') as f:
@@ -387,13 +562,25 @@ class YoloDatasetCapture(Node):
                 len(boxes), focus_boxes, group_key,
             ])
 
-        if self.frame_index % 20 == 0:
+        self.frame_index += 1
+        self.saved_images += 1
+        self.waiting_for_fresh_frame = False
+
+        if self.saved_images % 25 == 0 or self.saved_images == self.target_images:
             self.get_logger().info(
-                f'saved={stem} split={split} boxes={len(boxes)} '
-                f'focus={focus_boxes} output={self.output_dir}'
+                f'SAVED {self.saved_images}/{self.target_images} '
+                f'split={split} boxes={len(boxes)} focus={focus_boxes}'
             )
 
-        self.frame_index += 1
+        if self.saved_images >= self.target_images:
+            self.finished = True
+            self.get_logger().info(
+                f'Dataset complete: {self.saved_images} images in {self.output_dir}'
+            )
+            # Let the final log flush, then stop this node. The launch file
+            # watches this process and shuts the simulation down as well.
+            self.create_timer(0.25, lambda: rclpy.shutdown())
+
 
 
 def main(args=None):
