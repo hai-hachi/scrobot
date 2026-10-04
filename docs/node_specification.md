@@ -219,6 +219,25 @@ the shuttle settles naturally onto the court.
 
 ## scrobot_debug
 
+### `control_check.launch.py`
+Single entry point for `scrobot_control` validation.
+
+Supported scenarios:
+
+```text
+test:=raw
+test:=manual
+test:=mux
+test:=smoother
+test:=collision
+test:=full
+```
+
+The launch brings up Gazebo, the robot, the required controller or full control
+stack, the depth point-cloud-to-scan adapter when collision monitoring is in
+the path, telemetry, local-frame RViz, and the automated control test driver.
+`test:=full` runs the complete control acceptance sequence.
+
 ### `telemetry_monitor`
 Debug-only consolidated terminal monitor.
 
