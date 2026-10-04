@@ -23,9 +23,10 @@
 
   <!--
     Collision width can be overridden by simulation while the visual and
-    physical wheel dimensions remain 30 mm. Real/default description keeps
-    the full wheel width; Gazebo uses a narrow line-contact approximation
-    for ideal differential-drive odometry evaluation.
+    physical wheel dimensions remain 30 mm. The hardware/default description
+    keeps the full tire width; the current Gazebo wrapper intentionally uses a
+    1 mm line-contact approximation because the full-width collision produced
+    excessive lateral skid in simulation.
   -->
   <xacro:arg name="wheel_collision_width" default="0.030"/>
   <xacro:property name="wheel_collision_width" value="$(arg wheel_collision_width)"/>
