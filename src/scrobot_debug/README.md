@@ -321,3 +321,44 @@ ros2 launch scrobot_debug rviz.launch.py
 
 They were removed from `scrobot_simulation` so the simulation package contains
 only Gazebo runtime functionality.
+
+
+## Localization / AprilTag systematic check
+
+Launch the localization stack with production TF ownership (EKF owns `odom -> base_footprint`) and RViz disabled by default:
+
+```bash
+ros2 launch scrobot_debug localization_check.launch.py
+```
+
+Enable the optional simulated magnetometer only when intentionally testing it:
+
+```bash
+ros2 launch scrobot_debug localization_check.launch.py use_magnetometer:=true
+```
+
+Enable RViz only for visual inspection:
+
+```bash
+ros2 launch scrobot_debug localization_check.launch.py launch_rviz:=true
+```
+
+The `localization_monitor` reports local/global TF availability, calibrated color-camera intrinsics, AprilTag ID and decision margin, camera-to-tag range, farthest observed range, tag-center pixel offset from `(cx, cy)`, and horizontal/vertical angular offset from the optical axis.
+
+For range/centering tests, start the robot at a chosen pose with `robot_x`, `robot_y`, and `robot_yaw`, or drive it manually while the monitor is running. Use the farthest stable recognition range to choose `max_tag_distance`, then choose the relocalization stand-off where the tag-center offsets are close to zero.
+
+Test the full-rotation acquisition directly:
+
+```bash
+ros2 action send_goal /approach_tag scrobot_interfaces/action/ApproachTag \
+  "{preferred_tag_id: -1, target_distance: 1.70, timeout_sec: 60.0}" --feedback
+```
+
+With no acceptable tag, the search ends after measured accumulated odometry yaw reaches `2*pi`; it is no longer approximated by a fixed search timer.
+
+With a visible centered tag, test the stationary 15-sample global correction:
+
+```bash
+ros2 action send_goal /relocalize scrobot_interfaces/action/Relocalize \
+  "{preferred_tag_id: -1, sample_count: 15, timeout_sec: 15.0}" --feedback
+```
