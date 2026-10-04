@@ -120,6 +120,13 @@ install(
 )
 
 install(
+  PROGRAMS
+    scripts/localization_monitor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME localization_monitor
+)
+
+install(
   DIRECTORY
     launch
     config
