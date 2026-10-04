@@ -6,15 +6,17 @@
     params="drive_contact_mu:=5.0 caster_contact_mu:=0.05">
 
     <!-- ============================================================ -->
-    <!-- Physical-width drive-wheel contact tuned for stable traction -->
+    <!-- Narrow line-contact drive-wheel model tuned for stable traction -->
     <!-- ============================================================ -->
     <!--
-      Normal simulation keeps the real 30 mm tire collision width.
-      Gazebo previously showed excessive wheel skid with ordinary
-      contact settings, so both contact directions use a deliberately
-      elevated friction coefficient while force-dependent slip remains
-      disabled. These are simulation-stability values, not measured
-      tire/material coefficients.
+      The visual / physical tire remains 30 mm wide in scrobot_description,
+      while spawn_robot.launch.py overrides only the Gazebo collision width to
+      1 mm. The narrow contact patch is intentional: the full-width collision
+      produced excessive lateral skid for this differential-drive model.
+
+      Both contact directions still use configurable friction coefficients and
+      force-dependent slip remains disabled. These are simulation-stability
+      values, not measured tire/material coefficients.
 
       fdir1 follows the wheel rolling direction (link +X).
     -->
