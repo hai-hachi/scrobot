@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
+import ast
 import math
 
 import rclpy
-from geometry_msgs.msg import Point, TwistStamped
+from geometry_msgs.msg import Point, PolygonStamped, TwistStamped
+from rcl_interfaces.srv import GetParameters
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import LaserScan
@@ -43,6 +45,9 @@ class ControlStackMonitor(Node):
         self.smoothed_cmd = None
         self.drive_cmd = None
         self.last_status = ''
+        self.zone_source = 'debug_defaults'
+        self.zone_topic_seen = False
+        self.cm_param_future = None
 
         sensor_qos = QoSProfile(depth=5)
         sensor_qos.reliability = ReliabilityPolicy.BEST_EFFORT
@@ -74,6 +79,23 @@ class ControlStackMonitor(Node):
             self.drive_cb,
             command_qos,
         )
+        self.create_subscription(
+            PolygonStamped,
+            '/collision_monitor/stop_zone',
+            self.stop_zone_cb,
+            command_qos,
+        )
+        self.create_subscription(
+            PolygonStamped,
+            '/collision_monitor/slowdown_zone',
+            self.slowdown_zone_cb,
+            command_qos,
+        )
+
+        self.cm_param_client = self.create_client(
+            GetParameters,
+            '/collision_monitor/get_parameters',
+        )
 
         self.marker_pub = self.create_publisher(
             MarkerArray,
@@ -88,6 +110,7 @@ class ControlStackMonitor(Node):
 
         self.create_timer(0.2, self.publish_markers)
         self.create_timer(1.0, self.publish_status)
+        self.create_timer(1.0, self.refresh_collision_monitor_params)
 
     def scan_cb(self, msg):
         self.latest_scan = msg
@@ -97,6 +120,78 @@ class ControlStackMonitor(Node):
 
     def drive_cb(self, msg):
         self.drive_cmd = msg
+
+    def stop_zone_cb(self, msg):
+        points = self.polygon_msg_points(msg)
+        if points:
+            self.stop_zone = points
+            self.zone_topic_seen = True
+            self.zone_source = 'collision_monitor_polygon_topics'
+
+    def slowdown_zone_cb(self, msg):
+        points = self.polygon_msg_points(msg)
+        if points:
+            self.slowdown_zone = points
+            self.zone_topic_seen = True
+            self.zone_source = 'collision_monitor_polygon_topics'
+
+    @staticmethod
+    def polygon_msg_points(msg):
+        return [(float(p.x), float(p.y)) for p in msg.polygon.points]
+
+    @staticmethod
+    def parse_points(value):
+        try:
+            raw_points = ast.literal_eval(value)
+        except (SyntaxError, ValueError):
+            return []
+
+        points = []
+        for point in raw_points:
+            if not isinstance(point, (list, tuple)) or len(point) < 2:
+                return []
+            points.append((float(point[0]), float(point[1])))
+
+        return points if len(points) >= 3 else []
+
+    def refresh_collision_monitor_params(self):
+        if self.zone_topic_seen:
+            return
+
+        if self.cm_param_future is not None:
+            if not self.cm_param_future.done():
+                return
+
+            try:
+                response = self.cm_param_future.result()
+            except Exception as exc:
+                self.get_logger().warn(
+                    f'Failed reading collision_monitor polygon params: {exc}'
+                )
+                self.cm_param_future = None
+                return
+
+            self.cm_param_future = None
+            if response is None or len(response.values) != 2:
+                return
+
+            stop_points = self.parse_points(response.values[0].string_value)
+            slowdown_points = self.parse_points(response.values[1].string_value)
+
+            if stop_points:
+                self.stop_zone = stop_points
+            if slowdown_points:
+                self.slowdown_zone = slowdown_points
+            if stop_points or slowdown_points:
+                self.zone_source = 'collision_monitor_params'
+            return
+
+        if not self.cm_param_client.service_is_ready():
+            return
+
+        request = GetParameters.Request()
+        request.names = ['stop_zone.points', 'slowdown_zone.points']
+        self.cm_param_future = self.cm_param_client.call_async(request)
 
     @staticmethod
     def point(x, y, z):
@@ -156,9 +251,10 @@ class ControlStackMonitor(Node):
         marker.color.b = rgba[2]
         marker.color.a = rgba[3]
 
-        a, b, c, d = points
-        for x, y in (a, b, c, a, c, d):
-            marker.points.append(self.point(x, y, z))
+        anchor = points[0]
+        for i in range(1, len(points) - 1):
+            for x, y in (anchor, points[i], points[i + 1]):
+                marker.points.append(self.point(x, y, z))
         return marker
 
     def make_outline(self, marker_id, name, points, z, rgba, width=0.025):
@@ -245,8 +341,11 @@ class ControlStackMonitor(Node):
         smoothed_text = 'none' if smoothed is None else f'vx={smoothed[0]:.3f} wz={smoothed[1]:.3f}'
         drive_text = 'none' if drive is None else f'vx={drive[0]:.3f} wz={drive[1]:.3f}'
 
+        cm_topics = 'seen' if self.zone_topic_seen else 'silent'
         text = (
-            f'{state} | scan_points={len(scan_points)} stop_hits={stop_hits} '
+            f'{state} | zone_source={self.zone_source} '
+            f'cm_polygon_topics={cm_topics} | '
+            f'scan_points={len(scan_points)} stop_hits={stop_hits} '
             f'slowdown_hits={slow_hits} min={min_text} | '
             f'smoothed={smoothed_text} | drive={drive_text}'
         )
