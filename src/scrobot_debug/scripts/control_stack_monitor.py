@@ -52,9 +52,9 @@ class ControlStackMonitor(Node):
         command_qos.reliability = ReliabilityPolicy.RELIABLE
         command_qos.durability = DurabilityPolicy.VOLATILE
 
-        marker_qos = QoSProfile(depth=1)
+        marker_qos = QoSProfile(depth=5)
         marker_qos.reliability = ReliabilityPolicy.RELIABLE
-        marker_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
+        marker_qos.durability = DurabilityPolicy.VOLATILE
 
         self.create_subscription(
             LaserScan,

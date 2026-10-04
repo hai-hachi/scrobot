@@ -3,9 +3,12 @@ Panels:
     Help Height: 70
     Name: Displays
     Property Tree Widget:
-      Expanded: ~
-      Splitter Ratio: 0.6200000047683716
-    Tree Height: 325
+      Expanded:
+        - /Robot Collision Model1
+        - /Control Stack Debug Overlay1
+        - /TF1
+      Splitter Ratio: 0.62
+    Tree Height: 760
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Views
@@ -145,18 +148,27 @@ Visualization Manager:
       Update Interval: 0
       Value: true
       Visual Enabled: false
+
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: Control Stack Debug Overlay
-      Namespaces:
-        {}
-      Topic:
+      Enabled: true
+      Value: true
+      Marker Topic:
         Depth: 5
-        Durability Policy: Volatile
+        Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: visualization_marker_array
-      Value: true
+        Value: /debug/control_stack_viz
+      Namespaces:
+        base_footprint_outline: true
+        scan_points: true
+        slowdown_zone_fill: true
+        slowdown_zone_outline: true
+        stop_zone_fill: true
+        stop_zone_outline: true
+      Queue Size: 5
+
     - Class: rviz_default_plugins/TF
       Enabled: true
       Filter (blacklist): ""
