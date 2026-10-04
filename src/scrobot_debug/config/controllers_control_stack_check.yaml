@@ -1,0 +1,47 @@
+controller_manager:
+  ros__parameters:
+
+    update_rate: 100
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    diff_drive_controller:
+      type: diff_drive_controller/DiffDriveController
+
+
+diff_drive_controller:
+  ros__parameters:
+
+    left_wheel_names:
+      - left_wheel_joint
+
+    right_wheel_names:
+      - right_wheel_joint
+
+    wheel_radius: 0.050
+    wheel_separation: 0.420
+
+    wheel_separation_multiplier: 1.0
+    left_wheel_radius_multiplier: 1.0
+    right_wheel_radius_multiplier: 1.0
+
+    odom_frame_id: odom
+    base_frame_id: base_footprint
+
+    open_loop: false
+    position_feedback: true
+
+    # This debug launch does not start EKF. Let the wheel controller own
+    # odom -> base_footprint so collision_monitor can transform scans.
+    enable_odom_tf: true
+
+    publish_rate: 50.0
+    velocity_rolling_window_size: 10
+    publish_limited_velocity: true
+
+    cmd_vel_timeout: 0.5
+
+    linear.x.has_velocity_limits: true
+    linear.x.max_velocity: 1.0
+    linear.x.min_velocity: -1.0
