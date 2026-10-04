@@ -69,7 +69,10 @@ def launch_setup(context):
         control = include(
             'scrobot_control',
             'control_stack.launch.py',
-            {'use_sim_time': use_sim_time},
+            {
+                'use_sim_time': use_sim_time,
+                'collision_base_shift_correction': 'false',
+            },
         )
 
     actions = [
