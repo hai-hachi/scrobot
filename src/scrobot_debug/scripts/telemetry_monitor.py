@@ -8,7 +8,7 @@ from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import Log
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 from vision_msgs.msg import Detection3DArray
 
 
@@ -85,7 +85,7 @@ class TelemetryMonitor(Node):
         )
 
         self.create_subscription(
-            String, '/control/mode', self._control_mode_cb, state_qos
+            Bool, '/control/manual_mode', self._control_mode_cb, state_qos
         )
         self.create_subscription(
             String, '/mission/state', self._mission_state_cb, state_qos
@@ -216,7 +216,7 @@ class TelemetryMonitor(Node):
         )
 
     def _control_mode_cb(self, msg):
-        mode = str(msg.data)
+        mode = 'MANUAL' if bool(msg.data) else 'AUTO'
         if mode == self.control_mode:
             return
         previous = self.control_mode
