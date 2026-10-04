@@ -37,7 +37,7 @@ sweep_mission_manager:
     fixed_stop_max_tag_distance: 4.0
 
     initial_tag_id: -1
-    tag_approach_distance: 1.70
+    tag_approach_distance: 0.80
     # Overall approach timeout; the no-tag search itself ends after measured 2pi yaw.
     tag_approach_timeout: 60.0
     tag_recovery_max_attempts: 3
