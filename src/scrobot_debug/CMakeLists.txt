@@ -110,6 +110,7 @@ install(
     launch
     config
     models
+    rviz
     worlds
   DESTINATION share/${PROJECT_NAME}
 )
