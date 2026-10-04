@@ -934,6 +934,13 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             super()._approach_result(future)
             return
 
+        # Recovery is only for the explicit no-tag result produced after the
+        # measured full-rotation search. Approach/alignment failures remain real
+        # mission failures and are handled by the base mission manager.
+        if 'No acceptable AprilTag found after a full' not in wrapped.result.message:
+            super()._approach_result(future)
+            return
+
         self.approach_goal_handle = None
         self.tag_recovery_attempts += 1
 
