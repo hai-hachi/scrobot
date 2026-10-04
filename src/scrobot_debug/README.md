@@ -34,6 +34,50 @@ It watches control mode, mission state, local-collection phase, raw/eligible
 shuttle counts, simulation shuttle ground truth and collection events, estimated
 pose versus Gazebo truth, and selected `/rosout` messages.
 
+## Control stack check
+
+Start the normal simulation, production control stack, and telemetry with one
+command:
+
+```bash
+ros2 launch scrobot_debug control_stack_check.launch.py
+```
+
+This is the generic regression launch for `scrobot_control`. It starts Gazebo,
+spawns the robot, then starts the controller spawners, AUTO/MANUAL muxes,
+velocity smoother, collision monitor, and telemetry after the configured
+`control_delay`.
+
+Useful checks from another terminal:
+
+```bash
+ros2 control list_controllers
+ros2 topic list | grep -E "cmd_vel|controller|joint|odom|control"
+```
+
+Expected control path:
+
+```text
+/cmd_vel_auto
+  -> /cmd_vel_selected
+  -> /cmd_vel_smoothed
+  -> /diff_drive_controller/cmd_vel
+```
+
+Expected controllers:
+
+```text
+joint_state_broadcaster active
+diff_drive_controller active
+```
+
+Optional arguments:
+
+```bash
+ros2 launch scrobot_debug control_stack_check.launch.py \
+  robot_x:=1.0 robot_y:=0.0 robot_yaw:=0.0 control_delay:=4.0
+```
+
 ## Manual control check
 
 Start the dependencies:
