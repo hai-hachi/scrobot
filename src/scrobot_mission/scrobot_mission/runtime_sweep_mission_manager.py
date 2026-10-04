@@ -46,6 +46,7 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         self.declare_parameter('manual_mode_topic', '/control/manual_mode')
         self.declare_parameter('manual_resume_return_distance', 0.15)
         self.declare_parameter('manual_resume_return_yaw_deg', 10.0)
+        self.declare_parameter('tag_recovery_max_attempts', 3)
 
         self.join_acceptance_distance = float(
             self.get_parameter('join_acceptance_distance').value
@@ -81,6 +82,12 @@ class RuntimeSweepMissionManager(SweepMissionManager):
                 float(self.get_parameter('manual_resume_return_yaw_deg').value),
             )
         )
+        self.tag_recovery_max_attempts = max(
+            1, int(self.get_parameter('tag_recovery_max_attempts').value)
+        )
+
+        self.last_good_localization_pose = None
+        self.tag_recovery_attempts = 0
 
         self.test_goal_pose = None
         self.test_active = False
@@ -287,7 +294,10 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         if self._resume_saved_manual_phase():
             return
 
-        if resume_state == MissionState.RETURN_TO_SWEEP:
+        if resume_state in (
+            MissionState.RETURN_TO_SWEEP,
+            MissionState.TAG_RECOVERY_RETURN,
+        ):
             if self.manual_nav_pose is None or not self.manual_nav_purpose:
                 self._fail(
                     'Cannot resume paused navigation: target pose/purpose was not preserved.'
@@ -837,6 +847,12 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             self._start_test_return()
         elif purpose == 'test_return':
             self._finish_test_return()
+        elif purpose == 'tag_recovery_return':
+            self.get_logger().info(
+                'Reached last successful localization pose; retrying AprilTag search.'
+            )
+            self._set_state(MissionState.INITIAL_TAG_APPROACH)
+            self._send_initial_approach()
         elif purpose == 'manual_resume_checkpoint':
             self.get_logger().info(
                 'Manual-interrupt checkpoint reached; resuming saved autonomous phase.'
@@ -882,10 +898,22 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             else:
                 self._finish_control_cancel()
             return
+
+        if (
+            wrapped.status == GoalStatus.STATUS_SUCCEEDED
+            and wrapped.result.success
+        ):
+            pose_info = self._robot_pose()
+            if pose_info is not None:
+                pose, _ = pose_info
+                self.last_good_localization_pose = copy.deepcopy(pose)
+            self.tag_recovery_attempts = 0
+
         super()._relocalize_result(future, initial)
 
     def _approach_result(self, future):
         wrapped = future.result()
+
         if self.manual_paused and wrapped.status != GoalStatus.STATUS_CANCELED:
             self.approach_goal_handle = None
             self._manual_pause_complete()
@@ -897,7 +925,48 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             self.approach_goal_handle = None
             self._manual_pause_complete()
             return
-        super()._approach_result(future)
+
+        if (
+            wrapped.status == GoalStatus.STATUS_SUCCEEDED
+            and wrapped.result.success
+        ):
+            self.tag_recovery_attempts = 0
+            super()._approach_result(future)
+            return
+
+        self.approach_goal_handle = None
+        self.tag_recovery_attempts += 1
+
+        if self.tag_recovery_attempts >= self.tag_recovery_max_attempts:
+            self._fail(
+                'Initial AprilTag acquisition failed after '
+                f'{self.tag_recovery_attempts} full-search attempt(s): '
+                f'{wrapped.result.message}'
+            )
+            return
+
+        if self.last_good_localization_pose is not None:
+            self.get_logger().warn(
+                'AprilTag search completed one full rotation without a usable tag. '
+                'Returning to the last successful localization pose before retrying '
+                f'(attempt {self.tag_recovery_attempts + 1}/'
+                f'{self.tag_recovery_max_attempts}).'
+            )
+            self._set_state(MissionState.TAG_RECOVERY_RETURN)
+            self._send_navigation(
+                copy.deepcopy(self.last_good_localization_pose),
+                'tag_recovery_return',
+            )
+            return
+
+        self.get_logger().warn(
+            'AprilTag search completed one full rotation and no previous '
+            'localization pose exists. Retrying in place '
+            f'(attempt {self.tag_recovery_attempts + 1}/'
+            f'{self.tag_recovery_max_attempts}).'
+        )
+        self._set_state(MissionState.INITIAL_TAG_APPROACH)
+        self._send_initial_approach()
 
     def _collect_result(self, future):
         wrapped = future.result()
