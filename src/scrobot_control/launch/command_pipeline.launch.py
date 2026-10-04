@@ -15,6 +15,7 @@ def generate_launch_description():
         'command_pipeline.yaml',
     )
     use_sim_time = LaunchConfiguration('use_sim_time')
+    collision_base_shift_correction = LaunchConfiguration('collision_base_shift_correction')
 
     manual_mode_manager = Node(
         package='scrobot_control',
@@ -59,7 +60,13 @@ def generate_launch_description():
         executable='collision_monitor',
         name='collision_monitor',
         output='screen',
-        parameters=[pipeline_params, {'use_sim_time': use_sim_time}],
+        parameters=[
+            pipeline_params,
+            {
+                'use_sim_time': use_sim_time,
+                'base_shift_correction': collision_base_shift_correction,
+            },
+        ],
     )
 
     lifecycle_manager = Node(
@@ -79,6 +86,12 @@ def generate_launch_description():
             'use_sim_time',
             default_value='false',
             choices=['true', 'false'],
+        ),
+        DeclareLaunchArgument(
+            'collision_base_shift_correction',
+            default_value='true',
+            choices=['true', 'false'],
+            description='Use odom-based time-shift correction in collision monitor.',
         ),
         manual_mode_manager,
         autonomy_mux,
