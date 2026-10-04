@@ -5,12 +5,20 @@
     <link name="camera_color_frame">
       <sensor name="d435i_color_dataset" type="camera">
         <always_on>true</always_on>
-        <update_rate>30.0</update_rate>
+        <update_rate>5.0</update_rate>
         <visualize>false</visualize>
         <topic>/yolo/camera/color</topic>
         <gz_frame_id>camera_color_optical_frame</gz_frame_id>
 
         <camera name="d435i_color_dataset_camera">
+          <!--
+            Dataset camera is event-driven: render exactly one frame when the
+            capture node requests it. update_rate is only the maximum trigger
+            rate, not a continuous 5 Hz stream.
+          -->
+          <triggered>true</triggered>
+          <trigger_topic>/yolo/camera/color/trigger</trigger_topic>
+
           <!-- Same SCROBOT factory-calibration-derived RGB HFOV. -->
           <horizontal_fov>1.229041640167034</horizontal_fov>
           <camera_info_topic>/yolo/camera/color/camera_info</camera_info_topic>
