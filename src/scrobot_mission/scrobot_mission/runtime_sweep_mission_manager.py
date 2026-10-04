@@ -303,7 +303,7 @@ class RuntimeSweepMissionManager(SweepMissionManager):
                     'Cannot resume paused navigation: target pose/purpose was not preserved.'
                 )
                 return
-            self._set_state(MissionState.RETURN_TO_SWEEP)
+            self._set_state(resume_state)
             self._send_navigation(
                 copy.deepcopy(self.manual_nav_pose),
                 self.manual_nav_purpose,
