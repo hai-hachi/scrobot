@@ -1,13 +1,16 @@
 import os
 
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import (
+    get_package_prefix,
+    get_package_share_directory,
+)
 from launch import LaunchDescription
 from launch.actions import (
+    AppendEnvironmentVariable,
     DeclareLaunchArgument,
     EmitEvent,
     IncludeLaunchDescription,
     RegisterEventHandler,
-    TimerAction,
 )
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
@@ -16,67 +19,78 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
-def include(pkg, launch_file, args=None):
-    return IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(get_package_share_directory(pkg), 'launch', launch_file)
-        ),
-        launch_arguments=(args or {}).items(),
-    )
-
-
 def generate_launch_description():
-    use_sim_time = LaunchConfiguration('use_sim_time')
+    debug_pkg = get_package_share_directory('scrobot_debug')
+    simulation_pkg = get_package_share_directory('scrobot_simulation')
+    ros_gz_sim_pkg = get_package_share_directory('ros_gz_sim')
+
     output_dir = LaunchConfiguration('output_dir')
     session_name = LaunchConfiguration('session_name')
     target_images = LaunchConfiguration('target_images')
+    shuttle_count = LaunchConfiguration('shuttle_count')
     positive_pose_fraction = LaunchConfiguration('positive_pose_fraction')
-    settle_time = LaunchConfiguration('settle_time')
     random_seed = LaunchConfiguration('random_seed')
 
-    shuttle_mode = LaunchConfiguration('shuttle_mode')
-    shuttle_count = LaunchConfiguration('shuttle_count')
-    spawn_delay = LaunchConfiguration('spawn_delay')
-    capture_delay = LaunchConfiguration('capture_delay')
+    debug_models = os.path.join(debug_pkg, 'models')
+    simulation_models = os.path.join(simulation_pkg, 'models')
+    world = os.path.join(debug_pkg, 'worlds', 'yolo_dataset.sdf')
+    bridge_config = os.path.join(debug_pkg, 'config', 'yolo_dataset_bridge.yaml')
 
-    simulation = include(
-        'scrobot_simulation',
-        'simulation.launch.py',
-        {
-            'use_sim_time': use_sim_time,
-            'x': '2.0',
-            'y': '0.0',
-            'yaw': '0.0',
-            'enable_magnetometer': 'false',
-        },
+    add_debug_models = AppendEnvironmentVariable(
+        name='GZ_SIM_RESOURCE_PATH',
+        value=debug_models,
+    )
+    add_sim_models = AppendEnvironmentVariable(
+        name='GZ_SIM_RESOURCE_PATH',
+        value=simulation_models,
     )
 
-    shuttles = IncludeLaunchDescription(
+    gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory('scrobot_simulation'),
-                'launch',
-                'spawn_shuttles.launch.py',
-            )
+            os.path.join(ros_gz_sim_pkg, 'launch', 'gz_sim.launch.py')
         ),
         launch_arguments={
-            'mode': shuttle_mode,
-            'count': shuttle_count,
+            # Server-only, headless, run immediately.
+            'gz_args': ['-r -s -v 2 ', world],
+            'on_exit_shutdown': 'true',
         }.items(),
+    )
+
+    bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        name='yolo_dataset_bridge',
+        output='screen',
+        parameters=[{'config_file': bridge_config}],
+    )
+
+    image_bridge = Node(
+        package='ros_gz_image',
+        executable='image_bridge',
+        name='yolo_dataset_image_bridge',
+        output='screen',
+        arguments=['/yolo/camera/color'],
+        parameters=[{'qos': 'sensor_data'}],
+        remappings=[
+            (
+                '/yolo/camera/color',
+                '/camera/camera/color/image_raw',
+            ),
+        ],
     )
 
     capture = Node(
         package='scrobot_debug',
-        executable='yolo_dataset_capture',
-        name='yolo_dataset_capture',
+        executable='yolo_dataset_fast_capture',
+        name='yolo_dataset_fast_capture',
         output='screen',
         parameters=[{
-            'use_sim_time': use_sim_time,
+            'use_sim_time': True,
             'output_dir': output_dir,
             'session_name': session_name,
             'target_images': target_images,
+            'shuttle_count': shuttle_count,
             'positive_pose_fraction': positive_pose_fraction,
-            'settle_time': settle_time,
             'random_seed': random_seed,
         }],
     )
@@ -87,7 +101,7 @@ def generate_launch_description():
             on_exit=[
                 EmitEvent(
                     event=Shutdown(
-                        reason='Synthetic YOLO dataset capture completed.'
+                        reason='Fast synthetic YOLO dataset capture completed.'
                     )
                 )
             ],
@@ -95,11 +109,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument(
-            'use_sim_time',
-            default_value='true',
-            choices=['true', 'false'],
-        ),
         DeclareLaunchArgument(
             'output_dir',
             default_value=os.path.expanduser(
@@ -110,42 +119,34 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'session_name',
             default_value='',
-            description='Optional filename/session prefix. Empty creates a timestamp.',
+            description='Optional filename/session prefix.',
         ),
         DeclareLaunchArgument(
             'target_images',
             default_value='1200',
-            description='Number of labeled RGB frames to generate before exiting.',
+            description='Number of RGB frames to generate before automatic exit.',
+        ),
+        DeclareLaunchArgument(
+            'shuttle_count',
+            default_value='40',
+            description='Static visual-only shuttle population.',
         ),
         DeclareLaunchArgument(
             'positive_pose_fraction',
             default_value='0.85',
-            description=(
-                'Fraction of randomized robot viewpoints biased toward a shuttle '
-                'at the 0.50-1.68 m camera-relative focus range.'
-            ),
-        ),
-        DeclareLaunchArgument(
-            'settle_time',
-            default_value='0.40',
-            description='Simulation seconds to wait after each robot teleport.',
+            description='Fraction of views biased toward a 0.50-1.68 m shuttle.',
         ),
         DeclareLaunchArgument(
             'random_seed',
             default_value='42',
-            description='Robot-viewpoint random seed.',
+            description='Seed for static shuttle layout and camera viewpoints.',
         ),
-        DeclareLaunchArgument(
-            'shuttle_mode',
-            default_value='mixed',
-            choices=['single', 'random', 'cluster', 'mixed'],
-        ),
-        DeclareLaunchArgument('shuttle_count', default_value='50'),
-        DeclareLaunchArgument('spawn_delay', default_value='4.0'),
-        DeclareLaunchArgument('capture_delay', default_value='6.0'),
 
-        simulation,
-        TimerAction(period=spawn_delay, actions=[shuttles]),
-        TimerAction(period=capture_delay, actions=[capture]),
+        add_debug_models,
+        add_sim_models,
+        gazebo,
+        bridge,
+        image_bridge,
+        capture,
         shutdown_when_done,
     ])
