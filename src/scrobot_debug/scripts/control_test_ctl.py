@@ -184,19 +184,41 @@ class ControlTest(Node):
 
         self.spin_sleep(0.5)
         self.require(self.odom is not None, 'wheel odometry available')
-        start = self.odom
+        self.require(
+            self.ground_truth is not None,
+            'Gazebo ground-truth odometry available',
+        )
+
+        wheel_start = self.odom
+        gt_start = self.ground_truth
 
         self.publish_for(self.pub_raw, 0.20, 0.0, 1.2)
         self.spin_sleep(0.2)
-        self.require(self.odom is not None, 'wheel odometry remains available')
 
-        dx = self.odom[0] - start[0]
-        dy = self.odom[1] - start[1]
-        distance = math.hypot(dx, dy)
+        self.require(self.odom is not None, 'wheel odometry remains available')
         self.require(
-            distance > 0.10,
-            'raw forward command moves wheel odometry',
-            f'distance={distance:.3f} m',
+            self.ground_truth is not None,
+            'Gazebo ground truth remains available',
+        )
+
+        wheel_distance = math.hypot(
+            self.odom[0] - wheel_start[0],
+            self.odom[1] - wheel_start[1],
+        )
+        gt_distance = math.hypot(
+            self.ground_truth[0] - gt_start[0],
+            self.ground_truth[1] - gt_start[1],
+        )
+
+        self.require(
+            wheel_distance > 0.10,
+            'raw command rotates drive wheels',
+            f'wheel_odom_distance={wheel_distance:.3f} m',
+        )
+        self.require(
+            gt_distance > 0.10,
+            'raw command moves Gazebo chassis',
+            f'ground_truth_distance={gt_distance:.3f} m',
         )
 
         for _ in range(6):
