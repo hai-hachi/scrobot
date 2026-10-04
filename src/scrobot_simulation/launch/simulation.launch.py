@@ -31,6 +31,7 @@ def generate_launch_description():
     enable_magnetometer = LaunchConfiguration('enable_magnetometer')
     drive_contact_mu = LaunchConfiguration('drive_contact_mu')
     caster_contact_mu = LaunchConfiguration('caster_contact_mu')
+    controller_params = LaunchConfiguration('controller_params')
 
     spawn_delay = LaunchConfiguration('spawn_delay')
 
@@ -75,6 +76,7 @@ def generate_launch_description():
             'enable_magnetometer': enable_magnetometer,
             'drive_contact_mu': drive_contact_mu,
             'caster_contact_mu': caster_contact_mu,
+            'controller_params': controller_params,
         }.items(),
     )
 
@@ -167,6 +169,15 @@ def generate_launch_description():
             'caster_contact_mu',
             default_value='0.05',
             description='Gazebo passive-caster contact friction coefficient.',
+        ),
+        DeclareLaunchArgument(
+            'controller_params',
+            default_value=os.path.join(
+                get_package_share_directory('scrobot_control'),
+                'config',
+                'controllers.yaml',
+            ),
+            description='ros2_control controller YAML loaded by Gazebo.',
         ),
 
         gazebo,
