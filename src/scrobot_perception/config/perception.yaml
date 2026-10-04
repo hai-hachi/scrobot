@@ -29,23 +29,19 @@ apriltag:
       sizes: [0.100, 0.100, 0.100, 0.100]
 
 
-depth_self_filter:
+depth_scan_self_filter:
   ros__parameters:
     use_sim_time: true
 
-    target_frame: base_footprint
-    input_topic: /camera/camera/depth/points
-    output_topic: /camera/camera/depth/points_filtered
-    transform_tolerance: 0.05
+    input_topic: /camera/camera/depth/scan_raw
+    output_topic: /camera/camera/depth/scan
 
-    # Mask only the robot's own body before depth is collapsed to LaserScan.
+    # Mask only scan rays that land inside the robot's own body footprint.
     # Physical body is approximately x=+0.325/-0.450 m, y=+/-0.225 m.
     self_min_x: -0.45
     self_max_x: 0.34
     self_min_y: -0.24
     self_max_y: 0.24
-    self_min_z: -0.05
-    self_max_z: 0.75
 
 
 depth_pointcloud_to_scan:
