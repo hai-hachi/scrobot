@@ -29,8 +29,8 @@ def generate_launch_description():
         ): 'best_effort',
     }
 
-    depth_registration = ComposableNodeContainer(
-        name='depth_registration_container',
+    depth_to_color_registration = ComposableNodeContainer(
+        name='depth_to_color_registration_container',
         namespace='',
         package='rclcpp_components',
         executable='component_container',
@@ -80,5 +80,5 @@ def generate_launch_description():
             choices=['true', 'false'],
             description='Use Gazebo simulation time.',
         ),
-        depth_registration,
+        depth_to_color_registration,
     ])
