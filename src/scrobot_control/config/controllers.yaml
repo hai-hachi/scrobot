@@ -1,6 +1,5 @@
 controller_manager:
   ros__parameters:
-
     update_rate: 100
 
     joint_state_broadcaster:
@@ -13,22 +12,14 @@ controller_manager:
 diff_drive_controller:
   ros__parameters:
 
-    # ==========================================
     # Wheel joints
-    # ==========================================
-
     left_wheel_names:
       - left_wheel_joint
-
     right_wheel_names:
       - right_wheel_joint
 
-
-    # ==========================================
-    # Robot geometry
-    # Values currently defined in your Xacro
-    # ==========================================
-
+    # Differential-drive geometry.
+    # Keep these synchronized with scrobot_description.
     wheel_radius: 0.050
     wheel_separation: 0.420
 
@@ -36,49 +27,27 @@ diff_drive_controller:
     left_wheel_radius_multiplier: 1.0
     right_wheel_radius_multiplier: 1.0
 
-
-    # ==========================================
     # Frames
-    # ==========================================
-
     odom_frame_id: odom
     base_frame_id: base_footprint
 
-
-    # ==========================================
-    # Odometry feedback
-    # ==========================================
-
+    # Closed-loop wheel odometry from joint position feedback.
     open_loop: false
     position_feedback: true
 
-    # Temporary.
-    # Later EKF will publish odom -> base_footprint.
+    # Disabled intentionally: robot_localization owns odom -> base_footprint.
     enable_odom_tf: false
 
-
-    # ==========================================
     # Publishing
-    # ==========================================
-
     publish_rate: 50.0
-
     velocity_rolling_window_size: 10
-
     publish_limited_velocity: true
 
-
-    # ==========================================
-    # Command safety
-    # ==========================================
-
+    # Command watchdog
     cmd_vel_timeout: 0.5
 
-
-    # ==========================================
-    # Velocity limits
-    # ==========================================
-
-    linear.x.has_velocity_limits: true
+    # Final controller-level velocity limits.
     linear.x.max_velocity: 1.0
     linear.x.min_velocity: -1.0
+    angular.z.max_velocity: 2.0
+    angular.z.min_velocity: -2.0
