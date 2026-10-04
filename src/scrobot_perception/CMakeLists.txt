@@ -25,9 +25,9 @@ install(
 # with RENAME so CMake materializes an executable wrapper for symlink installs.
 install(
   PROGRAMS
-    scripts/depth_self_filter.py
+    scripts/depth_scan_self_filter.py
   DESTINATION lib/${PROJECT_NAME}
-  RENAME depth_self_filter
+  RENAME depth_scan_self_filter
 )
 
 install(
