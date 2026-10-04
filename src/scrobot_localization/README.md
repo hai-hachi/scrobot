@@ -210,62 +210,11 @@ farther than 9.0 m is rejected before the 10.5 m relocalization gate is
 evaluated. This is intentionally left unchanged until the recognition-range
 test is completed.
 
-## Debug / systematic test
+## Testing
 
-Build:
+Runnable localization and AprilTag validation procedures are centralized in `../scrobot_debug/debug_md/localization.md`.
 
-```bash
-cd ~/scrobot_ws
-colcon build --symlink-install --packages-up-to scrobot_debug
-source install/setup.bash
-```
-
-Run:
-
-```bash
-ros2 launch scrobot_debug localization_check.launch.py
-```
-
-RViz is off by default:
-
-```bash
-ros2 launch scrobot_debug localization_check.launch.py launch_rviz:=true
-```
-
-Optional magnetometer:
-
-```bash
-ros2 launch scrobot_debug localization_check.launch.py use_magnetometer:=true
-```
-
-The debug monitor reports:
-
-- `odom -> base_footprint` availability;
-- `map -> odom` availability;
-- color-camera intrinsics;
-- AprilTag ID;
-- decision margin;
-- camera-to-tag range;
-- maximum observed range;
-- tag-center pixel offset from `(cx, cy)`;
-- horizontal/vertical angular offset from the camera optical axis.
-
-This test is used to determine the real stable recognition range and the
-preferred centered relocalization stand-off.
-
-### Test a complete 2*pi search
-
-```bash
-ros2 action send_goal /approach_tag scrobot_interfaces/action/ApproachTag \
-  "{preferred_tag_id: -1, target_distance: 0.80, timeout_sec: 60.0}" --feedback
-```
-
-### Test the 15-sample global correction
-
-```bash
-ros2 action send_goal /relocalize scrobot_interfaces/action/Relocalize \
-  "{preferred_tag_id: -1, sample_count: 15, timeout_sec: 15.0}" --feedback
-```
+The debug index for all subsystems is `../scrobot_debug/debug_md/README.md`.
 
 ## Important files
 
