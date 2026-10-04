@@ -1,6 +1,8 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="scrobot">
 
+  <xacro:arg name="enable_magnetometer" default="false"/>
+
   <material name="aluminum_grey">
     <color rgba="0.60 0.62 0.65 1.0"/>
   </material>
@@ -31,7 +33,7 @@
   <xacro:property name="wheel_collision_width" value="$(arg wheel_collision_width)"/>
 
   <xacro:property name="base_front_x" value="0.325"/>
-  <xacro:property name="base_rear_x" value="-0.420"/>
+  <xacro:property name="base_rear_x" value="-0.450"/>
   <xacro:property name="base_left_y" value="0.225"/>
   <xacro:property name="base_right_y" value="-0.225"/>
 
@@ -62,10 +64,6 @@
   <xacro:property name="camera_pitch" value="${15.0 * pi / 180.0}"/>
   <xacro:property name="camera_yaw" value="0.0"/>
 
-  <xacro:property name="imu_x" value="-0.035"/>
-  <xacro:property name="imu_y" value="0.0"/>
-  <xacro:property name="imu_z" value="0.030"/>
-
   <xacro:property name="mag_x" value="-0.035"/>
   <xacro:property name="mag_y" value="0.0"/>
   <xacro:property name="mag_z" value="0.040"/>
@@ -80,6 +78,6 @@
   <xacro:scrobot_wheels/>
   <xacro:scrobot_casters/>
   <xacro:scrobot_collector/>
-  <xacro:scrobot_sensors/>
+  <xacro:scrobot_sensors enable_magnetometer="$(arg enable_magnetometer)"/>
 
 </robot>
