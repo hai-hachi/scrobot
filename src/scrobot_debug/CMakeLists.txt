@@ -44,6 +44,13 @@ install(
 
 install(
   PROGRAMS
+    scripts/control_test_ctl.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME control_test_ctl
+)
+
+install(
+  PROGRAMS
     scripts/debug_raw_teleop.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME debug_raw_teleop
