@@ -19,6 +19,7 @@ tag_global_localizer:
     quiet_border_cells: 1
     texture_pixels: 1024
 
+    # Retained for compatibility with older localization tuning notes.
     filter_tau: 0.25
     min_decision_margin: 20.0
     max_tag_distance: 9.0
@@ -58,7 +59,9 @@ tag_approach_controller:
     selection_min_samples: 3
     pending_detection_max_age: 0.25
 
+    # Search ends from measured accumulated yaw, not a fixed time approximation.
     search_angular_velocity: 0.45
+    search_rotation_rad: 6.283185307179586
     max_linear_velocity: 0.45
     max_angular_velocity: 0.75
     k_position: 1.10
