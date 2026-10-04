@@ -1,0 +1,191 @@
+SCROBOT PERCEPTION + YOLO RESUME CHECKLIST
+==========================================
+Branch: simulation-systematic-test2
+High-level computer: Jetson Orin Nano
+Training laptop: ThinkPad with NVIDIA RTX 2000 Ada laptop GPU, Ubuntu, CUDA
+
+PURPOSE
+-------
+This file records the perception decisions and remaining work so the cleanup can
+resume after YOLO training without reconstructing prior chats.
+
+CURRENT FINAL-VISION DECISIONS
+------------------------------
+1. Obstacle/depth pipeline stays lightweight:
+   Gazebo/D435i PointCloud2
+     -> pointcloud_to_laserscan
+     -> /camera/camera/depth/scan_raw
+     -> depth_scan_self_filter
+     -> /camera/camera/depth/scan
+     -> collision_monitor + Nav2 costmaps
+
+2. Do NOT use the full point cloud downstream. Jetson Orin is the production
+   high-level computer now, but the 2D scan architecture remains intentional.
+
+3. Keep the scan-level self-filter. Do not restore the old slow full PointCloud
+   self-filter.
+
+4. Simulated D435i camera uses calibration-derived FOV values:
+   color: 1280x720, HFOV about 70.418899 deg
+   depth: 848x480, HFOV about 90.503557 deg
+
+5. TODO after YOLO training:
+   update pointcloud_to_laserscan angle_min/angle_max to the calibrated depth
+   half-FOV, approximately +/-0.78979 rad.
+
+6. Obstacle scan vertical band:
+   min_height = 0.12 m
+   max_height = 0.70 m
+   Reason: shuttle maximum dimension is about 0.09 m; 0.12 m deliberately
+   ignores shuttlecocks while preserving margin.
+
+7. LaserScan obstacle/safety range:
+   range_min = 0.30 m
+   range_max = 3.30 m
+
+8. Simulated depth camera:
+   keep near plane consistent with camera model as appropriate;
+   set far clip to 10.0 m when perception cleanup resumes.
+   The safety/obstacle operating range is controlled by LaserScan 0.30-3.30 m,
+   not by the depth camera far clip.
+
+9. RealSense RGB is assumed rectified already. Do not add image_proc
+   rectification to the production AprilTag/YOLO pipeline. Remove stale
+   image_proc dependency/path after confirming nothing else needs it.
+
+10. AprilTag infrastructure remains:
+    color image + CameraInfo -> apriltag_ros
+    -> /apriltag/detections + observed_tag_* TF
+    Localization owns quality gating and map->odom correction.
+
+11. YOLO shuttle pipeline target:
+    D435i rectified RGB
+      -> YOLO 2D shuttle bbox
+      -> depth aligned to RGB/color stream
+      -> depth sampled from bbox/ROI
+      -> deproject with COLOR CameraInfo K
+      -> 3D shuttle position relative to camera
+      -> /perception/shuttle_detections_3d
+      -> collection eligibility filter
+      -> local SMC collection controller
+
+12. All shuttle detection ranges discussed for YOLO are CAMERA-RELATIVE.
+    Robot/collector-relative coordinates are obtained later through TF.
+
+13. Important shuttle RGB operating range:
+    theoretical/previous range: 0.17-1.68 m camera-relative
+    observed useful closest ground visibility from prior color-camera tests:
+    about 0.50 m
+    Therefore prioritize about 0.50-1.68 m in training data.
+    Optional edge examples outside this range may be included, but should not
+    dominate training.
+
+14. shuttle_tracker:
+    current production mission does NOT launch or consume it.
+    Current consumers use /perception/shuttle_detections_3d directly.
+    Keep shuttle_tracker code available but treat it as DISABLED/OPTIONAL legacy
+    infrastructure. Do not tune it and do not make mission depend on it unless a
+    future persistent court-wide shuttle map is explicitly desired.
+
+15. Fake shuttle detector:
+    keep for simulation/testing only.
+    Do not make it part of the final real perception path.
+
+16. YOLO is intentionally trained before finishing perception cleanup.
+
+SYNTHETIC YOLO DATASET PLAN
+---------------------------
+Goal:
+- generate SCROBOT-specific synthetic RGB images from Gazebo
+- automatically create YOLO labels from simulation truth
+- automatically split train/val/test
+- save directly into the local yoloshuttle workspace
+
+Default local target:
+  ~/Desktop/yoloshuttle/dataset/gazebo_scrobot
+
+Dataset generator lives in scrobot_debug and uses:
+- /camera/camera/color/image_raw
+- /camera/camera/color/camera_info
+- /evaluation/shuttle_ground_truth
+- /evaluation/ground_truth_odom
+- base_footprint -> camera_color_optical_frame static TF
+- exact installed shuttle visual STL vertices
+
+Bounding boxes:
+- load the same shuttle.STL Gazebo renders
+- transform mesh vertices by each shuttle ground-truth pose
+- transform world vertices into camera_color_optical_frame
+- project through the actual CameraInfo K matrix
+- clip to image bounds
+- convert to normalized YOLO xywh
+No manual labeling is required for synthetic data.
+
+Dataset rules:
+- capture at a low rate (default about 2 Hz) to reduce adjacent duplicates
+- label every visible projected shuttle, not only shuttles in the preferred
+  operating range, to avoid unlabeled positive objects
+- prefer saving positive frames that contain at least one shuttle in the
+  0.50-1.68 m camera-relative focus range
+- keep some true negative images with no visible shuttle
+- split by quantized robot position + heading group, not individual frames, to
+  reduce train/val/test leakage from near-identical adjacent frames
+- save metadata.csv with robot pose, split, box count, and focus-range info
+
+Training warning:
+- currently there are no new real-life robot-camera shuttle images
+- synthetic-only fine-tuning can overfit to Gazebo appearance
+- best.pt is retained as the baseline and starting point
+- when real D435i/green-court images become available, mix them into training
+  and keep a real-only held-out test set
+
+YOLOSHUTTLE REPO
+----------------
+Repo:
+  https://github.com/hai-hachi/yoloshuttle
+
+Baseline:
+  best.pt
+
+Existing training:
+  train_finetune.py
+
+Recommended first smoke:
+- Ubuntu venv
+- verify nvidia-smi
+- verify torch.cuda.is_available()
+- print GPU and CUDA/PyTorch versions
+- load best.pt
+- run 1 training epoch on generated Gazebo dataset using device 0
+- start batch 4 for smoke
+- if stable, later try batch 8 then 16
+
+Initial serious fine-tune recommendation:
+- model: best.pt
+- imgsz: 640
+- lr0: about 0.0001
+- first experiment: 10-20 epochs
+- batch: 8 initially; try 16 only if VRAM is comfortable
+- compare against original best.pt before replacing anything
+
+POST-YOLO PERCEPTION CLEANUP TODO
+--------------------------------
+[ ] Keep Jetson Orin as production compute reference in docs.
+[ ] Update scan HFOV to calibrated depth HFOV (~+/-0.78979 rad).
+[ ] Set min_height = 0.12 m as single source of truth.
+[ ] Remove launch/YAML conflict for min_height.
+[ ] Set LaserScan range_min = 0.30 m.
+[ ] Set LaserScan range_max = 3.30 m.
+[ ] Set simulated depth far clip = 10.0 m.
+[ ] Keep scan self-filter.
+[ ] Verify scan self-mask remains valid with final base geometry.
+[ ] Keep AprilTag configuration and interfaces.
+[ ] Remove stale image_proc/rectification path/dependency.
+[ ] Verify simulated CameraInfo matches the already-recorded factory intrinsics.
+[ ] Keep shuttle_tracker disabled/optional.
+[ ] Add final real YOLO + aligned-depth node later.
+[ ] Add scrobot_debug/launch/perception_check.launch.py.
+[ ] Add/update scrobot_debug/debug_md/perception.md.
+[ ] Add scrobot_perception/README.md architecture documentation.
+[ ] Update stale interface/docs that still show tracker as mandatory.
+[ ] Validate Nav2 and collision_monitor both consume filtered /depth/scan.
