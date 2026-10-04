@@ -9,7 +9,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
 
     rviz_config = PathJoinSubstitution([
-        FindPackageShare('scrobot_description'),
+        FindPackageShare('scrobot_debug'),
         'rviz',
         'scrobot.rviz',
     ])
