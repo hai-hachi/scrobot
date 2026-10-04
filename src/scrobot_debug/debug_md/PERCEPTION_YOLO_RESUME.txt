@@ -95,49 +95,59 @@ CURRENT FINAL-VISION DECISIONS
 
 SYNTHETIC YOLO DATASET PLAN
 ---------------------------
-Goal:
-- generate SCROBOT-specific synthetic RGB images from Gazebo
-- automatically create YOLO labels from simulation truth
-- automatically split train/val/test
-- save directly into the local yoloshuttle workspace
+The final dataset generator is isolated under scrobot_debug and DOES NOT use
+production robot simulation.
 
-Default local target:
+Command:
+  ros2 launch scrobot_debug yolo_dataset_capture.launch.py
+
+Fast debug-only architecture:
+  lightweight court world
+  + RGB-only D435i camera rig
+  + static visual-only production shuttle STL models
+  -> random camera pose
+  -> first fresh RGB frame
+  -> known STL projection
+  -> automatic YOLO label
+  -> train/val/test split
+  -> repeat
+  -> automatic shutdown
+
+It intentionally does NOT launch:
+  full SCROBOT model
+  ros2_control
+  depth camera
+  PointCloud
+  aligned depth
+  IMU
+  EKF
+  collision monitor
+  ShuttleManagerSystem
+  /evaluation/shuttle_ground_truth
+  /evaluation/ground_truth_odom
+  TF
+
+Camera viewpoint retained:
+  RGB 1280x720
+  HFOV 1.229041640167034 rad
+  color-frame height 0.28683059 m
+  15 deg downward pitch
+  optical-frame convention unchanged
+
+Default dataset:
+  target_images = 1200
+  shuttle_count = 40
+  positive_pose_fraction = 0.85
+  primary target range = 0.50-1.68 m camera-relative
+
+Output:
   ~/Desktop/yoloshuttle/dataset/gazebo_scrobot
 
-Dataset generator lives in scrobot_debug and uses:
-- /camera/camera/color/image_raw
-- /camera/camera/color/camera_info
-- /evaluation/shuttle_ground_truth
-- /evaluation/ground_truth_odom
-- base_footprint -> camera_color_optical_frame static TF
-- exact installed shuttle visual STL vertices
+Progress:
+  /debug/yolo_dataset_status
 
-Bounding boxes:
-- load the same shuttle.STL Gazebo renders
-- transform mesh vertices by each shuttle ground-truth pose
-- transform world vertices into camera_color_optical_frame
-- project through the actual CameraInfo K matrix
-- clip to image bounds
-- convert to normalized YOLO xywh
-No manual labeling is required for synthetic data.
-
-Dataset rules:
-- capture at a low rate (default about 2 Hz) to reduce adjacent duplicates
-- label every visible projected shuttle, not only shuttles in the preferred
-  operating range, to avoid unlabeled positive objects
-- prefer saving positive frames that contain at least one shuttle in the
-  0.50-1.68 m camera-relative focus range
-- keep some true negative images with no visible shuttle
-- split by quantized robot position + heading group, not individual frames, to
-  reduce train/val/test leakage from near-identical adjacent frames
-- save metadata.csv with robot pose, split, box count, and focus-range info
-
-Training warning:
-- currently there are no new real-life robot-camera shuttle images
-- synthetic-only fine-tuning can overfit to Gazebo appearance
-- best.pt is retained as the baseline and starting point
-- when real D435i/green-court images become available, mix them into training
-  and keep a real-only held-out test set
+The older full-simulation recorder remains in the repository only as fallback;
+the standard yolo_dataset_capture.launch.py now uses the fast RGB-only path.
 
 YOLOSHUTTLE REPO
 ----------------
