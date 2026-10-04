@@ -31,6 +31,14 @@ def generate_launch_description():
         ],
     )
 
+    depth_self_filter = Node(
+        package='scrobot_perception',
+        executable='depth_self_filter.py',
+        name='depth_self_filter',
+        output='screen',
+        parameters=[params, {'use_sim_time': use_sim_time}],
+    )
+
     pointcloud_to_scan = Node(
         package='pointcloud_to_laserscan',
         executable='pointcloud_to_laserscan_node',
@@ -45,7 +53,7 @@ def generate_launch_description():
             },
         ],
         remappings=[
-            ('cloud_in', '/camera/camera/depth/points'),
+            ('cloud_in', '/camera/camera/depth/points_filtered'),
             ('scan', '/camera/camera/depth/scan'),
         ],
     )
@@ -68,5 +76,6 @@ def generate_launch_description():
         ),
         LogInfo(msg=['Perception scan height band: ', min_height, ' to ', max_height, ' m']),
         apriltag,
+        depth_self_filter,
         pointcloud_to_scan,
     ])
