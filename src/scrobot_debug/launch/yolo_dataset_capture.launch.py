@@ -58,7 +58,7 @@ def generate_launch_description():
     perception = include(
         'scrobot_perception',
         'perception.launch.py',
-        {'use_sim_time': use_sim_time}.items(),
+        {'use_sim_time': use_sim_time},
     )
 
     control = include(
