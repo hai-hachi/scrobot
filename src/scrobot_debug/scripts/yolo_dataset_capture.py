@@ -5,6 +5,7 @@ import hashlib
 import math
 import os
 import struct
+import time
 from pathlib import Path
 
 import cv2
@@ -147,6 +148,7 @@ class YoloDatasetCapture(Node):
         self.declare_parameter('jpeg_quality', 95)
         self.declare_parameter('position_group_m', 0.50)
         self.declare_parameter('yaw_group_deg', 30.0)
+        self.declare_parameter('session_name', '')
 
         self.output_dir = Path(str(self.get_parameter('output_dir').value)).expanduser().resolve()
         self.capture_rate = max(0.1, float(self.get_parameter('capture_rate').value))
@@ -157,6 +159,8 @@ class YoloDatasetCapture(Node):
         self.jpeg_quality = int(self.get_parameter('jpeg_quality').value)
         self.position_group_m = max(0.05, float(self.get_parameter('position_group_m').value))
         self.yaw_group_rad = math.radians(max(1.0, float(self.get_parameter('yaw_group_deg').value)))
+        requested_session = str(self.get_parameter('session_name').value).strip()
+        self.session_name = requested_session or time.strftime('s%Y%m%d_%H%M%S')
 
         sim_share = Path(get_package_share_directory('scrobot_simulation'))
         self.mesh_vertices = load_stl_vertices(sim_share / 'models' / 'shuttle' / 'meshes' / 'shuttle.STL')
@@ -222,7 +226,7 @@ class YoloDatasetCapture(Node):
         if not self.metadata_path.exists():
             with self.metadata_path.open('w', newline='') as f:
                 csv.writer(f).writerow([
-                    'frame', 'split', 'robot_x', 'robot_y', 'robot_yaw_rad',
+                    'frame', 'session', 'split', 'robot_x', 'robot_y', 'robot_yaw_rad',
                     'boxes', 'focus_boxes', 'group_key'
                 ])
 
@@ -352,7 +356,7 @@ class YoloDatasetCapture(Node):
         # Out-of-focus positive frames are still retained because unlabeled visible
         # shuttles would be harmful training data.
         split, group_key, yaw = self._split_for_pose()
-        stem = f'gazebo_{self.frame_index:07d}'
+        stem = f'{self.session_name}_gazebo_{self.frame_index:07d}'
         img_path = self.output_dir / 'images' / split / f'{stem}.jpg'
         label_path = self.output_dir / 'labels' / split / f'{stem}.txt'
 
@@ -378,7 +382,7 @@ class YoloDatasetCapture(Node):
         robot_t, _ = self.robot_pose_world
         with self.metadata_path.open('a', newline='') as f:
             csv.writer(f).writerow([
-                stem, split,
+                stem, self.session_name, split,
                 f'{robot_t[0]:.6f}', f'{robot_t[1]:.6f}', f'{yaw:.6f}',
                 len(boxes), focus_boxes, group_key,
             ])
