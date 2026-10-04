@@ -33,9 +33,11 @@ drive_contact_mu    := 5.0
 caster_contact_mu   := 0.05
 ```
 
-The normal simulation uses the physical 30 mm drive-wheel collision width.
-The contact coefficients above are Gazebo tuning parameters used to reduce
-excessive simulated skid; they are not measured material coefficients.
+The wheel visual / physical geometry remains 30 mm wide, but normal Gazebo
+simulation intentionally overrides only the drive-wheel collision width to
+1 mm. The narrow line-contact approximation is retained because the full-width
+collision produced excessive lateral skid. The contact coefficients above are
+Gazebo tuning parameters, not measured material coefficients.
 
 The optional HMC5883L path remains a boolean switch:
 
