@@ -18,11 +18,29 @@ map -> odom -> base_footprint -> base_link
 
 ## Control
 
+### `/control/manual_mode`
+Type: `std_msgs/msg/Bool`
+
+Single authoritative AUTO/MANUAL mode state. `false` = AUTO, `true` = MANUAL.
+Transient-local / reliable.
+
+### `/cmd_vel_manual_input`
+Operator command input published by `manual_teleop`.
+
 ### `/cmd_vel_manual`
-Manual velocity command source used by keyboard teleoperation and tests.
+Manual command output owned by `manual_mode_manager`.
+
+### `/cmd_vel_auto`
+Selected autonomous command after `autonomy_mux`.
+
+### `/cmd_vel_selected`
+AUTO/MANUAL-selected command before smoothing.
+
+### `/cmd_vel_smoothed`
+Velocity-smoother output before collision monitoring.
 
 ### `/diff_drive_controller/cmd_vel`
-Final velocity command consumed by the differential-drive controller.
+Final collision-monitored velocity command consumed by the differential-drive controller.
 
 ### `/diff_drive_controller/odom`
 Wheel-odometry output.
