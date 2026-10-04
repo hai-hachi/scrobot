@@ -130,6 +130,7 @@ class FastYoloDatasetCapture(Node):
 
         self.declare_parameter('world_name', 'yolo_dataset')
         self.declare_parameter('camera_entity', 'yolo_camera_rig')
+        self.declare_parameter('camera_trigger_topic', '/yolo/camera/color/trigger')
         self.declare_parameter('target_images', 1200)
         self.declare_parameter('shuttle_count', 40)
         self.declare_parameter('spawn_workers', 8)
@@ -163,6 +164,7 @@ class FastYoloDatasetCapture(Node):
 
         self.world_name = str(self.get_parameter('world_name').value)
         self.camera_entity = str(self.get_parameter('camera_entity').value)
+        self.camera_trigger_topic = str(self.get_parameter('camera_trigger_topic').value)
         self.target_images = max(1, int(self.get_parameter('target_images').value))
         self.shuttle_count = max(1, int(self.get_parameter('shuttle_count').value))
         self.spawn_workers = max(1, int(self.get_parameter('spawn_workers').value))
@@ -244,6 +246,7 @@ class FastYoloDatasetCapture(Node):
         self.pose_kind = 'waiting'
         self.finished = False
         self.state = 'WAITING_FOR_CAMERA'
+        self.initial_trigger_sent = False
 
         self.last_saved_split = ''
         self.last_saved_boxes = 0
@@ -488,6 +491,28 @@ class FastYoloDatasetCapture(Node):
 
         return None
 
+    def _trigger_camera(self):
+        cmd = [
+            'gz', 'topic',
+            '-t', self.camera_trigger_topic,
+            '-m', 'gz.msgs.Boolean',
+            '-p', 'data: true',
+        ]
+        result = subprocess.run(
+            cmd,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        if result.returncode != 0:
+            self.state = 'CAMERA_TRIGGER_FAILED'
+            self.get_logger().error(
+                'Camera trigger failed: ' + result.stdout.strip()
+            )
+            return False
+        return True
+
     def _teleport_camera(self, position, yaw):
         q = quat_from_rpy(0.0, self.camera_pitch, yaw)
 
@@ -526,8 +551,12 @@ class FastYoloDatasetCapture(Node):
         self.camera_yaw = yaw
         self.camera_color_q = q
         self.teleport_stamp_ns = self.get_clock().now().nanoseconds
+
+        if not self._trigger_camera():
+            return False
+
         self.waiting_for_fresh_frame = True
-        self.state = 'WAITING_FOR_FRESH_RGB'
+        self.state = 'WAITING_FOR_TRIGGERED_RGB'
         return True
 
     def _next_view(self):
@@ -724,6 +753,8 @@ class FastYoloDatasetCapture(Node):
 
         if self.latest_image is None or self.camera_info is None:
             self.state = 'WAITING_FOR_CAMERA'
+            if not self.initial_trigger_sent:
+                self.initial_trigger_sent = self._trigger_camera()
             return
 
         if not self.scene_spawned:
@@ -739,7 +770,7 @@ class FastYoloDatasetCapture(Node):
             return
 
         if self._image_stamp_ns(self.latest_image) <= self.teleport_stamp_ns:
-            self.state = 'WAITING_FOR_FRESH_RGB'
+            self.state = 'WAITING_FOR_TRIGGERED_RGB'
             return
 
         self.state = 'SAVING_FRAME'
@@ -747,7 +778,7 @@ class FastYoloDatasetCapture(Node):
 
     def publish_status(self):
         status = {
-            'mode': 'fast_rgb_only',
+            'mode': 'fast_rgb_only_triggered',
             'state': self.state,
             'saved_images': self.saved_images,
             'target_images': self.target_images,
