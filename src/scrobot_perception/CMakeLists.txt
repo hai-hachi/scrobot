@@ -16,6 +16,7 @@ endif()
 
 install(
   PROGRAMS
+    scripts/depth_self_filter.py
     scripts/fake_shuttle_detector.py
     scripts/shuttle_tracker.py
   DESTINATION lib/${PROJECT_NAME}
