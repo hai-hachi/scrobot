@@ -32,6 +32,11 @@ def generate_launch_description():
         'config',
         'control_stack_check.rviz',
     )
+    controller_params = os.path.join(
+        debug_pkg,
+        'config',
+        'controllers_control_stack_check.yaml',
+    )
 
     simulation = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -45,6 +50,7 @@ def generate_launch_description():
             'yaw': robot_yaw,
             'spawn_delay': spawn_delay,
             'enable_magnetometer': enable_magnetometer,
+            'controller_params': controller_params,
         }.items(),
     )
 
