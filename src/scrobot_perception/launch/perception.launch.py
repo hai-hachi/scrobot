@@ -33,7 +33,7 @@ def generate_launch_description():
 
     depth_self_filter = Node(
         package='scrobot_perception',
-        executable='depth_self_filter.py',
+        executable='depth_self_filter',
         name='depth_self_filter',
         output='screen',
         parameters=[params, {'use_sim_time': use_sim_time}],
