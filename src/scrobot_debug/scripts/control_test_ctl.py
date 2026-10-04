@@ -64,6 +64,12 @@ class ControlTest(Node):
             self._odom_cb,
             qos,
         )
+        self.create_subscription(
+            Odometry,
+            '/evaluation/ground_truth_odom',
+            self._ground_truth_cb,
+            qos,
+        )
 
         self.manual_client = self.create_client(
             SetBool, '/control/set_manual_mode'
@@ -74,6 +80,7 @@ class ControlTest(Node):
         self.smoothed = None
         self.final = None
         self.odom = None
+        self.ground_truth = None
 
     @staticmethod
     def pair(msg):
@@ -98,6 +105,19 @@ class ControlTest(Node):
         self.odom = (
             float(msg.pose.pose.position.x),
             float(msg.pose.pose.position.y),
+        )
+
+    def _ground_truth_cb(self, msg):
+        p = msg.pose.pose.position
+        q = msg.pose.pose.orientation
+        yaw = math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y),
+            1.0 - 2.0 * (q.y * q.y + q.z * q.z),
+        )
+        self.ground_truth = (
+            float(p.x),
+            float(p.y),
+            yaw,
         )
 
     def msg(self, vx=0.0, wz=0.0):
@@ -358,16 +378,25 @@ class ControlTest(Node):
         )
 
     def spawn_obstacle(self, x):
+        self.require(
+            self.ground_truth is not None,
+            'ground-truth pose available for obstacle placement',
+        )
         self.delete_obstacle()
         time.sleep(0.3)
+
+        robot_x, robot_y, robot_yaw = self.ground_truth
+        obstacle_x = robot_x + math.cos(robot_yaw) * x
+        obstacle_y = robot_y + math.sin(robot_yaw) * x
+
         result = subprocess.run(
             [
                 'ros2', 'run', 'ros_gz_sim', 'create',
                 '-world', 'badminton_court',
                 '-name', 'control_test_obstacle',
                 '-file', self.obstacle_file(),
-                '-x', f'{x:.3f}',
-                '-y', '0.0',
+                '-x', f'{obstacle_x:.3f}',
+                '-y', f'{obstacle_y:.3f}',
                 '-z', '0.20',
             ],
             stdout=subprocess.PIPE,
@@ -382,7 +411,7 @@ class ControlTest(Node):
         )
         self.spin_sleep(1.0)
 
-    def command_and_final(self, speed=0.20, duration=1.2):
+    def command_and_final(self, speed=0.20, duration=0.35):
         self.final = None
         self.publish_for(self.pub_nav, speed, 0.0, duration)
         return None if self.final is None else self.final[0]
@@ -399,7 +428,7 @@ class ControlTest(Node):
             f'final={clear}',
         )
 
-        self.spawn_obstacle(0.46)
+        self.spawn_obstacle(0.49)
         slow = self.command_and_final(0.20)
         self.require(
             slow is not None and 0.0 < slow < 0.15,
