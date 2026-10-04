@@ -15,6 +15,7 @@ def generate_launch_description():
         'command_pipeline.yaml',
     )
     use_sim_time = LaunchConfiguration('use_sim_time')
+    manual_command_timeout = LaunchConfiguration('manual_command_timeout')
 
     joint_state_broadcaster_spawner = Node(
         package='controller_manager',
@@ -43,7 +44,10 @@ def generate_launch_description():
         executable='manual_mode_manager',
         name='manual_mode_manager',
         output='screen',
-        parameters=[{'use_sim_time': use_sim_time}],
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'command_timeout': manual_command_timeout,
+        }],
     )
 
     # Stage 1: autonomous command arbitration.
@@ -104,6 +108,11 @@ def generate_launch_description():
             'use_sim_time',
             default_value='true',
             choices=['true', 'false'],
+        ),
+        DeclareLaunchArgument(
+            'manual_command_timeout',
+            default_value='0.60',
+            description='Manual keyboard command deadman timeout [s]. Long enough to bridge normal key-repeat startup delay.',
         ),
         joint_state_broadcaster_spawner,
         diff_drive_controller_spawner,
