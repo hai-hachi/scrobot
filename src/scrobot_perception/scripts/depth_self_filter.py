@@ -7,6 +7,7 @@ import rclpy
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
 import tf2_ros
 
@@ -104,7 +105,7 @@ class DepthSelfFilter(Node):
             transform = self.tf_buffer.lookup_transform(
                 self.target_frame,
                 msg.header.frame_id,
-                rclpy.time.Time.from_msg(msg.header.stamp),
+                Time.from_msg(msg.header.stamp),
                 timeout=Duration(seconds=self.transform_tolerance),
             )
         except Exception as exc:
