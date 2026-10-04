@@ -6,7 +6,7 @@ import rclpy
 from geometry_msgs.msg import TwistStamped
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool
 from std_srvs.srv import SetBool
 
 
@@ -30,7 +30,6 @@ class ManualModeManager(Node):
 
         self.declare_parameter('manual_input_topic', '/cmd_vel_manual_input')
         self.declare_parameter('manual_output_topic', '/cmd_vel_manual')
-        self.declare_parameter('mode_topic', '/control/mode')
         self.declare_parameter('manual_mode_topic', '/control/manual_mode')
         self.declare_parameter('service_name', '/control/set_manual_mode')
         self.declare_parameter('publish_rate', 20.0)
@@ -43,7 +42,6 @@ class ManualModeManager(Node):
         self.manual_output_topic = str(
             self.get_parameter('manual_output_topic').value
         )
-        self.mode_topic = str(self.get_parameter('mode_topic').value)
         self.manual_mode_topic = str(
             self.get_parameter('manual_mode_topic').value
         )
@@ -71,9 +69,6 @@ class ManualModeManager(Node):
 
         self.manual_pub = self.create_publisher(
             TwistStamped, self.manual_output_topic, command_qos
-        )
-        self.mode_pub = self.create_publisher(
-            String, self.mode_topic, state_qos
         )
         self.manual_mode_pub = self.create_publisher(
             Bool, self.manual_mode_topic, state_qos
@@ -132,10 +127,6 @@ class ManualModeManager(Node):
         return response
 
     def _publish_mode_state(self):
-        mode_msg = String()
-        mode_msg.data = 'MANUAL' if self.manual_mode else 'AUTO'
-        self.mode_pub.publish(mode_msg)
-
         manual_msg = Bool()
         manual_msg.data = self.manual_mode
         self.manual_mode_pub.publish(manual_msg)
