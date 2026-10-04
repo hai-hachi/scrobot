@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import csv
+import json
 import hashlib
 import math
 import os
@@ -20,6 +21,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image
+from std_msgs.msg import String
 from tf2_ros import Buffer, TransformException, TransformListener
 
 
@@ -164,6 +166,7 @@ class YoloDatasetCapture(Node):
         self.declare_parameter('position_group_m', 0.50)
         self.declare_parameter('yaw_group_deg', 30.0)
         self.declare_parameter('session_name', '')
+        self.declare_parameter('status_topic', '/debug/yolo_dataset_status')
 
         self.output_dir = Path(str(self.get_parameter('output_dir').value)).expanduser().resolve()
         self.capture_rate = max(1.0, float(self.get_parameter('capture_rate').value))
@@ -209,6 +212,16 @@ class YoloDatasetCapture(Node):
         self.teleport_stamp_ns = 0
         self.settle_until_ns = 0
         self.finished = False
+        self.state = 'STARTING'
+        self.last_saved_split = ''
+        self.last_saved_boxes = 0
+        self.last_saved_focus_boxes = 0
+
+        self.status_pub = self.create_publisher(
+            String,
+            str(self.get_parameter('status_topic').value),
+            10,
+        )
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -241,9 +254,76 @@ class YoloDatasetCapture(Node):
         )
 
         self.create_timer(1.0 / self.capture_rate, self.capture)
+        self.create_timer(1.0, self.publish_status)
         self.get_logger().info(
             f'Automatic synthetic YOLO capture: target={self.target_images} images, '
             f'positive_pose_fraction={self.positive_pose_fraction:.2f}, output={self.output_dir}'
+        )
+
+    def _input_flags(self):
+        return {
+            'image': self.latest_image is not None,
+            'camera_info': self.camera_info is not None,
+            'robot_odom': self.robot_pose_world is not None,
+            'shuttle_gt': self.received_shuttle_gt,
+            'camera_tf': self.base_to_camera is not None,
+        }
+
+    def _derive_wait_state(self):
+        flags = self._input_flags()
+        if not flags['image']:
+            return 'WAITING_FOR_IMAGE'
+        if not flags['camera_info']:
+            return 'WAITING_FOR_CAMERA_INFO'
+        if not flags['robot_odom']:
+            return 'WAITING_FOR_ROBOT_GT_ODOM'
+        if not flags['shuttle_gt']:
+            return 'WAITING_FOR_SHUTTLE_GT'
+        if not flags['camera_tf']:
+            return 'WAITING_FOR_CAMERA_TF'
+        if self.finished:
+            return 'COMPLETE'
+        if self.waiting_for_fresh_frame:
+            self.state = 'SETTLING_AFTER_TELEPORT'
+        now_ns = self.get_clock().now().nanoseconds
+            if now_ns < self.settle_until_ns:
+                return 'SETTLING_AFTER_TELEPORT'
+            if self.latest_image is None or self._image_stamp_ns(self.latest_image) <= self.teleport_stamp_ns:
+                return 'WAITING_FOR_FRESH_IMAGE'
+            if self.robot_pose_stamp_ns <= self.teleport_stamp_ns:
+                return 'WAITING_FOR_FRESH_ODOM'
+            return 'READY_TO_SAVE'
+        return self.state
+
+    def publish_status(self):
+        status = {
+            'state': self._derive_wait_state(),
+            'saved_images': self.saved_images,
+            'target_images': self.target_images,
+            'progress_pct': round(100.0 * self.saved_images / max(1, self.target_images), 2),
+            'pose_attempts': self.pose_attempts,
+            'pose_kind': self.pose_kind,
+            'session': self.session_name,
+            'inputs': self._input_flags(),
+            'shuttle_count': len(self.shuttle_poses_world),
+            'last_split': self.last_saved_split,
+            'last_boxes': self.last_saved_boxes,
+            'last_focus_boxes': self.last_saved_focus_boxes,
+            'output_dir': str(self.output_dir),
+        }
+        msg = String()
+        msg.data = json.dumps(status, sort_keys=True)
+        self.status_pub.publish(msg)
+
+        # Mirror the same status to the launch console at a low rate so a stuck
+        # run is diagnosable even before opening a second terminal.
+        self.get_logger().info(
+            'DATASET_STATUS '
+            f"state={status['state']} "
+            f"saved={self.saved_images}/{self.target_images} "
+            f"attempts={self.pose_attempts} "
+            f"inputs={status['inputs']} "
+            f"shuttles={len(self.shuttle_poses_world)}"
         )
 
     def _prepare_output(self):
@@ -401,6 +481,7 @@ class YoloDatasetCapture(Node):
             text=True,
         )
         if result.returncode != 0:
+            self.state = 'TELEPORT_FAILED'
             self.get_logger().error(
                 'Gazebo set_pose failed: ' + result.stdout.strip()
             )
@@ -424,6 +505,7 @@ class YoloDatasetCapture(Node):
             pose = self._sample_random_pose()
 
         x, y, yaw, kind = pose
+        self.state = 'TELEPORTING'
         if self._teleport_robot(x, y, yaw):
             self.pose_kind = kind
             if self.pose_attempts % 25 == 0:
@@ -483,6 +565,7 @@ class YoloDatasetCapture(Node):
 
     def capture(self):
         if self.finished:
+            self.state = 'COMPLETE'
             return
 
         if (
@@ -492,9 +575,11 @@ class YoloDatasetCapture(Node):
             or not self.received_shuttle_gt
             or not self._lookup_camera()
         ):
+            self.state = self._derive_wait_state()
             return
 
         if not self.waiting_for_fresh_frame:
+            self.state = 'CHOOSING_VIEWPOINT'
             self._next_randomized_view()
             return
 
@@ -535,6 +620,7 @@ class YoloDatasetCapture(Node):
                 self.waiting_for_fresh_frame = False
                 return
 
+        self.state = 'SAVING_FRAME'
         split, group_key, yaw = self._split_for_pose()
         stem = f'{self.session_name}_gazebo_{self.frame_index:07d}'
         img_path = self.output_dir / 'images' / split / f'{stem}.jpg'
@@ -571,6 +657,10 @@ class YoloDatasetCapture(Node):
 
         self.frame_index += 1
         self.saved_images += 1
+        self.last_saved_split = split
+        self.last_saved_boxes = len(boxes)
+        self.last_saved_focus_boxes = focus_boxes
+        self.state = 'FRAME_SAVED'
         self.waiting_for_fresh_frame = False
 
         if self.saved_images % 25 == 0 or self.saved_images == self.target_images:
@@ -581,6 +671,7 @@ class YoloDatasetCapture(Node):
 
         if self.saved_images >= self.target_images:
             self.finished = True
+            self.state = 'COMPLETE'
             self.get_logger().info(
                 f'Dataset complete: {self.saved_images} images in {self.output_dir}'
             )
