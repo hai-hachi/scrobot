@@ -27,6 +27,7 @@
   <exec_depend>ros_gz_bridge</exec_depend>
   <exec_depend>rcl_interfaces</exec_depend>
   <exec_depend>vision_msgs</exec_depend>
+  <exec_depend>apriltag_msgs</exec_depend>
 
   <exec_depend>scrobot_simulation</exec_depend>
   <exec_depend>scrobot_control</exec_depend>
