@@ -6,12 +6,12 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Time
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
 
 
 def generate_launch_description():
     simulation_pkg = get_package_share_directory('scrobot_simulation')
     debug_pkg = get_package_share_directory('scrobot_debug')
+    control_pkg = get_package_share_directory('scrobot_control')
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     rviz = LaunchConfiguration('rviz')
@@ -37,26 +37,11 @@ def generate_launch_description():
         }.items(),
     )
 
-    joint_state_broadcaster = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=[
-            'joint_state_broadcaster',
-            '--controller-manager',
-            '/controller_manager',
-        ],
-        output='screen',
-    )
-
-    diff_drive_controller = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=[
-            'diff_drive_controller',
-            '--controller-manager',
-            '/controller_manager',
-        ],
-        output='screen',
+    controllers = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(control_pkg, 'launch', 'controllers.launch.py')
+        ),
+        launch_arguments={'use_sim_time': use_sim_time}.items(),
     )
 
     telemetry = IncludeLaunchDescription(
@@ -68,7 +53,7 @@ def generate_launch_description():
 
     rviz_debug = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(debug_pkg, 'launch', 'rviz.launch.py')
+            os.path.join(debug_pkg, 'launch', 'rviz_local.launch.py')
         ),
         launch_arguments={'use_sim_time': use_sim_time}.items(),
         condition=IfCondition(rviz),
@@ -104,6 +89,6 @@ def generate_launch_description():
         rviz_debug,
         TimerAction(
             period=controller_delay,
-            actions=[joint_state_broadcaster, diff_drive_controller, telemetry],
+            actions=[controllers, telemetry],
         ),
     ])
