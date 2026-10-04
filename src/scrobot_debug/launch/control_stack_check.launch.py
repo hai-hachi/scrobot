@@ -131,8 +131,8 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'rviz_delay',
-            default_value='6.0',
-            description='Delay before starting the local safety RViz view [s].',
+            default_value='4.0',
+            description='Delay before starting RViz. Keep this before control_delay so RViz catches collision_monitor startup polygons [s].',
         ),
         DeclareLaunchArgument(
             'launch_rviz',
