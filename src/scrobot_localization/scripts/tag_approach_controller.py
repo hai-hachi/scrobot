@@ -118,7 +118,8 @@ class TagApproachController(Node):
         self.declare_parameter('selection_min_samples', 4)
         self.declare_parameter('pending_detection_max_age', 0.25)
 
-        self.declare_parameter('search_angular_velocity', 0.25)
+        self.declare_parameter('search_angular_velocity', 0.45)
+        self.declare_parameter('search_rotation_rad', 2.0 * math.pi)
         self.declare_parameter('max_linear_velocity', 0.25)
         self.declare_parameter('max_angular_velocity', 0.60)
         self.declare_parameter('k_position', 0.80)
@@ -168,6 +169,10 @@ class TagApproachController(Node):
 
         self.search_angular_velocity = float(
             self.get_parameter('search_angular_velocity').value
+        )
+        self.search_rotation_rad = max(
+            0.1,
+            float(self.get_parameter('search_rotation_rad').value),
         )
         self.max_linear_velocity = float(
             self.get_parameter('max_linear_velocity').value
@@ -229,6 +234,11 @@ class TagApproachController(Node):
         self.last_tag_bearing = float('nan')
         self.last_face_angle = float('nan')
         self.stable_since = None
+
+        # Search progress is measured from odometry yaw so one search attempt
+        # means one physical rotation even if simulation timing or smoothing varies.
+        self.search_last_yaw = None
+        self.search_accumulated_yaw = 0.0
 
         # Stationary multi-frame selection state.
         self.observe_started = None
@@ -332,6 +342,8 @@ class TagApproachController(Node):
             self.last_tag_bearing = float('nan')
             self.last_face_angle = float('nan')
             self.stable_since = None
+            self.search_last_yaw = None
+            self.search_accumulated_yaw = 0.0
 
             self.observe_started = None
             self.selection_samples = {}
@@ -727,6 +739,30 @@ class TagApproachController(Node):
 
         if phase == 'search':
             self.stable_since = None
+
+            robot = self.get_robot_pose()
+            if robot is not None:
+                yaw = robot[2]
+                if self.search_last_yaw is None:
+                    self.search_last_yaw = yaw
+                else:
+                    step = abs(angle_difference(yaw, self.search_last_yaw))
+                    # Ignore impossible discontinuities rather than counting a TF reset
+                    # as physical rotation.
+                    if step <= math.pi / 2.0:
+                        self.search_accumulated_yaw += step
+                    self.search_last_yaw = yaw
+
+                if self.search_accumulated_yaw >= self.search_rotation_rad:
+                    self.finish_approach(
+                        success=False,
+                        message=(
+                            'No acceptable AprilTag found after a full '
+                            f'{self.search_accumulated_yaw:.3f} rad search rotation.'
+                        ),
+                    )
+                    return
+
             self.publish_cmd(0.0, self.search_angular_velocity)
             return
 
@@ -867,6 +903,8 @@ class TagApproachController(Node):
             self.last_tag_bearing = float('nan')
             self.last_face_angle = float('nan')
             self.stable_since = None
+            self.search_last_yaw = None
+            self.search_accumulated_yaw = 0.0
 
             self.observe_started = None
             self.selection_samples = {}
