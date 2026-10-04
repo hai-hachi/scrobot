@@ -205,6 +205,31 @@ The collection harness uses the same production dynamic shuttle model as normal
 mission simulation and validates the current 45 mm local +Z shuttle collection
 center against the 300 x 60 mm collector rectangle.
 
+## Robot description check
+
+Use this launch to validate the hardware-neutral URDF/Xacro and TF tree without
+requiring localization, AprilTags, Nav2, or a `map -> odom` transform:
+
+```bash
+ros2 launch scrobot_debug description_check.launch.py
+```
+
+The dedicated RViz config uses `base_footprint` as both the fixed frame and
+view target, and only shows the robot model, TF tree, and a local grid. The
+launch starts `robot_state_publisher` and `joint_state_publisher_gui`
+directly from `scrobot_description/urdf/scrobot.urdf.xacro`.
+
+By default it uses the physical/default 30 mm drive-wheel collision width. To
+inspect the Gazebo anti-skid collision override instead:
+
+```bash
+ros2 launch scrobot_debug description_check.launch.py \
+  wheel_collision_width:=0.001
+```
+
+This test is intentionally separate from the mission RViz launch, whose global
+fixed frame remains `map`.
+
 ## RViz
 
 RViz and the court MarkerArray visualizer are debug tools and live here now:
