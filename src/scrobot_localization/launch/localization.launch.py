@@ -7,6 +7,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -28,6 +29,7 @@ def generate_launch_description():
     )
 
     use_sim_time = LaunchConfiguration('use_sim_time')
+    use_magnetometer = LaunchConfiguration('use_magnetometer')
 
 
     # ==========================================
@@ -99,7 +101,8 @@ def generate_launch_description():
         parameters=[
             imu_filter_config,
             {
-                'use_sim_time': use_sim_time
+                'use_sim_time': use_sim_time,
+                'use_mag': ParameterValue(use_magnetometer, value_type=bool),
             }
         ],
 
@@ -151,7 +154,14 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'use_sim_time',
-            default_value='true'
+            default_value='true',
+            choices=['true', 'false'],
+        ),
+        DeclareLaunchArgument(
+            'use_magnetometer',
+            default_value='false',
+            choices=['true', 'false'],
+            description='Fuse /imu/mag in Madgwick when an HMC5883L-class sensor is available.',
         ),
 
         # Order here is logical; ROS nodes can start asynchronously.
