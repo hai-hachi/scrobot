@@ -222,34 +222,11 @@ The debug-only control-stack controller configuration enables diff-drive odom TF
 only when localization is intentionally absent. Do not run both odom-TF owners
 at the same time.
 
-## Debug paths
+## Testing
 
-### Full control stack
+Runnable control regression procedures are centralized in `../scrobot_debug/debug_md/control.md`.
 
-```bash
-ros2 launch scrobot_debug control_stack_check.launch.py
-```
-
-This launches simulation, filtered depth scan, control stack, telemetry, and the
-control-stack monitor.
-
-RViz is disabled by default to reduce point-cloud/rendering load:
-
-```bash
-ros2 launch scrobot_debug control_stack_check.launch.py launch_rviz:=true
-```
-
-### Raw drive test
-
-Use the dedicated debug raw-drive tools only for subsystem isolation. Raw
-bypass is not the production path and must not become the normal manual-control
-architecture.
-
-### AUTO / MANUAL override test
-
-The debug package also contains an autonomy/manual override check for verifying
-that MANUAL cancels/pauses autonomous behavior and AUTO resumes the preserved
-mission context.
+The debug index for all subsystems is `../scrobot_debug/debug_md/README.md`.
 
 ## What was learned from `main`
 
