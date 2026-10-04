@@ -4,6 +4,9 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Robot Collision Model1
+        - /Raw Depth Scan1
+        - /Collision Monitor Stop Zone1
+        - /Collision Monitor Slowdown Zone1
         - /Control Stack Debug Overlay1
         - /TF1
       Splitter Ratio: 0.62
@@ -62,24 +65,72 @@ Visualization Manager:
       Update Interval: 0
       Visual Enabled: false
 
+    - Class: rviz_default_plugins/LaserScan
+      Name: Raw Depth Scan
+      Enabled: true
+      Value: true
+      Alpha: 1
+      Axis: Z
+      Channel Name: intensity
+      Color: 0; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 8
+      Size (m): 0.04
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /camera/camera/depth/scan
+      Use Fixed Frame: true
+      Use rainbow: false
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Collision Monitor Stop Zone
+      Enabled: true
+      Value: true
+      Alpha: 0.85
+      Color: 255; 0; 0
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /collision_monitor/stop_zone
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Collision Monitor Slowdown Zone
+      Enabled: true
+      Value: true
+      Alpha: 0.85
+      Color: 255; 220; 0
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /collision_monitor/slowdown_zone
+
     - Class: rviz_default_plugins/MarkerArray
       Name: Control Stack Debug Overlay
       Enabled: true
       Value: true
-      Marker Topic:
+      Namespaces: {}
+      Queue Size: 5
+      Topic:
         Depth: 5
-        Durability Policy: Transient Local
+        Durability Policy: Volatile
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /debug/control_stack_viz
-      Namespaces:
-        base_footprint_outline: true
-        scan_points: true
-        slowdown_zone_fill: true
-        slowdown_zone_outline: true
-        stop_zone_fill: true
-        stop_zone_outline: true
-      Queue Size: 5
 
     - Class: rviz_default_plugins/TF
       Name: TF
