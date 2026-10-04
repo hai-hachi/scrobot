@@ -128,6 +128,24 @@ def launch_setup(context):
     )
     actions.append(rviz_local)
 
+    test_driver = Node(
+        package='scrobot_debug',
+        executable='control_test_ctl',
+        name='control_test_ctl',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'test': test,
+            'startup_wait': 2.0,
+        }],
+    )
+    actions.append(
+        TimerAction(
+            period=float(LaunchConfiguration('stack_delay').perform(context)) + 2.0,
+            actions=[test_driver],
+        )
+    )
+
     return actions
 
 
