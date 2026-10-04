@@ -36,23 +36,24 @@ pose versus Gazebo truth, and selected `/rosout` messages.
 
 ## Control stack check
 
-Start the normal simulation, production control stack, and telemetry with one
-command:
+Start the normal simulation, perception scan source, production control stack,
+and telemetry with one command:
 
 ```bash
 ros2 launch scrobot_debug control_stack_check.launch.py
 ```
 
 This is the generic regression launch for `scrobot_control`. It starts Gazebo,
-spawns the robot, then starts the controller spawners, AUTO/MANUAL muxes,
-velocity smoother, collision monitor, and telemetry after the configured
-`control_delay`.
+spawns the robot, starts `scrobot_perception/perception.launch.py` so the
+collision monitor receives `/camera/camera/depth/scan`, then starts the
+controller spawners, AUTO/MANUAL muxes, velocity smoother, collision monitor,
+and telemetry after the configured `control_delay`.
 
 Useful checks from another terminal:
 
 ```bash
 ros2 control list_controllers
-ros2 topic list | grep -E "cmd_vel|controller|joint|odom|control"
+ros2 topic list | grep -E "cmd_vel|controller|joint|odom|control|depth/scan"
 ```
 
 Expected control path:
@@ -71,11 +72,22 @@ joint_state_broadcaster active
 diff_drive_controller active
 ```
 
+Expected safety input:
+
+```text
+/camera/camera/depth/scan
+```
+
+If `/cmd_vel_selected` is active but `/diff_drive_controller/cmd_vel` is blank,
+check `/cmd_vel_smoothed` first, then confirm that `/camera/camera/depth/scan`
+is publishing. The collision monitor intentionally sits between the smoother
+and the diff-drive controller.
+
 Optional arguments:
 
 ```bash
 ros2 launch scrobot_debug control_stack_check.launch.py \
-  robot_x:=1.0 robot_y:=0.0 robot_yaw:=0.0 control_delay:=4.0
+  robot_x:=1.0 robot_y:=0.0 robot_yaw:=0.0 control_delay:=5.0
 ```
 
 ## Manual control check
