@@ -295,6 +295,11 @@ class YoloDatasetCapture(Node):
         return self.state
 
     def publish_status(self):
+        # Probe the static camera TF independently of the main capture gate so
+        # the status topic reports TF health even when another input is missing.
+        if self.base_to_camera is None:
+            self._lookup_camera()
+
         status = {
             'state': self._derive_wait_state(),
             'saved_images': self.saved_images,
@@ -567,12 +572,15 @@ class YoloDatasetCapture(Node):
             self.state = 'COMPLETE'
             return
 
+        if self.base_to_camera is None:
+            self._lookup_camera()
+
         if (
             self.latest_image is None
             or self.camera_info is None
             or self.robot_pose_world is None
             or not self.received_shuttle_gt
-            or not self._lookup_camera()
+            or self.base_to_camera is None
         ):
             self.state = self._derive_wait_state()
             return
