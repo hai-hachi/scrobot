@@ -156,7 +156,7 @@ After capture:
 
 ```bash
 cd ~/Desktop/yoloshuttle
-./ubuntu_cuda_smoke.sh dataset/gazebo_scrobot/data.yaml
+bash ubuntu_cuda_smoke.sh dataset/gazebo_scrobot/data.yaml
 ```
 
 If the CUDA smoke test passes, proceed to a longer fine-tune.
