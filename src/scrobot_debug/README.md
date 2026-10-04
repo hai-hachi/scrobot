@@ -89,7 +89,7 @@ ros2 launch scrobot_debug manual_control_check.launch.py
 Then use a real terminal for the interactive keyboard node:
 
 ```bash
-ros2 run scrobot_control manual_teleop.py
+ros2 run scrobot_control manual_teleop
 ```
 
 The keyboard process is intentionally not started by a ROS launch file because
@@ -133,7 +133,7 @@ ros2 launch scrobot_debug autonomy_manual_override_check.launch.py
 Then, from a separate interactive terminal:
 
 ```bash
-ros2 run scrobot_control manual_teleop.py
+ros2 run scrobot_control manual_teleop
 ```
 
 During autonomous motion:
@@ -175,7 +175,7 @@ ros2 launch scrobot_debug raw_drive_check.launch.py
 Then in a real terminal:
 
 ```bash
-ros2 run scrobot_debug debug_raw_teleop.py
+ros2 run scrobot_debug debug_raw_teleop
 ```
 
 `debug_raw_teleop.py` publishes directly to
