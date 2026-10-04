@@ -1,9 +1,14 @@
+# Goal
+# Overall local-collection spree timeout in seconds; <= 0 uses the server default.
 float32 timeout_sec
 ---
+# Result
 bool success
 int32 targets_attempted
 string message
 ---
+# Feedback
+# One-based index of the target currently being attempted.
 int32 target_index
 float32 bearing_deg
 float32 range_m
