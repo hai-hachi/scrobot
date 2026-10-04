@@ -1,5 +1,6 @@
 tag_global_localizer:
   ros__parameters:
+    # `map` is the badminton-court global coordinate frame used by Nav2.
     map_frame: map
     odom_frame: odom
     base_frame: base_footprint
