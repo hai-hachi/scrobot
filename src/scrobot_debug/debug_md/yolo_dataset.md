@@ -46,7 +46,7 @@ colcon build --symlink-install --packages-up-to scrobot_debug
 source install/setup.bash
 ```
 
-## One-command capture
+## One-command automatic generation
 
 Make sure the training repository exists first:
 
@@ -55,7 +55,7 @@ cd ~/Desktop
 git clone https://github.com/hai-hachi/yoloshuttle.git
 ```
 
-Then:
+Then run exactly one command:
 
 ```bash
 ros2 launch scrobot_debug yolo_dataset_capture.launch.py
@@ -64,70 +64,57 @@ ros2 launch scrobot_debug yolo_dataset_capture.launch.py
 Defaults:
 
 ```text
-output_dir     ~/Desktop/yoloshuttle/dataset/gazebo_scrobot
-capture_rate   2 Hz
-shuttle_mode   mixed
-shuttle_count  40
+output_dir              ~/Desktop/yoloshuttle/dataset/gazebo_scrobot
+target_images           1200
+positive_pose_fraction  0.85
+shuttle_mode            mixed
+shuttle_count           50
+settle_time             0.40 s
+random_seed             42
 ```
 
-The recorder automatically:
+Nothing else is required. Do not run manual teleop.
 
-1. launches the SCROBOT simulation;
-2. launches local EKF, perception and the production-safe control stack;
-3. spawns the shuttle distribution;
-4. captures RGB frames;
-5. derives shuttle boxes from simulation truth + exact STL geometry;
-6. writes labels;
-7. assigns train/val/test by robot pose + heading group;
-8. retains only a subset of repeated negative frames;
-9. appends `metadata.csv`.
+The launch automatically:
 
-## Create viewpoint diversity
+1. starts Gazebo and the simulated D435i;
+2. spawns a randomized mixed shuttle distribution;
+3. loads the exact rendered `shuttle.STL`;
+4. teleports the robot to randomized safe court poses;
+5. biases most poses around a randomly selected shuttle so its camera-relative
+   range is approximately 0.50-1.68 m;
+6. applies random heading jitter so shuttles appear across the RGB image rather
+   than only in the center;
+7. uses a smaller fraction of random court poses for background/negative views;
+8. waits for a fresh settled camera frame after every teleport;
+9. projects every visible shuttle mesh through the live RGB `CameraInfo`;
+10. writes the RGB image and YOLO label;
+11. assigns train/val/test by robot position + heading group;
+12. repeats until `target_images` images have been saved;
+13. exits the recorder and automatically shuts the launch down.
 
-In a second terminal:
+The output is therefore ready for training after the one launch command returns.
 
-```bash
-source ~/scrobot_ws/install/setup.bash
-ros2 run scrobot_control manual_teleop
-```
-
-Enter MANUAL:
-
-```text
-M
-```
-
-Then drive around the court with W/A/S/D.
-
-Do not remain stationary for most of the recording. The split is deliberately
-grouped by quantized robot position and heading so adjacent frames from the same
-viewpoint go into the same split.
-
-The dataset is most valuable when the robot observes shuttles across:
-
-- approximately 0.50-1.68 m camera-relative range;
-- image center and image edges;
-- different shuttle orientations;
-- isolated and multi-shuttle scenes;
-- court lines, net, posts, AprilTags and other negative background features.
-
-The recorder labels every shuttle whose projected visual mesh is in the image,
-including visible shuttles outside the preferred 0.50-1.68 m focus range. This
-avoids teaching YOLO that a visible shuttle outside the focus range is
-background.
-
-## Optional launch overrides
+### Generate a different-size dataset
 
 ```bash
 ros2 launch scrobot_debug yolo_dataset_capture.launch.py \
-  capture_rate:=1.0 \
-  shuttle_mode:=mixed \
-  shuttle_count:=60 \
-  output_dir:=$HOME/Desktop/yoloshuttle/dataset/gazebo_scrobot
+  target_images:=2000
+```
+
+### Generate a different randomized viewpoint sequence
+
+```bash
+ros2 launch scrobot_debug yolo_dataset_capture.launch.py \
+  target_images:=1200 \
+  random_seed:=123
 ```
 
 Repeated runs are safe. Each run gets a timestamp session prefix, so previous
 images are not overwritten.
+
+The initial shuttle layout is randomized by the simulation shuttle spawner.
+Robot viewpoints are independently randomized by the capture node.
 
 ## Inspect counts
 
