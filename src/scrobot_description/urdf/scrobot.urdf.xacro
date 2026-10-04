@@ -49,7 +49,6 @@
   <xacro:property name="caster_fork_com_z" value="-0.01513"/>
 
   <xacro:property name="collector_radius" value="0.030"/>
-  <xacro:property name="collector_diameter" value="0.060"/>
   <xacro:property name="collector_length" value="0.300"/>
   <xacro:property name="collector_x" value="0.165"/>
   <xacro:property name="collector_y" value="0.0"/>
