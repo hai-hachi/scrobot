@@ -80,18 +80,25 @@ public:
 
     if (this->robotEntity_ == gz::sim::kNullEntity ||
         this->collectorEntity_ == gz::sim::kNullEntity ||
-        !_ecm.HasEntity(this->robotEntity_) ||
-        !_ecm.HasEntity(this->collectorEntity_))
+        (this->robotEntity_ != gz::sim::kNullEntity &&
+         !_ecm.HasEntity(this->robotEntity_)) ||
+        (this->collectorEntity_ != gz::sim::kNullEntity &&
+         !_ecm.HasEntity(this->collectorEntity_)))
     {
       this->ResolveRobotAndCollector(_ecm);
     }
-    if (this->robotEntity_ == gz::sim::kNullEntity ||
-        this->collectorEntity_ == gz::sim::kNullEntity)
-    {
-      return;
-    }
 
-    const auto collectorPose = gz::sim::worldPose(this->collectorEntity_, _ecm);
+    // Shuttle ground truth is independent of the collection mechanism. Keep
+    // publishing poses even if the robot / collector link is temporarily not
+    // resolvable (for example in dataset-generation or startup transients).
+    const bool collectorReady =
+      this->enableCollection_ &&
+      this->collectorEntity_ != gz::sim::kNullEntity &&
+      _ecm.HasEntity(this->collectorEntity_);
+
+    gz::math::Pose3d collectorPose;
+    if (collectorReady)
+      collectorPose = gz::sim::worldPose(this->collectorEntity_, _ecm);
 
     gz::msgs::Pose_V shuttleGroundTruthMsg;
     gz::msgs::Pose_V collectedMsg;
@@ -110,36 +117,36 @@ public:
 
         const auto shuttlePose = gz::sim::worldPose(_entity, _ecm);
 
-        // Collection reference point:
-        //   shuttle model origin + 45 mm along the shuttle's local +Z axis.
-        // This point follows the shuttle orientation and approximates the
-        // geometric middle of the 90 mm shuttle body.
-        const auto shuttleCenterOffsetWorld = shuttlePose.Rot().RotateVector(
-          gz::math::Vector3d(0.0, 0.0, this->shuttleCenterOffsetZ_));
-        const auto shuttleCollectCenter =
-          shuttlePose.Pos() + shuttleCenterOffsetWorld;
-
-        // Express the shuttle collection center directly in collector_link.
-        // This removes the duplicated +0.165 m robot-frame offset from the
-        // world/plugin configuration: moving collector_link in the URDF now
-        // moves the pickup zone automatically.
-        const auto collectorToShuttleWorld =
-          shuttleCollectCenter - collectorPose.Pos();
-        const auto shuttleCenterCollector =
-          collectorPose.Rot().Inverse().RotateVector(collectorToShuttleWorld);
-
-        // A shuttle is collected only when its collection-center point is
-        // inside the 300 mm x 60 mm rectangle centered on collector_link.
-        const bool centerInsidePickupZone =
-          std::abs(shuttleCenterCollector.X()) <= this->pickupHalfLength_ &&
-          std::abs(shuttleCenterCollector.Y()) <= this->pickupHalfWidth_;
-
-        if (this->enableCollection_ && centerInsidePickupZone)
+        if (collectorReady)
         {
-          auto *collectedPose = collectedMsg.add_pose();
-          this->FillPoseMessage(*collectedPose, _entity, _nameComp->Data(), shuttlePose);
-          _ecm.RequestRemoveEntity(_entity);
-          return true;
+          // Collection reference point:
+          //   shuttle model origin + 45 mm along the shuttle's local +Z axis.
+          // This point follows the shuttle orientation and approximates the
+          // geometric middle of the 90 mm shuttle body.
+          const auto shuttleCenterOffsetWorld = shuttlePose.Rot().RotateVector(
+            gz::math::Vector3d(0.0, 0.0, this->shuttleCenterOffsetZ_));
+          const auto shuttleCollectCenter =
+            shuttlePose.Pos() + shuttleCenterOffsetWorld;
+
+          // Express the shuttle collection center directly in collector_link.
+          const auto collectorToShuttleWorld =
+            shuttleCollectCenter - collectorPose.Pos();
+          const auto shuttleCenterCollector =
+            collectorPose.Rot().Inverse().RotateVector(collectorToShuttleWorld);
+
+          // A shuttle is collected only when its collection-center point is
+          // inside the 300 mm x 60 mm rectangle centered on collector_link.
+          const bool centerInsidePickupZone =
+            std::abs(shuttleCenterCollector.X()) <= this->pickupHalfLength_ &&
+            std::abs(shuttleCenterCollector.Y()) <= this->pickupHalfWidth_;
+
+          if (centerInsidePickupZone)
+          {
+            auto *collectedPose = collectedMsg.add_pose();
+            this->FillPoseMessage(*collectedPose, _entity, _nameComp->Data(), shuttlePose);
+            _ecm.RequestRemoveEntity(_entity);
+            return true;
+          }
         }
 
         auto *poseMsg = shuttleGroundTruthMsg.add_pose();
