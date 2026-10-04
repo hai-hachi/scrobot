@@ -40,7 +40,7 @@ def generate_launch_description():
 
     manual_mode_manager = Node(
         package='scrobot_control',
-        executable='manual_mode_manager.py',
+        executable='manual_mode_manager',
         name='manual_mode_manager',
         output='screen',
         parameters=[{'use_sim_time': use_sim_time}],
