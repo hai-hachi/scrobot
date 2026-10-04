@@ -130,6 +130,7 @@ install(
   DIRECTORY
     launch
     config
+    debug_md
     models
     worlds
   DESTINATION share/${PROJECT_NAME}
