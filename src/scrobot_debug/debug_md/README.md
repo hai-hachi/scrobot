@@ -24,6 +24,7 @@ source install/setup.bash
 | AUTO/MANUAL override | `ros2 launch scrobot_debug autonomy_manual_override_check.launch.py` | [control.md](control.md) |
 | Raw drive | `ros2 launch scrobot_debug raw_drive_check.launch.py` | [control.md](control.md) |
 | Localization / AprilTag | `ros2 launch scrobot_debug localization_check.launch.py` | [localization.md](localization.md) |
+| YOLO synthetic dataset | `ros2 launch scrobot_debug yolo_dataset_capture.launch.py` | [yolo_dataset.md](yolo_dataset.md) |
 | Shuttle physics | `ros2 launch scrobot_debug shuttle_physics_check.launch.py` | See `../README.md` until split into its own guide |
 | Collection | `ros2 launch scrobot_debug collection_check.launch.py` | See `../README.md` until split into its own guide |
 | Telemetry only | `ros2 launch scrobot_debug telemetry.launch.py` | See `../README.md` |
