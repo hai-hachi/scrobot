@@ -8,7 +8,7 @@ Updated for the current ROS 2 Jazzy / Gazebo Harmonic stack.
 Production AUTO/MANUAL arbitration state owner.
 
 - Service: `/control/set_manual_mode` (`std_srvs/srv/SetBool`)
-- Publishes latched state on `/control/manual_mode` and `/control/mode`.
+- Publishes the single latched AUTO/MANUAL state on `/control/manual_mode` (`std_msgs/Bool`).
 - Input: `/cmd_vel_manual_input`.
 - Output: `/cmd_vel_manual`.
 - While MANUAL is active, keeps the high-priority manual path alive with the
@@ -25,6 +25,23 @@ Interactive keyboard client for the manual-mode manager.
 - `W/S/A/D`: drive.
 - Publishes only to `/cmd_vel_manual_input`; it does not own the final command
   mux directly.
+
+### Command pipeline
+Production motion command path:
+
+```text
+Nav2 / local collection / relocalization
+ -> autonomy_mux
+ -> control_mode_mux
+ -> velocity_smoother
+ -> collision_monitor
+ -> diff_drive_controller
+```
+
+Manual mode remains inside the same smoothing and collision-monitoring path.
+Manual reverse is permitted under operator supervision. Ordinary autonomous
+planning remains forward-only; any future autonomous back-out recovery must be
+an explicit guarded navigation behavior.
 
 ### `diff_drive_controller`
 ROS 2 control differential-drive controller.
@@ -220,9 +237,15 @@ as the production manual-control path.
 Measures shuttle drift and collector-envelope clearance during isolated shuttle
 physics/collision tests.
 
+### RViz / description checks
+All test-oriented RViz profiles live in `scrobot_debug`:
+
+- `description_check.launch.py`: model/TF view, fixed frame `base_footprint`.
+- `rviz_local.launch.py`: local simulation/subsystem view, fixed frame `base_footprint`.
+- `rviz_map.launch.py`: full mission/Nav2/court view, fixed frame `map`.
+
 ### `court_visualizer`
-RViz MarkerArray-only court visualization. This node and RViz launch ownership
-were moved out of `scrobot_simulation`.
+RViz MarkerArray-only court visualization used by the map-frame debug profile.
 
 ## scrobot_evaluation
 
