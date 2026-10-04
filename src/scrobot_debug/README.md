@@ -47,23 +47,27 @@ This is the generic regression launch for `scrobot_control`. It starts Gazebo,
 spawns the robot, starts `scrobot_perception/perception.launch.py` so the
 collision monitor receives `/camera/camera/depth/scan`, then starts the
 controller spawners, AUTO/MANUAL muxes, velocity smoother, collision monitor,
-telemetry, and `control_stack_check.rviz`.
+telemetry, a debug safety-marker overlay, and `control_stack_check.rviz`.
 
 The RViz view uses `base_footprint` as the fixed frame so it does not depend on
 localization. It is meant for local safety debugging:
 
 ```text
-cyan points   /camera/camera/depth/scan
-red polygon   /collision_monitor/stop_zone
-yellow polygon /collision_monitor/slowdown_zone
-robot model   /robot_description + TF
+cyan points       /camera/camera/depth/scan
+transparent red   configured stop-zone overlay from /debug/control_safety_markers
+transparent yellow configured slowdown-zone overlay from /debug/control_safety_markers
+blue outline      configured base-footprint outline from /debug/control_safety_markers
+red topic         actual /collision_monitor/stop_zone, when published/rendered
+yellow topic      actual /collision_monitor/slowdown_zone, when published/rendered
+robot model       /robot_description + TF
 ```
 
 Useful checks from another terminal:
 
 ```bash
 ros2 control list_controllers
-ros2 topic list | grep -E "cmd_vel|controller|joint|odom|control|depth/scan"
+ros2 topic list | grep -E "cmd_vel|controller|joint|odom|control|depth/scan|safety_markers"
+ros2 topic echo /debug/control_safety_markers --once
 ```
 
 Expected control path:
@@ -90,9 +94,9 @@ Expected safety input:
 
 If `/cmd_vel_selected` is active but `/diff_drive_controller/cmd_vel` is zero,
 check `/cmd_vel_smoothed` first, then inspect RViz. Cyan depth-scan points
-inside the red stop zone mean the collision monitor is intentionally stopping
-the command. This can happen if the processed scan contains self-points from
-the robot footprint.
+inside the transparent red stop-zone overlay mean the collision monitor is
+intentionally stopping the command. This can happen if the processed scan
+contains self-points from the robot footprint.
 
 Optional arguments:
 
