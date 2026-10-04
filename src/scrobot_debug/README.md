@@ -37,7 +37,7 @@ pose versus Gazebo truth, and selected `/rosout` messages.
 ## Control stack check
 
 Start the normal simulation, perception scan source, production control stack,
-and telemetry with one command:
+telemetry, and local safety RViz view with one command:
 
 ```bash
 ros2 launch scrobot_debug control_stack_check.launch.py
@@ -47,7 +47,17 @@ This is the generic regression launch for `scrobot_control`. It starts Gazebo,
 spawns the robot, starts `scrobot_perception/perception.launch.py` so the
 collision monitor receives `/camera/camera/depth/scan`, then starts the
 controller spawners, AUTO/MANUAL muxes, velocity smoother, collision monitor,
-and telemetry after the configured `control_delay`.
+telemetry, and `control_stack_check.rviz`.
+
+The RViz view uses `base_footprint` as the fixed frame so it does not depend on
+localization. It is meant for local safety debugging:
+
+```text
+cyan points   /camera/camera/depth/scan
+red polygon   /collision_monitor/stop_zone
+yellow polygon /collision_monitor/slowdown_zone
+robot model   /robot_description + TF
+```
 
 Useful checks from another terminal:
 
@@ -78,16 +88,23 @@ Expected safety input:
 /camera/camera/depth/scan
 ```
 
-If `/cmd_vel_selected` is active but `/diff_drive_controller/cmd_vel` is blank,
-check `/cmd_vel_smoothed` first, then confirm that `/camera/camera/depth/scan`
-is publishing. The collision monitor intentionally sits between the smoother
-and the diff-drive controller.
+If `/cmd_vel_selected` is active but `/diff_drive_controller/cmd_vel` is zero,
+check `/cmd_vel_smoothed` first, then inspect RViz. Cyan depth-scan points
+inside the red stop zone mean the collision monitor is intentionally stopping
+the command. This can happen if the processed scan contains self-points from
+the robot footprint.
 
 Optional arguments:
 
 ```bash
 ros2 launch scrobot_debug control_stack_check.launch.py \
   robot_x:=1.0 robot_y:=0.0 robot_yaw:=0.0 control_delay:=5.0
+```
+
+Run headless or without RViz:
+
+```bash
+ros2 launch scrobot_debug control_stack_check.launch.py launch_rviz:=false
 ```
 
 ## Manual control check
