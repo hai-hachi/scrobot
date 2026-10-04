@@ -36,8 +36,6 @@ def generate_launch_description():
 
     shuttle_mode = LaunchConfiguration('shuttle_mode')
     shuttle_count = LaunchConfiguration('shuttle_count')
-    shuttle_seed = LaunchConfiguration('shuttle_seed')
-
     spawn_delay = LaunchConfiguration('spawn_delay')
     capture_delay = LaunchConfiguration('capture_delay')
 
@@ -143,14 +141,6 @@ def generate_launch_description():
             choices=['single', 'random', 'cluster', 'mixed'],
         ),
         DeclareLaunchArgument('shuttle_count', default_value='50'),
-        DeclareLaunchArgument(
-            'shuttle_seed',
-            default_value='',
-            description=(
-                'Reserved for repeatable shuttle layouts; the current shuttle '
-                'launcher auto-selects a seed when empty.'
-            ),
-        ),
         DeclareLaunchArgument('spawn_delay', default_value='4.0'),
         DeclareLaunchArgument('capture_delay', default_value='6.0'),
 
