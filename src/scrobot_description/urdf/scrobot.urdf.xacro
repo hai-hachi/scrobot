@@ -29,7 +29,7 @@
     keeps the real 30 mm collision width by default; scrobot_simulation may
     substitute an effective contact width for stable differential-drive motion.
   -->
-  <xacro:arg name="wheel_collision_width" default="0.001"/>
+  <xacro:arg name="wheel_collision_width" default="0.030"/>
   <xacro:property name="wheel_collision_width" value="$(arg wheel_collision_width)"/>
 
   <xacro:property name="base_front_x" value="0.325"/>
