@@ -1,7 +1,40 @@
 # Synthetic YOLO dataset generation
 
-This debug workflow creates a YOLO-format shuttlecock dataset directly from the
-Gazebo simulation.
+This workflow now uses a dedicated lightweight RGB-only Gazebo renderer under
+`scrobot_debug`. It does not launch the production robot, ros2_control, depth,
+IMU, EKF, collision monitor, shuttle manager, or shuttle ground-truth bridge.
+
+## Fast pipeline
+
+```text
+debug-only court world
+  + same green mat / lines / net / AprilTags / lighting
+  + RGB-only D435i camera rig
+  + static visual-only shuttle STL models
+        ↓
+random camera viewpoint
+        ↓
+wait for first fresh RGB frame
+        ↓
+project known shuttle STL poses through live CameraInfo
+        ↓
+save JPG + YOLO TXT
+        ↓
+repeat until target_images
+        ↓
+automatic shutdown
+```
+
+The camera rig keeps the SCROBOT RGB viewpoint:
+
+- 1280x720;
+- HFOV 1.229041640167034 rad;
+- camera color-frame height 0.28683059 m above court;
+- 15 deg downward pitch;
+- same `camera_color_frame -> camera_color_optical_frame` convention.
+
+The shuttle model uses the exact production `shuttle.STL`, but is static,
+visual-only, and has no collision or physics.
 
 ## Output
 
@@ -21,41 +54,27 @@ Default destination:
     └── test/
 ```
 
-Each saved RGB image gets a matching YOLO label file.
-
-## Label source
-
-No manual annotation is required for the synthetic dataset.
-
-The recorder uses:
-
-- the same detailed `shuttle.STL` Gazebo renders;
-- shuttle world poses from `/evaluation/shuttle_ground_truth`;
-- robot world pose from `/evaluation/ground_truth_odom`;
-- `base_footprint -> camera_color_optical_frame` TF;
-- the live color `CameraInfo` calibration matrix.
-
-All STL vertices are projected into the RGB image and converted into clipped
-YOLO bounding boxes.
-
 ## Build
 
 ```bash
 cd ~/scrobot_ws
+git checkout simulation-systematic-test2
+git pull
+
 colcon build --symlink-install --packages-up-to scrobot_debug
 source install/setup.bash
 ```
 
-## One-command automatic generation
+## One command
 
-Make sure the training repository exists first:
+Make sure the training repo exists:
 
 ```bash
 cd ~/Desktop
 git clone https://github.com/hai-hachi/yoloshuttle.git
 ```
 
-Then run exactly one command:
+Then:
 
 ```bash
 ros2 launch scrobot_debug yolo_dataset_capture.launch.py
@@ -64,45 +83,23 @@ ros2 launch scrobot_debug yolo_dataset_capture.launch.py
 Defaults:
 
 ```text
-output_dir              ~/Desktop/yoloshuttle/dataset/gazebo_scrobot
 target_images           1200
+shuttle_count           40
 positive_pose_fraction  0.85
-shuttle_mode            mixed
-shuttle_count           50
-settle_time             0.40 s
 random_seed             42
 ```
 
-Nothing else is required. Do not run manual teleop.
+The launch is server-only/headless and exits automatically when the dataset is
+complete.
 
-The launch automatically:
-
-1. starts Gazebo and the simulated D435i;
-2. spawns a randomized mixed shuttle distribution;
-3. loads the exact rendered `shuttle.STL`;
-4. teleports the robot to randomized safe court poses;
-5. biases most poses around a randomly selected shuttle so its camera-relative
-   range is approximately 0.50-1.68 m;
-6. applies random heading jitter so shuttles appear across the RGB image rather
-   than only in the center;
-7. uses a smaller fraction of random court poses for background/negative views;
-8. waits for a fresh settled camera frame after every teleport;
-9. projects every visible shuttle mesh through the live RGB `CameraInfo`;
-10. writes the RGB image and YOLO label;
-11. assigns train/val/test by robot position + heading group;
-12. repeats until `target_images` images have been saved;
-13. exits the recorder and automatically shuts the launch down.
-
-The output is therefore ready for training after the one launch command returns.
-
-### Generate a different-size dataset
+### Larger dataset
 
 ```bash
 ros2 launch scrobot_debug yolo_dataset_capture.launch.py \
   target_images:=2000
 ```
 
-### Generate a different randomized viewpoint sequence
+### Different randomized scene/view sequence
 
 ```bash
 ros2 launch scrobot_debug yolo_dataset_capture.launch.py \
@@ -110,11 +107,85 @@ ros2 launch scrobot_debug yolo_dataset_capture.launch.py \
   random_seed:=123
 ```
 
-Repeated runs are safe. Each run gets a timestamp session prefix, so previous
-images are not overwritten.
+## Progress
 
-The initial shuttle layout is randomized by the simulation shuttle spawner.
-Robot viewpoints are independently randomized by the capture node.
+```bash
+ros2 topic echo /debug/yolo_dataset_status
+```
+
+Expected status includes:
+
+```text
+mode=fast
+state=...
+saved_images
+target_images
+progress_pct
+pose_attempts
+shuttle_count
+last_boxes
+last_focus_boxes
+```
+
+Common states:
+
+```text
+WAITING_FOR_CAMERA
+SPAWNING_STATIC_SHUTTLES
+STATIC_SCENE_READY
+TELEPORTING_RGB_RIG
+WAITING_FOR_FRESH_RGB
+SAVING_FRAME
+FRAME_SAVED
+TARGET_VIEW_REJECTED
+NEGATIVE_VIEW_SKIPPED
+COMPLETE
+```
+
+## Dataset behavior
+
+The static shuttle layout is randomized once per run. Each shuttle gets a
+random court position/orientation, with a mix of uniform and clustered
+placement.
+
+For each image, the RGB camera pose is randomized:
+
+- most views are biased toward a shuttle at approximately 0.50-1.68 m
+  camera-relative range;
+- heading jitter moves the target across the RGB image rather than keeping it
+  centered;
+- a smaller fraction of views are random court/background views;
+- negative frames are subsampled;
+- all visible projected shuttles are labeled, including those outside the
+  preferred focus range.
+
+Train/val/test assignment is grouped by quantized camera position and heading
+rather than individual frame order.
+
+## Label generation
+
+No manual synthetic labeling is required.
+
+For each static shuttle:
+
+1. load the exact production STL vertices;
+2. apply the known shuttle world pose;
+3. transform into `camera_color_optical_frame`;
+4. project with the live RGB `CameraInfo` matrix;
+5. clip the projected box to the 1280x720 image;
+6. write normalized YOLO `class x_center y_center width height`.
+
+Class:
+
+```text
+0: Shuttlecock
+```
+
+## Important limitation
+
+Labels are geometric projections of the full STL. The generator does not
+perform pixel-level occlusion reasoning. Clustered shuttles are useful as hard
+examples, but the dataset should not be dominated by severe overlap.
 
 ## Inspect counts
 
@@ -125,25 +196,9 @@ for s in train val test; do
 done
 ```
 
-A useful recording should populate all three splits. If one split is empty,
-drive through more distinct robot positions/headings and capture another
-session.
-
-## Important limitation
-
-The boxes are geometric projections of the full rendered shuttle mesh. They do
-not perform pixel-level visibility/occlusion testing. Avoid generating most of
-the dataset from heavily overlapping shuttle piles. Use mixed/random scenes for
-the majority of training data and treat clustered scenes as a smaller hard-case
-subset.
-
-## Train
-
-After capture:
+## CUDA smoke
 
 ```bash
 cd ~/Desktop/yoloshuttle
 bash ubuntu_cuda_smoke.sh dataset/gazebo_scrobot/data.yaml
 ```
-
-If the CUDA smoke test passes, proceed to a longer fine-tune.
