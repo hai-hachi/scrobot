@@ -142,9 +142,9 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'launch_rviz',
-            default_value='true',
+            default_value='false',
             choices=['true', 'false'],
-            description='Open the local RViz safety view.',
+            description='Open the local RViz safety view. Disabled by default to reduce simulation load.',
         ),
         DeclareLaunchArgument(
             'enable_magnetometer',
