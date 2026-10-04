@@ -1,7 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="scrobot">
 
-  <xacro:arg name="enable_magnetometer" default="false"/>
   <xacro:arg name="drive_contact_mu" default="5.0"/>
   <xacro:arg name="caster_contact_mu" default="0.05"/>
 

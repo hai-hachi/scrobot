@@ -88,7 +88,7 @@ def generate_launch_description():
 
     rviz_debug = include(
         'scrobot_debug',
-        'rviz.launch.py',
+        'rviz_map.launch.py',
         {'use_sim_time': use_sim_time},
         condition=IfCondition(rviz),
     )

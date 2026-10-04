@@ -44,9 +44,10 @@ def generate_launch_description():
     #   - ros2_control
     #   - gz_ros2_control
     #
-    # Simulation uses the physical wheel geometry from scrobot_description.
-    # Contact friction is tuned in physics_gazebo.xacro to reduce excessive
-    # Gazebo wheel skid without replacing the 30 mm tire with a line contact.
+    # scrobot_description keeps the real 30 mm tire geometry. Gazebo uses a
+    # 1 mm effective wheel-contact collision width because the flat 30 mm
+    # cylinder produces a systematic tight-turn bias in differential-drive
+    # motion. The visual/physical tire dimensions remain unchanged.
     # ==========================================================
 
     xacro_file = PathJoinSubstitution([
@@ -60,6 +61,7 @@ def generate_launch_description():
             FindExecutable(name='xacro'),
             ' ',
             xacro_file,
+            ' wheel_collision_width:=0.001',
             ' enable_magnetometer:=',
             enable_magnetometer,
             ' drive_contact_mu:=',

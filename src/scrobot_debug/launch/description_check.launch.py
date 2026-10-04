@@ -14,11 +14,10 @@ def generate_launch_description():
         'urdf',
         'scrobot.urdf.xacro',
     ])
-
     rviz_config = PathJoinSubstitution([
-        FindPackageShare('scrobot_description'),
+        FindPackageShare('scrobot_debug'),
         'rviz',
-        'scrobot.rviz',
+        'model.rviz',
     ])
 
     robot_description = ParameterValue(
@@ -30,9 +29,8 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
-            description='Use simulation clock if true',
+            choices=['true', 'false'],
         ),
-
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
@@ -43,18 +41,16 @@ def generate_launch_description():
                 'use_sim_time': use_sim_time,
             }],
         ),
-
         Node(
             package='joint_state_publisher_gui',
             executable='joint_state_publisher_gui',
             name='joint_state_publisher_gui',
             output='screen',
         ),
-
         Node(
             package='rviz2',
             executable='rviz2',
-            name='rviz2',
+            name='rviz2_model',
             output='screen',
             arguments=['-d', rviz_config],
             parameters=[{'use_sim_time': use_sim_time}],

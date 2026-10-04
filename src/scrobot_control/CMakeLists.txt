@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 project(scrobot_control)
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
-
 find_package(ament_cmake REQUIRED)
 
 if(BUILD_TESTING)
@@ -24,8 +20,15 @@ install(
 install(
   PROGRAMS
     scripts/manual_mode_manager.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME manual_mode_manager
+)
+
+install(
+  PROGRAMS
     scripts/manual_teleop.py
   DESTINATION lib/${PROJECT_NAME}
+  RENAME manual_teleop
 )
 
 ament_package()

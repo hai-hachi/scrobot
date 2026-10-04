@@ -2,18 +2,6 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   <xacro:macro name="scrobot_collector">
     <link name="collector_link">
-      <inertial>
-        <origin xyz="0 -0.0023 0" rpy="0 0 0"/>
-        <mass value="0.150"/>
-        <inertia
-          ixx="1.24e-3"
-          ixy="0"
-          ixz="0"
-          iyy="6.41e-5"
-          iyz="0"
-          izz="1.24e-3"/>
-      </inertial>
-
       <visual name="collector_visual">
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
@@ -22,20 +10,20 @@
 
         <material name="plastic_blue"/>
       </visual>
+
+      <!-- Simple physical roller collision; detailed STL remains visual-only. -->
+      <collision name="collector_collision">
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${collector_radius}" length="${collector_length}"/>
+        </geometry>
+      </collision>
     </link>
 
     <joint name="collector_joint" type="fixed">
       <parent link="base_link"/>
       <child link="collector_link"/>
       <origin xyz="${collector_x} ${collector_y} ${collector_z}" rpy="0 0 0"/>
-    </joint>
-
-    <link name="pickup_link"/>
-
-    <joint name="pickup_joint" type="fixed">
-      <parent link="collector_link"/>
-      <child link="pickup_link"/>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
     </joint>
   </xacro:macro>
 </robot>

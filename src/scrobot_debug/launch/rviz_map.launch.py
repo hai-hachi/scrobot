@@ -9,36 +9,15 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
 
     rviz_config = PathJoinSubstitution([
-        FindPackageShare('scrobot_description'),
+        FindPackageShare('scrobot_debug'),
         'rviz',
-        'scrobot.rviz',
+        'map.rviz',
     ])
-
     court_config = PathJoinSubstitution([
         FindPackageShare('scrobot_debug'),
         'config',
         'court_visualizer.yaml',
     ])
-
-    court_visualizer = Node(
-        package='scrobot_debug',
-        executable='court_visualizer',
-        name='court_visualizer',
-        output='screen',
-        parameters=[
-            court_config,
-            {'use_sim_time': use_sim_time},
-        ],
-    )
-
-    rviz = Node(
-        package='rviz2',
-        executable='rviz2',
-        name='rviz2',
-        output='screen',
-        arguments=['-d', rviz_config],
-        parameters=[{'use_sim_time': use_sim_time}],
-    )
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -46,6 +25,19 @@ def generate_launch_description():
             default_value='true',
             choices=['true', 'false'],
         ),
-        court_visualizer,
-        rviz,
+        Node(
+            package='scrobot_debug',
+            executable='court_visualizer',
+            name='court_visualizer',
+            output='screen',
+            parameters=[court_config, {'use_sim_time': use_sim_time}],
+        ),
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name='rviz2_map',
+            output='screen',
+            arguments=['-d', rviz_config],
+            parameters=[{'use_sim_time': use_sim_time}],
+        ),
     ])

@@ -1,0 +1,209 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Local Grid
+      Enabled: true
+      Value: true
+      Alpha: 0.35
+      Cell Size: 0.5
+      Color: 120; 120; 120
+      Plane: XY
+      Plane Cell Count: 20
+      Reference Frame: <Fixed Frame>
+
+    - Class: rviz_default_plugins/RobotModel
+      Name: Robot
+      Enabled: true
+      Value: true
+      Alpha: 1
+      Collision Enabled: false
+      Description Source: Topic
+      Description Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      Visual Enabled: true
+
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Value: true
+      Frame Timeout: 15
+      Marker Scale: 0.15
+      Show Arrows: true
+      Show Axes: true
+      Show Names: false
+      Frames:
+        All Enabled: true
+
+    - Class: rviz_default_plugins/LaserScan
+      Name: Depth Obstacle Scan
+      Enabled: true
+      Value: true
+      Alpha: 1
+      Axis: Z
+      Channel Name: intensity
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.01
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /camera/camera/depth/scan
+      Use Fixed Frame: true
+      Use rainbow: false
+
+    - Class: rviz_default_plugins/PointCloud2
+      Name: Depth Point Cloud
+      Enabled: false
+      Value: false
+      Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Invert Rainbow: false
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.01
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /camera/camera/depth/points
+      Use Fixed Frame: true
+      Use rainbow: true
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Collision Stop Zone
+      Enabled: true
+      Value: true
+      Alpha: 1
+      Color: 255; 0; 0
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /collision_monitor/stop_zone
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Collision Slowdown Zone
+      Enabled: true
+      Value: true
+      Alpha: 1
+      Color: 255; 220; 0
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /collision_monitor/slowdown_zone
+
+    - Class: rviz_default_plugins/Odometry
+      Name: Wheel Odometry
+      Enabled: false
+      Value: false
+      Keep: 100
+      Position Tolerance: 0.02
+      Angle Tolerance: 0.05
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /diff_drive_controller/odom
+      Shape:
+        Value: Arrow
+        Alpha: 1
+        Axes Length: 0.25
+        Axes Radius: 0.01
+        Color: 0; 255; 255
+        Head Length: 0.07
+        Head Radius: 0.03
+        Shaft Length: 0.20
+        Shaft Radius: 0.01
+      Covariance:
+        Value: false
+
+    - Class: rviz_default_plugins/Odometry
+      Name: Filtered Odometry
+      Enabled: false
+      Value: false
+      Keep: 100
+      Position Tolerance: 0.02
+      Angle Tolerance: 0.05
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /odometry/filtered
+      Shape:
+        Value: Arrow
+        Alpha: 1
+        Axes Length: 0.25
+        Axes Radius: 0.01
+        Color: 255; 0; 255
+        Head Length: 0.07
+        Head Radius: 0.03
+        Shaft Length: 0.20
+        Shaft Radius: 0.01
+      Covariance:
+        Value: false
+
+  Enabled: true
+  Global Options:
+    Background Color: 40; 40; 40
+    Fixed Frame: base_footprint
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 3
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0.2
+      Name: Local Robot
+      Target Frame: base_footprint
+      Value: Orbit (rviz_default_plugins)
+    Saved: ~
+
+Window Geometry:
+  Height: 900
+  Width: 1400

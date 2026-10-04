@@ -8,7 +8,7 @@ import rclpy
 from geometry_msgs.msg import TwistStamped
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import String
+from std_msgs.msg import Bool
 from std_srvs.srv import SetBool
 
 
@@ -43,7 +43,7 @@ class ManualTeleop(Node):
         self.declare_parameter('angular_speed', 0.50)
         self.declare_parameter('manual_input_topic', '/cmd_vel_manual_input')
         self.declare_parameter('mode_service', '/control/set_manual_mode')
-        self.declare_parameter('mode_topic', '/control/mode')
+        self.declare_parameter('manual_mode_topic', '/control/manual_mode')
 
         self.linear_speed = float(self.get_parameter('linear_speed').value)
         self.angular_speed = float(self.get_parameter('angular_speed').value)
@@ -71,14 +71,14 @@ class ManualTeleop(Node):
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
         self.create_subscription(
-            String,
-            str(self.get_parameter('mode_topic').value),
+            Bool,
+            str(self.get_parameter('manual_mode_topic').value),
             self._mode_cb,
             mode_qos,
         )
 
     def _mode_cb(self, msg):
-        self.manual_active = str(msg.data).strip().upper() == 'MANUAL'
+        self.manual_active = bool(msg.data)
 
     def publish_command(self, linear_x, angular_z):
         msg = TwistStamped()
