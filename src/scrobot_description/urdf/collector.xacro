@@ -2,22 +2,38 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   <xacro:macro name="scrobot_collector">
     <link name="collector_link">
+      <!--
+        Keep collector_link as a real Gazebo/TF link with negligible placeholder
+        inertia. The assembled-body mass/inertia remains owned by base_link.
+      -->
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.0001"/>
+        <inertia
+          ixx="1e-8"
+          ixy="0"
+          ixz="0"
+          iyy="1e-8"
+          iyz="0"
+          izz="1e-8"/>
+      </inertial>
+
       <visual name="collector_visual">
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
           <mesh filename="package://scrobot_description/meshes/visual/collector.STL" scale="1 1 1"/>
         </geometry>
-
         <material name="plastic_blue"/>
       </visual>
 
-      <!-- Simple physical roller collision; detailed STL remains visual-only. -->
-      <collision name="collector_collision">
-        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
-        <geometry>
-          <cylinder radius="${collector_radius}" length="${collector_length}"/>
-        </geometry>
-      </collision>
+      <!--
+        Intentionally no collision geometry here. At the current mount height
+        the physical 60 mm roller touches the court. Modelling it as a fixed
+        cylinder makes Gazebo treat the collector as a non-rotating floor skid
+        and can prevent the drive wheels from moving the chassis. Shuttle
+        pickup physics uses collector_link pose + pickup envelope in the
+        simulation plugin instead.
+      -->
     </link>
 
     <joint name="collector_joint" type="fixed">
