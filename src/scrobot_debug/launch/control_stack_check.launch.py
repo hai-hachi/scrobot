@@ -69,6 +69,14 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': use_sim_time}.items(),
     )
 
+    safety_markers = Node(
+        package='scrobot_debug',
+        executable='control_safety_markers',
+        name='control_safety_markers',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
+    )
+
     rviz = Node(
         package='rviz2',
         executable='rviz2',
@@ -143,5 +151,6 @@ def generate_launch_description():
         TimerAction(period=perception_delay, actions=[perception]),
         TimerAction(period=control_delay, actions=[control]),
         TimerAction(period=control_delay, actions=[telemetry]),
+        TimerAction(period=control_delay, actions=[safety_markers]),
         TimerAction(period=rviz_delay, actions=[rviz]),
     ])

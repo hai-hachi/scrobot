@@ -3,9 +3,15 @@ Panels:
     Help Height: 70
     Name: Displays
     Property Tree Widget:
-      Expanded: ~
-      Splitter Ratio: 0.6200000047683716
-    Tree Height: 463
+      Expanded:
+        - /Robot Collision Model1
+        - /Configured Safety Overlay1
+        - /Depth Scan Points1
+        - /Stop Zone Topic1
+        - /Slowdown Zone Topic1
+        - /TF1
+      Splitter Ratio: 0.62
+    Tree Height: 760
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Views
@@ -16,11 +22,13 @@ Panels:
 Visualization Manager:
   Class: ""
   Displays:
-    - Alpha: 0.44999998807907104
-      Cell Size: 0.10000000149011612
-      Class: rviz_default_plugins/Grid
-      Color: 120; 120; 120
+    - Class: rviz_default_plugins/Grid
+      Name: Base Grid
       Enabled: true
+      Value: true
+      Alpha: 0.35
+      Cell Size: 0.1
+      Color: 95; 95; 95
       Line Style:
         Line Width: 0.009999999776482582
         Value: Lines
@@ -34,8 +42,7 @@ Visualization Manager:
       Plane Cell Count: 20
       Reference Frame: <Fixed Frame>
       Value: true
-    - Alpha: 0.550000011920929
-      Class: rviz_default_plugins/RobotModel
+      Alpha: 0.28
       Collision Enabled: true
       Description File: ""
       Description Source: Topic
@@ -143,6 +150,29 @@ Visualization Manager:
       Name: Robot Collision Model
       TF Prefix: ""
       Update Interval: 0
+      Visual Enabled: false
+
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Configured Safety Overlay
+      Enabled: true
+      Value: true
+      Marker Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /debug/control_safety_markers
+      Namespaces:
+        base_footprint_outline: true
+        slowdown_zone_fill: true
+        slowdown_zone_outline: true
+        stop_zone_fill: true
+        stop_zone_outline: true
+      Queue Size: 5
+
+    - Class: rviz_default_plugins/LaserScan
+      Name: Depth Scan Points
+      Enabled: true
       Value: true
       Visual Enabled: true
     - Alpha: 1
@@ -156,8 +186,7 @@ Visualization Manager:
       Class: rviz_default_plugins/LaserScan
       Color: 0; 255; 255
       Color Transformer: FlatColor
-      Decay Time: 0
-      Enabled: true
+      Decay Time: 0.5
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -166,22 +195,33 @@ Visualization Manager:
       Name: Depth Scan Points
       Position Transformer: XYZ
       Selectable: true
-      Size (Pixels): 5
-      Size (m): 0.03500000014901161
-      Style: Points
+      Size (Pixels): 12
+      Size (m): 0.075
+      Style: Flat Squares
       Topic:
-        Depth: 5
+        Depth: 10
         Durability Policy: Volatile
         Filter size: 10
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /camera/camera/depth/scan
       Use Fixed Frame: true
-      Use rainbow: true
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Stop Zone Topic
+      Enabled: true
       Value: true
-    - Alpha: 0.8999999761581421
-      Class: rviz_default_plugins/Polygon
-      Color: 255; 40; 40
+      Alpha: 1
+      Color: 255; 30; 30
+      Topic:
+        Depth: 10
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /collision_monitor/stop_zone
+
+    - Class: rviz_default_plugins/Polygon
+      Name: Slowdown Zone Topic
       Enabled: true
       Name: Stop Zone
       Topic:
@@ -192,17 +232,16 @@ Visualization Manager:
         Reliability Policy: Best Effort
         Value: /collision_monitor/stop_zone
       Value: true
-    - Alpha: 0.6499999761581421
-      Class: rviz_default_plugins/Polygon
+      Alpha: 0.9
       Color: 255; 210; 0
       Enabled: true
       Name: Slowdown Zone
       Topic:
-        Depth: 5
+        Depth: 10
         Durability Policy: Volatile
         Filter size: 10
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /collision_monitor/slowdown_zone
       Value: true
     - Class: rviz_default_plugins/TF
@@ -288,7 +327,7 @@ Visualization Manager:
       Value: true
   Enabled: true
   Global Options:
-    Background Color: 35; 35; 35
+    Background Color: 25; 25; 25
     Fixed Frame: base_footprint
     Frame Rate: 30
   Name: root
@@ -303,23 +342,9 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Class: rviz_default_plugins/Orbit
-      Distance: 1.295420527458191
-      Enable Stereo Rendering:
-        Stereo Eye Separation: 0.05999999865889549
-        Stereo Focal Distance: 1
-        Swap Stereo Eyes: false
-        Value: false
-      Focal Point:
-        X: -0.07161997258663177
-        Y: 0.01599988341331482
-        Z: 0.1312892884016037
-      Focal Shape Fixed Size: true
-      Focal Shape Size: 0.05000000074505806
-      Invert Z Axis: false
-      Name: Current View
-      Near Clip Distance: 0.009999999776482582
-      Pitch: 0.49979734420776367
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Safety Top Down
+      Scale: 1.0
       Target Frame: base_footprint
       Value: Orbit (rviz_default_plugins)
       Yaw: 5.182399749755859

@@ -44,6 +44,13 @@ install(
 
 install(
   PROGRAMS
+    scripts/control_safety_markers.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME control_safety_markers
+)
+
+install(
+  PROGRAMS
     scripts/debug_raw_teleop.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME debug_raw_teleop
