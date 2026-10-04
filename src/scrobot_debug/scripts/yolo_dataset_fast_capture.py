@@ -247,6 +247,7 @@ class FastYoloDatasetCapture(Node):
         self.finished = False
         self.state = 'WAITING_FOR_CAMERA'
         self.initial_trigger_sent = False
+        self.finalized = False
 
         self.last_saved_split = ''
         self.last_saved_boxes = 0
@@ -745,6 +746,7 @@ class FastYoloDatasetCapture(Node):
             self.get_logger().info(
                 f'Fast dataset complete: {self.saved_images} images in {self.output_dir}'
             )
+            self.finalize_partial_dataset(reason='complete')
             self.create_timer(0.10, lambda: rclpy.shutdown())
 
     def capture_step(self):
@@ -775,6 +777,58 @@ class FastYoloDatasetCapture(Node):
 
         self.state = 'SAVING_FRAME'
         self._save_current_frame()
+
+    def finalize_partial_dataset(self, reason='stopped'):
+        if self.finalized:
+            return
+
+        self.finalized = True
+
+        counts = {}
+        total = 0
+        for split in ('train', 'val', 'test'):
+            image_dir = self.output_dir / 'images' / split
+            label_dir = self.output_dir / 'labels' / split
+
+            image_count = len(list(image_dir.glob('*.jpg'))) if image_dir.exists() else 0
+            label_count = len(list(label_dir.glob('*.txt'))) if label_dir.exists() else 0
+
+            counts[split] = {
+                'images': image_count,
+                'labels': label_count,
+            }
+            total += image_count
+
+        usable = (
+            counts['train']['images'] > 0
+            and counts['val']['images'] > 0
+        )
+
+        summary = {
+            'status': reason,
+            'session': self.session_name,
+            'saved_this_run': self.saved_images,
+            'dataset_total_images': total,
+            'target_images': self.target_images,
+            'counts': counts,
+            'training_ready': usable,
+            'output_dir': str(self.output_dir),
+        }
+
+        (self.output_dir / 'dataset_summary.json').write_text(
+            json.dumps(summary, indent=2, sort_keys=True) + '\n'
+        )
+
+        self.get_logger().info(
+            'DATASET_FINALIZED '
+            f"reason={reason} "
+            f"saved_this_run={self.saved_images} "
+            f"total={total} "
+            f"train={counts['train']['images']} "
+            f"val={counts['val']['images']} "
+            f"test={counts['test']['images']} "
+            f"training_ready={usable}"
+        )
 
     def publish_status(self):
         status = {
@@ -817,11 +871,18 @@ class FastYoloDatasetCapture(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = FastYoloDatasetCapture()
+    stop_reason = 'stopped'
     try:
         rclpy.spin(node)
+        if node.finished:
+            stop_reason = 'complete'
     except KeyboardInterrupt:
-        pass
+        stop_reason = 'interrupted'
     finally:
+        try:
+            node.finalize_partial_dataset(reason=stop_reason)
+        except Exception as exc:
+            node.get_logger().error(f'Failed to finalize partial dataset: {exc}')
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
