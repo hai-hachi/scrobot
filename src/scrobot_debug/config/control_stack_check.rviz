@@ -6,8 +6,6 @@ Panels:
       Expanded:
         - /Robot Collision Model1
         - /Raw Depth Scan1
-        - /Collision Monitor Stop Zone1
-        - /Collision Monitor Slowdown Zone1
         - /Control Stack Debug Overlay1
         - /TF1
       Splitter Ratio: 0.6200000047683716
@@ -92,34 +90,6 @@ Visualization Manager:
         Value: /camera/camera/depth/scan
       Use Fixed Frame: true
       Use rainbow: false
-      Value: true
-
-    - Alpha: 0.8500000238418579
-      Class: rviz_default_plugins/Polygon
-      Color: 255; 0; 0
-      Enabled: true
-      Name: Collision Monitor Stop Zone
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /collision_monitor/stop_zone
-      Value: true
-
-    - Alpha: 0.8500000238418579
-      Class: rviz_default_plugins/Polygon
-      Color: 255; 220; 0
-      Enabled: true
-      Name: Collision Monitor Slowdown Zone
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /collision_monitor/slowdown_zone
       Value: true
 
     - Class: rviz_default_plugins/MarkerArray
