@@ -92,7 +92,7 @@ class TagGlobalLocalizer(Node):
 
         self.declare_parameter('min_decision_margin', 20.0)
         self.declare_parameter('max_tag_distance', 9.0)
-        self.declare_parameter('relocalization_max_distance', 4.0)
+        self.declare_parameter('relocalization_max_distance', 10.5)
         self.declare_parameter('max_view_angle_deg', 35.0)
         self.declare_parameter('max_position_disagreement', 0.15)
         self.declare_parameter('max_yaw_disagreement_deg', 6.0)
