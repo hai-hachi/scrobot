@@ -44,6 +44,13 @@ install(
 
 install(
   PROGRAMS
+    scripts/control_stack_monitor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME control_stack_monitor
+)
+
+install(
+  PROGRAMS
     scripts/control_safety_markers.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME control_safety_markers
