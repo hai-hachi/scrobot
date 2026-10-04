@@ -16,10 +16,18 @@ endif()
 
 install(
   PROGRAMS
-    scripts/depth_self_filter.py
     scripts/fake_shuttle_detector.py
     scripts/shuttle_tracker.py
   DESTINATION lib/${PROJECT_NAME}
+)
+
+# GitHub-created files may not preserve executable mode. Install this node
+# with RENAME so CMake materializes an executable wrapper for symlink installs.
+install(
+  PROGRAMS
+    scripts/depth_self_filter.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME depth_self_filter
 )
 
 install(
