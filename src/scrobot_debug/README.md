@@ -195,10 +195,7 @@ ros2 topic echo /debug/telemetry
 
 ## Shuttle collection check
 
-The old `shuttle_sim_check.launch.py` / `shuttle_sim_monitor.py` path was
-removed because it duplicated older circle-radius pickup logic.
-
-Use the current collection-center test instead:
+Use the current collection-center validation:
 
 ```bash
 ros2 launch scrobot_debug collection_check.launch.py
