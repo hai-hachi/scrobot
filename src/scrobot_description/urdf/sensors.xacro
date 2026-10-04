@@ -4,6 +4,7 @@
   <xacro:include
     filename="$(find scrobot_description)/urdf/realsense_d435i.xacro"/>
 
+  <!-- Numerical placeholder only; fixed sensor mass is accounted in base_link. -->
   <xacro:macro name="tiny_sensor_inertial">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -24,7 +25,7 @@
     so it remains directly attached to base_link using the existing
     mag_x / mag_y / mag_z parameters.
   -->
-  <xacro:macro name="scrobot_sensors">
+  <xacro:macro name="scrobot_sensors" params="enable_magnetometer:=false">
 
     <!-- ====================================================== -->
     <!-- Intel RealSense D435i                                  -->
@@ -41,17 +42,19 @@
     <!-- Separate 5883L magnetometer                            -->
     <!-- ====================================================== -->
 
-    <link name="mag_link">
-      <xacro:tiny_sensor_inertial/>
-    </link>
+    <xacro:if value="${enable_magnetometer}">
+      <link name="mag_link">
+        <xacro:tiny_sensor_inertial/>
+      </link>
 
-    <joint name="mag_joint" type="fixed">
-      <parent link="base_link"/>
-      <child link="mag_link"/>
-      <origin
-        xyz="${mag_x} ${mag_y} ${mag_z}"
-        rpy="0 0 0"/>
-    </joint>
+      <joint name="mag_joint" type="fixed">
+        <parent link="base_link"/>
+        <child link="mag_link"/>
+        <origin
+          xyz="${mag_x} ${mag_y} ${mag_z}"
+          rpy="0 0 0"/>
+      </joint>
+    </xacro:if>
 
   </xacro:macro>
 
