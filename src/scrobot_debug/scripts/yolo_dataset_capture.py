@@ -197,6 +197,7 @@ class YoloDatasetCapture(Node):
         self.camera_info = None
         self.latest_image = None
         self.robot_pose_world = None
+        self.robot_pose_stamp_ns = 0
         self.shuttle_poses_world = []
         self.received_shuttle_gt = False
         self.base_to_camera = None
@@ -281,6 +282,10 @@ class YoloDatasetCapture(Node):
 
     def odom_cb(self, msg):
         self.robot_pose_world = pose_tuple(msg.pose.pose)
+        self.robot_pose_stamp_ns = (
+            int(msg.header.stamp.sec) * 1_000_000_000
+            + int(msg.header.stamp.nanosec)
+        )
 
     def _lookup_camera(self):
         if self.base_to_camera is not None:
@@ -497,6 +502,8 @@ class YoloDatasetCapture(Node):
         if now_ns < self.settle_until_ns:
             return
         if self._image_stamp_ns(self.latest_image) <= self.teleport_stamp_ns:
+            return
+        if self.robot_pose_stamp_ns <= self.teleport_stamp_ns:
             return
 
         robot_t, robot_q = self.robot_pose_world
