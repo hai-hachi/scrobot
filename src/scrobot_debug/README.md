@@ -47,27 +47,31 @@ This is the generic regression launch for `scrobot_control`. It starts Gazebo,
 spawns the robot, starts `scrobot_perception/perception.launch.py` so the
 collision monitor receives `/camera/camera/depth/scan`, then starts the
 controller spawners, AUTO/MANUAL muxes, velocity smoother, collision monitor,
-telemetry, a debug safety-marker overlay, and `control_stack_check.rviz`.
+telemetry, the control-stack monitor, and `control_stack_check.rviz`.
 
-The RViz view uses `base_footprint` as the fixed frame so it does not depend on
-localization. It is meant for local safety debugging:
+This debug launch uses `controllers_control_stack_check.yaml`, which enables
+the diff-drive controller's wheel odometry TF. The production controller config
+keeps that TF disabled because EKF normally owns `odom -> base_footprint`, but
+this standalone control-stack test does not launch EKF.
+
+The RViz view uses `base_footprint` as the fixed frame and is meant for local
+safety debugging:
 
 ```text
-cyan points       /camera/camera/depth/scan
-transparent red   configured stop-zone overlay from /debug/control_safety_markers
-transparent yellow configured slowdown-zone overlay from /debug/control_safety_markers
-blue outline      configured base-footprint outline from /debug/control_safety_markers
-red topic         actual /collision_monitor/stop_zone, when published/rendered
-yellow topic      actual /collision_monitor/slowdown_zone, when published/rendered
 robot model       /robot_description + TF
+raw cloud         /camera/camera/depth/points
+filtered scan     /camera/camera/depth/scan
+red polygon       actual /collision_monitor/stop_zone, when published/rendered
+yellow polygon    actual /collision_monitor/slowdown_zone, when published/rendered
 ```
 
 Useful checks from another terminal:
 
 ```bash
 ros2 control list_controllers
-ros2 topic list | grep -E "cmd_vel|controller|joint|odom|control|depth/scan|safety_markers"
-ros2 topic echo /debug/control_safety_markers --once
+ros2 topic list | grep -E "cmd_vel|controller|joint|odom|control|depth/scan|depth/points"
+ros2 run tf2_ros tf2_echo odom base_footprint
+ros2 topic echo /debug/control_stack_status
 ```
 
 Expected control path:
