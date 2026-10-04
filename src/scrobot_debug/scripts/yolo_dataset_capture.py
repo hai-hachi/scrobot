@@ -284,8 +284,7 @@ class YoloDatasetCapture(Node):
         if self.finished:
             return 'COMPLETE'
         if self.waiting_for_fresh_frame:
-            self.state = 'SETTLING_AFTER_TELEPORT'
-        now_ns = self.get_clock().now().nanoseconds
+            now_ns = self.get_clock().now().nanoseconds
             if now_ns < self.settle_until_ns:
                 return 'SETTLING_AFTER_TELEPORT'
             if self.latest_image is None or self._image_stamp_ns(self.latest_image) <= self.teleport_stamp_ns:
