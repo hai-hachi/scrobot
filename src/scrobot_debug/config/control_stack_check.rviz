@@ -4,9 +4,10 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Robot Collision Model1
+        - /Configured Safety Overlay1
         - /Depth Scan Points1
-        - /Stop Zone1
-        - /Slowdown Zone1
+        - /Stop Zone Topic1
+        - /Slowdown Zone Topic1
         - /TF1
       Splitter Ratio: 0.62
     Tree Height: 760
@@ -64,6 +65,24 @@ Visualization Manager:
       Update Interval: 0
       Visual Enabled: false
 
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Configured Safety Overlay
+      Enabled: true
+      Value: true
+      Marker Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /debug/control_safety_markers
+      Namespaces:
+        base_footprint_outline: true
+        slowdown_zone_fill: true
+        slowdown_zone_outline: true
+        stop_zone_fill: true
+        stop_zone_outline: true
+      Queue Size: 5
+
     - Class: rviz_default_plugins/LaserScan
       Name: Depth Scan Points
       Enabled: true
@@ -99,7 +118,7 @@ Visualization Manager:
       Use Fixed Frame: true
 
     - Class: rviz_default_plugins/Polygon
-      Name: Stop Zone
+      Name: Stop Zone Topic
       Enabled: true
       Value: true
       Alpha: 1
@@ -112,7 +131,7 @@ Visualization Manager:
         Value: /collision_monitor/stop_zone
 
     - Class: rviz_default_plugins/Polygon
-      Name: Slowdown Zone
+      Name: Slowdown Zone Topic
       Enabled: true
       Value: true
       Alpha: 0.9
