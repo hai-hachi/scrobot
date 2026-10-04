@@ -219,7 +219,7 @@ class YoloDatasetCapture(Node):
             'val: images/val\n'
             'test: images/test\n\n'
             'names:\n'
-            '  0: shuttle\n'
+            '  0: Shuttlecock\n'
         )
 
         self.metadata_path = self.output_dir / 'metadata.csv'
