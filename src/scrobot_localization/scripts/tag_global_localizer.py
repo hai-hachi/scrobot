@@ -82,8 +82,8 @@ class TagGlobalLocalizer(Node):
         self.declare_parameter('pole_x', 0.0)
         self.declare_parameter('left_pole_y', 3.05)
         self.declare_parameter('right_pole_y', -3.05)
-        self.declare_parameter('tag_height', 0.120)
-        self.declare_parameter('tag_mount_radius', 0.030)
+        self.declare_parameter('tag_height', 0.150)
+        self.declare_parameter('tag_mount_radius', 0.075)
         self.declare_parameter('inward_angle_deg', 45.0)
         self.declare_parameter('tag_edge_size', 0.100)
         self.declare_parameter('active_grid_cells', 6)
@@ -91,8 +91,8 @@ class TagGlobalLocalizer(Node):
         self.declare_parameter('texture_pixels', 1024)
 
         self.declare_parameter('min_decision_margin', 20.0)
-        self.declare_parameter('max_tag_distance', 6.0)
-        self.declare_parameter('relocalization_max_distance', 2.0)
+        self.declare_parameter('max_tag_distance', 9.0)
+        self.declare_parameter('relocalization_max_distance', 4.0)
         self.declare_parameter('max_view_angle_deg', 35.0)
         self.declare_parameter('max_position_disagreement', 0.15)
         self.declare_parameter('max_yaw_disagreement_deg', 6.0)
@@ -107,7 +107,7 @@ class TagGlobalLocalizer(Node):
 
         self.declare_parameter('stationary_linear_threshold', 0.02)
         self.declare_parameter('stationary_angular_threshold', 0.03)
-        self.declare_parameter('stationary_settle_time', 0.40)
+        self.declare_parameter('stationary_settle_time', 0.30)
         self.declare_parameter('processing_rate', 20.0)
         self.declare_parameter('publish_rate', 30.0)
 
