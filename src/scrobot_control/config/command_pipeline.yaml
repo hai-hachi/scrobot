@@ -80,7 +80,9 @@ collision_monitor:
     enable_stamped_cmd_vel: true
 
     state_topic: /collision_monitor_state
-    source_timeout: 0.3
+    # Gazebo depth clouds arrive through bridge -> pointcloud_to_laserscan ->
+    # scan self-filter. Allow normal simulator jitter without failing closed.
+    source_timeout: 0.6
     stop_pub_timeout: 2.0
 
     # Simple fixed frontal zones. The old forward/backward/stopped
@@ -117,5 +119,5 @@ collision_monitor:
     depth_scan:
       type: scan
       topic: /camera/camera/depth/scan
-      source_timeout: 0.3
+      source_timeout: 0.6
       enabled: true
