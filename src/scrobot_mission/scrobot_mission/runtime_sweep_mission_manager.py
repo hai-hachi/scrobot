@@ -314,7 +314,7 @@ class RuntimeSweepMissionManager(SweepMissionManager):
 
     @staticmethod
     def _yaw_from_pose(pose):
-        q = pose.pose.orientation
+        q = pose.orientation
         return math.atan2(
             2.0 * (q.w * q.z + q.x * q.y),
             1.0 - 2.0 * (q.y * q.y + q.z * q.z),
@@ -336,8 +336,8 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         current_pose, current_yaw = pose_info
         checkpoint = self.manual_checkpoint_pose
 
-        dx = current_pose.pose.position.x - checkpoint.pose.position.x
-        dy = current_pose.pose.position.y - checkpoint.pose.position.y
+        dx = current_pose.position.x - checkpoint.position.x
+        dy = current_pose.position.y - checkpoint.position.y
         distance = math.hypot(dx, dy)
 
         checkpoint_yaw = self._yaw_from_pose(checkpoint)
