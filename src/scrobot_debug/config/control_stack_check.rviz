@@ -4,11 +4,14 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Polygon1
-        - /Polygon1/Status1
-        - /Polygon1/Topic1
+        - /Robot Collision Model1
+        - /Raw Depth Scan1
+        - /Collision Monitor Stop Zone1
+        - /Collision Monitor Slowdown Zone1
+        - /Control Stack Debug Overlay1
+        - /TF1
       Splitter Ratio: 0.6200000047683716
-    Tree Height: 325
+    Tree Height: 760
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Views
@@ -16,6 +19,7 @@ Panels:
       - /Current View1
     Name: Views
     Splitter Ratio: 0.5
+
 Visualization Manager:
   Class: ""
   Displays:
@@ -37,6 +41,7 @@ Visualization Manager:
       Plane Cell Count: 20
       Reference Frame: <Fixed Frame>
       Value: true
+
     - Alpha: 0.30000001192092896
       Class: rviz_default_plugins/RobotModel
       Collision Enabled: true
@@ -55,91 +60,6 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        base_footprint:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        base_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        camera_bottom_screw_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        camera_color_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_color_optical_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_depth_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_depth_optical_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_imu_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_imu_optical_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        collector_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        left_caster_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        left_caster_wheel_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        left_wheel_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        mag_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        pickup_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        right_caster_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        right_caster_wheel_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        right_wheel_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
@@ -148,18 +68,81 @@ Visualization Manager:
       Update Interval: 0
       Value: true
       Visual Enabled: false
-    - Class: rviz_default_plugins/MarkerArray
+
+    - Alpha: 1
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/LaserScan
+      Color: 0; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
       Enabled: true
-      Name: Control Stack Debug Overlay
-      Namespaces:
-        {}
+      Name: Raw Depth Scan
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 8
+      Size (m): 0.03999999910593033
+      Style: Points
       Topic:
         Depth: 5
         Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /camera/camera/depth/scan
+      Use Fixed Frame: true
+      Use rainbow: false
+      Value: true
+
+    - Alpha: 0.8500000238418579
+      Class: rviz_default_plugins/Polygon
+      Color: 255; 0; 0
+      Enabled: true
+      Name: Collision Monitor Stop Zone
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: visualization_marker_array
+        Value: /collision_monitor/stop_zone
       Value: true
+
+    - Alpha: 0.8500000238418579
+      Class: rviz_default_plugins/Polygon
+      Color: 255; 220; 0
+      Enabled: true
+      Name: Collision Monitor Slowdown Zone
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /collision_monitor/slowdown_zone
+      Value: true
+
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Marker Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /debug/control_stack_viz
+      Name: Control Stack Debug Overlay
+      Namespaces: {}
+      Queue Size: 5
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /debug/control_stack_viz
+      Value: true
+
     - Class: rviz_default_plugins/TF
       Enabled: true
       Filter (blacklist): ""
@@ -167,93 +150,15 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        base_footprint:
-          Value: true
-        base_link:
-          Value: true
-        camera_bottom_screw_frame:
-          Value: true
-        camera_color_frame:
-          Value: true
-        camera_color_optical_frame:
-          Value: true
-        camera_depth_frame:
-          Value: true
-        camera_depth_optical_frame:
-          Value: true
-        camera_imu_frame:
-          Value: true
-        camera_imu_optical_frame:
-          Value: true
-        camera_link:
-          Value: true
-        collector_link:
-          Value: true
-        left_caster_link:
-          Value: true
-        left_caster_wheel_link:
-          Value: true
-        left_wheel_link:
-          Value: true
-        mag_link:
-          Value: true
-        pickup_link:
-          Value: true
-        right_caster_link:
-          Value: true
-        right_caster_wheel_link:
-          Value: true
-        right_wheel_link:
-          Value: true
       Marker Scale: 0.07999999821186066
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: true
-      Tree:
-        base_footprint:
-          base_link:
-            camera_bottom_screw_frame:
-              camera_link:
-                camera_color_frame:
-                  camera_color_optical_frame:
-                    {}
-                camera_depth_frame:
-                  camera_depth_optical_frame:
-                    {}
-                camera_imu_frame:
-                  camera_imu_optical_frame:
-                    {}
-            collector_link:
-              pickup_link:
-                {}
-            left_caster_link:
-              left_caster_wheel_link:
-                {}
-            left_wheel_link:
-              {}
-            mag_link:
-              {}
-            right_caster_link:
-              right_caster_wheel_link:
-                {}
-            right_wheel_link:
-              {}
+      Tree: {}
       Update Interval: 0
       Value: true
-    - Alpha: 1
-      Class: rviz_default_plugins/Polygon
-      Color: 25; 255; 0
-      Enabled: true
-      Name: Polygon
-      Topic:
-        Depth: 5
-        Durability Policy: Transient Local
-        Filter size: 10
-        History Policy: Keep All
-        Reliability Policy: Best Effort
-        Value: /collision_monitor/slowdown_zone
-      Value: true
+
   Enabled: true
   Global Options:
     Background Color: 25; 25; 25
@@ -292,13 +197,13 @@ Visualization Manager:
       Value: Orbit (rviz_default_plugins)
       Yaw: 5.172399044036865
     Saved: ~
+
 Window Geometry:
   Displays:
     collapsed: false
   Height: 1089
   Hide Left Dock: false
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000001c9000003e3fc0200000003fb000000100044006900730070006c006100790073010000003f000001cb000000cc00fffffffb0000001200530065006c0065006300740069006f006e0100000210000000de0000005d00fffffffb0000000a0056006900650077007301000002f40000012e000000a900ffffff000005b1000003e300000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Views:
