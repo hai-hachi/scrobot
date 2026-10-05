@@ -13,6 +13,7 @@ import message_filters
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
+from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
@@ -46,7 +47,11 @@ class YoloShuttleDetector(Node):
         super().__init__("yolo_shuttle_detector")
 
         self.declare_parameter("model_path", "")
-        self.declare_parameter("device", "0")
+        self.declare_parameter(
+            "device",
+            "0",
+            ParameterDescriptor(dynamic_typing=True),
+        )
         self.declare_parameter("imgsz", 960)
         self.declare_parameter("confidence_threshold", 0.10)
         self.declare_parameter("iou_threshold", 0.70)
