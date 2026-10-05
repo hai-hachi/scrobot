@@ -5,7 +5,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 
 
 def include(pkg, launch_file, args=None, condition=None):
@@ -29,6 +29,8 @@ def generate_launch_description():
     enable_magnetometer = LaunchConfiguration('enable_magnetometer')
     shuttle_mode = LaunchConfiguration('shuttle_mode')
     shuttle_count = LaunchConfiguration('shuttle_count')
+    model_path = LaunchConfiguration('model_path')
+    device = LaunchConfiguration('device')
 
     robot_x = LaunchConfiguration('robot_x')
     robot_y = LaunchConfiguration('robot_y')
@@ -65,13 +67,13 @@ def generate_launch_description():
     perception = include(
         'scrobot_perception',
         'perception.launch.py',
-        {'use_sim_time': use_sim_time},
-    )
-
-    shuttle_perception = include(
-        'scrobot_perception',
-        'shuttle_perception_sim.launch.py',
-        {'use_sim_time': use_sim_time},
+        {
+            'use_sim_time': use_sim_time,
+            'enable_yolo': spawn_shuttles,
+            'model_path': model_path,
+            'device': device,
+            'publish_debug_image': 'false',
+        },
     )
 
     mission = include(
@@ -116,12 +118,9 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'enable_magnetometer',
-            default_value='true',
+            default_value='false',
             choices=['true', 'false'],
-            description=(
-                'Temporary compatibility switch: the current baseline '
-                'localization config still expects magnetometer input.'
-            ),
+            description='Enable the optional magnetometer path.',
         ),
         DeclareLaunchArgument(
             'spawn_shuttles',
@@ -135,6 +134,15 @@ def generate_launch_description():
             choices=['single', 'random', 'cluster', 'mixed'],
         ),
         DeclareLaunchArgument('shuttle_count', default_value='20'),
+        DeclareLaunchArgument(
+            'model_path',
+            default_value=EnvironmentVariable(
+                'SCROBOT_YOLO_MODEL',
+                default_value='',
+            ),
+            description='YOLO model used when spawn_shuttles:=true.',
+        ),
+        DeclareLaunchArgument('device', default_value='0'),
 
         DeclareLaunchArgument('robot_x', default_value='2.0'),
         DeclareLaunchArgument('robot_y', default_value='3.05'),
@@ -152,7 +160,6 @@ def generate_launch_description():
                 control,
                 localization,
                 perception,
-                shuttle_perception,
                 telemetry,
             ],
         ),
