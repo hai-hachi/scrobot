@@ -64,8 +64,8 @@ tag_approach_controller:
     # Search completion is based on measured accumulated yaw, not elapsed time.
     search_angular_velocity: 0.45
     search_rotation_rad: 6.283185307179586
-    max_linear_velocity: 0.45
-    max_angular_velocity: 0.75
+    max_linear_velocity: 0.25
+    max_angular_velocity: 0.60
 
     # Alternative SMC strategy parameters retained for regression tests.
     # The production desired pose is defined at base_link.
