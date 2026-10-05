@@ -35,11 +35,10 @@ class NativeBBoxDatasetCapture(Node):
         self.declare_parameter('random_seed', 42)
         self.declare_parameter('camera_height', 0.28683059)
         self.declare_parameter('settle_time_s', 2.0)
-        self.declare_parameter('camera_apply_wait_s', 0.05)
-        self.declare_parameter('camera_apply_steps', 2)
+        self.declare_parameter('camera_apply_wait_s', 0.10)
         self.declare_parameter('spawn_workers', 8)
         self.declare_parameter('sample_timeout_s', 5.0)
-        self.declare_parameter('max_camera_sync_retries', 8)
+        self.declare_parameter('max_camera_sync_retries', 2)
         self.declare_parameter('pose_retry_wait_s', 0.50)
         self.declare_parameter('camera_pitch_deg', 15.0)
         self.declare_parameter('min_focus_range', 0.50)
@@ -59,7 +58,6 @@ class NativeBBoxDatasetCapture(Node):
         self.camera_height = float(self.get_parameter('camera_height').value)
         self.settle_time_s = max(0.0, float(self.get_parameter('settle_time_s').value))
         self.camera_apply_wait_s = max(0.0, float(self.get_parameter('camera_apply_wait_s').value))
-        self.camera_apply_steps = max(1, int(self.get_parameter('camera_apply_steps').value))
         self.spawn_workers = max(1, int(self.get_parameter('spawn_workers').value))
         self.sample_timeout_s = max(1.0, float(self.get_parameter('sample_timeout_s').value))
         self.max_camera_sync_retries = max(1, int(self.get_parameter('max_camera_sync_retries').value))
@@ -201,36 +199,6 @@ class NativeBBoxDatasetCapture(Node):
         self.settle_started_wall = time.perf_counter()
         self._set_state('SETTLING_SHUTTLES')
 
-    def _set_world_paused(self, paused):
-        value = 'true' if paused else 'false'
-        r = self._run([
-            'gz', 'service',
-            '-s', f'/world/{self.world_name}/control',
-            '--reqtype', 'gz.msgs.WorldControl',
-            '--reptype', 'gz.msgs.Boolean',
-            '--timeout', '2000',
-            '--req', f'pause: {value}',
-        ])
-        if r.returncode != 0 or 'data: true' not in r.stdout.lower():
-            raise RuntimeError(
-                f'Failed to set world pause={paused}: {r.stdout.strip()}'
-            )
-
-    def _step_paused_world(self, steps=None):
-        count = self.camera_apply_steps if steps is None else max(1, int(steps))
-        r = self._run([
-            'gz', 'service',
-            '-s', f'/world/{self.world_name}/control',
-            '--reqtype', 'gz.msgs.WorldControl',
-            '--reptype', 'gz.msgs.Boolean',
-            '--timeout', '3000',
-            '--req', f'pause: true, multi_step: {count}',
-        ])
-        if r.returncode != 0 or 'data: true' not in r.stdout.lower():
-            raise RuntimeError(
-                f'Failed to step paused world by {count}: {r.stdout.strip()}'
-            )
-
     @staticmethod
     def _image_sha1(path):
         h = hashlib.sha1()
@@ -330,11 +298,9 @@ class NativeBBoxDatasetCapture(Node):
 
         self.pose_command_failures = 0
 
-        # /set_pose only queues WorldPoseCmd. The world is paused, so explicitly
-        # advance it enough iterations for UserCommands + Physics + Sensors to
-        # propagate the new model pose into Ogre before triggering the camera.
-        self._step_paused_world(self.camera_apply_steps)
-
+        # Match the old fast generator: the world keeps running, so UserCommands
+        # and Ogre naturally consume the new static-camera pose on subsequent
+        # iterations. Only a short wall-clock guard is needed before trigger.
         self.capture_phase = 'wait_camera_apply'
         self.phase_started_wall = time.perf_counter()
         self._set_state('WAITING_FOR_CAMERA_APPLY')
@@ -387,7 +353,7 @@ class NativeBBoxDatasetCapture(Node):
             csv.writer(f).writerow([
                 stem, split,
                 f'{x:.9f}', f'{y:.9f}', f'{yaw:.9f}',
-                raw_index, image_hash, len(rows), True,
+                raw_index, image_hash, len(rows), 'settled_auto_disabled',
             ])
 
         self.saved += 1
@@ -415,21 +381,17 @@ class NativeBBoxDatasetCapture(Node):
 
         if self.camera_sync_retries > self.max_camera_sync_retries:
             self.get_logger().warning(
-                f'{reason}; skipping this camera pose after '
-                f'{self.max_camera_sync_retries} controlled-step retries.'
+                f'{reason}; skipping camera pose after '
+                f'{self.max_camera_sync_retries} quick retries.'
             )
             self._reset_camera_capture()
             self._set_state('CAMERA_SYNC_SKIP_POSE')
             return
 
         self.get_logger().warning(
-            f'{reason}; advancing paused world and retrying same pose '
+            f'{reason}; renderer is one frame behind, retrying trigger '
             f'({self.camera_sync_retries}/{self.max_camera_sync_retries}).'
         )
-
-        # Advance the command / physics / render pipeline explicitly rather
-        # than burning camera renders while waiting for Ogre to catch up.
-        self._step_paused_world(self.camera_apply_steps)
         self.capture_phase = 'wait_camera_apply'
         self.phase_started_wall = time.perf_counter()
         self._set_state('WAITING_FOR_CAMERA_APPLY')
@@ -451,15 +413,13 @@ class NativeBBoxDatasetCapture(Node):
                     self._set_state('SETTLING_SHUTTLES')
                     return
 
-                self._set_state('FREEZING_SCENE')
-                self._set_world_paused(True)
                 self.settle_started_wall = None
                 self.scene_frozen = True
-                self._set_state('SCENE_FROZEN')
+                self._set_state('SCENE_SETTLED')
                 self.get_logger().info(
-                    'Scene paused after shuttle settling. Camera moves use only '
-                    f'{self.camera_apply_steps} controlled 1 ms world step(s) '
-                    'before each native bbox render.'
+                    'Shuttle settling complete. World remains running so camera '
+                    'teleports propagate normally; resting shuttle bodies use '
+                    'allow_auto_disable=true and stay asleep unless disturbed.'
                 )
                 return
 
