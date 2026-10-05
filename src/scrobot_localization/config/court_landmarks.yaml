@@ -46,14 +46,14 @@ tag_global_localizer:
 tag_approach_controller:
   ros__parameters:
     odom_frame: odom
-    base_frame: base_footprint
+    base_frame: base_link
     detections_topic: /apriltag/detections
     observed_tag_prefix: observed_tag_
     cmd_vel_topic: /cmd_vel_relocalization
 
     min_decision_margin: 10.0
     max_detection_distance: 10.0
-    default_target_distance: 0.80
+    default_target_distance: 0.90
     default_timeout: 60.0
     tag_lost_timeout: 1.0
 
@@ -78,6 +78,26 @@ tag_approach_controller:
     smc_phi: 0.08
     smc_krho: 0.80
     heading_stop_deg: 70.0
+
+    # Default production controller; debug launches override this for the
+    # comparison experiments.
+    control_strategy: pure_smc
+
+    # Original main-branch direct-goal controller.
+    main_k_position: 0.80
+    main_k_heading: 1.80
+    main_k_final_yaw: 1.80
+    main_drive_heading_limit_deg: 35.0
+
+    # Tangent biarc path feeding the SMC.
+    biarc_spacing: 0.08
+    biarc_lookahead: 0.35
+
+    # Normal-ray baseline.
+    ray_position_tolerance: 0.12
+    ray_heading_tolerance_deg: 8.0
+    ray_cross_speed: 0.30
+    ray_heading_gain: 1.80
 
     position_tolerance: 0.05
     yaw_tolerance_deg: 5.0
