@@ -96,7 +96,7 @@ class TagApproachController(Node):
     Experimental strategies are exposed for controlled debug comparison:
       pure_smc       direct pose SMC
       main_branch    original direct position + final-yaw controller
-      biarc_smc      tangent biarc reference path feeding the same SMC
+      biarc_smc      live-replanned tangent biarc path feeding the same SMC
       normal_ray_smc rotate/cross/face the tag normal ray, then SMC
 
     Once a tag is locked, other tags cannot steal it.
@@ -155,6 +155,14 @@ class TagApproachController(Node):
         self.declare_parameter('biarc_d1_factor_max', 6.0)
         self.declare_parameter('biarc_d1_factor_samples', 81)
         self.declare_parameter('biarc_max_arc_sweep_deg', 175.0)
+
+        # Live biarc replanning. Continue filtering the measured AprilTag goal,
+        # but regenerate the path only when the endpoint moves meaningfully.
+        # Near the goal, hand off to the proven main-branch pose controller.
+        self.declare_parameter('biarc_replan_position_threshold', 0.04)
+        self.declare_parameter('biarc_replan_yaw_threshold_deg', 2.5)
+        self.declare_parameter('biarc_replan_min_interval', 0.25)
+        self.declare_parameter('biarc_terminal_switch_distance', 1.25)
 
         # Deliberately simple normal-ray baseline.
         self.declare_parameter('ray_position_tolerance', 0.12)
@@ -287,6 +295,40 @@ class TagApproachController(Node):
                 ),
             )
         )
+        self.biarc_replan_position_threshold = max(
+            0.0,
+            float(
+                self.get_parameter(
+                    'biarc_replan_position_threshold'
+                ).value
+            ),
+        )
+        self.biarc_replan_yaw_threshold = math.radians(
+            max(
+                0.0,
+                float(
+                    self.get_parameter(
+                        'biarc_replan_yaw_threshold_deg'
+                    ).value
+                ),
+            )
+        )
+        self.biarc_replan_min_interval = max(
+            0.0,
+            float(
+                self.get_parameter(
+                    'biarc_replan_min_interval'
+                ).value
+            ),
+        )
+        self.biarc_terminal_switch_distance = max(
+            0.0,
+            float(
+                self.get_parameter(
+                    'biarc_terminal_switch_distance'
+                ).value
+            ),
+        )
 
         self.ray_position_tolerance = max(
             0.01, float(self.get_parameter('ray_position_tolerance').value)
@@ -302,6 +344,10 @@ class TagApproachController(Node):
         )
         self.position_tolerance = float(
             self.get_parameter('position_tolerance').value
+        )
+        self.biarc_terminal_switch_distance = max(
+            self.position_tolerance,
+            self.biarc_terminal_switch_distance,
         )
         self.yaw_tolerance = math.radians(
             float(self.get_parameter('yaw_tolerance_deg').value)
@@ -352,6 +398,8 @@ class TagApproachController(Node):
         # Strategy-specific experimental state.
         self.reference_path = []
         self.path_progress_index = 0
+        self.biarc_plan_goal = None
+        self.biarc_last_replan_time = None
         self.ray_heading = None
 
         # Search progress is measured from odometry yaw so one search attempt
@@ -480,6 +528,8 @@ class TagApproachController(Node):
             self.stable_since = None
             self.reference_path = []
             self.path_progress_index = 0
+            self.biarc_plan_goal = None
+            self.biarc_last_replan_time = None
             self.ray_heading = None
             self.search_last_yaw = None
             self.search_accumulated_yaw = 0.0
@@ -713,17 +763,10 @@ class TagApproachController(Node):
             self.last_tag_bearing = candidate['bearing']
             self.last_face_angle = candidate['face_angle']
 
-            # Safe to filter now because the tag ID cannot switch.
-            #
-            # For biarc_smc, freeze the final pose once the reference path has
-            # been generated. Otherwise the measured goal would continue
-            # moving while the already-published path endpoint remained fixed.
-            if (
-                self.control_strategy == 'biarc_smc'
-                and self.reference_path
-            ):
-                pass
-            elif self.goal_pose is None:
+            # Safe to filter now because the tag ID cannot switch. Strategy 3
+            # also keeps refining this live goal; its path-replan gate below
+            # decides when the filtered change is large enough to act on.
+            if self.goal_pose is None:
                 self.goal_pose = [
                     candidate['goal_x'],
                     candidate['goal_y'],
@@ -803,6 +846,8 @@ class TagApproachController(Node):
             self.last_face_angle = best['face_angle']
             self.reference_path = []
             self.path_progress_index = 0
+            self.biarc_plan_goal = None
+            self.biarc_last_replan_time = None
             self.ray_heading = None
 
             if self.control_strategy == 'main_branch':
@@ -1345,6 +1390,58 @@ class TagApproachController(Node):
 
         return best['path']
 
+    def _biarc_replan_required(self, goal_pose, now):
+        if not self.reference_path or self.biarc_plan_goal is None:
+            return True
+
+        if (
+            self.biarc_last_replan_time is not None
+            and now - self.biarc_last_replan_time
+            < self.biarc_replan_min_interval
+        ):
+            return False
+
+        position_shift = math.hypot(
+            goal_pose[0] - self.biarc_plan_goal[0],
+            goal_pose[1] - self.biarc_plan_goal[1],
+        )
+        yaw_shift = abs(
+            angle_difference(
+                goal_pose[2],
+                self.biarc_plan_goal[2],
+            )
+        )
+        return (
+            position_shift >= self.biarc_replan_position_threshold
+            or yaw_shift >= self.biarc_replan_yaw_threshold
+        )
+
+    def _set_biarc_plan(self, robot, goal_pose, now, reason):
+        self.reference_path = self._build_biarc_path(
+            robot,
+            goal_pose,
+        )
+        self.path_progress_index = 0
+        self.biarc_plan_goal = list(goal_pose)
+        self.biarc_last_replan_time = now
+        self._publish_reference_path()
+
+        endpoint = self.reference_path[-1]
+        endpoint_position_error = math.hypot(
+            endpoint[0] - goal_pose[0],
+            endpoint[1] - goal_pose[1],
+        )
+        endpoint_yaw_error = abs(
+            angle_difference(endpoint[2], goal_pose[2])
+        )
+
+        self.get_logger().info(
+            f'Biarc {reason}: {len(self.reference_path)} poses; '
+            f'endpoint_error={endpoint_position_error:.6f} m, '
+            f'endpoint_yaw_error='
+            f'{math.degrees(endpoint_yaw_error):.6f} deg.'
+        )
+
     def _publish_goal_pose(self, goal_pose):
         if goal_pose is None:
             return
@@ -1636,63 +1733,75 @@ class TagApproachController(Node):
         # Strategy 3: biarc tangent path -> moving SMC reference.
         # --------------------------------------------------------
         if phase == 'biarc_smc':
-            if not self.reference_path:
-                self.reference_path = self._build_biarc_path(
+            # Strategy 3 uses the continuously filtered AprilTag goal.
+            # Replanning starts from the CURRENT robot pose and is gated by
+            # endpoint motion + minimum time so the path does not jitter at
+            # the camera frame rate.
+            live_goal_rho = math.hypot(
+                goal_pose[0] - robot[0],
+                goal_pose[1] - robot[1],
+            )
+
+            # Biarc handles long-range capture. The existing main-branch pose
+            # controller handles the near-terminal region using the same live,
+            # continuously improving goal.
+            if live_goal_rho <= self.biarc_terminal_switch_distance:
+                with self.lock:
+                    self.phase = 'main_approach'
+                    self.reference_path = []
+                    self.path_progress_index = 0
+                    self.biarc_plan_goal = None
+                    self.biarc_last_replan_time = None
+                self.get_logger().info(
+                    'Biarc terminal handoff -> main_branch: '
+                    f'goal_rho={live_goal_rho:.3f} m <= '
+                    f'{self.biarc_terminal_switch_distance:.3f} m.'
+                )
+                self.publish_cmd(0.0, 0.0)
+                return
+
+            if self._biarc_replan_required(goal_pose, now):
+                reason = (
+                    'path generated'
+                    if not self.reference_path
+                    else 'replanned from live goal'
+                )
+
+                if self.biarc_plan_goal is not None:
+                    position_shift = math.hypot(
+                        goal_pose[0] - self.biarc_plan_goal[0],
+                        goal_pose[1] - self.biarc_plan_goal[1],
+                    )
+                    yaw_shift = abs(
+                        angle_difference(
+                            goal_pose[2],
+                            self.biarc_plan_goal[2],
+                        )
+                    )
+                    self.get_logger().info(
+                        'Biarc live-goal update accepted: '
+                        f'dpos={position_shift:.3f} m, '
+                        f'dyaw={math.degrees(yaw_shift):.2f} deg.'
+                    )
+
+                self._set_biarc_plan(
                     robot,
                     goal_pose,
-                )
-                self.path_progress_index = 0
-                self._publish_reference_path()
-
-                endpoint = self.reference_path[-1]
-                endpoint_position_error = math.hypot(
-                    endpoint[0] - goal_pose[0],
-                    endpoint[1] - goal_pose[1],
-                )
-                endpoint_yaw_error = abs(
-                    angle_difference(endpoint[2], goal_pose[2])
+                    now,
+                    reason,
                 )
 
-                self.get_logger().info(
-                    f'Biarc path generated: {len(self.reference_path)} poses; '
-                    f'endpoint_error={endpoint_position_error:.6f} m, '
-                    f'endpoint_yaw_error='
-                    f'{math.degrees(endpoint_yaw_error):.6f} deg.'
-                )
-
-            final_goal = self.reference_path[-1]
-            goal_rho = math.hypot(
-                final_goal[0] - robot[0],
-                final_goal[1] - robot[1],
-            )
-            goal_yaw_error = angle_difference(
-                final_goal[2],
-                robot[2],
-            )
-
-            if (
-                goal_rho <= self.position_tolerance
-                and abs(goal_yaw_error) <= self.yaw_tolerance
-            ):
-                self._enter_stable(
-                    'Biarc-SMC pose reached',
-                    robot,
-                    final_goal,
-                    tag_id,
-                )
-                phase = 'stable'
-            else:
-                reference = self._biarc_reference(robot)
-                if reference is None:
-                    self.publish_cmd(0.0, 0.0)
-                    return
-
-                linear, angular, _, _, _, _, _ = self._smc_command(
-                    robot,
-                    reference,
-                )
-                self.publish_cmd(linear, angular)
+            reference = self._biarc_reference(robot)
+            if reference is None:
+                self.publish_cmd(0.0, 0.0)
                 return
+
+            linear, angular, _, _, _, _, _ = self._smc_command(
+                robot,
+                reference,
+            )
+            self.publish_cmd(linear, angular)
+            return
 
         # --------------------------------------------------------
         # Strategy 4: perpendicular normal-ray capture -> SMC.
@@ -1865,6 +1974,8 @@ class TagApproachController(Node):
             self.stable_since = None
             self.reference_path = []
             self.path_progress_index = 0
+            self.biarc_plan_goal = None
+            self.biarc_last_replan_time = None
             self.ray_heading = None
             self.search_last_yaw = None
             self.search_accumulated_yaw = 0.0
