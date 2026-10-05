@@ -14,6 +14,8 @@ def generate_launch_description():
     tag_position_tolerance = LaunchConfiguration('tag_position_tolerance')
     tag_yaw_tolerance_deg = LaunchConfiguration('tag_yaw_tolerance_deg')
     tag_control_strategy = LaunchConfiguration('tag_control_strategy')
+    tag_max_linear_velocity = LaunchConfiguration('tag_max_linear_velocity')
+    tag_max_angular_velocity = LaunchConfiguration('tag_max_angular_velocity')
 
     # Exactly one node owns /relocalize and map -> odom.
     global_localizer = Node(package='scrobot_localization', executable='tag_global_localizer.py', name='tag_global_localizer', output='screen', parameters=[params, {'use_sim_time': use_sim_time}])
@@ -37,6 +39,14 @@ def generate_launch_description():
                     value_type=float,
                 ),
                 'control_strategy': tag_control_strategy,
+                'max_linear_velocity': ParameterValue(
+                    tag_max_linear_velocity,
+                    value_type=float,
+                ),
+                'max_angular_velocity': ParameterValue(
+                    tag_max_angular_velocity,
+                    value_type=float,
+                ),
             },
         ],
     )
@@ -66,6 +76,16 @@ def generate_launch_description():
                 'normal_ray_smc',
             ],
             description='AprilTag local approach strategy.',
+        ),
+        DeclareLaunchArgument(
+            'tag_max_linear_velocity',
+            default_value='0.45',
+            description='Tag approach linear speed limit [m/s].',
+        ),
+        DeclareLaunchArgument(
+            'tag_max_angular_velocity',
+            default_value='0.75',
+            description='Tag approach angular speed limit [rad/s].',
         ),
         global_localizer,
         approach_controller,
