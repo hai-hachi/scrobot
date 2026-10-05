@@ -22,5 +22,9 @@
         </material>
       </visual>
     </link>
+    <!-- Gazebo-native annotation class. Converted to YOLO class 0 offline. -->
+    <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+      <label>1</label>
+    </plugin>
   </model>
 </sdf>
