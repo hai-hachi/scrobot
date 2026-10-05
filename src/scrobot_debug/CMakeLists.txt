@@ -193,6 +193,13 @@ install(
 )
 
 install(
+  PROGRAMS
+    scripts/perception_monitor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME perception_monitor
+)
+
+install(
   DIRECTORY
     launch
     config
