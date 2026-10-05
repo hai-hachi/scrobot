@@ -1,8 +1,10 @@
-# SC Robot ROS Interface Specification
+# SC Robot Interface Specification
 
-This file mirrors `docs/interface_specification.md` for the current ROS 2 Jazzy / Gazebo Harmonic implementation.
+Updated for the current ROS 2 Jazzy / Gazebo Harmonic implementation.
 
-## Frames
+## TF
+
+Primary transform chain:
 
 ```text
 map -> odom -> base_footprint -> base_link
@@ -12,80 +14,174 @@ map -> odom -> base_footprint -> base_link
                          +--> camera_imu_optical_frame
 ```
 
-`map -> odom` is owned by global localization. `odom -> base_footprint` is owned by the local odometry chain.
+`map -> odom` is produced by global localization. `odom -> base_footprint`
+is the local odometry chain.
 
-## Main control interfaces
+## Control
 
-- `/cmd_vel_manual`: manual velocity source.
-- `/diff_drive_controller/cmd_vel`: final drive command.
-- `/diff_drive_controller/odom`: wheel odometry.
-- `/joint_states`: joint feedback.
+### `/cmd_vel_manual`
+Manual velocity command source used by keyboard teleoperation and tests.
 
-## Localization interfaces
+### `/diff_drive_controller/cmd_vel`
+Final velocity command consumed by the differential-drive controller.
 
-- `/imu/data_raw`: raw IMU.
-- `/imu/data`: filtered/orientation IMU where enabled.
-- `/odometry/filtered`: EKF odometry.
-- `/approach_tag`: `scrobot_interfaces/action/ApproachTag`.
-- `/relocalize`: `scrobot_interfaces/action/Relocalize`.
+### `/diff_drive_controller/odom`
+Wheel-odometry output.
 
-`/relocalize` establishes or corrects `map -> odom` while the robot is stationary.
+### `/joint_states`
+Wheel and joint feedback.
 
-## Camera interfaces
+## Localization
 
-- `/camera/camera/color/camera_info`: `sensor_msgs/msg/CameraInfo`.
-- `/camera/camera/depth/points`: `sensor_msgs/msg/PointCloud2`.
+### `/imu/data_raw`
+Raw robot IMU input.
 
-High-rate camera/depth streams use sensor-data QoS / Best Effort.
+### `/imu/data`
+Filtered/orientation-aware IMU output where configured.
 
-## Shuttle perception interfaces
+### `/odometry/filtered`
+EKF local odometry output.
 
-### `/perception/detections_2d`
+### `/approach_tag`
+Type: `scrobot_interfaces/action/ApproachTag`.
 
-Type: `vision_msgs/msg/Detection2DArray`  
-Frame: `camera_color_optical_frame`
+### `/relocalize`
+Type: `scrobot_interfaces/action/Relocalize`.
 
-Future real YOLO output.
+AprilTag localization owns global correction of `map -> odom`.
 
-### `/perception/shuttle_detections_3d`
+## Camera
 
-Type: `vision_msgs/msg/Detection3DArray`  
-Frame: `camera_depth_optical_frame`  
-QoS: Sensor Data / Best Effort
+### `/camera/camera/color/image_raw`
+Rectified RGB stream used directly by AprilTag and YOLO.
 
-Simulation publisher: `fake_shuttle_detector`.  
-Future real publisher: `depth_localizer`.
+### `/camera/camera/color/camera_info`
+Type: `sensor_msgs/msg/CameraInfo`.
 
-The detector does not own persistent IDs.
+Used by AprilTag and by the YOLO aligned-depth deprojection path.
 
-### `/perception/tracked_shuttles`
-
-Type: `vision_msgs/msg/Detection3DArray`  
-Frame: `map`  
-Publisher: `shuttle_tracker`  
-QoS: Reliable
-
-The tracker transforms detections into `map`, performs nearest-neighbor association, smooths positions, assigns stable IDs, and removes stale tracks.
-
-Current defaults:
+Validated simulation CameraInfo:
 
 ```text
-publish_rate          10 Hz
-association_distance  0.30 m
-position_alpha        0.50
-stale_timeout         1.50 s
-tf_timeout            0.05 s
-fallback_to_latest_tf true
+color 1280x720
+fx = 906.94
+fy = 906.94
+cx = 640.00
+cy = 360.00
 ```
 
-## Simulation-only truth
+### `/camera/camera/depth/camera_info`
+Validated simulation CameraInfo:
 
-- `/evaluation/ground_truth_odom`: `nav_msgs/msg/Odometry`; primary robot truth for evaluation.
-- `/evaluation/shuttle_ground_truth_gz`: `gz.msgs.Pose_V`; shuttle-only Gazebo truth.
-- `/evaluation/shuttle_ground_truth`: `geometry_msgs/msg/PoseArray`; shuttle-only ROS truth consumed only by fake perception.
+```text
+depth 848x480
+fx = 420.29
+fy = 420.29
+cx = 424.00
+cy = 240.00
+```
 
-The shuttle-only truth stream is additive and does not change the existing `scrobot_evaluation` odometry truth path.
+### `/camera/camera/aligned_depth_to_color/image_raw`
+Depth registered into the RGB/color image geometry.
 
-## Timing
+### `/camera/camera/depth/points`
+Type: `sensor_msgs/msg/PointCloud2`.
 
-All simulation nodes should use `use_sim_time: true`. Synthetic shuttle detections use the latest `/evaluation/ground_truth_odom` stamp so detection timestamps are in the Gazebo `/clock` domain. The tracker first requests exact-time TF and can fall back to the latest transform during startup or small timing skew.
+Input to `pointcloud_to_laserscan`; the full point cloud is not used
+downstream after scan conversion.
+
+### `/camera/camera/depth/scan`
+Type: `sensor_msgs/msg/LaserScan`.
+
+Filtered obstacle scan used by collision monitoring and Nav2 costmaps.
+
+Current scan geometry:
+
+```text
+height band = 0.12-0.70 m
+HFOV        = +/-0.7897925312 rad
+range       = 0.30-3.30 m
+```
+
+## Shuttle perception
+
+### `/perception/shuttle_detections_2d`
+Type: `vision_msgs/msg/Detection2DArray`.
+
+Frame: `camera_color_optical_frame`.
+
+Publisher: `yolo_shuttle_detector`.
+
+Contains YOLO shuttle bounding boxes and confidence scores.
+
+### `/perception/shuttle_detections_3d`
+Type: `vision_msgs/msg/Detection3DArray`.
+
+Frame: `camera_color_optical_frame`.
+
+Production publisher: `yolo_shuttle_detector`.
+
+The detector combines the YOLO bbox with RGB-aligned depth and deprojects the
+measurement with the color CameraInfo intrinsic matrix.
+
+Simulation/testing may alternatively publish this same interface using
+`fake_shuttle_detector`, but the fake detector is not part of the production
+vision path.
+
+QoS: sensor-data / Best Effort.
+
+The current production mission consumes these camera-relative detections
+directly through `shuttle_collection_filter`; persistent IDs are not required.
+
+### `/perception/collectable_shuttle_detections_3d`
+Type: `vision_msgs/msg/Detection3DArray`.
+
+Publisher: `shuttle_collection_filter`.
+
+Contains detections that pass mission-specific range and net-pole exclusion
+checks. The local collection controller consumes this topic.
+
+### Optional tracker topics
+
+`shuttle_tracker` remains available only if a future persistent court-wide
+shuttle map is desired.
+
+```text
+/perception/tracked_shuttles
+/perception/visible_tracked_shuttles
+```
+
+These topics are not required by the current production mission.
+
+## AprilTag perception
+
+### `/apriltag/detections`
+Type: `apriltag_msgs/msg/AprilTagDetectionArray`.
+
+Publisher: `apriltag_ros`.
+
+The localization package performs quality gating and global pose correction.
+
+## Simulation-only ground truth
+
+### `/evaluation/ground_truth_odom`
+Type: `nav_msgs/msg/Odometry`.
+
+Robot truth for simulation evaluation.
+
+### `/evaluation/shuttle_ground_truth`
+Type: `geometry_msgs/msg/PoseArray`.
+
+Shuttle-only Gazebo truth. It may drive the simulation-only fake detector, but
+must not feed production mission logic directly.
+
+### `/evaluation/shuttle_collected`
+Type: `geometry_msgs/msg/PoseArray`.
+
+One-shot simulated shuttle collection events.
+
+## Timing and QoS
+
+All simulation nodes use `use_sim_time: true` and Gazebo `/clock`.
+High-rate image, depth, scan, and raw detection streams use sensor-data QoS /
+Best Effort unless a specific consumer requires otherwise.
