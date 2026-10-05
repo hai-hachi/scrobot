@@ -389,6 +389,12 @@ class TagApproachController(Node):
             '/debug/tag_controller/reference_path',
             path_qos,
         )
+
+        self.goal_pose_pub = self.create_publisher(
+            PoseStamped,
+            '/debug/tag_controller/goal_pose',
+            path_qos,
+        )
         self.detection_sub = self.create_subscription(
             AprilTagDetectionArray,
             self.detections_topic,
@@ -694,7 +700,16 @@ class TagApproachController(Node):
             self.last_face_angle = candidate['face_angle']
 
             # Safe to filter now because the tag ID cannot switch.
-            if self.goal_pose is None:
+            #
+            # For biarc_smc, freeze the final pose once the reference path has
+            # been generated. Otherwise the measured goal would continue
+            # moving while the already-published path endpoint remained fixed.
+            if (
+                self.control_strategy == 'biarc_smc'
+                and self.reference_path
+            ):
+                pass
+            elif self.goal_pose is None:
                 self.goal_pose = [
                     candidate['goal_x'],
                     candidate['goal_y'],
@@ -1266,6 +1281,25 @@ class TagApproachController(Node):
 
         return best['path']
 
+    def _publish_goal_pose(self, goal_pose):
+        if goal_pose is None:
+            return
+
+        msg = PoseStamped()
+        msg.header.frame_id = self.odom_frame
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.pose.position.x = float(goal_pose[0])
+        msg.pose.position.y = float(goal_pose[1])
+        msg.pose.position.z = 0.03
+
+        q = quaternion_from_euler(0.0, 0.0, goal_pose[2])
+        msg.pose.orientation.x = float(q[0])
+        msg.pose.orientation.y = float(q[1])
+        msg.pose.orientation.z = float(q[2])
+        msg.pose.orientation.w = float(q[3])
+
+        self.goal_pose_pub.publish(msg)
+
     def _publish_reference_path(self):
         if not self.reference_path:
             return
@@ -1473,6 +1507,10 @@ class TagApproachController(Node):
             self.publish_cmd(0.0, 0.0)
             return
 
+        # RViz must show the exact goal used by this controller, in the same
+        # odom frame as the generated reference path.
+        self._publish_goal_pose(goal_pose)
+
         gx, gy, gyaw = goal_pose
 
         # --------------------------------------------------------
@@ -1541,8 +1579,21 @@ class TagApproachController(Node):
                 )
                 self.path_progress_index = 0
                 self._publish_reference_path()
+
+                endpoint = self.reference_path[-1]
+                endpoint_position_error = math.hypot(
+                    endpoint[0] - goal_pose[0],
+                    endpoint[1] - goal_pose[1],
+                )
+                endpoint_yaw_error = abs(
+                    angle_difference(endpoint[2], goal_pose[2])
+                )
+
                 self.get_logger().info(
-                    f'Biarc path generated: {len(self.reference_path)} poses.'
+                    f'Biarc path generated: {len(self.reference_path)} poses; '
+                    f'endpoint_error={endpoint_position_error:.6f} m, '
+                    f'endpoint_yaw_error='
+                    f'{math.degrees(endpoint_yaw_error):.6f} deg.'
                 )
 
             final_goal = self.reference_path[-1]
