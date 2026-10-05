@@ -180,7 +180,7 @@ Initial serious fine-tune recommendation:
 
 POST-YOLO PERCEPTION CLEANUP TODO
 --------------------------------
-[ ] Keep Jetson Orin as production compute reference in docs.
+[x] Keep Jetson Orin as production compute reference in docs.
 [x] Update scan HFOV to calibrated depth HFOV (~+/-0.78979 rad).
 [x] Set min_height = 0.12 m as single source of truth.
 [x] Remove launch/YAML conflict for min_height.
@@ -191,13 +191,13 @@ POST-YOLO PERCEPTION CLEANUP TODO
 [x] Verify scan self-mask remains valid with final base geometry.
 [x] Keep AprilTag configuration and interfaces.
 [x] Remove stale image_proc/rectification path/dependency.
-[ ] Verify simulated CameraInfo matches the already-recorded factory intrinsics.
+[x] Verify simulated CameraInfo matches the already-recorded factory intrinsics.
 [x] Keep shuttle_tracker disabled/optional.
 [x] Add final real YOLO + aligned-depth node.
 [x] Add scrobot_debug/launch/perception_check.launch.py.
 [x] Add/update scrobot_debug/debug_md/perception.md.
 [x] Add scrobot_perception/README.md architecture documentation.
-[ ] Update stale interface/docs that still show tracker as mandatory.
+[x] Update stale interface/docs that still show tracker as mandatory.
 [~] collision_monitor runtime validated with filtered /depth/scan during teleop/RViz test; Nav2 is configured for the same topic and will be runtime-validated with navigation/mission.
 
 
@@ -216,3 +216,16 @@ Validate the cleaned obstacle/depth perception path:
 - 0.30-3.30 m scan range
 - scan-level robot self-filter
 - collision_monitor and Nav2 consumption of /camera/camera/depth/scan
+
+
+CAMERAINFO VALIDATION — 2026-10-05
+----------------------------------
+[x] Color: 1280x720, fx=906.94, fy=906.94, cx=640.00, cy=360.00.
+[x] Depth: 848x480, fx=420.29, fy=420.29, cx=424.00, cy=240.00.
+[x] Values accepted as matching the intended simulated D435i calibration.
+
+PRODUCTION PERCEPTION LAUNCH
+----------------------------
+[x] perception.launch.py now optionally owns yolo_shuttle_detector.
+[x] perception_check.launch.py exercises the production perception composition
+    instead of launching a separate duplicate YOLO node.
