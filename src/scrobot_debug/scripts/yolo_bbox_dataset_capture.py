@@ -32,6 +32,7 @@ class NativeBBoxDatasetCapture(Node):
         self.declare_parameter('shuttle_count', 40)
         self.declare_parameter('random_seed', 42)
         self.declare_parameter('camera_height', 0.28683059)
+        self.declare_parameter('settle_time_s', 3.0)
         self.declare_parameter('camera_pitch_deg', 15.0)
         self.declare_parameter('min_focus_range', 0.50)
         self.declare_parameter('max_focus_range', 1.68)
@@ -48,6 +49,7 @@ class NativeBBoxDatasetCapture(Node):
         self.shuttle_count = max(1, int(self.get_parameter('shuttle_count').value))
         self.rng = random.Random(int(self.get_parameter('random_seed').value))
         self.camera_height = float(self.get_parameter('camera_height').value)
+        self.settle_time_s = max(0.0, float(self.get_parameter('settle_time_s').value))
         self.camera_pitch = math.radians(float(self.get_parameter('camera_pitch_deg').value))
         self.min_focus_range = float(self.get_parameter('min_focus_range').value)
         self.max_focus_range = float(self.get_parameter('max_focus_range').value)
@@ -55,7 +57,9 @@ class NativeBBoxDatasetCapture(Node):
         self.court_width = float(self.get_parameter('court_width').value)
 
         debug_share = Path(get_package_share_directory('scrobot_debug'))
-        self.shuttle_sdf = debug_share / 'models' / 'yolo_shuttle_visual' / 'model.sdf'
+        self.shuttle_sdf = (
+            debug_share / 'models' / 'yolo_shuttle_dynamic_labeled' / 'model.sdf'
+        )
 
         self.status_pub = self.create_publisher(
             String, str(self.get_parameter('status_topic').value), 10
@@ -70,6 +74,7 @@ class NativeBBoxDatasetCapture(Node):
         self.pending_pose = None
         self.pending_started_wall = None
         self.finished = False
+        self.settle_started_wall = None
 
         self._prepare_dirs()
         self.create_timer(0.05, self.step)
@@ -118,14 +123,18 @@ class NativeBBoxDatasetCapture(Node):
         for i in range(self.shuttle_count):
             x = self.rng.uniform(-half_l, half_l)
             y = self.rng.uniform(-half_w, half_w)
+            # Drop each shuttle slightly above the court with a random attitude.
+            # Physics then determines the final resting side/orientation.
+            roll = self.rng.uniform(-math.pi, math.pi)
+            pitch = self.rng.uniform(-math.pi, math.pi)
             yaw = self.rng.uniform(-math.pi, math.pi)
             cmd = [
                 'ros2','run','ros_gz_sim','create',
                 '-world',self.world_name,
                 '-name',f'yolo_shuttle_{i:03d}',
                 '-file',str(self.shuttle_sdf),
-                '-x',f'{x:.9f}','-y',f'{y:.9f}','-z','0.050',
-                '-R','0','-P',f'{math.pi/2:.9f}','-Y',f'{yaw:.9f}'
+                '-x',f'{x:.9f}','-y',f'{y:.9f}','-z','0.18',
+                '-R',f'{roll:.9f}','-P',f'{pitch:.9f}','-Y',f'{yaw:.9f}'
             ]
             r = self._run(cmd)
             if r.returncode != 0:
@@ -133,7 +142,8 @@ class NativeBBoxDatasetCapture(Node):
             self.shuttles.append((x,y))
 
         self.spawned = True
-        self._set_state('SCENE_READY')
+        self.settle_started_wall = time.perf_counter()
+        self._set_state('SETTLING_SHUTTLES')
 
     def _sample_camera_pose(self):
         sx, sy = self.rng.choice(self.shuttles)
@@ -259,6 +269,14 @@ class NativeBBoxDatasetCapture(Node):
             if not self.spawned:
                 self._spawn_scene()
                 return
+
+            if self.settle_started_wall is not None:
+                elapsed = time.perf_counter() - self.settle_started_wall
+                if elapsed < self.settle_time_s:
+                    self._set_state('SETTLING_SHUTTLES')
+                    return
+                self.settle_started_wall = None
+                self._set_state('SCENE_READY')
 
             if self.pending_raw_index is not None:
                 if self._convert_pending():
