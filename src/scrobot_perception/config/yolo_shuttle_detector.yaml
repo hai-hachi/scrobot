@@ -1,0 +1,46 @@
+yolo_shuttle_detector:
+  ros__parameters:
+    use_sim_time: false
+
+    # Leave empty in source. Supply with launch argument model_path:=... or
+    # environment variable SCROBOT_YOLO_MODEL.
+    model_path: ""
+
+    # Current pinned model was trained at 960 px.
+    device: "0"
+    imgsz: 960
+    confidence_threshold: 0.10
+    iou_threshold: 0.70
+    max_detection_rate: 15.0
+
+    color_topic: /camera/camera/color/image_raw
+    aligned_depth_topic: /camera/camera/aligned_depth_to_color/image_raw
+    camera_info_topic: /camera/camera/color/camera_info
+
+    output_2d_topic: /perception/shuttle_detections_2d
+    output_3d_topic: /perception/shuttle_detections_3d
+    debug_image_topic: /perception/shuttle_debug/image
+
+    yolo_class_index: 0
+    class_id: shuttle
+
+    # Camera-relative usable shuttle range selected for collection perception.
+    min_range: 0.50
+    max_range: 1.68
+
+    # Sample only the inner bbox region and bias toward the foreground. This
+    # reduces background-depth contamination for the thin shuttle geometry.
+    depth_roi_scale: 0.40
+    depth_percentile: 25.0
+    min_valid_depth_pixels: 4
+
+    # Approximate physical shuttle Detection3D bbox used by downstream code.
+    bbox_size_x: 0.08
+    bbox_size_y: 0.08
+    bbox_size_z: 0.10
+
+    sync_queue_size: 5
+    sync_slop: 0.08
+
+    publish_debug_image: false
+    stats_period: 5.0
