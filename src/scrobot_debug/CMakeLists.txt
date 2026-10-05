@@ -201,6 +201,13 @@ install(
 
 install(
   PROGRAMS
+    scripts/yolo_range_gate_monitor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME yolo_range_gate_monitor
+)
+
+install(
+  PROGRAMS
     scripts/perception_monitor.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME perception_monitor
