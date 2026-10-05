@@ -8,7 +8,7 @@ local_odom_logger:
     imu_topic: /imu/data
     joint_states_topic: /joint_states
 
-    requested_cmd_topic: /cmd_vel_manual_input_input
+    requested_cmd_topic: /cmd_vel_manual_input
     final_cmd_topic: /diff_drive_controller/cmd_vel
     test_state_topic: /evaluation/local_odom_test_state
 
@@ -22,7 +22,7 @@ local_odom_logger:
 
     # Keep generated evaluation data beside /src in the workspace,
     # outside the tracked repository tree.
-    output_root: /home/sea/scrobot_ws/evaluation_results/local_odom
+    output_root: ~/scrobot_ws/evaluation_results/local_odom
     run_name: ""
     flush_every_samples: 50
 
@@ -30,7 +30,7 @@ local_odom_logger:
 local_odom_test_runner:
   ros__parameters:
     test_type: suite
-    cmd_topic: /cmd_vel_manual
+    cmd_topic: /cmd_vel_manual_input
     state_topic: /evaluation/local_odom_test_state
     base_frame: base_footprint
     manage_manual_mode: true
