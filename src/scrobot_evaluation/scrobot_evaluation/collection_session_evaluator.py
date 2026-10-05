@@ -672,6 +672,11 @@ class CollectionSessionEvaluator(Node):
         if self.pass_start_time is not None:
             self._finish_collection_pass(self.end_time)
 
+        # By COMPLETE / ERROR the last local-collect target has had ample time
+        # to propagate through Gazebo ground truth. Resolve anything still
+        # pending so the summary cannot silently omit a failed pickup.
+        self._process_capture_checks(self.end_time, force=True)
+
         if self.state_enter_time is not None and self.state not in ('UNKNOWN', 'IDLE'):
             self.state_durations[self.state] += max(
                 0.0, self.end_time - self.state_enter_time
@@ -705,6 +710,7 @@ class CollectionSessionEvaluator(Node):
             self.state_file,
             self.phase_file,
             self.collection_file,
+            self.capture_file,
         ):
             handle.flush()
 
@@ -733,6 +739,8 @@ class CollectionSessionEvaluator(Node):
                 'remaining_near_poles', 'remaining_eligible',
                 'overall_collection_rate_percent', 'eligible_collection_rate_percent',
                 'collection_passes',
+                'capture_checks_started', 'capture_checks_passed',
+                'capture_checks_failed',
                 'ground_truth_path_m', 'estimated_path_m', 'path_length_error_m',
                 'position_rmse_m', 'distance_per_collected_m', 'time_per_collected_s',
                 'fixed_relocalizations', 'fixed_relocalization_time_s',
@@ -753,6 +761,9 @@ class CollectionSessionEvaluator(Node):
                 self.overall_collection_rate_percent(),
                 self.eligible_collection_rate_percent(),
                 self.collection_passes,
+                self.capture_checks_started,
+                self.capture_checks_passed,
+                self.capture_checks_failed,
                 self.gt_distance,
                 self.est_distance,
                 path_error,
@@ -774,6 +785,9 @@ class CollectionSessionEvaluator(Node):
             f'{self.eligible_shuttles()} eligible, '
             f'eligible_rate={self.eligible_collection_rate_percent():.1f}%, '
             f'GT distance={self.gt_distance:.1f}m, '
+            f'capture_checks={self.capture_checks_passed}/'
+            f'{self.capture_checks_started} passed '
+            f'(failed={self.capture_checks_failed}), '
             f'event_crosscheck={self.collection_event_count} '
             f'(delta={event_delta:+d}).'
         )
@@ -787,6 +801,7 @@ class CollectionSessionEvaluator(Node):
             self.state_file,
             self.phase_file,
             self.collection_file,
+            self.capture_file,
         ):
             if not handle.closed:
                 handle.close()
