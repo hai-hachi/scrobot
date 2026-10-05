@@ -208,6 +208,13 @@ install(
 
 install(
   PROGRAMS
+    scripts/yolo_multi_shuttle_monitor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME yolo_multi_shuttle_monitor
+)
+
+install(
+  PROGRAMS
     scripts/perception_monitor.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME perception_monitor
