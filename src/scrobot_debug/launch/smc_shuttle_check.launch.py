@@ -211,10 +211,18 @@ def generate_launch_description():
             description='Launch shuttle SMC RViz debug view.',
         ),
 
-        # Far enough to observe SMC convergence while remaining inside the
-        # validated YOLO depth range.
-        DeclareLaunchArgument('shuttle_x', default_value='1.50'),
-        DeclareLaunchArgument('shuttle_y', default_value='0.30'),
+        # Explicit world-frame shuttle placement for SMC trajectory tests.
+        # Keep the resulting detected base_link range inside about 0.50..1.80 m.
+        DeclareLaunchArgument(
+            'shuttle_x',
+            default_value='1.50',
+            description='Single shuttle world X position [m].',
+        ),
+        DeclareLaunchArgument(
+            'shuttle_y',
+            default_value='0.30',
+            description='Single shuttle world Y position [m].',
+        ),
 
         DeclareLaunchArgument('perception_delay', default_value='3.0'),
         DeclareLaunchArgument('stack_delay', default_value='4.0'),

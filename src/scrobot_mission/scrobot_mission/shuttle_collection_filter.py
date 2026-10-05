@@ -25,7 +25,8 @@ class ShuttleCollectionFilter(Node):
     """Publish only shuttles that are eligible for local collection.
 
     Eligibility is intentionally mission-specific and separate from perception:
-      * target must be within max_target_range of the robot;
+      * target must be between min_target_range and max_target_range;
+      * range is evaluated in base_link;
       * target must stay outside the exclusion radius around either net pole.
 
     The output detections keep their original frame and measurement so the
@@ -44,7 +45,8 @@ class ShuttleCollectionFilter(Node):
         self.declare_parameter('base_frame', 'base_link')
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('tf_timeout', 0.05)
-        self.declare_parameter('max_target_range', 2.0)
+        self.declare_parameter('min_target_range', 0.50)
+        self.declare_parameter('max_target_range', 1.80)
         self.declare_parameter('pole_x', 0.0)
         self.declare_parameter('pole_y_positions', [3.05, -3.05])
         self.declare_parameter('pole_exclusion_radius', 0.60)
@@ -54,8 +56,12 @@ class ShuttleCollectionFilter(Node):
         self.base_frame = str(self.get_parameter('base_frame').value)
         self.map_frame = str(self.get_parameter('map_frame').value)
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
-        self.max_target_range = float(
-            self.get_parameter('max_target_range').value
+        self.min_target_range = max(
+            0.0, float(self.get_parameter('min_target_range').value)
+        )
+        self.max_target_range = max(
+            self.min_target_range,
+            float(self.get_parameter('max_target_range').value),
         )
         self.pole_x = float(self.get_parameter('pole_x').value)
         self.pole_y_positions = [
@@ -83,7 +89,8 @@ class ShuttleCollectionFilter(Node):
         self.last_summary = None
         self.get_logger().info(
             'Shuttle collection filter started: '
-            f'range <= {self.max_target_range:.2f} m, '
+            f'base_link range = {self.min_target_range:.2f}..'
+            f'{self.max_target_range:.2f} m, '
             f'pole exclusion = {self.pole_exclusion_radius:.2f} m.'
         )
 
@@ -137,6 +144,7 @@ class ShuttleCollectionFilter(Node):
         else:
             map_tf = self._lookup(self.map_frame, source_frame)
 
+        near_count = 0
         far_count = 0
         pole_count = 0
         tf_count = 0
@@ -155,6 +163,9 @@ class ShuttleCollectionFilter(Node):
                     point_base = self._transform_point(base_tf, source_frame, point)
 
                 robot_range = math.hypot(point_base[0], point_base[1])
+                if robot_range < self.min_target_range:
+                    near_count += 1
+                    continue
                 if robot_range > self.max_target_range:
                     far_count += 1
                     continue
@@ -175,6 +186,7 @@ class ShuttleCollectionFilter(Node):
         summary = (
             len(msg.detections),
             len(output.detections),
+            near_count,
             far_count,
             pole_count,
             tf_count,
@@ -184,7 +196,8 @@ class ShuttleCollectionFilter(Node):
             self.get_logger().info(
                 'Collection candidates: '
                 f'raw={summary[0]}, eligible={summary[1]}, '
-                f'far={summary[2]}, near_pole={summary[3]}, tf_drop={summary[4]}'
+                f'too_near={summary[2]}, far={summary[3]}, '
+                f'near_pole={summary[4]}, tf_drop={summary[5]}'
             )
 
 

@@ -6,9 +6,11 @@ shuttle_collection_filter:
     map_frame: map
     tf_timeout: 0.05
 
-    # Only leave the sweep for nearby shuttles. Farther shuttles will be picked
-    # up naturally on a later sweep pass instead of causing long out-and-back trips.
-    max_target_range: 2.00
+    # Current validated YOLO/depth operating envelope for local collection.
+    # Range is evaluated after transforming the detected point to base_link,
+    # regardless of the original camera/detection frame.
+    min_target_range: 0.50
+    max_target_range: 1.80
 
     # Ignore shuttles close to either badminton-net pole.
     pole_x: 0.0
@@ -47,6 +49,10 @@ local_collect_controller:
     base_standoff_distance: 1.10
     precollect_position_tolerance: 0.03
     precollect_yaw_tolerance_deg: 5.0
+
+    # Prevent an oscillating heading from triggering straight collection just
+    # because it crosses the yaw tolerance for one control sample.
+    precollect_stable_time: 0.25
 
     # After the pose phase, collection is intentionally straight.
     straight_collect_speed: 0.30
