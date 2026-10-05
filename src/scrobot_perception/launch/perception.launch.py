@@ -2,7 +2,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, LogInfo
+from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -12,9 +12,6 @@ def generate_launch_description():
     params = os.path.join(perception_pkg, 'config', 'perception.yaml')
 
     use_sim_time = LaunchConfiguration('use_sim_time')
-    min_height = LaunchConfiguration('min_height')
-    max_height = LaunchConfiguration('max_height')
-
     apriltag = Node(
         package='apriltag_ros',
         executable='apriltag_node',
@@ -46,11 +43,7 @@ def generate_launch_description():
         output='screen',
         parameters=[
             params,
-            {
-                'use_sim_time': use_sim_time,
-                'min_height': min_height,
-                'max_height': max_height,
-            },
+            {'use_sim_time': use_sim_time},
         ],
         remappings=[
             ('cloud_in', '/camera/camera/depth/points'),
@@ -64,17 +57,6 @@ def generate_launch_description():
             default_value='true',
             choices=['true', 'false'],
         ),
-        DeclareLaunchArgument(
-            'min_height',
-            default_value='0.08',
-            description='Minimum obstacle height in base_footprint [m].',
-        ),
-        DeclareLaunchArgument(
-            'max_height',
-            default_value='0.70',
-            description='Maximum obstacle height in base_footprint [m].',
-        ),
-        LogInfo(msg=['Perception scan height band: ', min_height, ' to ', max_height, ' m']),
         apriltag,
         depth_scan_self_filter,
         pointcloud_to_scan,
