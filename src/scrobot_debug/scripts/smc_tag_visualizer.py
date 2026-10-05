@@ -55,9 +55,10 @@ class SmcTagVisualizer(Node):
     def __init__(self):
         super().__init__('smc_tag_visualizer')
 
+        self.declare_parameter('map_frame', 'map')
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_footprint')
-        self.declare_parameter('observed_tag_prefix', 'observed_tag_')
+        self.declare_parameter('mount_frame_prefix', 'tag_mount_')
         self.declare_parameter('tag_id', 0)
         self.declare_parameter('target_distance', 0.80)
         self.declare_parameter('tag_size', 0.10)
@@ -67,10 +68,11 @@ class SmcTagVisualizer(Node):
         self.declare_parameter('path_min_yaw_deg', 1.0)
         self.declare_parameter('max_path_poses', 2500)
 
+        self.map_frame = str(self.get_parameter('map_frame').value)
         self.odom_frame = str(self.get_parameter('odom_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
-        self.observed_tag_prefix = str(
-            self.get_parameter('observed_tag_prefix').value
+        self.mount_frame_prefix = str(
+            self.get_parameter('mount_frame_prefix').value
         )
         self.tag_id = int(self.get_parameter('tag_id').value)
         self.target_distance = float(
@@ -91,13 +93,6 @@ class SmcTagVisualizer(Node):
         )
         self.max_path_poses = max(
             100, int(self.get_parameter('max_path_poses').value)
-        )
-
-        # apriltag_ros PnP frame -> physical tag mount convention used by the
-        # localization/approach nodes.
-        self.T_mount_apriltag = xyz_rpy_to_matrix(
-            [0.0, 0.0, 0.0],
-            [-math.pi / 2.0, 0.0, -math.pi / 2.0],
         )
 
         latched_qos = QoSProfile(
@@ -149,7 +144,7 @@ class SmcTagVisualizer(Node):
         self.get_logger().info(
             'SMC tag RViz helper ready: '
             f'tag={self.tag_id}, camera goal={self.target_distance:.2f} m, '
-            'fixed frame=odom.'
+            'fixed frame=map.'
         )
 
     @staticmethod
@@ -201,42 +196,41 @@ class SmcTagVisualizer(Node):
         self.path_pub.publish(self.path)
 
     def _publish_target_geometry(self):
-        observed_tag_frame = self.observed_tag_prefix + str(self.tag_id)
+        mount_frame = self.mount_frame_prefix + str(self.tag_id)
 
         try:
-            tf_odom_april = self.tf_buffer.lookup_transform(
-                self.odom_frame,
-                observed_tag_frame,
+            tf_map_mount = self.tf_buffer.lookup_transform(
+                self.map_frame,
+                mount_frame,
                 Time(),
                 timeout=Duration(seconds=0.02),
             )
         except TransformException:
             return
 
-        T_odom_april = transform_to_matrix(tf_odom_april.transform)
-        T_odom_mount = T_odom_april @ inverse_matrix(self.T_mount_apriltag)
+        T_map_mount = transform_to_matrix(tf_map_mount.transform)
 
-        # The desired pose is intentionally shown at the COLOR CAMERA itself:
-        # target_distance metres on the visible face normal, facing the tag.
+        # Show the ideal COLOR CAMERA pose target directly from the known court
+        # tag geometry. This is available before AprilTag detection starts.
         T_mount_camera_goal = xyz_rpy_to_matrix(
             [self.target_distance, 0.0, 0.0],
             [0.0, 0.0, math.pi],
         )
-        T_odom_camera_goal = T_odom_mount @ T_mount_camera_goal
+        T_map_camera_goal = T_map_mount @ T_mount_camera_goal
 
         now = self.get_clock().now().to_msg()
 
         tag_marker = Marker()
-        tag_marker.header.frame_id = self.odom_frame
+        tag_marker.header.frame_id = self.map_frame
         tag_marker.header.stamp = now
         tag_marker.ns = 'smc_tag'
         tag_marker.id = 0
         tag_marker.type = Marker.CUBE
         tag_marker.action = Marker.ADD
-        tag_marker.pose.position.x = float(T_odom_mount[0, 3])
-        tag_marker.pose.position.y = float(T_odom_mount[1, 3])
-        tag_marker.pose.position.z = float(T_odom_mount[2, 3])
-        tag_q = quaternion_from_matrix(T_odom_mount)
+        tag_marker.pose.position.x = float(T_map_mount[0, 3])
+        tag_marker.pose.position.y = float(T_map_mount[1, 3])
+        tag_marker.pose.position.z = float(T_map_mount[2, 3])
+        tag_q = quaternion_from_matrix(T_map_mount)
         tag_marker.pose.orientation.x = float(tag_q[0])
         tag_marker.pose.orientation.y = float(tag_q[1])
         tag_marker.pose.orientation.z = float(tag_q[2])
@@ -252,12 +246,12 @@ class SmcTagVisualizer(Node):
         self.tag_pub.publish(tag_marker)
 
         goal = PoseStamped()
-        goal.header.frame_id = self.odom_frame
+        goal.header.frame_id = self.map_frame
         goal.header.stamp = now
-        goal.pose.position.x = float(T_odom_camera_goal[0, 3])
-        goal.pose.position.y = float(T_odom_camera_goal[1, 3])
+        goal.pose.position.x = float(T_map_camera_goal[0, 3])
+        goal.pose.position.y = float(T_map_camera_goal[1, 3])
         goal.pose.position.z = 0.03
-        goal_q = quaternion_from_matrix(T_odom_camera_goal)
+        goal_q = quaternion_from_matrix(T_map_camera_goal)
         goal.pose.orientation.x = float(goal_q[0])
         goal.pose.orientation.y = float(goal_q[1])
         goal.pose.orientation.z = float(goal_q[2])
