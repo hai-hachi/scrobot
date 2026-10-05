@@ -29,7 +29,6 @@ def generate_launch_description():
 
     perception_delay = LaunchConfiguration('perception_delay')
     shuttle_delay = LaunchConfiguration('shuttle_delay')
-    yolo_delay = LaunchConfiguration('yolo_delay')
     monitor_delay = LaunchConfiguration('monitor_delay')
 
     simulation = IncludeLaunchDescription(
@@ -64,28 +63,6 @@ def generate_launch_description():
             'x': shuttle_x,
             'y': shuttle_y,
         }.items(),
-    )
-
-    yolo_params = os.path.join(
-        perception_pkg,
-        'config',
-        'yolo_shuttle_detector.yaml',
-    )
-
-    yolo = Node(
-        package='scrobot_perception',
-        executable='yolo_shuttle_detector',
-        name='yolo_shuttle_detector',
-        output='screen',
-        parameters=[
-            yolo_params,
-            {
-                'use_sim_time': use_sim_time,
-                'model_path': model_path,
-                'device': device,
-                'publish_debug_image': publish_debug_image,
-            },
-        ],
     )
 
     monitor = Node(
@@ -140,11 +117,9 @@ def generate_launch_description():
         DeclareLaunchArgument('shuttle_y', default_value='0.00'),
         DeclareLaunchArgument('perception_delay', default_value='3.0'),
         DeclareLaunchArgument('shuttle_delay', default_value='4.0'),
-        DeclareLaunchArgument('yolo_delay', default_value='5.0'),
         DeclareLaunchArgument('monitor_delay', default_value='6.0'),
         simulation,
         TimerAction(period=perception_delay, actions=[production_perception]),
         TimerAction(period=shuttle_delay, actions=[spawn_shuttle]),
-        TimerAction(period=yolo_delay, actions=[yolo]),
         TimerAction(period=monitor_delay, actions=[monitor, rviz]),
     ])
