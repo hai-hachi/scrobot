@@ -85,8 +85,10 @@ class YoloShuttleDetector(Node):
         self.declare_parameter("class_id", "shuttle")
         self.declare_parameter("yolo_class_index", 0)
 
-        self.declare_parameter("min_range", 0.50)
-        self.declare_parameter("max_range", 1.68)
+        # Camera-depth validity only. Mission collection eligibility is
+        # evaluated later in base_link by shuttle_collection_filter.
+        self.declare_parameter("min_depth_range", 0.20)
+        self.declare_parameter("max_depth_range", 3.00)
         self.declare_parameter("depth_roi_scale", 0.40)
         self.declare_parameter("depth_percentile", 25.0)
         self.declare_parameter("min_valid_depth_pixels", 4)
@@ -150,8 +152,12 @@ class YoloShuttleDetector(Node):
             self.get_parameter("yolo_class_index").value
         )
 
-        self.min_range = float(self.get_parameter("min_range").value)
-        self.max_range = float(self.get_parameter("max_range").value)
+        self.min_depth_range = float(
+            self.get_parameter("min_depth_range").value
+        )
+        self.max_depth_range = float(
+            self.get_parameter("max_depth_range").value
+        )
         self.depth_roi_scale = float(
             self.get_parameter("depth_roi_scale").value
         )
@@ -183,8 +189,13 @@ class YoloShuttleDetector(Node):
             raise ValueError("iou_threshold must be in (0, 1]")
         if self.max_detection_rate <= 0.0:
             raise ValueError("max_detection_rate must be > 0")
-        if self.min_range <= 0.0 or self.max_range <= self.min_range:
-            raise ValueError("invalid min_range / max_range")
+        if (
+            self.min_depth_range <= 0.0
+            or self.max_depth_range <= self.min_depth_range
+        ):
+            raise ValueError(
+                "invalid min_depth_range / max_depth_range"
+            )
         if not 0.0 < self.depth_roi_scale <= 1.0:
             raise ValueError("depth_roi_scale must be in (0, 1]")
         if not 0.0 <= self.depth_percentile <= 100.0:
@@ -255,7 +266,8 @@ class YoloShuttleDetector(Node):
             "YOLO shuttle detector ready: "
             f"imgsz={self.imgsz}, conf={self.conf_threshold:.2f}, "
             f"device={self.device}, rate<={self.max_detection_rate:.1f} Hz, "
-            f"range={self.min_range:.2f}-{self.max_range:.2f} m"
+            f"camera_depth_valid={self.min_depth_range:.2f}-"
+            f"{self.max_depth_range:.2f} m"
         )
         self.get_logger().info(
             f"RGB={self.color_topic}, aligned_depth={self.depth_topic}, "
@@ -449,8 +461,8 @@ class YoloShuttleDetector(Node):
         roi = depth_m[iy0:iy1, ix0:ix1]
         valid = roi[
             np.isfinite(roi)
-            & (roi >= self.min_range)
-            & (roi <= self.max_range)
+            & (roi >= self.min_depth_range)
+            & (roi <= self.max_depth_range)
         ]
 
         if valid.size < self.min_valid_depth_pixels:
