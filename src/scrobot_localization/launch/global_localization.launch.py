@@ -13,6 +13,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     tag_position_tolerance = LaunchConfiguration('tag_position_tolerance')
     tag_yaw_tolerance_deg = LaunchConfiguration('tag_yaw_tolerance_deg')
+    tag_control_strategy = LaunchConfiguration('tag_control_strategy')
 
     # Exactly one node owns /relocalize and map -> odom.
     global_localizer = Node(package='scrobot_localization', executable='tag_global_localizer.py', name='tag_global_localizer', output='screen', parameters=[params, {'use_sim_time': use_sim_time}])
@@ -35,6 +36,7 @@ def generate_launch_description():
                     tag_yaw_tolerance_deg,
                     value_type=float,
                 ),
+                'control_strategy': tag_control_strategy,
             },
         ],
     )
@@ -52,7 +54,18 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'tag_yaw_tolerance_deg',
             default_value='5.0',
-            description='AprilTag SMC heading tolerance [deg].',
+            description='AprilTag desired-heading tolerance [deg].',
+        ),
+        DeclareLaunchArgument(
+            'tag_control_strategy',
+            default_value='pure_smc',
+            choices=[
+                'pure_smc',
+                'main_branch',
+                'biarc_smc',
+                'normal_ray_smc',
+            ],
+            description='AprilTag local approach strategy.',
         ),
         global_localizer,
         approach_controller,
