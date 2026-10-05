@@ -230,24 +230,24 @@ class FastYoloDatasetCapture(Node):
         sim_share = Path(get_package_share_directory('scrobot_simulation'))
         debug_share = Path(get_package_share_directory('scrobot_debug'))
 
-        # Render the detailed shuttle.STL in Gazebo, but label from the accepted
-        # low-poly octagonal envelope. Projecting the detailed mesh meant
-        # 156,846 vertex records per shuttle, i.e. >6.2 million Python vertex
-        # projections per image with 40 shuttles.
-        label_vertices = load_stl_vertices(
-            sim_share / 'models' / 'shuttle' / 'meshes'
-            / 'shuttle_collision_octagonal.stl'
+        # Use the exact visual mesh for labels, but deduplicate its triangle
+        # vertices and keep all projection math vectorized. We first reject
+        # shuttles whose centers are outside the RGB FOV, so only potentially
+        # visible shuttles pay the detailed projection cost.
+        visual_vertices = load_stl_vertices(
+            sim_share / 'models' / 'shuttle' / 'meshes' / 'shuttle.STL'
         )
-        self.label_mesh_vertices = np.unique(label_vertices, axis=0)
+        self.label_mesh_vertices = np.unique(visual_vertices, axis=0)
         self.get_logger().info(
-            f'Label envelope vertices: {len(self.label_mesh_vertices)} '
-            '(detailed visual mesh remains unchanged in Gazebo)'
+            f'Exact visual-label vertices: {len(self.label_mesh_vertices)} '
+            '(deduplicated shuttle.STL)'
         )
         self.static_shuttle_sdf = (
             debug_share / 'models' / 'yolo_shuttle_visual' / 'model.sdf'
         )
 
         self.latest_image = None
+        self.image_seq = 0
         self.camera_info = None
         self.shuttles = []
         self.scene_spawned = False
@@ -286,6 +286,8 @@ class FastYoloDatasetCapture(Node):
         self.wait_rgb_wall_start = None
         self.last_trigger_wall_time = None
         self.trigger_retry_count = 0
+        self.trigger_phase = 'idle'
+        self.trigger_image_seq = 0
 
         self._prepare_output()
 
@@ -345,10 +347,12 @@ class FastYoloDatasetCapture(Node):
                     'boxes',
                     'focus_boxes',
                     'group_key',
+                    'image_seq',
                 ])
 
     def image_cb(self, msg):
         self.latest_image = msg
+        self.image_seq += 1
 
     def camera_info_cb(self, msg):
         if msg.width > 0 and msg.height > 0 and len(msg.k) >= 9:
@@ -598,12 +602,18 @@ class FastYoloDatasetCapture(Node):
         self.teleport_stamp_ns = self.get_clock().now().nanoseconds
         self.trigger_retry_count = 0
 
+        # Gazebo set_pose may return before Ogre has consumed the new scene pose.
+        # The first triggered image can therefore still show the previous camera
+        # viewpoint. Always request one flush frame and discard it. Only a second
+        # fresh frame is eligible for saving.
+        self.trigger_phase = 'flush'
+        self.trigger_image_seq = self.image_seq
         if not self._trigger_camera():
             return False
 
         self.waiting_for_fresh_frame = True
         self.wait_rgb_wall_start = time.perf_counter()
-        self._set_state('WAITING_FOR_TRIGGERED_RGB')
+        self._set_state('WAITING_FOR_POSE_FLUSH_RGB')
         return True
 
     def _next_view(self):
@@ -639,8 +649,19 @@ class FastYoloDatasetCapture(Node):
         center_cam = world_to_camera_r @ center_delta
         center_range = float(np.linalg.norm(center_cam))
 
-        # Fast center/FOV rejection before touching the envelope vertices.
+        # Fast center/FOV rejection before touching the detailed visual mesh.
+        # Keep a generous margin so partially visible shuttles are not culled.
         if center_cam[2] <= 0.02:
+            return None
+        u_center = fx * center_cam[0] / center_cam[2] + cx
+        v_center = fy * center_cam[1] / center_cam[2] + cy
+        margin_px = 180.0
+        if (
+            u_center < -margin_px
+            or u_center > float(info.width) + margin_px
+            or v_center < -margin_px
+            or v_center > float(info.height) + margin_px
+        ):
             return None
 
         points_cam = (
@@ -777,6 +798,7 @@ class FastYoloDatasetCapture(Node):
                 len(boxes),
                 focus_boxes,
                 group_key,
+                self.image_seq,
             ])
 
         self.last_timings['write_ms'] = (
@@ -833,23 +855,29 @@ class FastYoloDatasetCapture(Node):
 
         if self.trigger_retry_count < self.max_trigger_retries:
             self.trigger_retry_count += 1
-            self._set_state('RETRIGGERING_RGB')
+            phase_name = self.trigger_phase.upper()
+            self._set_state(f'RETRIGGERING_{phase_name}_RGB')
             self.get_logger().warning(
-                f'No fresh RGB after {elapsed:.2f}s; '
+                f'No fresh {self.trigger_phase} RGB after {elapsed:.2f}s; '
                 f'retrigger {self.trigger_retry_count}/{self.max_trigger_retries}'
             )
+            self.trigger_image_seq = self.image_seq
             if self._trigger_camera():
-                self._set_state('WAITING_FOR_TRIGGERED_RGB')
+                if self.trigger_phase == 'flush':
+                    self._set_state('WAITING_FOR_POSE_FLUSH_RGB')
+                else:
+                    self._set_state('WAITING_FOR_CAPTURE_RGB')
             return True
 
         self.get_logger().warning(
-            f'No fresh RGB after {self.max_trigger_retries} retriggers; '
-            'skipping this viewpoint.'
+            f'No fresh {self.trigger_phase} RGB after '
+            f'{self.max_trigger_retries} retriggers; skipping this viewpoint.'
         )
         self.waiting_for_fresh_frame = False
         self.wait_rgb_wall_start = None
         self.last_trigger_wall_time = None
         self.trigger_retry_count = 0
+        self.trigger_phase = 'idle'
         self._set_state('RGB_TIMEOUT_SKIP_VIEW')
         return True
 
@@ -875,13 +903,41 @@ class FastYoloDatasetCapture(Node):
             self._next_view()
             return
 
-        if self._image_stamp_ns(self.latest_image) <= self.teleport_stamp_ns:
-            self._set_state('WAITING_FOR_TRIGGERED_RGB')
+        if self.image_seq <= self.trigger_image_seq:
+            if self.trigger_phase == 'flush':
+                self._set_state('WAITING_FOR_POSE_FLUSH_RGB')
+            else:
+                self._set_state('WAITING_FOR_CAPTURE_RGB')
             self._recover_missing_triggered_frame()
             return
 
+        if self.trigger_phase == 'flush':
+            # Discard the first post-teleport render. Its timestamp may be new
+            # even if Ogre rendered it from the previous camera transform.
+            self.trigger_phase = 'capture'
+            self.trigger_retry_count = 0
+            self.trigger_image_seq = self.image_seq
+            self._set_state('POSE_FLUSHED_TRIGGERING_CAPTURE')
+            if not self._trigger_camera():
+                self.waiting_for_fresh_frame = False
+                self.trigger_phase = 'idle'
+                return
+            self._set_state('WAITING_FOR_CAPTURE_RGB')
+            return
+
+        if self.trigger_phase != 'capture':
+            self.get_logger().warning(
+                f'Unexpected trigger phase {self.trigger_phase}; skipping view.'
+            )
+            self.waiting_for_fresh_frame = False
+            self.trigger_phase = 'idle'
+            return
+
+        # This is the second fresh frame after the teleport and is the only
+        # frame paired with labels from the commanded camera pose.
         self.last_trigger_wall_time = None
         self.trigger_retry_count = 0
+        self.trigger_phase = 'idle'
         self._set_state('SAVING_FRAME')
         self._save_current_frame()
 
