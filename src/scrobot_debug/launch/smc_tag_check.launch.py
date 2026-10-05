@@ -45,6 +45,7 @@ def generate_launch_description():
     visualizer_delay = LaunchConfiguration('visualizer_delay')
     rviz_delay = LaunchConfiguration('rviz_delay')
     approach_delay = LaunchConfiguration('approach_delay')
+    approach_timeout = LaunchConfiguration('approach_timeout')
 
     simulation = include(
         'scrobot_simulation',
@@ -156,10 +157,11 @@ def generate_launch_description():
     def send_approach(context):
         tag_id = preferred_tag_id.perform(context)
         distance = target_distance.perform(context)
+        timeout = approach_timeout.perform(context)
         goal = (
             '{preferred_tag_id: ' + tag_id
             + ', target_distance: ' + distance
-            + ', timeout_sec: 30.0}'
+            + ', timeout_sec: ' + timeout + '}'
         )
         return [
             ExecuteProcess(
@@ -255,6 +257,11 @@ def generate_launch_description():
         DeclareLaunchArgument('visualizer_delay', default_value='4.5'),
         DeclareLaunchArgument('rviz_delay', default_value='5.5'),
         DeclareLaunchArgument('approach_delay', default_value='8.0'),
+        DeclareLaunchArgument(
+            'approach_timeout',
+            default_value='60.0',
+            description='Approach action timeout [s].',
+        ),
 
         simulation,
         TimerAction(
