@@ -110,7 +110,7 @@ class TagApproachController(Node):
         self.declare_parameter('cmd_vel_topic', '/cmd_vel_relocalization')
 
         self.declare_parameter('min_decision_margin', 10.0)
-        self.declare_parameter('max_detection_distance', 9.0)
+        self.declare_parameter('max_detection_distance', 10.0)
         self.declare_parameter('default_target_distance', 0.80)
         self.declare_parameter('default_timeout', 60.0)
         self.declare_parameter('tag_lost_timeout', 1.0)
