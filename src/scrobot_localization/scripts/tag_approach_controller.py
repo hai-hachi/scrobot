@@ -154,6 +154,7 @@ class TagApproachController(Node):
         self.declare_parameter('biarc_d1_factor_min', 0.15)
         self.declare_parameter('biarc_d1_factor_max', 6.0)
         self.declare_parameter('biarc_d1_factor_samples', 81)
+        self.declare_parameter('biarc_max_arc_sweep_deg', 175.0)
 
         # Deliberately simple normal-ray baseline.
         self.declare_parameter('ray_position_tolerance', 0.12)
@@ -272,6 +273,19 @@ class TagApproachController(Node):
         )
         self.biarc_d1_factor_samples = max(
             3, int(self.get_parameter('biarc_d1_factor_samples').value)
+        )
+        self.biarc_max_arc_sweep = math.radians(
+            max(
+                90.0,
+                min(
+                    179.9,
+                    float(
+                        self.get_parameter(
+                            'biarc_max_arc_sweep_deg'
+                        ).value
+                    ),
+                ),
+            )
         )
 
         self.ray_position_tolerance = max(
@@ -910,16 +924,19 @@ class TagApproachController(Node):
                 }
             return None
 
-        # For the positive-d1/d2 biarc family we want the SHORT arc.
-        # 2*half_sweep can lie outside [-pi, pi], which selects the long way
-        # around the same circle and can send the path far outside the court.
-        # Wrapping the sweep preserves the same endpoint/tangent (difference
-        # is an integer 2*pi) while selecting the short circular arc.
-        raw_sweep = 2.0 * half_sweep
-        sweep = wrap_angle(raw_sweep)
+        # IMPORTANT: do not wrap a forward sweep into [-pi, pi].
+        #
+        # For a forward-moving circle, sign(sweep) must match sign(radius).
+        # Example: a valid +270 deg left-turn arc has the same endpoint
+        # position/orientation as a -90 deg geometric arc, but replacing
+        # +270 deg by -90 deg reverses the direction of travel relative to the
+        # stored tangent. That was the source of the wrong-side biarc bow.
+        #
+        # Keep the physically consistent signed sweep here. Compactness is
+        # handled later by rejecting biarc candidates whose individual arcs
+        # exceed biarc_max_arc_sweep.
+        sweep = 2.0 * half_sweep
 
-        # A wrapped sweep of ~0 would be the degenerate full-circle branch,
-        # which is not a useful positive-distance biarc segment.
         if abs(sweep) < 1e-8:
             return None
 
@@ -1161,6 +1178,18 @@ class TagApproachController(Node):
             for px, py, pyaw in reversed(second_reverse)
         ]
 
+        forward_sweep_1 = geometry_1['sweep']
+        forward_sweep_2 = -geometry_2_reverse['sweep']
+
+        # This experiment is meant to produce a compact tangent path, not a
+        # loop around the court. Reject any branch requiring an individual arc
+        # close to or beyond 180 deg, then continue searching the biarc family.
+        if (
+            abs(forward_sweep_1) > self.biarc_max_arc_sweep
+            or abs(forward_sweep_2) > self.biarc_max_arc_sweep
+        ):
+            return None
+
         join_yaw_error = abs(
             angle_difference(first[-1][2], second[0][2])
         )
@@ -1219,8 +1248,8 @@ class TagApproachController(Node):
             'length': length,
             'deviation': deviation,
             'min_radius': min_radius,
-            'sweep_1': geometry_1['sweep'],
-            'sweep_2': -geometry_2_reverse['sweep'],
+            'sweep_1': forward_sweep_1,
+            'sweep_2': forward_sweep_2,
         }
 
     def _build_biarc_path(self, start_pose, goal_pose):
@@ -1275,20 +1304,14 @@ class TagApproachController(Node):
                     0.30 - candidate['min_radius']
                 )
 
-            sweep_penalty = 0.0
-            for sweep in (
-                candidate['sweep_1'],
-                candidate['sweep_2'],
-            ):
-                excess = max(
-                    0.0,
-                    abs(sweep) - math.radians(170.0),
-                )
-                sweep_penalty += 0.75 * excess
+            sweep_penalty = 0.15 * (
+                abs(candidate['sweep_1'])
+                + abs(candidate['sweep_2'])
+            )
 
             candidate['score'] = (
                 candidate['length']
-                + 0.50 * candidate['deviation']
+                + 0.75 * candidate['deviation']
                 + radius_penalty
                 + sweep_penalty
             )
@@ -1302,7 +1325,8 @@ class TagApproachController(Node):
 
         if not candidates:
             self.get_logger().warn(
-                'Biarc search found no positive-d1/d2 G1 solution; '
+                'Biarc search found no compact forward G1 solution within '
+                f'{math.degrees(self.biarc_max_arc_sweep):.1f} deg per arc; '
                 'falling back to direct SMC.'
             )
             return [tuple(start_pose), tuple(goal_pose)]
@@ -1315,7 +1339,7 @@ class TagApproachController(Node):
             f'length={best["length"]:.3f} m, '
             f'max_deviation={best["deviation"]:.3f} m, '
             f'min_radius={best["min_radius"]:.3f} m, '
-            f'short_sweeps=({math.degrees(best["sweep_1"]):+.1f}, '
+            f'forward_sweeps=({math.degrees(best["sweep_1"]):+.1f}, '
             f'{math.degrees(best["sweep_2"]):+.1f}) deg.'
         )
 
