@@ -14,9 +14,9 @@ from scrobot_mission.sweep_mission_manager import MissionState, SweepMissionMana
 
 
 class RuntimeSweepMissionManager(SweepMissionManager):
-    """Sweep runtime wrapper focused on path-following tests.
+    """Production runtime extension for the sweep mission.
 
-    The base class owns the real mission behavior. This wrapper adds:
+    The base class owns the core mission state machine. This extension adds:
 
       * a forgiving NavigateToPose -> FollowPath handoff at sweep start;
       * an option to disable all shuttle-triggered diversions;
@@ -37,11 +37,11 @@ class RuntimeSweepMissionManager(SweepMissionManager):
         super().__init__()
 
         self.declare_parameter('join_acceptance_distance', 0.40)
-        self.declare_parameter('enable_shuttle_interrupts', False)
-        self.declare_parameter('enable_test_controls', True)
+        self.declare_parameter('enable_shuttle_interrupts', True)
+        self.declare_parameter('enable_test_controls', False)
         self.declare_parameter('test_command_topic', '/mission/test_command')
         self.declare_parameter('test_goal_topic', '/mission/test_goal')
-        self.declare_parameter('accept_rviz_goal_topic', True)
+        self.declare_parameter('accept_rviz_goal_topic', False)
         self.declare_parameter('rviz_goal_topic', '/goal_pose')
         self.declare_parameter('manual_mode_topic', '/control/manual_mode')
         self.declare_parameter('manual_resume_return_distance', 0.15)
