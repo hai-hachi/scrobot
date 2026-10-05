@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import csv
+import hashlib
 import json
 import math
 import os
@@ -32,7 +33,10 @@ class NativeBBoxDatasetCapture(Node):
         self.declare_parameter('shuttle_count', 40)
         self.declare_parameter('random_seed', 42)
         self.declare_parameter('camera_height', 0.28683059)
-        self.declare_parameter('settle_time_s', 3.0)
+        self.declare_parameter('settle_time_s', 2.0)
+        self.declare_parameter('camera_apply_wait_s', 0.25)
+        self.declare_parameter('sample_timeout_s', 5.0)
+        self.declare_parameter('max_camera_sync_retries', 5)
         self.declare_parameter('camera_pitch_deg', 15.0)
         self.declare_parameter('min_focus_range', 0.50)
         self.declare_parameter('max_focus_range', 1.68)
@@ -50,6 +54,9 @@ class NativeBBoxDatasetCapture(Node):
         self.rng = random.Random(int(self.get_parameter('random_seed').value))
         self.camera_height = float(self.get_parameter('camera_height').value)
         self.settle_time_s = max(0.0, float(self.get_parameter('settle_time_s').value))
+        self.camera_apply_wait_s = max(0.05, float(self.get_parameter('camera_apply_wait_s').value))
+        self.sample_timeout_s = max(1.0, float(self.get_parameter('sample_timeout_s').value))
+        self.max_camera_sync_retries = max(1, int(self.get_parameter('max_camera_sync_retries').value))
         self.camera_pitch = math.radians(float(self.get_parameter('camera_pitch_deg').value))
         self.min_focus_range = float(self.get_parameter('min_focus_range').value)
         self.max_focus_range = float(self.get_parameter('max_focus_range').value)
@@ -70,11 +77,21 @@ class NativeBBoxDatasetCapture(Node):
         self.saved = 0
         self.attempts = 0
         self.state = 'INIT'
-        self.pending_raw_index = None
-        self.pending_pose = None
-        self.pending_started_wall = None
         self.finished = False
         self.settle_started_wall = None
+        self.scene_frozen = False
+
+        # Sequential camera / triggered-render state machine.
+        self.capture_phase = 'idle'
+        self.pending_pose = None
+        self.phase_started_wall = None
+        self.flush_raw_index = None
+        self.capture_raw_index = None
+        self.next_raw_index = 0
+        self.flush_hash = None
+        self.accepted_hashes = set()
+        self.last_accepted_hash = None
+        self.camera_sync_retries = 0
 
         self._prepare_dirs()
         self.create_timer(0.05, self.step)
@@ -100,6 +117,16 @@ class NativeBBoxDatasetCapture(Node):
             'names:\n  0: Shuttlecock\n'
         )
 
+        self.metadata_path = self.output_dir / 'metadata.csv'
+        with self.metadata_path.open('w', newline='') as f:
+            csv.writer(f).writerow([
+                'frame', 'split',
+                'requested_camera_x', 'requested_camera_y',
+                'requested_camera_yaw_rad',
+                'raw_index', 'image_sha1', 'boxes',
+                'scene_frozen',
+            ])
+
     def _set_state(self, s):
         if s == self.state:
             return
@@ -123,26 +150,20 @@ class NativeBBoxDatasetCapture(Node):
         for i in range(self.shuttle_count):
             x = self.rng.uniform(-half_l, half_l)
             y = self.rng.uniform(-half_w, half_w)
-            # Start close to a realistic side-resting attitude, then let the
-            # production collision model settle it. This avoids high-energy
-            # random drops that can jitter or tunnel with a 5.2 g body.
-            if self.rng.random() < 0.5:
-                roll = self.rng.choice((-1.0, 1.0)) * (
-                    math.pi / 2.0 + self.rng.uniform(-0.20, 0.20)
-                )
-                pitch = self.rng.uniform(-0.20, 0.20)
-            else:
-                roll = self.rng.uniform(-0.20, 0.20)
-                pitch = self.rng.choice((-1.0, 1.0)) * (
-                    math.pi / 2.0 + self.rng.uniform(-0.20, 0.20)
-                )
+
+            # Match the production simulation spawn convention exactly:
+            # model origin 50 mm above court, roll=0, pitch=90 deg, random yaw.
+            # They remain dynamic briefly so contact physics can settle them,
+            # then the whole world is paused before any dataset image is taken.
+            roll = 0.0
+            pitch = math.pi / 2.0
             yaw = self.rng.uniform(-math.pi, math.pi)
             cmd = [
                 'ros2','run','ros_gz_sim','create',
                 '-world',self.world_name,
                 '-name',f'yolo_shuttle_{i:03d}',
                 '-file',str(self.shuttle_sdf),
-                '-x',f'{x:.9f}','-y',f'{y:.9f}','-z','0.080',
+                '-x',f'{x:.9f}','-y',f'{y:.9f}','-z','0.050',
                 '-R',f'{roll:.9f}','-P',f'{pitch:.9f}','-Y',f'{yaw:.9f}'
             ]
             r = self._run(cmd)
@@ -153,6 +174,44 @@ class NativeBBoxDatasetCapture(Node):
         self.spawned = True
         self.settle_started_wall = time.perf_counter()
         self._set_state('SETTLING_SHUTTLES')
+
+    def _set_world_paused(self, paused):
+        value = 'true' if paused else 'false'
+        r = self._run([
+            'gz', 'service',
+            '-s', f'/world/{self.world_name}/control',
+            '--reqtype', 'gz.msgs.WorldControl',
+            '--reptype', 'gz.msgs.Boolean',
+            '--timeout', '2000',
+            '--req', f'pause: {value}',
+        ])
+        if r.returncode != 0 or 'data: true' not in r.stdout.lower():
+            raise RuntimeError(
+                f'Failed to set world pause={paused}: {r.stdout.strip()}'
+            )
+
+    @staticmethod
+    def _image_sha1(path):
+        h = hashlib.sha1()
+        with path.open('rb') as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                h.update(chunk)
+        return h.hexdigest()
+
+    def _trigger_raw_sample(self):
+        idx = self.next_raw_index
+        r = self._run([
+            'gz','topic','-t',self.trigger_topic,
+            '-m','gz.msgs.Boolean','-p','data: true'
+        ])
+        if r.returncode != 0:
+            raise RuntimeError(f'camera trigger failed: {r.stdout.strip()}')
+        self.next_raw_index += 1
+        return idx
+
+    def _raw_pair_ready(self, idx):
+        img, box = self._raw_pair_paths(idx)
+        return img.exists() and box.exists()
 
     def _sample_camera_pose(self):
         sx, sy = self.rng.choice(self.shuttles)
@@ -182,9 +241,13 @@ class NativeBBoxDatasetCapture(Node):
             cr*cp*cy + sr*sp*sy,
         )
 
-    def _move_and_trigger(self):
-        self.attempts += 1
-        x,y,yaw = self._sample_camera_pose()
+    def _command_next_camera_pose(self, reuse_pose=False):
+        if not reuse_pose or self.pending_pose is None:
+            self.attempts += 1
+            self.pending_pose = self._sample_camera_pose()
+            self.camera_sync_retries = 0
+
+        x, y, yaw = self.pending_pose
         q = self._quat_from_rpy(0.0, self.camera_pitch, yaw)
 
         req = (
@@ -202,22 +265,13 @@ class NativeBBoxDatasetCapture(Node):
             '--req',req
         ])
         if r.returncode != 0 or 'data: true' not in r.stdout.lower():
-            self.get_logger().warning(f'set_pose failed: {r.stdout.strip()}')
-            return
+            raise RuntimeError(f'set_pose failed: {r.stdout.strip()}')
 
-        before = set((self.raw_dir / 'images').glob('image_*.png'))
-        r = self._run([
-            'gz','topic','-t',self.trigger_topic,
-            '-m','gz.msgs.Boolean','-p','data: true'
-        ])
-        if r.returncode != 0:
-            self.get_logger().warning(f'trigger failed: {r.stdout.strip()}')
-            return
-
-        self.pending_raw_index = len(before)
-        self.pending_pose = (x,y,yaw)
-        self.pending_started_wall = time.perf_counter()
-        self._set_state('WAITING_FOR_NATIVE_SAMPLE')
+        # Do NOT trigger immediately. /set_pose only queues WorldPoseCmd.
+        # Wait for paused Gazebo update iterations to propagate it into Ogre.
+        self.capture_phase = 'wait_camera_apply'
+        self.phase_started_wall = time.perf_counter()
+        self._set_state('WAITING_FOR_CAMERA_APPLY')
 
     def _raw_pair_paths(self, idx):
         stem = f'{idx:07d}'
@@ -238,11 +292,8 @@ class NativeBBoxDatasetCapture(Node):
         )
         return cycle[idx % len(cycle)]
 
-    def _convert_pending(self):
-        img, box = self._raw_pair_paths(self.pending_raw_index)
-        if not img.exists() or not box.exists():
-            return False
-
+    def _convert_raw_sample(self, raw_index, image_hash):
+        img, box = self._raw_pair_paths(raw_index)
         split = self._split_for_index(self.saved)
         stem = f'native_{self.saved:07d}'
         out_img = self.output_dir / 'images' / split / f'{stem}.png'
@@ -264,58 +315,180 @@ class NativeBBoxDatasetCapture(Node):
             for xc,yc,w,h in rows:
                 f.write(f'0 {xc:.8f} {yc:.8f} {w:.8f} {h:.8f}\n')
 
+        x, y, yaw = self.pending_pose
+        with self.metadata_path.open('a', newline='') as f:
+            csv.writer(f).writerow([
+                stem, split,
+                f'{x:.9f}', f'{y:.9f}', f'{yaw:.9f}',
+                raw_index, image_hash, len(rows), True,
+            ])
+
         self.saved += 1
+        self.accepted_hashes.add(image_hash)
+        self.last_accepted_hash = image_hash
         self.get_logger().info(
-            f'FRAME {self.saved}/{self.target_images} split={split} boxes={len(rows)} '
-            f'raw={img.name}'
+            f'FRAME {self.saved}/{self.target_images} split={split} '
+            f'boxes={len(rows)} raw=image_{raw_index:07d}.png '
+            f'hash={image_hash[:10]}'
         )
-        self.pending_raw_index = None
+
         self.pending_pose = None
-        self.pending_started_wall = None
+        self.flush_raw_index = None
+        self.capture_raw_index = None
+        self.flush_hash = None
+        self.camera_sync_retries = 0
+        self.capture_phase = 'idle'
+        self.phase_started_wall = None
         self._set_state('FRAME_SAVED')
-        return True
+
+    def _retry_camera_sync(self, reason):
+        self.camera_sync_retries += 1
+        if self.camera_sync_retries > self.max_camera_sync_retries:
+            self.get_logger().warning(
+                f'{reason}; abandoning this camera pose after '
+                f'{self.max_camera_sync_retries} retries.'
+            )
+            self.pending_pose = None
+            self.flush_raw_index = None
+            self.capture_raw_index = None
+            self.flush_hash = None
+            self.capture_phase = 'idle'
+            self.phase_started_wall = None
+            self.camera_sync_retries = 0
+            self._set_state('CAMERA_SYNC_SKIP_POSE')
+            return
+
+        self.get_logger().warning(
+            f'{reason}; re-applying camera pose '
+            f'({self.camera_sync_retries}/{self.max_camera_sync_retries}).'
+        )
+        self.flush_raw_index = None
+        self.capture_raw_index = None
+        self.flush_hash = None
+        self._command_next_camera_pose(reuse_pose=True)
 
     def step(self):
         if self.finished:
             return
+
         try:
+            # Phase 1: initialize the whole scene exactly once.
             if not self.spawned:
                 self._spawn_scene()
                 return
 
+            # Let all dynamic shuttles settle before any image is allowed.
             if self.settle_started_wall is not None:
                 elapsed = time.perf_counter() - self.settle_started_wall
                 if elapsed < self.settle_time_s:
                     self._set_state('SETTLING_SHUTTLES')
                     return
-                self.settle_started_wall = None
-                self._set_state('SCENE_READY')
 
-            if self.pending_raw_index is not None:
-                if self._convert_pending():
-                    return
-                if (
-                    self.pending_started_wall is not None
-                    and time.perf_counter() - self.pending_started_wall > 5.0
-                ):
-                    self.get_logger().warning(
-                        f'Native sample {self.pending_raw_index} not written '
-                        'within 5.0 s; retrying a new viewpoint.'
-                    )
-                    self.pending_raw_index = None
-                    self.pending_pose = None
-                    self.pending_started_wall = None
-                    self._set_state('NATIVE_SAMPLE_TIMEOUT')
+                self._set_state('FREEZING_SCENE')
+                self._set_world_paused(True)
+                self.settle_started_wall = None
+                self.scene_frozen = True
+                self._set_state('SCENE_FROZEN')
+                self.get_logger().info(
+                    'Scene frozen: shuttle physics stopped; only camera poses '
+                    'will change during dataset capture.'
+                )
+                return
+
+            if not self.scene_frozen:
                 return
 
             if self.saved >= self.target_images:
                 self.finished = True
                 self._set_state('COMPLETE')
-                self.get_logger().info(f'Native bbox dataset complete: {self.output_dir}')
+                self.get_logger().info(
+                    f'Native bbox dataset complete: {self.output_dir}'
+                )
                 rclpy.shutdown()
                 return
 
-            self._move_and_trigger()
+            # Phase 2: strictly sequential camera capture.
+            if self.capture_phase == 'idle':
+                self._command_next_camera_pose()
+                return
+
+            if self.capture_phase == 'wait_camera_apply':
+                if (
+                    time.perf_counter() - self.phase_started_wall
+                    < self.camera_apply_wait_s
+                ):
+                    return
+
+                # First render is a synchronization / proof frame only.
+                self.flush_raw_index = self._trigger_raw_sample()
+                self.capture_phase = 'wait_flush'
+                self.phase_started_wall = time.perf_counter()
+                self._set_state('WAITING_FOR_FLUSH_SAMPLE')
+                return
+
+            if self.capture_phase == 'wait_flush':
+                if not self._raw_pair_ready(self.flush_raw_index):
+                    if (
+                        time.perf_counter() - self.phase_started_wall
+                        > self.sample_timeout_s
+                    ):
+                        self._retry_camera_sync('flush sample timed out')
+                    return
+
+                flush_img, _ = self._raw_pair_paths(self.flush_raw_index)
+                self.flush_hash = self._image_sha1(flush_img)
+
+                # With the world frozen, a new requested viewpoint should not
+                # reproduce the previously accepted image exactly.
+                if (
+                    self.last_accepted_hash is not None
+                    and self.flush_hash == self.last_accepted_hash
+                ):
+                    self._retry_camera_sync(
+                        'renderer still returned the previous camera view'
+                    )
+                    return
+
+                # Trigger one more frame at the SAME commanded pose.
+                self.capture_raw_index = self._trigger_raw_sample()
+                self.capture_phase = 'wait_capture'
+                self.phase_started_wall = time.perf_counter()
+                self._set_state('WAITING_FOR_CONFIRMED_SAMPLE')
+                return
+
+            if self.capture_phase == 'wait_capture':
+                if not self._raw_pair_ready(self.capture_raw_index):
+                    if (
+                        time.perf_counter() - self.phase_started_wall
+                        > self.sample_timeout_s
+                    ):
+                        self._retry_camera_sync('confirmation sample timed out')
+                    return
+
+                capture_img, _ = self._raw_pair_paths(self.capture_raw_index)
+                capture_hash = self._image_sha1(capture_img)
+
+                # Frozen world + unchanged camera pose must render the same
+                # pixels twice. If not, the camera / renderer was still moving.
+                if capture_hash != self.flush_hash:
+                    self._retry_camera_sync(
+                        'two renders at the same camera pose did not match'
+                    )
+                    return
+
+                # Never admit duplicate images into the final dataset.
+                if capture_hash in self.accepted_hashes:
+                    self._retry_camera_sync(
+                        'candidate image duplicates an already accepted frame'
+                    )
+                    return
+
+                self._convert_raw_sample(
+                    self.capture_raw_index,
+                    capture_hash,
+                )
+                return
+
         except Exception as exc:
             self.get_logger().error(str(exc))
             self.finished = True
