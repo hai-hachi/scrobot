@@ -9,7 +9,6 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
@@ -44,6 +43,7 @@
   <exec_depend>scrobot_perception</exec_depend>
   <exec_depend>scrobot_mission</exec_depend>
   <exec_depend>scrobot_navigation</exec_depend>
+  <exec_depend>scrobot_interfaces</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>joint_state_publisher_gui</exec_depend>
