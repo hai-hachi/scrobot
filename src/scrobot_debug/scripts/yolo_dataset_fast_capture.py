@@ -140,6 +140,8 @@ class FastYoloDatasetCapture(Node):
         self.declare_parameter('world_name', 'yolo_dataset')
         self.declare_parameter('camera_entity', 'yolo_camera_rig')
         self.declare_parameter('camera_trigger_topic', '/yolo/camera/color/trigger')
+        self.declare_parameter('trigger_retry_timeout_s', 2.0)
+        self.declare_parameter('max_trigger_retries', 3)
         self.declare_parameter('target_images', 1200)
         self.declare_parameter('shuttle_count', 40)
         self.declare_parameter('spawn_workers', 8)
@@ -174,6 +176,8 @@ class FastYoloDatasetCapture(Node):
         self.world_name = str(self.get_parameter('world_name').value)
         self.camera_entity = str(self.get_parameter('camera_entity').value)
         self.camera_trigger_topic = str(self.get_parameter('camera_trigger_topic').value)
+        self.trigger_retry_timeout_s = max(0.2, float(self.get_parameter('trigger_retry_timeout_s').value))
+        self.max_trigger_retries = max(0, int(self.get_parameter('max_trigger_retries').value))
         self.target_images = max(1, int(self.get_parameter('target_images').value))
         self.shuttle_count = max(1, int(self.get_parameter('shuttle_count').value))
         self.spawn_workers = max(1, int(self.get_parameter('spawn_workers').value))
@@ -280,6 +284,8 @@ class FastYoloDatasetCapture(Node):
             'write_ms': 0.0,
         }
         self.wait_rgb_wall_start = None
+        self.last_trigger_wall_time = None
+        self.trigger_retry_count = 0
 
         self._prepare_output()
 
@@ -547,6 +553,7 @@ class FastYoloDatasetCapture(Node):
                 'Camera trigger failed: ' + result.stdout.strip()
             )
             return False
+        self.last_trigger_wall_time = time.perf_counter()
         return True
 
     def _teleport_camera(self, position, yaw):
@@ -589,6 +596,7 @@ class FastYoloDatasetCapture(Node):
         self.camera_yaw = yaw
         self.camera_color_q = q
         self.teleport_stamp_ns = self.get_clock().now().nanoseconds
+        self.trigger_retry_count = 0
 
         if not self._trigger_camera():
             return False
@@ -799,7 +807,6 @@ class FastYoloDatasetCapture(Node):
             f"label={self.last_timings['label_ms']:.1f}ms "
             f"write={self.last_timings['write_ms']:.1f}ms"
         )
-        self.publish_status(force=True)
 
         if self.saved_images >= self.target_images:
             self.finished = True
@@ -815,6 +822,36 @@ class FastYoloDatasetCapture(Node):
             return
         self.state = state
         self.publish_status(force=True)
+
+    def _recover_missing_triggered_frame(self):
+        if self.last_trigger_wall_time is None:
+            return False
+
+        elapsed = time.perf_counter() - self.last_trigger_wall_time
+        if elapsed < self.trigger_retry_timeout_s:
+            return False
+
+        if self.trigger_retry_count < self.max_trigger_retries:
+            self.trigger_retry_count += 1
+            self._set_state('RETRIGGERING_RGB')
+            self.get_logger().warning(
+                f'No fresh RGB after {elapsed:.2f}s; '
+                f'retrigger {self.trigger_retry_count}/{self.max_trigger_retries}'
+            )
+            if self._trigger_camera():
+                self._set_state('WAITING_FOR_TRIGGERED_RGB')
+            return True
+
+        self.get_logger().warning(
+            f'No fresh RGB after {self.max_trigger_retries} retriggers; '
+            'skipping this viewpoint.'
+        )
+        self.waiting_for_fresh_frame = False
+        self.wait_rgb_wall_start = None
+        self.last_trigger_wall_time = None
+        self.trigger_retry_count = 0
+        self._set_state('RGB_TIMEOUT_SKIP_VIEW')
+        return True
 
     def capture_step(self):
         if self.finished:
@@ -840,8 +877,11 @@ class FastYoloDatasetCapture(Node):
 
         if self._image_stamp_ns(self.latest_image) <= self.teleport_stamp_ns:
             self._set_state('WAITING_FOR_TRIGGERED_RGB')
+            self._recover_missing_triggered_frame()
             return
 
+        self.last_trigger_wall_time = None
+        self.trigger_retry_count = 0
         self._set_state('SAVING_FRAME')
         self._save_current_frame()
 
