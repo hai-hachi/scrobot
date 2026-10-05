@@ -2,7 +2,15 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.actions import (
+    DeclareLaunchArgument,
+    EmitEvent,
+    IncludeLaunchDescription,
+    RegisterEventHandler,
+    TimerAction,
+)
+from launch.event_handlers import OnProcessExit
+from launch.events import Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
@@ -63,20 +71,40 @@ def generate_launch_description():
         }.items(),
     )
 
-    detector = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                perception_pkg,
-                'launch',
-                'yolo_shuttle_detector.launch.py',
-            )
-        ),
-        launch_arguments={
-            'use_sim_time': use_sim_time,
-            'model_path': model_path,
-            'device': device,
-            'publish_debug_image': publish_debug_image,
-        }.items(),
+    detector_params = os.path.join(
+        perception_pkg,
+        'config',
+        'yolo_shuttle_detector.yaml',
+    )
+
+    detector = Node(
+        package='scrobot_perception',
+        executable='yolo_shuttle_detector',
+        name='yolo_shuttle_detector',
+        output='screen',
+        emulate_tty=True,
+        parameters=[
+            detector_params,
+            {
+                'use_sim_time': use_sim_time,
+                'model_path': model_path,
+                'device': device,
+                'publish_debug_image': publish_debug_image,
+            },
+        ],
+    )
+
+    detector_exit = RegisterEventHandler(
+        OnProcessExit(
+            target_action=detector,
+            on_exit=[
+                EmitEvent(
+                    event=Shutdown(
+                        reason='YOLO shuttle detector exited; stopping debug test.'
+                    )
+                )
+            ],
+        )
     )
 
     monitor = Node(
@@ -150,6 +178,7 @@ def generate_launch_description():
             period=detector_delay,
             actions=[detector],
         ),
+        detector_exit,
         TimerAction(
             period=monitor_delay,
             actions=[monitor],
