@@ -900,11 +900,25 @@ class TagApproachController(Node):
                 self.publish_cmd(linear, angular)
                 return
 
+            camera_range = float('nan')
+            try:
+                tf_camera_tag = self.tf_buffer.lookup_transform(
+                    self.camera_frame,
+                    self.observed_tag_prefix + str(tag_id),
+                    Time(),
+                    timeout=Duration(seconds=0.05),
+                )
+                p = tf_camera_tag.transform.translation
+                camera_range = math.hypot(float(p.x), float(p.y))
+            except TransformException:
+                pass
+
             self.get_logger().info(
                 'Tag SMC pose reached: '
                 f'rho={rho:.4f} m, e_y={e_y:+.4f} m, '
                 f'e_theta={math.degrees(e_theta):+.2f} deg, '
-                f's={s:+.4f}.'
+                f's={s:+.4f}, '
+                f'camera_range={camera_range:.3f} m.'
             )
             with self.lock:
                 self.phase = 'stable'
