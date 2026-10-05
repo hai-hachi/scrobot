@@ -87,10 +87,11 @@ def xyz_rpy_to_matrix(xyz, rpy):
 
 class TagApproachController(Node):
     """
-    Version 3: stationary multi-frame tag selection + best-facing tag lock.
+    Stationary multi-frame tag selection + camera-relative SMC approach.
 
-    Deliberately does NOT implement orbiting yet. The experiment is:
-      search -> stop/observe -> lock best-facing tag -> direct 1.7 m goal
+    Flow:
+      search -> stop/observe -> lock best-facing tag
+      -> SMC to camera-relative observation pose -> stable
 
     Once a tag is locked, the controller keeps driving toward the odom-frame
     goal even if the camera briefly loses the tag. The locked tag may refine
@@ -103,6 +104,7 @@ class TagApproachController(Node):
 
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_footprint')
+        self.declare_parameter('camera_frame', 'camera_color_frame')
         self.declare_parameter('detections_topic', '/apriltag/detections')
         self.declare_parameter('observed_tag_prefix', 'observed_tag_')
         self.declare_parameter('cmd_vel_topic', '/cmd_vel_relocalization')
@@ -122,11 +124,19 @@ class TagApproachController(Node):
         self.declare_parameter('search_rotation_rad', 2.0 * math.pi)
         self.declare_parameter('max_linear_velocity', 0.45)
         self.declare_parameter('max_angular_velocity', 0.75)
-        self.declare_parameter('k_position', 1.10)
-        self.declare_parameter('k_heading', 1.70)
-        self.declare_parameter('k_final_yaw', 1.70)
-        self.declare_parameter('drive_heading_limit_deg', 35.0)
-        self.declare_parameter('position_tolerance', 0.08)
+
+        # Shared nonlinear SMC pose law. The controlled point is a virtual
+        # point on the robot centerline at the camera's forward X offset.
+        # The camera's small lateral Y offset is compensated in the goal.
+        self.declare_parameter('smc_reference_speed', 0.50)
+        self.declare_parameter('smc_lambda', 2.00)
+        self.declare_parameter('smc_ks', 1.60)
+        self.declare_parameter('smc_eta', 0.50)
+        self.declare_parameter('smc_phi', 0.08)
+        self.declare_parameter('smc_krho', 0.80)
+        self.declare_parameter('heading_stop_deg', 70.0)
+
+        self.declare_parameter('position_tolerance', 0.05)
         self.declare_parameter('yaw_tolerance_deg', 5.0)
         self.declare_parameter('stable_time', 0.25)
         self.declare_parameter('goal_filter_alpha', 0.30)
@@ -134,6 +144,7 @@ class TagApproachController(Node):
 
         self.odom_frame = str(self.get_parameter('odom_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
+        self.camera_frame = str(self.get_parameter('camera_frame').value)
         self.detections_topic = str(self.get_parameter('detections_topic').value)
         self.observed_tag_prefix = str(
             self.get_parameter('observed_tag_prefix').value
@@ -180,11 +191,18 @@ class TagApproachController(Node):
         self.max_angular_velocity = float(
             self.get_parameter('max_angular_velocity').value
         )
-        self.k_position = float(self.get_parameter('k_position').value)
-        self.k_heading = float(self.get_parameter('k_heading').value)
-        self.k_final_yaw = float(self.get_parameter('k_final_yaw').value)
-        self.drive_heading_limit = math.radians(
-            float(self.get_parameter('drive_heading_limit_deg').value)
+        self.smc_reference_speed = float(
+            self.get_parameter('smc_reference_speed').value
+        )
+        self.smc_lambda = float(self.get_parameter('smc_lambda').value)
+        self.smc_ks = float(self.get_parameter('smc_ks').value)
+        self.smc_eta = float(self.get_parameter('smc_eta').value)
+        self.smc_phi = max(
+            1e-6, float(self.get_parameter('smc_phi').value)
+        )
+        self.smc_krho = float(self.get_parameter('smc_krho').value)
+        self.heading_stop = math.radians(
+            float(self.get_parameter('heading_stop_deg').value)
         )
         self.position_tolerance = float(
             self.get_parameter('position_tolerance').value
@@ -299,9 +317,8 @@ class TagApproachController(Node):
         )
 
         self.get_logger().info(
-            'Tag approach controller V3 started: stationary multi-frame '
-            'selection, best-facing tag lock, deferred detection TF processing, '
-            'direct odom-frame approach.'
+            'Tag approach controller started: stationary multi-frame '
+            'selection, best-facing tag lock, camera-relative SMC pose control.'
         )
 
     def goal_callback(self, goal_request):
@@ -360,7 +377,7 @@ class TagApproachController(Node):
         self.control_timer.reset()
 
         self.get_logger().info(
-            f'ApproachTag V3 started: preferred_tag={self.preferred_tag_id}, '
+            f'ApproachTag SMC started: preferred_tag={self.preferred_tag_id}, '
             f'target_distance={target_distance:.2f} m'
         )
 
@@ -438,17 +455,39 @@ class TagApproachController(Node):
         if robot_x_in_mount <= 0.0:
             return None, 'backside'
 
-        T_mount_goal = xyz_rpy_to_matrix(
+        # Desired observation pose is defined at the COLOR CAMERA, not at
+        # base_footprint. target_distance is therefore camera-relative.
+        T_mount_camera_goal = xyz_rpy_to_matrix(
             [target_distance, 0.0, 0.0],
             [0.0, 0.0, math.pi],
         )
-        T_odom_goal = T_odom_mount @ T_mount_goal
+        T_odom_camera_goal = T_odom_mount @ T_mount_camera_goal
 
-        gx = float(T_odom_goal[0, 3])
-        gy = float(T_odom_goal[1, 3])
-        q_goal = quaternion_from_matrix(T_odom_goal)
+        camera_goal_x = float(T_odom_camera_goal[0, 3])
+        camera_goal_y = float(T_odom_camera_goal[1, 3])
+        q_goal = quaternion_from_matrix(T_odom_camera_goal)
         _, _, gyaw = euler_from_quaternion(q_goal)
         gyaw = wrap_angle(gyaw)
+
+        try:
+            tf_base_camera = self.tf_buffer.lookup_transform(
+                self.base_frame,
+                self.camera_frame,
+                Time(),
+                timeout=Duration(seconds=0.05),
+            )
+        except TransformException:
+            return None, 'tf'
+
+        camera_dx = float(tf_base_camera.transform.translation.x)
+        camera_dy = float(tf_base_camera.transform.translation.y)
+
+        # SMC controls a virtual centerline point c metres ahead of the base.
+        # Compensate the real camera's lateral offset so convergence of the
+        # virtual point places the actual camera at the requested pose.
+        control_offset_c = camera_dx
+        gx = camera_goal_x + camera_dy * math.sin(gyaw)
+        gy = camera_goal_y - camera_dy * math.cos(gyaw)
 
         return {
             'tag_id': tag_id,
@@ -459,6 +498,9 @@ class TagApproachController(Node):
             'goal_x': gx,
             'goal_y': gy,
             'goal_yaw': gyaw,
+            'control_offset_c': control_offset_c,
+            'camera_goal_x': camera_goal_x,
+            'camera_goal_y': camera_goal_y,
         }, None
 
     def process_pending_detection(self):
@@ -577,10 +619,11 @@ class TagApproachController(Node):
                     candidate['goal_x'],
                     candidate['goal_y'],
                     candidate['goal_yaw'],
+                    candidate['control_offset_c'],
                 ]
             else:
                 a = self.goal_filter_alpha
-                old_x, old_y, old_yaw = self.goal_pose
+                old_x, old_y, old_yaw, old_c = self.goal_pose
                 self.goal_pose = [
                     old_x + a * (candidate['goal_x'] - old_x),
                     old_y + a * (candidate['goal_y'] - old_y),
@@ -588,6 +631,7 @@ class TagApproachController(Node):
                         old_yaw
                         + a * angle_difference(candidate['goal_yaw'], old_yaw)
                     ),
+                    old_c + a * (candidate['control_offset_c'] - old_c),
                 ]
 
     def select_and_lock_tag(self):
@@ -619,6 +663,9 @@ class TagApproachController(Node):
                 'goal_yaw': circular_mean(
                     [sample['goal_yaw'] for sample in samples]
                 ),
+                'control_offset_c': median(
+                    [sample['control_offset_c'] for sample in samples]
+                ),
             }
             summaries.append(summary)
 
@@ -645,12 +692,13 @@ class TagApproachController(Node):
                 best['goal_x'],
                 best['goal_y'],
                 best['goal_yaw'],
+                best['control_offset_c'],
             ]
             self.last_tag_seen = time.monotonic()
             self.last_tag_distance = best['distance']
             self.last_tag_bearing = best['bearing']
             self.last_face_angle = best['face_angle']
-            self.phase = 'approach'
+            self.phase = 'smc_pose'
             self.selection_samples = {}
 
         self.get_logger().info(
@@ -659,7 +707,7 @@ class TagApproachController(Node):
             f'face_angle={math.degrees(best["face_angle"]):.1f} deg, '
             f'distance={best["distance"]:.2f} m, '
             f'margin={best["margin"]:.1f}. '
-            f'Driving directly to {self.target_distance:.2f} m observation pose.'
+            f'SMC to {self.target_distance:.2f} m camera-relative observation pose.'
         )
 
         return True
@@ -800,51 +848,64 @@ class TagApproachController(Node):
             return
 
         x, y, yaw = robot
-        gx, gy, gyaw = goal_pose
-        dx = gx - x
-        dy = gy - y
+        gx, gy, gyaw, control_offset_c = goal_pose
+
+        # Pose of the virtual SMC control point on the robot centerline.
+        control_x = x + control_offset_c * math.cos(yaw)
+        control_y = y + control_offset_c * math.sin(yaw)
+
+        dx = gx - control_x
+        dy = gy - control_y
         rho = math.hypot(dx, dy)
-        heading_error = angle_difference(math.atan2(dy, dx), yaw)
-        final_yaw_error = angle_difference(gyaw, yaw)
+        alpha = (
+            angle_difference(math.atan2(dy, dx), yaw)
+            if rho > 1e-9
+            else 0.0
+        )
 
-        if phase == 'approach':
-            if rho > self.position_tolerance:
+        e_y = -math.sin(yaw) * dx + math.cos(yaw) * dy
+        e_theta = angle_difference(gyaw, yaw)
+        s = e_theta + self.smc_lambda * e_y
+        sat = clamp(s / self.smc_phi, -1.0, 1.0)
+
+        denominator = 1.0 + self.smc_lambda * control_offset_c
+        angular = (
+            self.smc_lambda
+            * self.smc_reference_speed
+            * math.sin(e_theta)
+            + self.smc_ks * s
+            + self.smc_eta * sat
+        ) / denominator
+        angular = clamp(
+            angular,
+            -self.max_angular_velocity,
+            self.max_angular_velocity,
+        )
+
+        linear = self.smc_krho * rho * math.cos(alpha)
+        if abs(alpha) >= self.heading_stop:
+            linear = 0.0
+        linear = clamp(
+            linear,
+            0.0,
+            self.max_linear_velocity,
+        )
+
+        if phase == 'smc_pose':
+            if (
+                rho > self.position_tolerance
+                or abs(e_theta) > self.yaw_tolerance
+            ):
                 self.stable_since = None
-
-                angular = clamp(
-                    self.k_heading * heading_error,
-                    -self.max_angular_velocity,
-                    self.max_angular_velocity,
-                )
-
-                if abs(heading_error) > self.drive_heading_limit:
-                    linear = 0.0
-                else:
-                    linear = clamp(
-                        self.k_position * rho,
-                        0.0,
-                        self.max_linear_velocity,
-                    )
-                    linear *= max(0.20, math.cos(heading_error))
-
                 self.publish_cmd(linear, angular)
                 return
 
-            with self.lock:
-                self.phase = 'final_align'
-            phase = 'final_align'
-
-        if phase == 'final_align':
-            if abs(final_yaw_error) > self.yaw_tolerance:
-                self.stable_since = None
-                angular = clamp(
-                    self.k_final_yaw * final_yaw_error,
-                    -self.max_angular_velocity,
-                    self.max_angular_velocity,
-                )
-                self.publish_cmd(0.0, angular)
-                return
-
+            self.get_logger().info(
+                'Tag SMC pose reached: '
+                f'rho={rho:.4f} m, e_y={e_y:+.4f} m, '
+                f'e_theta={math.degrees(e_theta):+.2f} deg, '
+                f's={s:+.4f}.'
+            )
             with self.lock:
                 self.phase = 'stable'
                 self.stable_since = None
