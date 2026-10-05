@@ -26,7 +26,6 @@ local_collect_controller:
     phase_topic: /mission/local_collect_phase
     odom_frame: odom
     base_frame: base_link
-    camera_frame: camera_color_frame
     collector_frame: collector_link
 
     # ------------------------------------------------------------
@@ -43,9 +42,9 @@ local_collect_controller:
     position_tolerance: 0.08
     reacquire_exclusion_radius: 0.12
 
-    # First place the COLOR CAMERA 1.00 m from the frozen shuttle in the
-    # ground plane, aligned toward it. Then start the straight collection pass.
-    camera_standoff_distance: 1.00
+    # First place base_link 1.10 m from the frozen shuttle in the ground
+    # plane, aligned toward it. Then start the straight collection pass.
+    base_standoff_distance: 1.10
     precollect_position_tolerance: 0.03
     precollect_yaw_tolerance_deg: 5.0
 
@@ -62,9 +61,9 @@ local_collect_controller:
     # Sliding surface:
     #   s = e_theta + lambda * e_y
     #
-    # Angular control:
-    #   omega = [omega_R + lambda*v_R*sin(e_theta)
-    #            + k_s*s + eta*sat(s/phi)] / [1 + lambda*c]
+    # Angular control with c = 0:
+    #   omega = omega_R + lambda*v_R*sin(e_theta)
+    #           + k_s*s + eta*sat(s/phi)
     #
     # The pre-collection reference is straight, so omega_R = 0.
     # Translation:
@@ -75,7 +74,6 @@ local_collect_controller:
     smc_eta: 0.50
     smc_phi: 0.08
     smc_krho: 0.80
-    # SMC control offset c is derived from base_link -> camera_color_frame TF.
     smc_max_angular_speed: 1.80
     smc_max_linear_speed: 0.50
 
