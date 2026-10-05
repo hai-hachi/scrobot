@@ -150,6 +150,9 @@ class YoloMultiShuttleMonitor(Node):
         self.collection_sequence = []
         self.last_target_xy = None
 
+        self.initial_gate_passed = False
+        self.initial_filtered_order = []
+
         transient_qos = QoSProfile(depth=1)
         transient_qos.reliability = ReliabilityPolicy.RELIABLE
         transient_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
@@ -351,7 +354,10 @@ class YoloMultiShuttleMonitor(Node):
             for row in entries
         )
 
-    def _initial_verdict(self):
+    def _update_initial_validation(self):
+        if self.initial_gate_passed:
+            return
+
         raw_labels = {row['label'] for row in self.raw_entries}
         filtered_labels = {row['label'] for row in self.filtered_entries}
 
@@ -359,15 +365,42 @@ class YoloMultiShuttleMonitor(Node):
         filter_ok = (
             {'A', 'B', 'C'}.issubset(filtered_labels)
             and 'D' not in filtered_labels
+            and len(self.filtered_entries) == 3
         )
 
         if raw_ok and filter_ok:
-            return 'INITIAL_PASS'
-        if not raw_ok:
-            return 'WAIT_RAW_4'
-        return 'FILTER_MISMATCH'
+            self.initial_gate_passed = True
+            self.initial_filtered_order = [
+                row['label'] for row in self.filtered_entries
+            ]
+            self.get_logger().info(
+                '[INITIAL FILTER PASS] '
+                f'order={"->".join(self.initial_filtered_order)}'
+            )
+
+    def _selection_state(self):
+        if not self.lock_sequence:
+            return 'WAIT'
+        if not self.initial_filtered_order:
+            return 'NO_INITIAL_ORDER'
+        return (
+            'PASS'
+            if self.lock_sequence[0] == self.initial_filtered_order[0]
+            else 'FAIL'
+        )
+
+    def _reacquire_state(self):
+        if len(self.lock_sequence) < 2:
+            return 'WAIT'
+        return (
+            'PASS'
+            if self.lock_sequence[1] != self.lock_sequence[0]
+            else 'FAIL'
+        )
 
     def _report(self):
+        self._update_initial_validation()
+
         locks = 'none' if not self.lock_sequence else '->'.join(
             self.lock_sequence
         )
@@ -377,12 +410,18 @@ class YoloMultiShuttleMonitor(Node):
             else '->'.join(self.collection_sequence)
         )
 
+        initial_state = (
+            'PASS' if self.initial_gate_passed else 'WAIT'
+        )
+
         self.get_logger().info(
             '[MULTI] '
             f'phase={self.phase} gt={self.gt_count} '
             f'raw={len(self.raw_entries)} '
-            f'filtered={len(self.filtered_entries)} '
-            f'{self._initial_verdict()} | '
+            f'filtered={len(self.filtered_entries)} | '
+            f'initial_filter={initial_state} '
+            f'selection={self._selection_state()} '
+            f'reacquire={self._reacquire_state()} | '
             f'locks={locks} collected={collected}'
         )
         self.get_logger().info(
