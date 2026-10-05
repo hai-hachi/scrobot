@@ -150,7 +150,10 @@ class TagApproachController(Node):
         # arbitrary endpoint poses, so the tangent-path experiment uses two
         # circular arcs joined with continuous tangent.
         self.declare_parameter('biarc_spacing', 0.08)
-        self.declare_parameter('biarc_lookahead', 0.35)
+        self.declare_parameter('biarc_lookahead', 0.30)
+        self.declare_parameter('biarc_ratio_min', 0.10)
+        self.declare_parameter('biarc_ratio_max', 10.0)
+        self.declare_parameter('biarc_ratio_samples', 61)
 
         # Deliberately simple normal-ray baseline.
         self.declare_parameter('ray_position_tolerance', 0.12)
@@ -259,6 +262,16 @@ class TagApproachController(Node):
         self.biarc_lookahead = max(
             self.biarc_spacing,
             float(self.get_parameter('biarc_lookahead').value),
+        )
+        self.biarc_ratio_min = max(
+            1e-3, float(self.get_parameter('biarc_ratio_min').value)
+        )
+        self.biarc_ratio_max = max(
+            self.biarc_ratio_min,
+            float(self.get_parameter('biarc_ratio_max').value),
+        )
+        self.biarc_ratio_samples = max(
+            3, int(self.get_parameter('biarc_ratio_samples').value)
         )
 
         self.ray_position_tolerance = max(
@@ -849,68 +862,153 @@ class TagApproachController(Node):
 
         return linear, angular, rho, alpha, e_y, e_theta, s
 
-    def _sample_tangent_arc(self, start, start_yaw, end):
+    def _arc_geometry(self, start, start_yaw, end):
+        """Return the unique no-loop circular arc from start pose to end point."""
         sx, sy = start
         ex, ey = end
         dx = ex - sx
         dy = ey - sy
         chord = math.hypot(dx, dy)
+
         if chord < 1e-9:
-            return [(sx, sy, wrap_angle(start_yaw))]
+            return {
+                'straight': True,
+                'radius': float('inf'),
+                'sweep': 0.0,
+                'length': 0.0,
+                'center': None,
+            }
 
-        tx = math.cos(start_yaw)
-        ty = math.sin(start_yaw)
-        nx = -ty
-        ny = tx
-        dn = dx * nx + dy * ny
+        chord_yaw = math.atan2(dy, dx)
+        half_sweep = angle_difference(chord_yaw, start_yaw)
 
-        # Degenerate arc -> straight tangent segment.
-        if abs(dn) < 1e-8:
-            count = max(1, int(math.ceil(chord / self.biarc_spacing)))
-            return [
+        # If the chord is tangent to the requested start heading, the
+        # zero-curvature solution is a straight segment.
+        if abs(math.sin(half_sweep)) < 1e-8:
+            return {
+                'straight': True,
+                'radius': float('inf'),
+                'sweep': 0.0,
+                'length': chord,
+                'center': None,
+            }
+
+        sweep = 2.0 * half_sweep
+        radius = chord / (2.0 * math.sin(half_sweep))
+
+        nx = -math.sin(start_yaw)
+        ny = math.cos(start_yaw)
+        center = (
+            sx + radius * nx,
+            sy + radius * ny,
+        )
+
+        return {
+            'straight': False,
+            'radius': radius,
+            'sweep': sweep,
+            'length': abs(radius * sweep),
+            'center': center,
+        }
+
+    def _sample_tangent_arc(self, start, start_yaw, end):
+        """Sample a circular arc that is tangent to start_yaw at start."""
+        geometry = self._arc_geometry(start, start_yaw, end)
+        sx, sy = start
+        ex, ey = end
+
+        if geometry['straight']:
+            length = math.hypot(ex - sx, ey - sy)
+            count = max(
+                1,
+                int(math.ceil(length / self.biarc_spacing)),
+            )
+            yaw = (
+                math.atan2(ey - sy, ex - sx)
+                if length > 1e-9
+                else start_yaw
+            )
+            points = [
                 (
-                    sx + dx * (i / count),
-                    sy + dy * (i / count),
-                    wrap_angle(start_yaw),
+                    sx + (ex - sx) * (i / count),
+                    sy + (ey - sy) * (i / count),
+                    wrap_angle(yaw),
                 )
                 for i in range(count + 1)
             ]
+            points[0] = (sx, sy, wrap_angle(start_yaw))
+            points[-1] = (ex, ey, wrap_angle(yaw))
+            return points, geometry
 
-        radius = chord * chord / (2.0 * dn)
-        cx = sx + radius * nx
-        cy = sy + radius * ny
-
-        a0 = math.atan2(sy - cy, sx - cx)
-        a1 = math.atan2(ey - cy, ex - cx)
-        delta = wrap_angle(a1 - a0)
-
-        if radius > 0.0 and delta < 0.0:
-            delta += 2.0 * math.pi
-        elif radius < 0.0 and delta > 0.0:
-            delta -= 2.0 * math.pi
-
-        arc_length = abs(radius * delta)
+        radius = geometry['radius']
+        sweep = geometry['sweep']
+        cx, cy = geometry['center']
         count = max(
             1,
-            int(math.ceil(arc_length / self.biarc_spacing)),
+            int(math.ceil(geometry['length'] / self.biarc_spacing)),
         )
 
         points = []
-        tangent_sign = 1.0 if radius > 0.0 else -1.0
         for i in range(count + 1):
             fraction = i / count
-            angle = a0 + fraction * delta
-            px = cx + abs(radius) * math.cos(angle)
-            py = cy + abs(radius) * math.sin(angle)
-            pyaw = wrap_angle(
-                angle + tangent_sign * math.pi / 2.0
+            tangent_yaw = start_yaw + fraction * sweep
+
+            # For signed radius R:
+            #   center = p + R * left_normal(tangent)
+            # hence p = center - R * left_normal(tangent).
+            px = cx + radius * math.sin(tangent_yaw)
+            py = cy - radius * math.cos(tangent_yaw)
+            points.append(
+                (
+                    float(px),
+                    float(py),
+                    wrap_angle(tangent_yaw),
+                )
             )
-            points.append((px, py, pyaw))
 
+        # Force exact endpoint coordinates against accumulated trig error.
         points[0] = (sx, sy, wrap_angle(start_yaw))
-        return points
+        points[-1] = (
+            ex,
+            ey,
+            wrap_angle(start_yaw + sweep),
+        )
+        return points, geometry
 
-    def _build_biarc_path(self, start_pose, goal_pose):
+    def _path_length(self, path):
+        return sum(
+            math.hypot(
+                path[index + 1][0] - path[index][0],
+                path[index + 1][1] - path[index][1],
+            )
+            for index in range(len(path) - 1)
+        )
+
+    def _max_chord_deviation(self, path, start, end):
+        sx, sy = start
+        ex, ey = end
+        vx = ex - sx
+        vy = ey - sy
+        vv = vx * vx + vy * vy
+
+        if vv < 1e-12:
+            return 0.0
+
+        maximum = 0.0
+        for px, py, _ in path:
+            wx = px - sx
+            wy = py - sy
+            u = clamp((wx * vx + wy * vy) / vv, 0.0, 1.0)
+            qx = sx + u * vx
+            qy = sy + u * vy
+            maximum = max(
+                maximum,
+                math.hypot(px - qx, py - qy),
+            )
+        return maximum
+
+    def _build_biarc_candidate(self, start_pose, goal_pose, ratio):
+        """Build one member of the biarc family using d1 / d2 = ratio."""
         x0, y0, yaw0 = start_pose
         x1, y1, yaw1 = goal_pose
 
@@ -921,63 +1019,202 @@ class TagApproachController(Node):
 
         vx = x1 - x0
         vy = y1 - y0
-        vv = vx * vx + vy * vy
-        if vv < 1e-8:
-            return [tuple(start_pose), tuple(goal_pose)]
+        chord_sq = vx * vx + vy * vy
+        if chord_sq < 1e-10:
+            return {
+                'path': [tuple(start_pose), tuple(goal_pose)],
+                'ratio': ratio,
+                'length': 0.0,
+                'deviation': 0.0,
+                'min_radius': float('inf'),
+                'sweep_1': 0.0,
+                'sweep_2': 0.0,
+            }
 
         dot_t = t0x * t1x + t0y * t1y
-        a = 2.0 * (1.0 - dot_t)
-        b = 2.0 * (
-            vx * (t0x + t1x)
-            + vy * (t0y + t1y)
-        )
-        cc = -vv
 
+        # General biarc family:
+        #   d1 = ratio * d2
+        # with G1 continuity condition
+        #   2(1-t0.t1)d1*d2
+        # + 2 v.(d1*t0 + d2*t1)
+        # - v.v = 0.
+        a = 2.0 * (1.0 - dot_t) * ratio
+        b = 2.0 * (
+            vx * (ratio * t0x + t1x)
+            + vy * (ratio * t0y + t1y)
+        )
+        cc = -chord_sq
+
+        roots = []
         if abs(a) < 1e-10:
             if abs(b) < 1e-10:
-                d = 0.5 * math.sqrt(vv)
-            else:
-                d = -cc / b
+                return None
+            roots.append(-cc / b)
         else:
-            discriminant = max(0.0, b * b - 4.0 * a * cc)
-            root = math.sqrt(discriminant)
-            roots = [
+            discriminant = b * b - 4.0 * a * cc
+            if discriminant < 0.0:
+                return None
+            root = math.sqrt(max(0.0, discriminant))
+            roots.extend([
                 (-b + root) / (2.0 * a),
                 (-b - root) / (2.0 * a),
-            ]
-            positive = [value for value in roots if value > 1e-6]
-            d = min(positive) if positive else 0.5 * math.sqrt(vv)
+            ])
+
+        positive = [value for value in roots if value > 1e-6]
+        if not positive:
+            return None
+
+        # The smaller positive tangent distance avoids unnecessary loops.
+        d2 = min(positive)
+        d1 = ratio * d2
 
         join_x = 0.5 * (
-            x0 + d * t0x + x1 - d * t1x
+            x0 + d1 * t0x
+            + x1 - d2 * t1x
         )
         join_y = 0.5 * (
-            y0 + d * t0y + y1 - d * t1y
+            y0 + d1 * t0y
+            + y1 - d2 * t1y
         )
 
-        first = self._sample_tangent_arc(
+        first, geometry_1 = self._sample_tangent_arc(
             (x0, y0),
             yaw0,
             (join_x, join_y),
         )
 
-        # Build the second circular arc backwards from the goal, then reverse
-        # it. This guarantees the final tangent equals the requested goal yaw.
-        second_reverse = self._sample_tangent_arc(
+        # Construct the second arc backwards from the final pose. Reversing the
+        # sampled points gives a forward arc with the requested final tangent.
+        second_reverse, geometry_2_reverse = self._sample_tangent_arc(
             (x1, y1),
             wrap_angle(yaw1 + math.pi),
             (join_x, join_y),
         )
         second = [
-            (px, py, wrap_angle(pyaw + math.pi))
+            (
+                px,
+                py,
+                wrap_angle(pyaw + math.pi),
+            )
             for px, py, pyaw in reversed(second_reverse)
         ]
 
+        if not first or not second:
+            return None
+
+        join_yaw_error = abs(
+            angle_difference(first[-1][2], second[0][2])
+        )
+        if join_yaw_error > math.radians(1.0):
+            return None
+
         path = first + second[1:]
-        if path:
-            path[0] = (x0, y0, wrap_angle(yaw0))
-            path[-1] = (x1, y1, wrap_angle(yaw1))
-        return path
+        path[0] = (x0, y0, wrap_angle(yaw0))
+        path[-1] = (x1, y1, wrap_angle(yaw1))
+
+        length = self._path_length(path)
+        deviation = self._max_chord_deviation(
+            path,
+            (x0, y0),
+            (x1, y1),
+        )
+
+        radii = []
+        for geometry in (geometry_1, geometry_2_reverse):
+            if not geometry['straight']:
+                radii.append(abs(geometry['radius']))
+        min_radius = min(radii) if radii else float('inf')
+
+        return {
+            'path': path,
+            'ratio': ratio,
+            'length': length,
+            'deviation': deviation,
+            'min_radius': min_radius,
+            'sweep_1': geometry_1['sweep'],
+            'sweep_2': -geometry_2_reverse['sweep'],
+        }
+
+    def _build_biarc_path(self, start_pose, goal_pose):
+        """Choose a compact G1 biarc instead of forcing the equal-d solution."""
+        if self.biarc_ratio_samples <= 1:
+            ratios = [1.0]
+        else:
+            log_min = math.log(self.biarc_ratio_min)
+            log_max = math.log(self.biarc_ratio_max)
+            ratios = [
+                math.exp(
+                    log_min
+                    + (log_max - log_min)
+                    * index
+                    / (self.biarc_ratio_samples - 1)
+                )
+                for index in range(self.biarc_ratio_samples)
+            ]
+
+        candidates = []
+        chord = math.hypot(
+            goal_pose[0] - start_pose[0],
+            goal_pose[1] - start_pose[1],
+        )
+
+        for ratio in ratios:
+            candidate = self._build_biarc_candidate(
+                start_pose,
+                goal_pose,
+                ratio,
+            )
+            if candidate is None:
+                continue
+
+            # Prefer the shortest valid biarc, but gently penalize large bows
+            # away from the direct chord and extremely tight circles. This
+            # avoids the huge equal-d detours seen at oblique start headings.
+            radius_penalty = 0.0
+            if (
+                math.isfinite(candidate['min_radius'])
+                and candidate['min_radius'] < 0.30
+            ):
+                radius_penalty = 2.0 * (
+                    0.30 - candidate['min_radius']
+                )
+
+            candidate['score'] = (
+                candidate['length']
+                + 0.35 * candidate['deviation']
+                + radius_penalty
+            )
+
+            # A candidate several times longer than the endpoint separation is
+            # almost certainly the looping member of the family.
+            if chord > 1e-6 and candidate['length'] > 3.0 * chord:
+                candidate['score'] += 5.0 * (
+                    candidate['length'] - 3.0 * chord
+                )
+
+            candidates.append(candidate)
+
+        if not candidates:
+            self.get_logger().warn(
+                'Biarc construction found no valid G1 candidate; '
+                'falling back to direct SMC.'
+            )
+            return [tuple(start_pose), tuple(goal_pose)]
+
+        best = min(candidates, key=lambda item: item['score'])
+
+        self.get_logger().info(
+            'Biarc selected: '
+            f'ratio d1/d2={best["ratio"]:.3f}, '
+            f'length={best["length"]:.3f} m, '
+            f'max_deviation={best["deviation"]:.3f} m, '
+            f'min_radius={best["min_radius"]:.3f} m, '
+            f'sweeps=({math.degrees(best["sweep_1"]):+.1f}, '
+            f'{math.degrees(best["sweep_2"]):+.1f}) deg.'
+        )
+
+        return best['path']
 
     def _publish_reference_path(self):
         if not self.reference_path:
