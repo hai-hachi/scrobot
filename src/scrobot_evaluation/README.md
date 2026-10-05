@@ -33,6 +33,11 @@ Inputs include:
 /joint_states
 ```
 
+Before running the suite, start simulation, production perception (YOLO may
+remain disabled), the control stack, and local localization. Production
+perception is required because the collision monitor consumes
+`/camera/camera/depth/scan`.
+
 Run a complete local-odometry suite:
 
 ```bash
