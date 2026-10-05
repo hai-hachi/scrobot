@@ -137,8 +137,14 @@ class YoloPerceptionMonitor(Node):
         rgb_hz = self.rgb_count / dt
         depth_hz = self.depth_count / dt
 
+        node_names = set(self.get_node_names())
+        detector_state = (
+            "OK" if "yolo_shuttle_detector" in node_names else "MISSING"
+        )
+
         self.get_logger().info(
             "[YOLO CHECK] "
+            f"NODE={detector_state} | "
             f"RGB={self._state(self.last_rgb)} {rgb_hz:.1f}Hz | "
             f"ALIGNED_DEPTH={self._state(self.last_depth)} {depth_hz:.1f}Hz | "
             f"INFO={self._state(self.last_info)} | "
