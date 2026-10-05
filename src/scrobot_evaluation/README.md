@@ -6,6 +6,22 @@ This package observes production behavior; it does not arbitrate robot control.
 
 ## Local odometry evaluation
 
+The automatic test runner drives through the production manual-control path:
+
+```text
+local_odom_test_runner
+ -> /cmd_vel_manual_input
+ -> manual_mode_manager
+ -> /cmd_vel_manual
+ -> AUTO/MANUAL mux
+ -> velocity smoother
+ -> collision monitor
+ -> diff_drive_controller
+```
+
+It requests MANUAL through `/control/set_manual_mode` before motion and
+restores AUTO when the sequence finishes.
+
 Inputs include:
 
 ```text
@@ -33,6 +49,30 @@ ros2 run scrobot_evaluation analyze_local_odom \
 ```
 
 ## Collection-session evaluation
+
+The collection evaluator now distinguishes three different facts:
+
+```text
+controller target attempt
+Gazebo /evaluation/shuttle_collected event
+authoritative decrease in /evaluation/shuttle_ground_truth
+```
+
+After every completed local-collection overrun, the evaluator gives the Gazebo
+removal/bridge a short grace period and records a physical capture check in:
+
+```text
+capture_verification.csv
+```
+
+A final full-mission run should have:
+
+```text
+capture_checks_failed = 0
+```
+
+Ground-truth count remains authoritative; the one-shot collected-event topic is
+kept as a diagnostic cross-check.
 
 The collection evaluator records mission state, local-collection phase, robot
 truth, shuttle truth, shuttle collection events, path length, timing, and
