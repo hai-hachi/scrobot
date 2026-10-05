@@ -74,8 +74,31 @@ Default robot start:
 ```text
 x   = 1.50 m
 y   = 1.80 m
+z   = 0.003 m
 yaw = 2.80 rad
 ```
+
+All spawn components are launch arguments:
+
+```text
+robot_x
+robot_y
+robot_z
+robot_yaw
+```
+
+Example farther start for tag 0:
+
+```bash
+ros2 launch scrobot_debug smc_tag_check.launch.py \
+  robot_x:=2.90 \
+  robot_y:=0.20 \
+  robot_yaw:=2.35619
+```
+
+This places the robot several metres from tag 0 while initially pointing
+approximately toward it. You can move farther still as long as the tag remains
+inside the detector's usable range and view angle.
 
 ## Build
 
@@ -100,6 +123,70 @@ source install/setup.bash
 ```bash
 ros2 launch scrobot_debug smc_tag_check.launch.py
 ```
+
+The test reuses the master `scrobot_debug/rviz.launch.py`, so the existing
+`court_visualizer` remains the source of the badminton court, net, and poles.
+Only the RViz display profile is replaced with the lightweight
+`config/smc_tag.rviz`.
+
+The SMC view intentionally contains only:
+
+```text
+Court / net / poles
+Robot model
+Selected AprilTag marker
+Desired color-camera pose + heading
+Robot trajectory
+```
+
+It does not load Nav2 costmaps, collision polygons, shuttle ground truth, or
+other mission displays.
+
+### RViz topic/QoS setup
+
+```text
+/court_markers
+  MarkerArray
+  Reliable + Transient Local
+
+/debug/smc_tag/tag_marker
+  Marker
+  Reliable + Transient Local
+
+/debug/smc_tag/desired_camera_pose
+  PoseStamped
+  Reliable + Transient Local
+
+/debug/smc_tag/trajectory
+  Path
+  Reliable + Transient Local
+```
+
+RViz uses the same durability/reliability settings. The transient-local debug
+topics are published before RViz starts, so the target pose and court geometry
+remain available when RViz subscribes.
+
+The fixed frame is `map`. Because this isolated approach test does not execute
+`/relocalize`, a debug-only static `map -> odom` transform is created from the
+known Gazebo spawn pose. This transform is only for visualization; the SMC
+controller itself still works entirely in `odom`.
+
+Startup order is intentionally:
+
+```text
+Gazebo / robot
+  ↓
+perception + EKF + control + tag nodes + debug map->odom
+  ↓
+SMC visualization publisher
+  ↓
+master RViz + court_visualizer
+  ↓
+/approach_tag goal
+```
+
+so TF, latched markers, and the trajectory publisher are ready before the robot
+starts moving.
 
 The launch automatically sends:
 
@@ -134,6 +221,30 @@ e_theta=...
 s=...
 camera_range=... m
 ```
+
+Current tag handoff tolerances:
+
+```text
+position_tolerance = 0.05 m
+yaw_tolerance      = 5 deg
+stable_time        = 0.25 s
+```
+
+The position test is the 2D Euclidean error `rho` of the SMC controlled point
+around the desired camera pose, not merely a radial distance-to-tag threshold.
+
+For convergence experiments the debug launch exposes both tolerances:
+
+```bash
+ros2 launch scrobot_debug smc_tag_check.launch.py \
+  position_tolerance:=0.02 \
+  yaw_tolerance_deg:=3.0
+```
+
+Tightening the tolerance is preferable to adding an integral term before the
+actual residual error is measured. If a repeatable nonzero bias remains after
+the SMC is allowed to converge, first check camera/tag geometry, velocity
+deadband, and SMC boundary-layer tuning before adding integral action.
 
 The final controller behavior is STOP. It does not drive through the tag.
 
