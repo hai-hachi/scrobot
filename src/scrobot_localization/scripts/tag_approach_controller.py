@@ -809,6 +809,270 @@ class TagApproachController(Node):
         _, _, yaw = euler_from_quaternion([q.x, q.y, q.z, q.w])
         return [float(t.x), float(t.y), wrap_angle(yaw)]
 
+    def _smc_command(self, robot, reference):
+        x, y, yaw = robot
+        gx, gy, gyaw = reference
+
+        dx = gx - x
+        dy = gy - y
+        rho = math.hypot(dx, dy)
+        alpha = (
+            angle_difference(math.atan2(dy, dx), yaw)
+            if rho > 1e-9
+            else 0.0
+        )
+
+        e_y = -math.sin(yaw) * dx + math.cos(yaw) * dy
+        e_theta = angle_difference(gyaw, yaw)
+        s = e_theta + self.smc_lambda * e_y
+        sat = clamp(s / self.smc_phi, -1.0, 1.0)
+
+        # c = 0: the controlled point is base_link itself.
+        angular = (
+            self.smc_lambda
+            * self.smc_reference_speed
+            * math.sin(e_theta)
+            + self.smc_ks * s
+            + self.smc_eta * sat
+        )
+        angular = clamp(
+            angular,
+            -self.max_angular_velocity,
+            self.max_angular_velocity,
+        )
+
+        linear = self.smc_krho * rho * math.cos(alpha)
+        if abs(alpha) >= self.heading_stop:
+            linear = 0.0
+        linear = clamp(
+            linear,
+            0.0,
+            self.max_linear_velocity,
+        )
+
+        return linear, angular, rho, alpha, e_y, e_theta, s
+
+    def _sample_tangent_arc(self, start, start_yaw, end):
+        sx, sy = start
+        ex, ey = end
+        dx = ex - sx
+        dy = ey - sy
+        chord = math.hypot(dx, dy)
+        if chord < 1e-9:
+            return [(sx, sy, wrap_angle(start_yaw))]
+
+        tx = math.cos(start_yaw)
+        ty = math.sin(start_yaw)
+        nx = -ty
+        ny = tx
+        dn = dx * nx + dy * ny
+
+        # Degenerate arc -> straight tangent segment.
+        if abs(dn) < 1e-8:
+            count = max(1, int(math.ceil(chord / self.biarc_spacing)))
+            return [
+                (
+                    sx + dx * (i / count),
+                    sy + dy * (i / count),
+                    wrap_angle(start_yaw),
+                )
+                for i in range(count + 1)
+            ]
+
+        radius = chord * chord / (2.0 * dn)
+        cx = sx + radius * nx
+        cy = sy + radius * ny
+
+        a0 = math.atan2(sy - cy, sx - cx)
+        a1 = math.atan2(ey - cy, ex - cx)
+        delta = wrap_angle(a1 - a0)
+
+        if radius > 0.0 and delta < 0.0:
+            delta += 2.0 * math.pi
+        elif radius < 0.0 and delta > 0.0:
+            delta -= 2.0 * math.pi
+
+        arc_length = abs(radius * delta)
+        count = max(
+            1,
+            int(math.ceil(arc_length / self.biarc_spacing)),
+        )
+
+        points = []
+        tangent_sign = 1.0 if radius > 0.0 else -1.0
+        for i in range(count + 1):
+            fraction = i / count
+            angle = a0 + fraction * delta
+            px = cx + abs(radius) * math.cos(angle)
+            py = cy + abs(radius) * math.sin(angle)
+            pyaw = wrap_angle(
+                angle + tangent_sign * math.pi / 2.0
+            )
+            points.append((px, py, pyaw))
+
+        points[0] = (sx, sy, wrap_angle(start_yaw))
+        return points
+
+    def _build_biarc_path(self, start_pose, goal_pose):
+        x0, y0, yaw0 = start_pose
+        x1, y1, yaw1 = goal_pose
+
+        t0x = math.cos(yaw0)
+        t0y = math.sin(yaw0)
+        t1x = math.cos(yaw1)
+        t1y = math.sin(yaw1)
+
+        vx = x1 - x0
+        vy = y1 - y0
+        vv = vx * vx + vy * vy
+        if vv < 1e-8:
+            return [tuple(start_pose), tuple(goal_pose)]
+
+        dot_t = t0x * t1x + t0y * t1y
+        a = 2.0 * (1.0 - dot_t)
+        b = 2.0 * (
+            vx * (t0x + t1x)
+            + vy * (t0y + t1y)
+        )
+        cc = -vv
+
+        if abs(a) < 1e-10:
+            if abs(b) < 1e-10:
+                d = 0.5 * math.sqrt(vv)
+            else:
+                d = -cc / b
+        else:
+            discriminant = max(0.0, b * b - 4.0 * a * cc)
+            root = math.sqrt(discriminant)
+            roots = [
+                (-b + root) / (2.0 * a),
+                (-b - root) / (2.0 * a),
+            ]
+            positive = [value for value in roots if value > 1e-6]
+            d = min(positive) if positive else 0.5 * math.sqrt(vv)
+
+        join_x = 0.5 * (
+            x0 + d * t0x + x1 - d * t1x
+        )
+        join_y = 0.5 * (
+            y0 + d * t0y + y1 - d * t1y
+        )
+
+        first = self._sample_tangent_arc(
+            (x0, y0),
+            yaw0,
+            (join_x, join_y),
+        )
+
+        # Build the second circular arc backwards from the goal, then reverse
+        # it. This guarantees the final tangent equals the requested goal yaw.
+        second_reverse = self._sample_tangent_arc(
+            (x1, y1),
+            wrap_angle(yaw1 + math.pi),
+            (join_x, join_y),
+        )
+        second = [
+            (px, py, wrap_angle(pyaw + math.pi))
+            for px, py, pyaw in reversed(second_reverse)
+        ]
+
+        path = first + second[1:]
+        if path:
+            path[0] = (x0, y0, wrap_angle(yaw0))
+            path[-1] = (x1, y1, wrap_angle(yaw1))
+        return path
+
+    def _publish_reference_path(self):
+        if not self.reference_path:
+            return
+
+        msg = Path()
+        msg.header.frame_id = self.odom_frame
+        msg.header.stamp = self.get_clock().now().to_msg()
+
+        for x, y, yaw in self.reference_path:
+            pose = PoseStamped()
+            pose.header = msg.header
+            pose.pose.position.x = float(x)
+            pose.pose.position.y = float(y)
+            pose.pose.position.z = 0.02
+            q = quaternion_from_euler(0.0, 0.0, yaw)
+            pose.pose.orientation.x = float(q[0])
+            pose.pose.orientation.y = float(q[1])
+            pose.pose.orientation.z = float(q[2])
+            pose.pose.orientation.w = float(q[3])
+            msg.poses.append(pose)
+
+        self.reference_path_pub.publish(msg)
+
+    def _biarc_reference(self, robot):
+        if not self.reference_path:
+            return None
+
+        start = max(0, self.path_progress_index - 3)
+        closest_index = start
+        closest_distance = float('inf')
+
+        for index in range(start, len(self.reference_path)):
+            px, py, _ = self.reference_path[index]
+            distance = math.hypot(
+                px - robot[0],
+                py - robot[1],
+            )
+            if distance < closest_distance:
+                closest_distance = distance
+                closest_index = index
+
+        self.path_progress_index = max(
+            self.path_progress_index,
+            closest_index,
+        )
+
+        lookahead_index = self.path_progress_index
+        accumulated = 0.0
+        while lookahead_index + 1 < len(self.reference_path):
+            p0 = self.reference_path[lookahead_index]
+            p1 = self.reference_path[lookahead_index + 1]
+            accumulated += math.hypot(
+                p1[0] - p0[0],
+                p1[1] - p0[1],
+            )
+            lookahead_index += 1
+            if accumulated >= self.biarc_lookahead:
+                break
+
+        return self.reference_path[lookahead_index]
+
+    def _base_planar_range_to_tag(self, tag_id):
+        try:
+            tf_base_tag = self.tf_buffer.lookup_transform(
+                self.base_frame,
+                self.observed_tag_prefix + str(tag_id),
+                Time(),
+                timeout=Duration(seconds=0.05),
+            )
+        except TransformException:
+            return float('nan')
+
+        p = tf_base_tag.transform.translation
+        return math.hypot(float(p.x), float(p.y))
+
+    def _enter_stable(self, label, robot, goal_pose, tag_id):
+        _, _, rho, _, e_y, e_theta, s = self._smc_command(
+            robot,
+            goal_pose,
+        )
+        base_range = self._base_planar_range_to_tag(tag_id)
+        self.get_logger().info(
+            f'{label}: '
+            f'rho={rho:.4f} m, e_y={e_y:+.4f} m, '
+            f'e_theta={math.degrees(e_theta):+.2f} deg, '
+            f's={s:+.4f}, base_range={base_range:.3f} m.'
+        )
+        with self.lock:
+            self.phase = 'stable'
+            self.stable_since = None
+
     def control_loop(self):
         self.process_pending_detection()
 
@@ -872,8 +1136,6 @@ class TagApproachController(Node):
                     self.search_last_yaw = yaw
                 else:
                     step = abs(angle_difference(yaw, self.search_last_yaw))
-                    # Ignore impossible discontinuities rather than counting a TF reset
-                    # as physical rotation.
                     if step <= math.pi / 2.0:
                         self.search_accumulated_yaw += step
                     self.search_last_yaw = yaw
@@ -898,7 +1160,10 @@ class TagApproachController(Node):
             if observe_started is None:
                 return
 
-            selection_duration = self.selection_settle_time + self.selection_window
+            selection_duration = (
+                self.selection_settle_time
+                + self.selection_window
+            )
             if now - observe_started >= selection_duration:
                 if not self.select_and_lock_tag():
                     with self.lock:
@@ -924,51 +1189,207 @@ class TagApproachController(Node):
             self.publish_cmd(0.0, 0.0)
             return
 
-        x, y, yaw = robot
-        gx, gy, gyaw, control_offset_c = goal_pose
+        gx, gy, gyaw = goal_pose
 
-        # Pose of the virtual SMC control point on the robot centerline.
-        control_x = x + control_offset_c * math.cos(yaw)
-        control_y = y + control_offset_c * math.sin(yaw)
+        # --------------------------------------------------------
+        # Strategy 2: original main-branch direct-goal controller.
+        # --------------------------------------------------------
+        if phase == 'main_approach':
+            dx = gx - robot[0]
+            dy = gy - robot[1]
+            rho = math.hypot(dx, dy)
+            heading_error = angle_difference(
+                math.atan2(dy, dx),
+                robot[2],
+            )
 
-        dx = gx - control_x
-        dy = gy - control_y
-        rho = math.hypot(dx, dy)
-        alpha = (
-            angle_difference(math.atan2(dy, dx), yaw)
-            if rho > 1e-9
-            else 0.0
-        )
+            if rho > self.position_tolerance:
+                self.stable_since = None
+                angular = clamp(
+                    self.main_k_heading * heading_error,
+                    -self.max_angular_velocity,
+                    self.max_angular_velocity,
+                )
+                if abs(heading_error) > self.main_drive_heading_limit:
+                    linear = 0.0
+                else:
+                    linear = clamp(
+                        self.main_k_position * rho,
+                        0.0,
+                        self.max_linear_velocity,
+                    )
+                    linear *= max(0.20, math.cos(heading_error))
+                self.publish_cmd(linear, angular)
+                return
 
-        e_y = -math.sin(yaw) * dx + math.cos(yaw) * dy
-        e_theta = angle_difference(gyaw, yaw)
-        s = e_theta + self.smc_lambda * e_y
-        sat = clamp(s / self.smc_phi, -1.0, 1.0)
+            with self.lock:
+                self.phase = 'main_final_align'
+            phase = 'main_final_align'
 
-        denominator = 1.0 + self.smc_lambda * control_offset_c
-        angular = (
-            self.smc_lambda
-            * self.smc_reference_speed
-            * math.sin(e_theta)
-            + self.smc_ks * s
-            + self.smc_eta * sat
-        ) / denominator
-        angular = clamp(
-            angular,
-            -self.max_angular_velocity,
-            self.max_angular_velocity,
-        )
+        if phase == 'main_final_align':
+            yaw_error = angle_difference(gyaw, robot[2])
+            if abs(yaw_error) > self.yaw_tolerance:
+                self.stable_since = None
+                angular = clamp(
+                    self.main_k_final_yaw * yaw_error,
+                    -self.max_angular_velocity,
+                    self.max_angular_velocity,
+                )
+                self.publish_cmd(0.0, angular)
+                return
 
-        linear = self.smc_krho * rho * math.cos(alpha)
-        if abs(alpha) >= self.heading_stop:
-            linear = 0.0
-        linear = clamp(
-            linear,
-            0.0,
-            self.max_linear_velocity,
-        )
+            self._enter_stable(
+                'Main-branch pose reached',
+                robot,
+                goal_pose,
+                tag_id,
+            )
+            phase = 'stable'
 
+        # --------------------------------------------------------
+        # Strategy 3: biarc tangent path -> moving SMC reference.
+        # --------------------------------------------------------
+        if phase == 'biarc_smc':
+            if not self.reference_path:
+                self.reference_path = self._build_biarc_path(
+                    robot,
+                    goal_pose,
+                )
+                self.path_progress_index = 0
+                self._publish_reference_path()
+                self.get_logger().info(
+                    f'Biarc path generated: {len(self.reference_path)} poses.'
+                )
+
+            final_goal = self.reference_path[-1]
+            goal_rho = math.hypot(
+                final_goal[0] - robot[0],
+                final_goal[1] - robot[1],
+            )
+            goal_yaw_error = angle_difference(
+                final_goal[2],
+                robot[2],
+            )
+
+            if (
+                goal_rho <= self.position_tolerance
+                and abs(goal_yaw_error) <= self.yaw_tolerance
+            ):
+                self._enter_stable(
+                    'Biarc-SMC pose reached',
+                    robot,
+                    final_goal,
+                    tag_id,
+                )
+                phase = 'stable'
+            else:
+                reference = self._biarc_reference(robot)
+                if reference is None:
+                    self.publish_cmd(0.0, 0.0)
+                    return
+
+                linear, angular, _, _, _, _, _ = self._smc_command(
+                    robot,
+                    reference,
+                )
+                self.publish_cmd(linear, angular)
+                return
+
+        # --------------------------------------------------------
+        # Strategy 4: perpendicular normal-ray capture -> SMC.
+        # --------------------------------------------------------
+        if phase in ('ray_turn', 'ray_cross', 'ray_face'):
+            dx = robot[0] - gx
+            dy = robot[1] - gy
+            lateral = (
+                -math.sin(gyaw) * dx
+                + math.cos(gyaw) * dy
+            )
+
+            if phase == 'ray_turn':
+                if abs(lateral) <= self.ray_position_tolerance:
+                    with self.lock:
+                        self.phase = 'ray_face'
+                    phase = 'ray_face'
+                else:
+                    if self.ray_heading is None:
+                        self.ray_heading = wrap_angle(
+                            gyaw
+                            - math.copysign(math.pi / 2.0, lateral)
+                        )
+
+                    heading_error = angle_difference(
+                        self.ray_heading,
+                        robot[2],
+                    )
+                    if abs(heading_error) > self.ray_heading_tolerance:
+                        self.publish_cmd(
+                            0.0,
+                            clamp(
+                                self.ray_heading_gain * heading_error,
+                                -self.max_angular_velocity,
+                                self.max_angular_velocity,
+                            ),
+                        )
+                        return
+
+                    with self.lock:
+                        self.phase = 'ray_cross'
+                    phase = 'ray_cross'
+
+            if phase == 'ray_cross':
+                if abs(lateral) <= self.ray_position_tolerance:
+                    self.publish_cmd(0.0, 0.0)
+                    with self.lock:
+                        self.phase = 'ray_face'
+                    phase = 'ray_face'
+                else:
+                    heading_error = angle_difference(
+                        self.ray_heading,
+                        robot[2],
+                    )
+                    linear = min(
+                        self.ray_cross_speed,
+                        max(0.08, 0.8 * abs(lateral)),
+                    )
+                    angular = clamp(
+                        self.ray_heading_gain * heading_error,
+                        -self.max_angular_velocity,
+                        self.max_angular_velocity,
+                    )
+                    self.publish_cmd(linear, angular)
+                    return
+
+            if phase == 'ray_face':
+                heading_error = angle_difference(
+                    gyaw,
+                    robot[2],
+                )
+                if abs(heading_error) > self.ray_heading_tolerance:
+                    self.publish_cmd(
+                        0.0,
+                        clamp(
+                            self.ray_heading_gain * heading_error,
+                            -self.max_angular_velocity,
+                            self.max_angular_velocity,
+                        ),
+                    )
+                    return
+
+                self.ray_heading = None
+                with self.lock:
+                    self.phase = 'smc_pose'
+                phase = 'smc_pose'
+
+        # --------------------------------------------------------
+        # Strategy 1 and final stage of strategy 4: direct pose SMC.
+        # --------------------------------------------------------
         if phase == 'smc_pose':
+            linear, angular, rho, _, e_y, e_theta, s = self._smc_command(
+                robot,
+                goal_pose,
+            )
+
             if (
                 rho > self.position_tolerance
                 or abs(e_theta) > self.yaw_tolerance
@@ -977,25 +1398,12 @@ class TagApproachController(Node):
                 self.publish_cmd(linear, angular)
                 return
 
-            camera_range = float('nan')
-            try:
-                tf_camera_tag = self.tf_buffer.lookup_transform(
-                    self.camera_frame,
-                    self.observed_tag_prefix + str(tag_id),
-                    Time(),
-                    timeout=Duration(seconds=0.05),
-                )
-                p = tf_camera_tag.transform.translation
-                camera_range = math.hypot(float(p.x), float(p.y))
-            except TransformException:
-                pass
-
+            base_range = self._base_planar_range_to_tag(tag_id)
             self.get_logger().info(
                 'Tag SMC pose reached: '
                 f'rho={rho:.4f} m, e_y={e_y:+.4f} m, '
                 f'e_theta={math.degrees(e_theta):+.2f} deg, '
-                f's={s:+.4f}, '
-                f'camera_range={camera_range:.3f} m.'
+                f's={s:+.4f}, base_range={base_range:.3f} m.'
             )
             with self.lock:
                 self.phase = 'stable'
@@ -1024,7 +1432,8 @@ class TagApproachController(Node):
                     success=True,
                     message=(
                         'Reached requested tag observation pose with locked '
-                        f'tag {tag_id}; final face angle={face_text}.'
+                        f'tag {tag_id}; strategy={self.control_strategy}; '
+                        f'final face angle={face_text}.'
                     ),
                 )
 
