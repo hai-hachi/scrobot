@@ -16,13 +16,6 @@ endif()
 
 install(
   PROGRAMS
-    scripts/fake_shuttle_detector.py
-    scripts/shuttle_tracker.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-install(
-  PROGRAMS
     scripts/yolo_shuttle_detector.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME yolo_shuttle_detector
