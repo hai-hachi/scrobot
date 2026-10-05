@@ -1461,6 +1461,17 @@ class TagApproachController(Node):
 
         self.goal_pose_pub.publish(msg)
 
+    def _clear_reference_path(self):
+        self.reference_path = []
+        self.path_progress_index = 0
+
+        # Publish an explicit empty transient-local Path so RViz does not keep
+        # displaying the last biarc after terminal handoff.
+        msg = Path()
+        msg.header.frame_id = self.odom_frame
+        msg.header.stamp = self.get_clock().now().to_msg()
+        self.reference_path_pub.publish(msg)
+
     def _publish_reference_path(self):
         if not self.reference_path:
             return
@@ -1748,10 +1759,9 @@ class TagApproachController(Node):
             if live_goal_rho <= self.biarc_terminal_switch_distance:
                 with self.lock:
                     self.phase = 'main_approach'
-                    self.reference_path = []
-                    self.path_progress_index = 0
                     self.biarc_plan_goal = None
                     self.biarc_last_replan_time = None
+                self._clear_reference_path()
                 self.get_logger().info(
                     'Biarc terminal handoff -> main_branch: '
                     f'goal_rho={live_goal_rho:.3f} m <= '
