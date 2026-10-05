@@ -14,12 +14,13 @@ Analyze:
 
 ```bash
 ros2 run scrobot_evaluation analyze_local_odom \
-  ~/scrobot_evaluation_runs/local_odom/local_odom_suite_01
+  ~/scrobot_ws/evaluation_results/local_odom/local_odom_suite_01
 ```
 
-The evaluator compares wheel odometry and EKF against
-`/evaluation/ground_truth_odom`; AprilTag/map correction is intentionally
-excluded from local-odometry metrics.
+The test runner requests MANUAL mode, publishes through
+`/cmd_vel_manual_input`, and restores AUTO after the sequence. The evaluator
+compares wheel odometry and EKF against `/evaluation/ground_truth_odom`;
+AprilTag/map correction is intentionally excluded from local-odometry metrics.
 
 ## Collection session
 
@@ -40,6 +41,14 @@ return-to-sweep time
 relocalization count
 position RMSE
 errors/timeouts
+capture checks started / passed / failed
+collection-event vs ground-truth count delta
+```
+
+The final mission requires:
+
+```text
+capture_checks_failed = 0
 ```
 
 Use this evaluator during the final full-mission acceptance run.
