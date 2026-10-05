@@ -193,8 +193,11 @@ def generate_launch_description():
         DeclareLaunchArgument('rviz_delay', default_value='6.0'),
         DeclareLaunchArgument(
             'mission_delay',
-            default_value='10.0',
-            description='Delay so sensors, controllers, perception, and shuttle spawning are ready.',
+            default_value='15.0',
+            description=(
+                'Delay so the 50-shuttle spawn, sensors, controllers, '
+                'perception, and evaluator are ready before mission autostart.'
+            ),
         ),
 
         simulation,
