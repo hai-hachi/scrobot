@@ -181,21 +181,38 @@ Initial serious fine-tune recommendation:
 POST-YOLO PERCEPTION CLEANUP TODO
 --------------------------------
 [ ] Keep Jetson Orin as production compute reference in docs.
-[ ] Update scan HFOV to calibrated depth HFOV (~+/-0.78979 rad).
-[ ] Set min_height = 0.12 m as single source of truth.
-[ ] Remove launch/YAML conflict for min_height.
-[ ] Set LaserScan range_min = 0.30 m.
-[ ] Set LaserScan range_max = 3.30 m.
-[ ] Set simulated depth far clip = 10.0 m.
-[ ] Keep scan self-filter.
+[x] Update scan HFOV to calibrated depth HFOV (~+/-0.78979 rad).
+[x] Set min_height = 0.12 m as single source of truth.
+[x] Remove launch/YAML conflict for min_height.
+[x] Set LaserScan range_min = 0.30 m.
+[x] Set LaserScan range_max = 3.30 m.
+[x] Set simulated depth far clip = 10.0 m.
+[x] Keep scan self-filter.
 [ ] Verify scan self-mask remains valid with final base geometry.
-[ ] Keep AprilTag configuration and interfaces.
-[ ] Remove stale image_proc/rectification path/dependency.
+[x] Keep AprilTag configuration and interfaces.
+[x] Remove stale image_proc/rectification path/dependency.
 [ ] Verify simulated CameraInfo matches the already-recorded factory intrinsics.
-[ ] Keep shuttle_tracker disabled/optional.
-[ ] Add final real YOLO + aligned-depth node later.
+[x] Keep shuttle_tracker disabled/optional.
+[x] Add final real YOLO + aligned-depth node.
 [ ] Add scrobot_debug/launch/perception_check.launch.py.
 [ ] Add/update scrobot_debug/debug_md/perception.md.
-[ ] Add scrobot_perception/README.md architecture documentation.
+[x] Add scrobot_perception/README.md architecture documentation.
 [ ] Update stale interface/docs that still show tracker as mandatory.
 [ ] Validate Nav2 and collision_monitor both consume filtered /depth/scan.
+
+
+YOLO PERCEPTION VALIDATION — 2026-10-05
+---------------------------------------
+[x] gazebo_simple_v2.pt integrated through yolo_shuttle_detector.
+[x] End-to-end Gazebo RGB -> YOLO -> aligned depth -> Detection3D test works.
+[x] Live shuttle spawn/despawn works without restarting Gazebo.
+[x] Full command procedure recorded in debug_md/yolo_perception.md.
+
+NEXT STEP
+---------
+Validate the cleaned obstacle/depth perception path:
+- pointcloud_to_laserscan calibrated depth HFOV
+- 0.12-0.70 m obstacle height band
+- 0.30-3.30 m scan range
+- scan-level robot self-filter
+- collision_monitor and Nav2 consumption of /camera/camera/depth/scan
