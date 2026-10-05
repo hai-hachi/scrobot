@@ -69,9 +69,9 @@ local_collect_controller:
     # Translation:
     #   v = k_rho * rho * cos(alpha)
     smc_reference_speed: 0.50
-    smc_lambda: 2.00
-    smc_ks: 1.60
-    smc_eta: 0.50
+    smc_lambda: 5.00
+    smc_ks: 2.00
+    smc_eta: 0.70
     smc_phi: 0.08
     smc_krho: 0.80
     smc_max_angular_speed: 1.80
