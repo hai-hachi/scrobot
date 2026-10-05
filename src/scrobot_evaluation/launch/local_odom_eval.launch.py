@@ -16,6 +16,7 @@ def generate_launch_description():
     run_test = LaunchConfiguration('run_test')
     test_type = LaunchConfiguration('test_type')
     run_name = LaunchConfiguration('run_name')
+    output_root = LaunchConfiguration('output_root')
 
     logger = Node(
         package='scrobot_evaluation',
@@ -27,6 +28,7 @@ def generate_launch_description():
             {
                 'use_sim_time': use_sim_time,
                 'run_name': run_name,
+                'output_root': output_root,
             },
         ],
     )
@@ -67,6 +69,13 @@ def generate_launch_description():
             'run_name',
             default_value='',
             description='Optional output directory name.',
+        ),
+        DeclareLaunchArgument(
+            'output_root',
+            default_value=os.path.expanduser(
+                '~/scrobot_ws/evaluation_results/local_odom'
+            ),
+            description='Root directory for local-odometry evaluation runs.',
         ),
         logger,
         runner,
