@@ -4,6 +4,7 @@ tag_global_localizer:
     map_frame: map
     odom_frame: odom
     base_frame: base_footprint
+    camera_frame: camera_color_frame
     detections_topic: /apriltag/detections
     observed_tag_prefix: observed_tag_
     mount_frame_prefix: tag_mount_
@@ -65,14 +66,20 @@ tag_approach_controller:
     # Search completion is based on measured accumulated yaw, not elapsed time.
     search_angular_velocity: 0.45
     search_rotation_rad: 6.283185307179586
-    search_rotation_rad: 6.283185307179586
     max_linear_velocity: 0.45
     max_angular_velocity: 0.75
-    k_position: 1.10
-    k_heading: 1.70
-    k_final_yaw: 1.70
-    drive_heading_limit_deg: 35.0
-    position_tolerance: 0.08
+
+    # Nonlinear SMC pose controller. The observation pose is defined at the
+    # color camera; default_target_distance is camera-relative.
+    smc_reference_speed: 0.50
+    smc_lambda: 2.00
+    smc_ks: 1.60
+    smc_eta: 0.50
+    smc_phi: 0.08
+    smc_krho: 0.80
+    heading_stop_deg: 70.0
+
+    position_tolerance: 0.05
     yaw_tolerance_deg: 5.0
     stable_time: 0.25
     goal_filter_alpha: 0.30
