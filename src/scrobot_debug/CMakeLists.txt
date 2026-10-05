@@ -186,6 +186,13 @@ install(
 )
 
 install(
+  PROGRAMS
+    scripts/yolo_perception_monitor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME yolo_perception_monitor
+)
+
+install(
   DIRECTORY
     launch
     config
