@@ -123,54 +123,74 @@ so both normal and `--symlink-install` builds expose its launch/config/executabl
 
 ## scrobot_perception
 
-### `fake_shuttle_detector`
-Simulation-only perception adapter.
+### `yolo_shuttle_detector`
+Production shuttle detector.
 
 Inputs:
 
-- `/evaluation/shuttle_ground_truth` (`geometry_msgs/msg/PoseArray`)
-- `/evaluation/ground_truth_odom`
+- `/camera/camera/color/image_raw`
+- `/camera/camera/aligned_depth_to_color/image_raw`
 - `/camera/camera/color/camera_info`
-- static base/camera TF
 
-Output:
+Outputs:
 
+- `/perception/shuttle_detections_2d`
 - `/perception/shuttle_detections_3d`
-- type: `vision_msgs/msg/Detection3DArray`
-- frame: `camera_depth_optical_frame`
-- sensor-data QoS
-
-The detector limits Gazebo shuttle truth by camera range/FOV and emits the same 3D detection interface planned for the real RGB-D pipeline. It does not assign persistent IDs.
-
-Synthetic detection timestamps are derived from Gazebo ground-truth odometry so they remain in simulation time.
-
-### `shuttle_tracker`
-Persistent map-frame shuttle tracker.
-
-Input:
-
-- `/perception/shuttle_detections_3d`
-
-Output:
-
-- `/perception/tracked_shuttles`
-- type: `vision_msgs/msg/Detection3DArray`
-- frame: `map`
-- Reliable QoS
-- default publish rate: 10 Hz
+- optional `/perception/shuttle_debug/image`
 
 Processing:
 
 ```text
-camera-frame detection
- -> TF into map
- -> nearest-neighbor association
- -> exponential position smoothing
- -> persistent integer ID
- -> stale-track removal
+rectified RGB
+ -> YOLO shuttle bbox
+ -> inner-bbox aligned-depth sampling
+ -> foreground-biased depth estimate
+ -> deprojection with color CameraInfo
+ -> camera-relative Detection3DArray
 ```
 
-Default gate is 0.30 m, smoothing alpha 0.50, stale timeout 1.50 s. Exact measurement-time TF is preferred; the tracker can fall back to the latest transform during startup/timing skew.
+The current 3D output frame is `camera_color_optical_frame`. The detector is
+configured for the current shuttle model at `imgsz=960` and camera-relative
+usable depth 0.50-1.68 m.
+
+### `depth_pointcloud_to_scan`
+Converts the D435i depth point cloud into the 2D obstacle scan used downstream.
+
+Current parameters:
+
+```text
+min_height = 0.12 m
+max_height = 0.70 m
+angle_min  = -0.7897925312 rad
+angle_max  = +0.7897925312 rad
+range_min  = 0.30 m
+range_max  = 3.30 m
+```
+
+### `depth_scan_self_filter`
+Masks scan rays that intersect the robot body footprint and publishes:
+
+```text
+/camera/camera/depth/scan
+```
+
+This filtered scan is the common obstacle source for collision monitoring and
+Nav2 costmaps.
+
+### AprilTag node
+`apriltag_ros` consumes the rectified RGB stream and color CameraInfo and
+publishes `/apriltag/detections`. Global-localization quality gating remains
+owned by `scrobot_localization`.
+
+### `fake_shuttle_detector`
+Simulation-only adapter retained for tests that explicitly need Gazebo truth.
+It publishes the same `/perception/shuttle_detections_3d` interface but is not
+part of the final real perception path.
+
+### `shuttle_tracker`
+Optional persistent map-frame tracker retained for future use. The current
+production mission does not launch or require it; mission collection consumes
+`/perception/shuttle_detections_3d` through `shuttle_collection_filter`.
 
 ## scrobot_simulation
 
