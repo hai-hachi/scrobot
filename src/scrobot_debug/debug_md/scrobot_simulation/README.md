@@ -53,3 +53,27 @@ ros2 topic echo /evaluation/shuttle_collected
 ```
 
 Simulation truth is evaluation/debug-only.
+
+
+## Production pickup-removal preflight
+
+The strongest collection regression is the complete production local-collection
+path:
+
+```bash
+ros2 launch scrobot_debug smc_shuttle_check.launch.py \
+  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt \
+  launch_rviz:=false
+```
+
+The collection monitor requires both the collection event and a decrease in
+`/evaluation/shuttle_ground_truth`.
+
+Required result before a full mission:
+
+```text
+REMOVAL_PASS
+```
+
+`REMOVAL_FAIL` means the dynamic shuttle remained in Gazebo and the mission
+run should not be used for collection-rate evaluation.
