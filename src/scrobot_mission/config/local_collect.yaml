@@ -75,12 +75,12 @@ local_collect_controller:
     # Translation:
     #   v = k_rho * rho * cos(alpha)
     smc_reference_speed: 0.50
-    smc_lambda: 3.00
-    smc_ks: 2.00
-    smc_eta: 0.70
-    smc_phi: 0.08
+    smc_lambda: 2.50
+    smc_ks: 1.20
+    smc_eta: 0.40
+    smc_phi: 0.30
     smc_krho: 0.80
-    smc_max_angular_speed: 1.80
+    smc_max_angular_speed: 1.00
     smc_max_linear_speed: 0.50
 
     # Rotate first for large position-heading error, matching the previous
@@ -89,4 +89,4 @@ local_collect_controller:
 
     # Kinematic command slew limits retained from the robot design.
     max_linear_accel: 1.00
-    max_angular_accel: 1.00
+    max_angular_accel: 2.00
