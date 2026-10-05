@@ -42,6 +42,7 @@ class TelemetryMonitor(Node):
                 'sweep_mission_manager',
                 'local_collect_controller',
                 'shuttle_collection_filter',
+                'yolo_shuttle_detector',
                 'fake_shuttle_detector',
                 'shuttle_tracker',
                 'tag_global_localizer',
