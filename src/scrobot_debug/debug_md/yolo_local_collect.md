@@ -255,7 +255,9 @@ ros2 run scrobot_simulation spawn_shuttles \
   --x 1.20 --y -0.25
 ```
 
-Keep each initial target inside the validated YOLO camera-relative range.
+Keep each initial target inside the validated mission envelope of
+0.50-1.80 m planar range from `base_link`. The YOLO detector itself uses a
+broader 0.20-3.00 m camera-depth validity interval.
 
 ## 8. Pass criteria
 
@@ -272,5 +274,123 @@ The integration passes when:
 9. The action completes successfully.
 10. Collision monitoring remains active throughout the motion.
 
-After this passes, the next test is to replace the manual action trigger with
-the sweep mission's automatic shuttle diversion.
+This single-shuttle integration passed. Multi-shuttle filtering, selection,
+and reacquisition were then validated separately as described below.
+
+
+## 9. Multi-shuttle selection and reacquisition
+
+The next integration test uses the production detector, mission filter, local
+SMC controller, and physical Gazebo collection with four shuttles:
+
+```text
+A = (1.25, -0.50) m  initial range about 1.35 m  eligible
+B = (1.45, -0.15) m  initial range about 1.46 m  eligible
+C = (1.60, +0.20) m  initial range about 1.61 m  eligible
+D = (1.75, +0.60) m  initial range about 1.85 m  initially rejected
+```
+
+Run:
+
+```bash
+ros2 launch scrobot_debug yolo_multi_collect_check.launch.py \
+  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt
+```
+
+The test validates:
+
+```text
+4 raw YOLO detections
+        |
+        v
+initial mission gate
+A / B / C eligible
+D initially rejected
+        |
+        v
+local_collect_controller
+locks first eligible detection in array order
+        |
+        v
+collect
+        |
+        v
+exclude attempted target
+        |
+        v
+reacquire first new eligible detection
+```
+
+Important controller behavior:
+
+```text
+_lock_first_target()
+```
+
+does not currently sort by nearest range or smallest bearing. It walks the
+filtered `Detection3DArray` in order and freezes the first eligible detection
+that is not within the reacquisition exclusion radius of a previously attempted
+target.
+
+The monitor latches the pre-motion filter result and reports:
+
+```text
+initial_filter=PASS
+selection=PASS
+reacquire=PASS
+```
+
+The multi-shuttle test passed. Therefore the existing first-visible/array-order
+policy is retained for the current mission. A more explicit cost-based selector
+is an optional future optimization, not a blocker.
+
+Note that shuttle D may legitimately become eligible after the robot moves.
+Only the initial gate is expected to reject D.
+
+## 10. Final local-collection validation status
+
+The complete local collection subsystem is now considered validated:
+
+```text
+production YOLO detection                 PASS
+aligned-depth 3D reconstruction           PASS
+base_link collection range filter         PASS
+single-shuttle SMC collection             PASS
+stable pre-pose handoff                   PASS
+straight 0.30 m/s collection pass         PASS
+Gazebo physical collection event          PASS
+multiple simultaneous shuttles            PASS
+first-target selection                     PASS
+post-collection target reacquisition      PASS
+```
+
+The remaining simulation milestone is no longer a local-perception or
+local-controller test. It is the full mission integration:
+
+```text
+initial AprilTag acquisition / relocalization
+        |
+        v
+Nav2 join + court sweep
+        |
+        v
+eligible shuttle interrupt
+        |
+        v
+save sweep checkpoint / path index
+        |
+        v
+local collection spree
+        |
+        v
+Nav2 return to saved checkpoint
+        |
+        v
+resume sweep progress
+        |
+        v
+periodic/fixed-station AprilTag relocalization
+        |
+        v
+mission COMPLETE
+```
