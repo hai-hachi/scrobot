@@ -124,7 +124,7 @@ ros2 topic echo /perception/shuttle_detections_3d
 
 ```bash
 ros2 launch scrobot_debug yolo_perception_check.launch.py \
-  model_path=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt \
+  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt \
   shuttle_x:=1.40 \
   shuttle_y:=0.20
 ```
