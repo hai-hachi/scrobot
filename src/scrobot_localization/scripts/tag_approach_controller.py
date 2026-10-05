@@ -6,7 +6,8 @@ import time
 
 import rclpy
 from apriltag_msgs.msg import AprilTagDetectionArray
-from geometry_msgs.msg import TwistStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped
+from nav_msgs.msg import Path
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
@@ -87,15 +88,18 @@ def xyz_rpy_to_matrix(xyz, rpy):
 
 class TagApproachController(Node):
     """
-    Stationary multi-frame tag selection + camera-relative SMC approach.
+    Stationary multi-frame tag selection with selectable local approach law.
 
-    Flow:
-      search -> stop/observe -> lock best-facing tag
-      -> SMC to camera-relative observation pose -> stable
+    The desired pose is expressed at base_link, with a default 0.90 m stand-off
+    from the physical tag face. The default production strategy is pure_smc.
 
-    Once a tag is locked, the controller keeps driving toward the odom-frame
-    goal even if the camera briefly loses the tag. The locked tag may refine
-    that goal when new observations arrive, but other tags cannot steal it.
+    Experimental strategies are exposed for controlled debug comparison:
+      pure_smc       direct pose SMC
+      main_branch    original direct position + final-yaw controller
+      biarc_smc      tangent biarc reference path feeding the same SMC
+      normal_ray_smc rotate/cross/face the tag normal ray, then SMC
+
+    Once a tag is locked, other tags cannot steal it.
     """
 
     def __init__(self):
@@ -103,7 +107,7 @@ class TagApproachController(Node):
         self.cb_group = ReentrantCallbackGroup()
 
         self.declare_parameter('odom_frame', 'odom')
-        self.declare_parameter('base_frame', 'base_footprint')
+        self.declare_parameter('base_frame', 'base_link')
         self.declare_parameter('camera_frame', 'camera_color_frame')
         self.declare_parameter('detections_topic', '/apriltag/detections')
         self.declare_parameter('observed_tag_prefix', 'observed_tag_')
@@ -111,7 +115,7 @@ class TagApproachController(Node):
 
         self.declare_parameter('min_decision_margin', 10.0)
         self.declare_parameter('max_detection_distance', 10.0)
-        self.declare_parameter('default_target_distance', 0.80)
+        self.declare_parameter('default_target_distance', 0.90)
         self.declare_parameter('default_timeout', 60.0)
         self.declare_parameter('tag_lost_timeout', 1.0)
 
@@ -135,6 +139,26 @@ class TagApproachController(Node):
         self.declare_parameter('smc_phi', 0.08)
         self.declare_parameter('smc_krho', 0.80)
         self.declare_parameter('heading_stop_deg', 70.0)
+
+        self.declare_parameter('control_strategy', 'pure_smc')
+
+        # Original main-branch direct-goal controller.
+        self.declare_parameter('main_k_position', 0.80)
+        self.declare_parameter('main_k_heading', 1.80)
+        self.declare_parameter('main_k_final_yaw', 1.80)
+        self.declare_parameter('main_drive_heading_limit_deg', 35.0)
+
+        # Biarc reference path. A single circle cannot in general satisfy two
+        # arbitrary endpoint poses, so the tangent-path experiment uses two
+        # circular arcs joined with continuous tangent.
+        self.declare_parameter('biarc_spacing', 0.08)
+        self.declare_parameter('biarc_lookahead', 0.35)
+
+        # Deliberately simple normal-ray baseline.
+        self.declare_parameter('ray_position_tolerance', 0.12)
+        self.declare_parameter('ray_heading_tolerance_deg', 8.0)
+        self.declare_parameter('ray_cross_speed', 0.30)
+        self.declare_parameter('ray_heading_gain', 1.8)
 
         self.declare_parameter('position_tolerance', 0.05)
         self.declare_parameter('yaw_tolerance_deg', 5.0)
@@ -204,6 +228,54 @@ class TagApproachController(Node):
         self.heading_stop = math.radians(
             float(self.get_parameter('heading_stop_deg').value)
         )
+
+        self.control_strategy = str(
+            self.get_parameter('control_strategy').value
+        ).strip().lower()
+        if self.control_strategy not in (
+            'pure_smc',
+            'main_branch',
+            'biarc_smc',
+            'normal_ray_smc',
+        ):
+            raise ValueError(
+                'control_strategy must be pure_smc, main_branch, '
+                'biarc_smc, or normal_ray_smc.'
+            )
+
+        self.main_k_position = float(
+            self.get_parameter('main_k_position').value
+        )
+        self.main_k_heading = float(
+            self.get_parameter('main_k_heading').value
+        )
+        self.main_k_final_yaw = float(
+            self.get_parameter('main_k_final_yaw').value
+        )
+        self.main_drive_heading_limit = math.radians(
+            float(self.get_parameter('main_drive_heading_limit_deg').value)
+        )
+
+        self.biarc_spacing = max(
+            0.02, float(self.get_parameter('biarc_spacing').value)
+        )
+        self.biarc_lookahead = max(
+            self.biarc_spacing,
+            float(self.get_parameter('biarc_lookahead').value),
+        )
+
+        self.ray_position_tolerance = max(
+            0.01, float(self.get_parameter('ray_position_tolerance').value)
+        )
+        self.ray_heading_tolerance = math.radians(
+            float(self.get_parameter('ray_heading_tolerance_deg').value)
+        )
+        self.ray_cross_speed = max(
+            0.0, float(self.get_parameter('ray_cross_speed').value)
+        )
+        self.ray_heading_gain = float(
+            self.get_parameter('ray_heading_gain').value
+        )
         self.position_tolerance = float(
             self.get_parameter('position_tolerance').value
         )
@@ -253,6 +325,11 @@ class TagApproachController(Node):
         self.last_face_angle = float('nan')
         self.stable_since = None
 
+        # Strategy-specific experimental state.
+        self.reference_path = []
+        self.path_progress_index = 0
+        self.ray_heading = None
+
         # Search progress is measured from odometry yaw so one search attempt
         # means one physical rotation even if simulation timing or smoothing varies.
         self.search_last_yaw = None
@@ -291,6 +368,17 @@ class TagApproachController(Node):
             self.cmd_vel_topic,
             control_qos,
         )
+
+        path_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.reference_path_pub = self.create_publisher(
+            Path,
+            '/debug/tag_controller/reference_path',
+            path_qos,
+        )
         self.detection_sub = self.create_subscription(
             AprilTagDetectionArray,
             self.detections_topic,
@@ -318,7 +406,8 @@ class TagApproachController(Node):
 
         self.get_logger().info(
             'Tag approach controller started: stationary multi-frame '
-            'selection, best-facing tag lock, camera-relative SMC pose control.'
+            f'selection, base-link target={self.default_target_distance:.2f} m, '
+            f'strategy={self.control_strategy}.'
         )
 
     def goal_callback(self, goal_request):
@@ -359,6 +448,9 @@ class TagApproachController(Node):
             self.last_tag_bearing = float('nan')
             self.last_face_angle = float('nan')
             self.stable_since = None
+            self.reference_path = []
+            self.path_progress_index = 0
+            self.ray_heading = None
             self.search_last_yaw = None
             self.search_accumulated_yaw = 0.0
 
@@ -377,8 +469,9 @@ class TagApproachController(Node):
         self.control_timer.reset()
 
         self.get_logger().info(
-            f'ApproachTag SMC started: preferred_tag={self.preferred_tag_id}, '
-            f'target_distance={target_distance:.2f} m'
+            f'ApproachTag started: strategy={self.control_strategy}, '
+            f'preferred_tag={self.preferred_tag_id}, '
+            f'base_target_distance={target_distance:.2f} m'
         )
 
         result = await future
@@ -455,39 +548,19 @@ class TagApproachController(Node):
         if robot_x_in_mount <= 0.0:
             return None, 'backside'
 
-        # Desired observation pose is defined at the COLOR CAMERA, not at
-        # base_footprint. target_distance is therefore camera-relative.
-        T_mount_camera_goal = xyz_rpy_to_matrix(
+        # Desired pose is defined directly at base_link. The rigid camera
+        # offset is absorbed into the selected stand-off distance, so c = 0.
+        T_mount_goal = xyz_rpy_to_matrix(
             [target_distance, 0.0, 0.0],
             [0.0, 0.0, math.pi],
         )
-        T_odom_camera_goal = T_odom_mount @ T_mount_camera_goal
+        T_odom_goal = T_odom_mount @ T_mount_goal
 
-        camera_goal_x = float(T_odom_camera_goal[0, 3])
-        camera_goal_y = float(T_odom_camera_goal[1, 3])
-        q_goal = quaternion_from_matrix(T_odom_camera_goal)
+        gx = float(T_odom_goal[0, 3])
+        gy = float(T_odom_goal[1, 3])
+        q_goal = quaternion_from_matrix(T_odom_goal)
         _, _, gyaw = euler_from_quaternion(q_goal)
         gyaw = wrap_angle(gyaw)
-
-        try:
-            tf_base_camera = self.tf_buffer.lookup_transform(
-                self.base_frame,
-                self.camera_frame,
-                Time(),
-                timeout=Duration(seconds=0.05),
-            )
-        except TransformException:
-            return None, 'tf'
-
-        camera_dx = float(tf_base_camera.transform.translation.x)
-        camera_dy = float(tf_base_camera.transform.translation.y)
-
-        # SMC controls a virtual centerline point c metres ahead of the base.
-        # Compensate the real camera's lateral offset so convergence of the
-        # virtual point places the actual camera at the requested pose.
-        control_offset_c = camera_dx
-        gx = camera_goal_x + camera_dy * math.sin(gyaw)
-        gy = camera_goal_y - camera_dy * math.cos(gyaw)
 
         return {
             'tag_id': tag_id,
@@ -498,9 +571,6 @@ class TagApproachController(Node):
             'goal_x': gx,
             'goal_y': gy,
             'goal_yaw': gyaw,
-            'control_offset_c': control_offset_c,
-            'camera_goal_x': camera_goal_x,
-            'camera_goal_y': camera_goal_y,
         }, None
 
     def process_pending_detection(self):
@@ -619,11 +689,10 @@ class TagApproachController(Node):
                     candidate['goal_x'],
                     candidate['goal_y'],
                     candidate['goal_yaw'],
-                    candidate['control_offset_c'],
                 ]
             else:
                 a = self.goal_filter_alpha
-                old_x, old_y, old_yaw, old_c = self.goal_pose
+                old_x, old_y, old_yaw = self.goal_pose
                 self.goal_pose = [
                     old_x + a * (candidate['goal_x'] - old_x),
                     old_y + a * (candidate['goal_y'] - old_y),
@@ -631,7 +700,6 @@ class TagApproachController(Node):
                         old_yaw
                         + a * angle_difference(candidate['goal_yaw'], old_yaw)
                     ),
-                    old_c + a * (candidate['control_offset_c'] - old_c),
                 ]
 
     def select_and_lock_tag(self):
@@ -663,9 +731,6 @@ class TagApproachController(Node):
                 'goal_yaw': circular_mean(
                     [sample['goal_yaw'] for sample in samples]
                 ),
-                'control_offset_c': median(
-                    [sample['control_offset_c'] for sample in samples]
-                ),
             }
             summaries.append(summary)
 
@@ -692,13 +757,24 @@ class TagApproachController(Node):
                 best['goal_x'],
                 best['goal_y'],
                 best['goal_yaw'],
-                best['control_offset_c'],
             ]
             self.last_tag_seen = time.monotonic()
             self.last_tag_distance = best['distance']
             self.last_tag_bearing = best['bearing']
             self.last_face_angle = best['face_angle']
-            self.phase = 'smc_pose'
+            self.reference_path = []
+            self.path_progress_index = 0
+            self.ray_heading = None
+
+            if self.control_strategy == 'main_branch':
+                self.phase = 'main_approach'
+            elif self.control_strategy == 'biarc_smc':
+                self.phase = 'biarc_smc'
+            elif self.control_strategy == 'normal_ray_smc':
+                self.phase = 'ray_turn'
+            else:
+                self.phase = 'smc_pose'
+
             self.selection_samples = {}
 
         self.get_logger().info(
@@ -707,7 +783,8 @@ class TagApproachController(Node):
             f'face_angle={math.degrees(best["face_angle"]):.1f} deg, '
             f'distance={best["distance"]:.2f} m, '
             f'margin={best["margin"]:.1f}. '
-            f'SMC to {self.target_distance:.2f} m camera-relative observation pose.'
+            f'strategy={self.control_strategy}, '
+            f'base-link target={self.target_distance:.2f} m.'
         )
 
         return True
