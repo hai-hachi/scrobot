@@ -355,6 +355,26 @@ Detailed procedure:
 debug_md/yolo_perception.md
 ```
 
+## SMC pose-control checks
+
+Two isolated launches validate the same nonlinear SMC pose-control concept for
+the two precision targets:
+
+```bash
+# AprilTag: 0.80 m color-camera observation pose, then stop.
+ros2 launch scrobot_debug smc_tag_check.launch.py
+
+# Shuttle: 1.00 m color-camera staging pose, then straight collection.
+ros2 launch scrobot_debug smc_shuttle_check.launch.py \
+  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt
+```
+
+Detailed procedure and equations:
+
+```text
+debug_md/smc.md
+```
+
 ## Detailed test procedures
 
 Subsystem test procedures are centralized in `debug_md/README.md`.
