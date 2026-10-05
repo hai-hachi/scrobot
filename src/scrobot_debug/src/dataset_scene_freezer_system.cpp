@@ -15,7 +15,7 @@
 #include <gz/sim/components/LinearVelocityCmd.hh>
 #include <gz/sim/components/Model.hh>
 #include <gz/sim/components/Name.hh>
-#include <gz/sim/components/WorldPoseCmd.hh>
+#include <gz/sim/components/PoseCmd.hh>
 #include <gz/transport/Node.hh>
 
 #include <sdf/Element.hh>
