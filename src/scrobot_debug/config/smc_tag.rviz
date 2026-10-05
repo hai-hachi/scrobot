@@ -1,0 +1,157 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded: ~
+      Splitter Ratio: 0.78
+    Tree Height: 520
+  - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Value: true
+      Alpha: 0.35
+      Cell Size: 0.5
+      Color: 120; 120; 120
+      Line Style:
+        Line Width: 0.02
+        Value: Lines
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 30
+      Reference Frame: <Fixed Frame>
+
+    - Class: rviz_default_plugins/RobotModel
+      Name: Robot
+      Enabled: true
+      Value: true
+      Alpha: 1
+      Collision Enabled: false
+      Description File: ""
+      Description Source: Topic
+      Description Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+      Mass Properties:
+        Inertia: false
+        Mass: false
+      TF Prefix: ""
+      Update Interval: 0
+      Visual Enabled: true
+
+    - Class: rviz_default_plugins/Marker
+      Name: AprilTag Target
+      Enabled: true
+      Value: true
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /debug/smc_tag/tag_marker
+
+    - Class: rviz_default_plugins/Pose
+      Name: Desired Camera Pose
+      Enabled: true
+      Value: true
+      Alpha: 1
+      Color: 255; 85; 0
+      Shape: Arrow
+      Shaft Length: 0.35
+      Shaft Radius: 0.025
+      Head Length: 0.15
+      Head Radius: 0.06
+      Axes Length: 0.40
+      Axes Radius: 0.03
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /debug/smc_tag/desired_camera_pose
+
+    - Class: rviz_default_plugins/Path
+      Name: Robot Trajectory
+      Enabled: true
+      Value: true
+      Alpha: 1
+      Buffer Length: 1
+      Color: 0; 255; 255
+      Line Style: Lines
+      Line Width: 0.04
+      Pose Style: None
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /debug/smc_tag/trajectory
+
+  Enabled: true
+  Global Options:
+    Background Color: 35; 35; 35
+    Fixed Frame: odom
+    Frame Rate: 15
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Angle: 0
+      Class: rviz_default_plugins/TopDownOrtho
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.06
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: 0
+        Y: 2
+        Z: 0
+      Invert Z Axis: false
+      Name: SMC Top Down
+      Near Clip Distance: 0.01
+      Scale: 55
+      Target Frame: odom
+      Value: TopDownOrtho (rviz_default_plugins)
+    Saved: ~
+
+Window Geometry:
+  Displays:
+    collapsed: false
+  Views:
+    collapsed: true
+  Height: 820
+  Width: 1200
+  X: 60
+  Y: 60
