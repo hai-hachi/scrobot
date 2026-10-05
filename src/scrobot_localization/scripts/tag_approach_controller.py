@@ -910,7 +910,19 @@ class TagApproachController(Node):
                 }
             return None
 
-        sweep = 2.0 * half_sweep
+        # For the positive-d1/d2 biarc family we want the SHORT arc.
+        # 2*half_sweep can lie outside [-pi, pi], which selects the long way
+        # around the same circle and can send the path far outside the court.
+        # Wrapping the sweep preserves the same endpoint/tangent (difference
+        # is an integer 2*pi) while selecting the short circular arc.
+        raw_sweep = 2.0 * half_sweep
+        sweep = wrap_angle(raw_sweep)
+
+        # A wrapped sweep of ~0 would be the degenerate full-circle branch,
+        # which is not a useful positive-distance biarc segment.
+        if abs(sweep) < 1e-8:
+            return None
+
         radius = chord / (2.0 * math.sin(half_sweep))
 
         nx = -math.sin(start_yaw)
@@ -1156,6 +1168,34 @@ class TagApproachController(Node):
             return None
 
         path = first + second[1:]
+
+        # Do not overwrite the endpoint to hide a geometry error. Verify that
+        # the sampled biarc actually interpolates the requested endpoint pose.
+        start_position_error = math.hypot(
+            path[0][0] - x0,
+            path[0][1] - y0,
+        )
+        end_position_error = math.hypot(
+            path[-1][0] - x1,
+            path[-1][1] - y1,
+        )
+        start_yaw_error = abs(
+            angle_difference(path[0][2], yaw0)
+        )
+        end_yaw_error = abs(
+            angle_difference(path[-1][2], yaw1)
+        )
+
+        if (
+            start_position_error > 1e-5
+            or end_position_error > 1e-5
+            or start_yaw_error > math.radians(0.01)
+            or end_yaw_error > math.radians(0.01)
+        ):
+            return None
+
+        # Snap only after the interpolation check has passed, to remove tiny
+        # floating-point error while keeping the endpoint invariant explicit.
         path[0] = (x0, y0, wrap_angle(yaw0))
         path[-1] = (x1, y1, wrap_angle(yaw1))
 
@@ -1275,7 +1315,7 @@ class TagApproachController(Node):
             f'length={best["length"]:.3f} m, '
             f'max_deviation={best["deviation"]:.3f} m, '
             f'min_radius={best["min_radius"]:.3f} m, '
-            f'sweeps=({math.degrees(best["sweep_1"]):+.1f}, '
+            f'short_sweeps=({math.degrees(best["sweep_1"]):+.1f}, '
             f'{math.degrees(best["sweep_2"]):+.1f}) deg.'
         )
 
