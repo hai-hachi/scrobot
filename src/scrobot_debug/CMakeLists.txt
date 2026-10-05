@@ -200,6 +200,13 @@ install(
 )
 
 install(
+  PROGRAMS
+    scripts/smc_tag_visualizer.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME smc_tag_visualizer
+)
+
+install(
   DIRECTORY
     launch
     config
