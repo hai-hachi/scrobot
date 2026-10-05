@@ -1,8 +1,9 @@
 import os
+import shutil
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import AppendEnvironmentVariable, DeclareLaunchArgument, EmitEvent, ExecuteProcess, IncludeLaunchDescription, RegisterEventHandler
+from launch.actions import AppendEnvironmentVariable, DeclareLaunchArgument, EmitEvent, IncludeLaunchDescription, OpaqueFunction, RegisterEventHandler
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -17,10 +18,14 @@ def generate_launch_description():
 
     world = os.path.join(debug_pkg, 'worlds', 'yolo_bbox_dataset.sdf')
 
-    clear_raw = ExecuteProcess(
-        cmd=['bash', '-lc', 'rm -rf /tmp/scrobot_yolo_bbox_raw && mkdir -p /tmp/scrobot_yolo_bbox_raw/images /tmp/scrobot_yolo_bbox_raw/boxes'],
-        output='screen',
-    )
+    def clear_native_raw(_context):
+        raw = '/tmp/scrobot_yolo_bbox_raw'
+        shutil.rmtree(raw, ignore_errors=True)
+        os.makedirs(os.path.join(raw, 'images'), exist_ok=True)
+        os.makedirs(os.path.join(raw, 'boxes'), exist_ok=True)
+        return []
+
+    clear_raw = OpaqueFunction(function=clear_native_raw)
 
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
