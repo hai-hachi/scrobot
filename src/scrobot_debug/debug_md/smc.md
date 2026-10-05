@@ -445,3 +445,39 @@ base_range ~= 1.10 m
 ```
 
 The robot then runs straight over the frozen shuttle target.
+
+
+## Biarc branch validation
+
+Current path parameters:
+
+```text
+biarc_spacing          = 0.08 m
+biarc_lookahead        = 0.30 m
+biarc_max_arc_sweep    = 175 deg
+d1 family search       = 0.15 ... 6.0 x balanced d1
+d1 samples             = 81
+```
+
+The arc generator keeps the physically correct **forward signed sweep**.
+It must not wrap a +270 deg forward left-turn into a -90 deg arc: although
+those angles share the same endpoint orientation modulo 2*pi, the -90 deg
+version reverses motion relative to the stored tangent and makes the reference
+bow to the wrong side. Candidates requiring more than 175 deg on either arc are
+rejected and another member of the biarc family is tried.
+
+The controller also verifies that the sampled path truly interpolates the
+requested start and controller-goal pose before accepting it.
+
+RViz contains two goal markers:
+
+```text
+Desired Base Pose   = ideal pose from known court/tag geometry
+Controller Goal     = pose produced from the locked AprilTag observation
+```
+
+The biarc must end exactly at **Controller Goal**. For a healthy detection,
+Controller Goal should also nearly overlap Desired Base Pose.
+
+This is the most promising experiment when pure pose SMC has a small capture
+region, because the SMC sees much smaller local lateral and heading errors.
