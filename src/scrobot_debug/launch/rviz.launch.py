@@ -8,11 +8,12 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
 
-    rviz_config = PathJoinSubstitution([
+    default_rviz_config = PathJoinSubstitution([
         FindPackageShare('scrobot_description'),
         'rviz',
         'scrobot.rviz',
     ])
+    rviz_config = LaunchConfiguration('rviz_config')
 
     court_config = PathJoinSubstitution([
         FindPackageShare('scrobot_debug'),
@@ -45,6 +46,11 @@ def generate_launch_description():
             'use_sim_time',
             default_value='true',
             choices=['true', 'false'],
+        ),
+        DeclareLaunchArgument(
+            'rviz_config',
+            default_value=default_rviz_config,
+            description='RViz config file; defaults to the master SCROBOT view.',
         ),
         court_visualizer,
         rviz,
