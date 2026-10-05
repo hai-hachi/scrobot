@@ -27,9 +27,10 @@ heading   = directly toward the shuttle
 then straight collect at 0.30 m/s
 ```
 
-The SMC law is therefore:
+The local controller is best understood as two coupled parts:
 
 ```text
+angular steering:
 s = e_theta + lambda * e_y
 
 omega =
@@ -37,12 +38,25 @@ omega =
   + k_s * s
   + eta * sat(s / phi)
 
+forward translation:
 v = k_rho * rho * cos(alpha)
 ```
 
-For large `alpha`, linear motion is stopped until the heading is acceptable.
+The sliding-mode law primarily generates `omega`. The linear velocity is a
+separate proportional pose-approach law. Definitions:
 
-Current baseline gains:
+```text
+rho   = Euclidean distance from current base_link XY to desired XY
+alpha = angle from current robot heading to the desired XY position
+k_rho = proportional gain converting position error into forward speed
+v_R   = reference speed appearing inside the SMC angular law
+```
+
+`v_R` is not the same variable as the commanded `v`. During pose approach,
+`v` naturally decreases as `rho -> 0`. For large `alpha`, translation is
+stopped so the robot can correct its heading first.
+
+AprilTag SMC baseline parameters remain:
 
 ```text
 v_R      = 0.50 m/s
@@ -506,7 +520,9 @@ build fixed base_link pre-pose
    ↓
 PURE SMC to pre-pose
    ↓
-position + yaw tolerance satisfied
+rho <= 0.03 m AND |e_theta| <= 5 deg
+   ↓
+remain continuously valid for 0.25 s
    ↓
 STRAIGHT_COLLECT: v = 0.30 m/s, omega = 0
    ↓
@@ -521,7 +537,12 @@ The shuttle controller uses the same simplified convention:
 controlled point = base_link
 c = 0
 desired stand-off = 1.10 m from frozen shuttle
+usable mission range = 0.50 ... 1.80 m from base_link
 ```
+
+The 0.50–1.80 m range is a mission-side eligibility range evaluated after the
+detection has been transformed into `base_link`; it is not a camera-depth
+range.
 
 After convergence:
 
@@ -549,11 +570,12 @@ ros2 launch scrobot_debug smc_shuttle_check.launch.py \
 Expected convergence line:
 
 ```text
-SMC pre-pose reached:
+SMC pre-pose reached and stable:
 rho=...
 e_y=...
 e_theta=...
 s=...
+stable=0.25 s
 base_range=... m
 ```
 
@@ -579,12 +601,85 @@ base_range at handoff
 success / timeout / circling behavior
 ```
 
-The main question is the shuttle SMC capture region: how much lateral and
+The main question was the shuttle SMC capture region: how much lateral and
 heading error can be corrected while the shuttle remains inside the useful
-camera region. Only after that is understood should a path-shaping method such
-as biarc be considered.
+camera region. The pure-SMC test was retained; no biarc was added to shuttle
+collection.
+
+## Final shuttle SMC tuning
+
+The first shuttle runs showed acceptable lateral convergence but strong heading
+overshoot. Tuning was therefore focused on the angular dynamics while keeping
+the lateral behavior intact. The final values currently pushed in
+`local_collect.yaml` are:
+
+```text
+v_R                    = 0.50 m/s
+lambda                 = 2.50
+k_s                    = 1.20
+eta                    = 0.40
+phi                    = 0.30
+k_rho                  = 0.80
+max angular speed      = 1.00 rad/s
+max linear speed       = 0.50 m/s
+max angular accel      = 2.00 rad/s^2
+max linear accel       = 1.00 m/s^2
+pre-pose position tol  = 0.03 m
+pre-pose yaw tol       = 5 deg
+pre-pose stable time   = 0.25 s
+```
+
+Important tuning lessons from the shuttle test:
+
+- `lambda` weights lateral error inside `s = e_theta + lambda*e_y`; once
+  lateral tracking is acceptable, do not keep changing it to solve pure
+  heading overshoot.
+- Increasing `phi` softens the boundary layer around `s = 0` and reduces
+  aggressive sign-changing angular correction.
+- Reducing `eta` weakens the reaching/switching term and can reduce repeated
+  heading crossings.
+- Reducing `k_s` reduces proportional correction on the sliding surface.
+- `smc_max_angular_speed` limits how fast the robot may rotate.
+- `max_angular_accel` is a slew-rate limit. If it is too small, the controller
+  can request a reversal while the commanded angular velocity is still slowly
+  decelerating in the old direction, increasing overshoot. The final shuttle
+  setup therefore uses a lower angular-speed ceiling but a higher angular
+  acceleration limit.
+- A stable-time gate is required before `STRAIGHT_COLLECT`; otherwise an
+  oscillating heading can cross the yaw tolerance for one sample and trigger
+  the straight pass too early.
+
+## Shuttle RViz debug view
+
+The shuttle debug launch now shows:
+
+```text
+robot model
+frozen shuttle target
+desired 1.10 m base_link pre-pose
+actual robot trajectory
+court / net / poles
+```
+
+Relevant topics:
+
+```text
+/debug/smc_shuttle/target
+/debug/smc_shuttle/pre_pose
+/debug/smc_shuttle/target_marker
+/debug/smc_shuttle/pre_pose_view
+/debug/smc_shuttle/trajectory
+```
+
+The frozen target and pre-pose debug topics use Reliable + Transient Local QoS
+so RViz can start after target lock without losing the geometry. The trajectory
+is generated from `/odometry/filtered` using Reliable + Volatile QoS.
 
 The robot then runs straight over the frozen shuttle target.
+
+At this point the AprilTag and shuttle SMC investigation is considered closed;
+future shuttle work should return to perception accuracy and mission integration
+unless new control failures appear.
 
 
 ## Biarc branch validation
