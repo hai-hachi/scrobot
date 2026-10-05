@@ -3,8 +3,7 @@
 <package format="3">
   <name>scrobot_description</name>
   <version>0.0.1</version>
-  <description>URDF/Xacro description package for the SC Robot shuttlecock collection robot.</description>
-
+  <description>Hardware-neutral URDF/Xacro description for the SC Robot shuttlecock collector.</description>
   <maintainer email="hai.hachi.154@gmail.com">sea</maintainer>
   <license>Apache-2.0</license>
 
@@ -16,6 +15,9 @@
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>joint_state_publisher_gui</exec_depend>
   <exec_depend>rviz2</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
