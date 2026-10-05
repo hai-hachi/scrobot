@@ -2,7 +2,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import AppendEnvironmentVariable, DeclareLaunchArgument, EmitEvent, IncludeLaunchDescription, RegisterEventHandler
+from launch.actions import AppendEnvironmentVariable, DeclareLaunchArgument, EmitEvent, ExecuteProcess, IncludeLaunchDescription, RegisterEventHandler
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -16,6 +16,11 @@ def generate_launch_description():
     ros_gz_sim_pkg = get_package_share_directory('ros_gz_sim')
 
     world = os.path.join(debug_pkg, 'worlds', 'yolo_bbox_dataset.sdf')
+
+    clear_raw = ExecuteProcess(
+        cmd=['bash', '-lc', 'rm -rf /tmp/scrobot_yolo_bbox_raw && mkdir -p /tmp/scrobot_yolo_bbox_raw/images /tmp/scrobot_yolo_bbox_raw/boxes'],
+        output='screen',
+    )
 
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -56,6 +61,7 @@ def generate_launch_description():
         DeclareLaunchArgument('random_seed', default_value='42'),
         AppendEnvironmentVariable(name='GZ_SIM_RESOURCE_PATH', value=os.path.join(debug_pkg, 'models')),
         AppendEnvironmentVariable(name='GZ_SIM_RESOURCE_PATH', value=os.path.join(simulation_pkg, 'models')),
+        clear_raw,
         gazebo,
         capture,
         shutdown_when_done,
