@@ -5,9 +5,22 @@ visualization for SC Robot.
 
 Production packages must not depend on this package.
 
+## Final full-mission regression
+
+```bash
+ros2 launch scrobot_debug full_mission_check.launch.py \
+  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt
+```
+
+Default final layout is 50 mixed shuttles with seed 20261003. The launch starts
+simulation, production control, local EKF, production YOLO perception,
+telemetry, collection-session evaluation, and the complete sweep mission in a
+controlled startup order.
+
 ## Main regression launches
 
 ```text
+full_mission_check.launch.py         final integrated court-clearing mission
 description_check.launch.py          URDF / TF / mesh check
 camera_check.launch.py               isolated D435i geometry check
 control_stack_check.launch.py        command/safety pipeline
