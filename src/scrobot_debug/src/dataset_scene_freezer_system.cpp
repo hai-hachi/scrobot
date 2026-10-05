@@ -79,13 +79,8 @@ public:
       if (!_ecm.HasEntity(entity))
         continue;
 
-      auto poseCmd =
-        _ecm.Component<gz::sim::components::WorldPoseCmd>(entity);
-      if (poseCmd)
-        poseCmd->SetData(pose, [](const auto &, const auto &) {return false;});
-      else
-        _ecm.CreateComponent(
-          entity, gz::sim::components::WorldPoseCmd(pose));
+      _ecm.SetComponentData<gz::sim::components::WorldPoseCmd>(
+        entity, pose);
 
       gz::sim::Model model(entity);
       const auto link = model.LinkByName(_ecm, "shuttle_link");
@@ -93,22 +88,10 @@ public:
         continue;
 
       const gz::math::Vector3d zero{0.0, 0.0, 0.0};
-
-      auto linear =
-        _ecm.Component<gz::sim::components::LinearVelocityCmd>(link);
-      if (linear)
-        linear->SetData(zero, [](const auto &, const auto &) {return false;});
-      else
-        _ecm.CreateComponent(
-          link, gz::sim::components::LinearVelocityCmd(zero));
-
-      auto angular =
-        _ecm.Component<gz::sim::components::AngularVelocityCmd>(link);
-      if (angular)
-        angular->SetData(zero, [](const auto &, const auto &) {return false;});
-      else
-        _ecm.CreateComponent(
-          link, gz::sim::components::AngularVelocityCmd(zero));
+      _ecm.SetComponentData<gz::sim::components::LinearVelocityCmd>(
+        link, zero);
+      _ecm.SetComponentData<gz::sim::components::AngularVelocityCmd>(
+        link, zero);
     }
   }
 
