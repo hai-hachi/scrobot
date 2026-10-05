@@ -155,6 +155,22 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}],
     )
 
+    collection_monitor = Node(
+        package='scrobot_debug',
+        executable='collection_test_monitor',
+        name='smc_shuttle_collection_monitor',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'center_offset_z': 0.045,
+            'base_frame': 'base_footprint',
+            'collector_frame': 'collector_link',
+            'pickup_half_length': 0.030,
+            'pickup_half_width': 0.150,
+            'report_rate': 2.0,
+        }],
+    )
+
     rviz = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -243,7 +259,10 @@ def generate_launch_description():
             period=controller_delay,
             actions=[collection_filter, local_collect, telemetry],
         ),
-        TimerAction(period=visualizer_delay, actions=[shuttle_visualizer]),
+        TimerAction(
+            period=visualizer_delay,
+            actions=[shuttle_visualizer, collection_monitor],
+        ),
         TimerAction(period=rviz_delay, actions=[rviz]),
         TimerAction(period=action_delay, actions=[collect_action]),
     ])
