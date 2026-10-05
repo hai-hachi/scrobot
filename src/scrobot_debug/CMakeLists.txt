@@ -5,35 +5,10 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
-find_package(gz-plugin2 REQUIRED COMPONENTS register)
-find_package(gz-sim8 REQUIRED)
-find_package(gz-msgs10 REQUIRED)
-find_package(gz-transport13 REQUIRED)
-
-set(GZ_PLUGIN_VER ${gz-plugin2_VERSION_MAJOR})
-set(GZ_MSGS_VER ${gz-msgs10_VERSION_MAJOR})
-set(GZ_TRANSPORT_VER ${gz-transport13_VERSION_MAJOR})
 
 add_executable(
   court_visualizer
   src/court_visualizer.cpp
-)
-
-add_library(
-  dataset_scene_freezer_system
-  SHARED
-  src/dataset_scene_freezer_system.cpp
-)
-
-set_property(TARGET dataset_scene_freezer_system PROPERTY CXX_STANDARD 17)
-
-target_link_libraries(
-  dataset_scene_freezer_system
-  PRIVATE
-    gz-plugin${GZ_PLUGIN_VER}::gz-plugin${GZ_PLUGIN_VER}
-    gz-sim8::gz-sim8
-    gz-msgs${GZ_MSGS_VER}::gz-msgs${GZ_MSGS_VER}
-    gz-transport${GZ_TRANSPORT_VER}::gz-transport${GZ_TRANSPORT_VER}
 )
 
 ament_target_dependencies(
@@ -54,12 +29,6 @@ install(
   TARGETS
     court_visualizer
   DESTINATION lib/${PROJECT_NAME}
-)
-
-install(
-  TARGETS
-    dataset_scene_freezer_system
-  LIBRARY DESTINATION lib
 )
 
 # Python debug tools are created through the GitHub API, which does not
@@ -159,30 +128,9 @@ install(
 
 install(
   PROGRAMS
-    scripts/yolo_dataset_capture.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME yolo_dataset_capture
-)
-
-install(
-  PROGRAMS
     scripts/yolo_dataset_fast_capture.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME yolo_dataset_fast_capture
-)
-
-install(
-  PROGRAMS
-    scripts/yolo_bbox_dataset_capture.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME yolo_bbox_dataset_capture
-)
-
-install(
-  PROGRAMS
-    scripts/yolo_simple_dataset_capture.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME yolo_simple_dataset_capture
 )
 
 install(
