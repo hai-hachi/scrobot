@@ -24,9 +24,11 @@ yolo_shuttle_detector:
     yolo_class_index: 0
     class_id: shuttle
 
-    # Camera-relative usable shuttle range selected for collection perception.
-    min_range: 0.50
-    max_range: 1.68
+    # Broad camera-depth validity gate only. These values are NOT the local
+    # collection envelope. Mission eligibility is evaluated after TF into
+    # base_link by shuttle_collection_filter (currently 0.50..1.80 m planar).
+    min_depth_range: 0.20
+    max_depth_range: 3.00
 
     # Sample only the inner bbox region and bias toward the foreground. This
     # reduces background-depth contamination for the thin shuttle geometry.
