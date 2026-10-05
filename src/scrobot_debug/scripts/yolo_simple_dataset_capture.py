@@ -199,8 +199,16 @@ class SimpleYoloDatasetCapture(Node):
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired as exc:
+            output = exc.stdout or b''
+            if isinstance(output, bytes):
+                output = output.decode('utf-8', errors='replace')
+            else:
+                output = str(output)
+            if output and not output.endswith('\n'):
+                output += '\n'
+            output += 'TIMEOUT'
             return subprocess.CompletedProcess(
-                cmd, 124, stdout=(exc.stdout or '') + '\nTIMEOUT'
+                cmd, 124, stdout=output
             )
 
     def _spawn_scene(self):
