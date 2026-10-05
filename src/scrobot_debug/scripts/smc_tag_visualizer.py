@@ -115,7 +115,7 @@ class SmcTagVisualizer(Node):
         )
         self.goal_pub = self.create_publisher(
             PoseStamped,
-            '/debug/smc_tag/desired_base_pose',
+            '/debug/smc_tag/ideal_base_pose',
             latched_qos,
         )
         self.tag_pub = self.create_publisher(
