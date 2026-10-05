@@ -207,6 +207,13 @@ install(
 )
 
 install(
+  PROGRAMS
+    scripts/smc_shuttle_visualizer.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME smc_shuttle_visualizer
+)
+
+install(
   DIRECTORY
     launch
     config
