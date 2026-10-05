@@ -178,6 +178,25 @@ no very tight-radius preference
 penalty for near-loop arc sweeps
 ```
 
+A separate bug was also fixed in the circular-arc sampler. The raw tangent
+solution produces a sweep of `2*half_sweep`, which may be greater than 180 deg
+for an oblique start. That selects the long way around the same circle. For the
+positive-`d1,d2` biarc family we require the short arc, so the sweep is now
+wrapped into `[-pi, pi]`.
+
+The sampler now also verifies the natural sampled endpoint before any numerical
+snapping:
+
+```text
+start position error <= 1e-5 m
+end position error   <= 1e-5 m
+start yaw error      <= 0.01 deg
+end yaw error        <= 0.01 deg
+```
+
+A candidate that does not actually interpolate the requested final pose is
+discarded.
+
 The equal-`d` solution is retained as a guaranteed search anchor.
 
 The generated path is not followed with RPP. A pose approximately
