@@ -179,6 +179,13 @@ install(
 )
 
 install(
+  PROGRAMS
+    scripts/yolo_simple_dataset_capture.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME yolo_simple_dataset_capture
+)
+
+install(
   DIRECTORY
     launch
     config
