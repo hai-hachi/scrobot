@@ -151,9 +151,9 @@ class TagApproachController(Node):
         # circular arcs joined with continuous tangent.
         self.declare_parameter('biarc_spacing', 0.08)
         self.declare_parameter('biarc_lookahead', 0.30)
-        self.declare_parameter('biarc_ratio_min', 0.10)
-        self.declare_parameter('biarc_ratio_max', 10.0)
-        self.declare_parameter('biarc_ratio_samples', 61)
+        self.declare_parameter('biarc_d1_factor_min', 0.15)
+        self.declare_parameter('biarc_d1_factor_max', 6.0)
+        self.declare_parameter('biarc_d1_factor_samples', 81)
 
         # Deliberately simple normal-ray baseline.
         self.declare_parameter('ray_position_tolerance', 0.12)
@@ -263,15 +263,15 @@ class TagApproachController(Node):
             self.biarc_spacing,
             float(self.get_parameter('biarc_lookahead').value),
         )
-        self.biarc_ratio_min = max(
-            1e-3, float(self.get_parameter('biarc_ratio_min').value)
+        self.biarc_d1_factor_min = max(
+            1e-3, float(self.get_parameter('biarc_d1_factor_min').value)
         )
-        self.biarc_ratio_max = max(
-            self.biarc_ratio_min,
-            float(self.get_parameter('biarc_ratio_max').value),
+        self.biarc_d1_factor_max = max(
+            self.biarc_d1_factor_min,
+            float(self.get_parameter('biarc_d1_factor_max').value),
         )
-        self.biarc_ratio_samples = max(
-            3, int(self.get_parameter('biarc_ratio_samples').value)
+        self.biarc_d1_factor_samples = max(
+            3, int(self.get_parameter('biarc_d1_factor_samples').value)
         )
 
         self.ray_position_tolerance = max(
@@ -863,7 +863,7 @@ class TagApproachController(Node):
         return linear, angular, rho, alpha, e_y, e_theta, s
 
     def _arc_geometry(self, start, start_yaw, end):
-        """Return the unique no-loop circular arc from start pose to end point."""
+        """Return the no-loop circular arc from a start pose to an end point."""
         sx, sy = start
         ex, ey = end
         dx = ex - sx
@@ -882,16 +882,18 @@ class TagApproachController(Node):
         chord_yaw = math.atan2(dy, dx)
         half_sweep = angle_difference(chord_yaw, start_yaw)
 
-        # If the chord is tangent to the requested start heading, the
-        # zero-curvature solution is a straight segment.
+        # Forward-collinear chord -> straight segment. A chord exactly behind
+        # the requested tangent has no finite no-loop circular-arc solution.
         if abs(math.sin(half_sweep)) < 1e-8:
-            return {
-                'straight': True,
-                'radius': float('inf'),
-                'sweep': 0.0,
-                'length': chord,
-                'center': None,
-            }
+            if math.cos(half_sweep) > 0.0:
+                return {
+                    'straight': True,
+                    'radius': float('inf'),
+                    'sweep': 0.0,
+                    'length': chord,
+                    'center': None,
+                }
+            return None
 
         sweep = 2.0 * half_sweep
         radius = chord / (2.0 * math.sin(half_sweep))
@@ -912,8 +914,11 @@ class TagApproachController(Node):
         }
 
     def _sample_tangent_arc(self, start, start_yaw, end):
-        """Sample a circular arc that is tangent to start_yaw at start."""
+        """Sample a circular arc tangent to start_yaw at the start point."""
         geometry = self._arc_geometry(start, start_yaw, end)
+        if geometry is None:
+            return None, None
+
         sx, sy = start
         ex, ey = end
 
@@ -953,9 +958,8 @@ class TagApproachController(Node):
             fraction = i / count
             tangent_yaw = start_yaw + fraction * sweep
 
-            # For signed radius R:
-            #   center = p + R * left_normal(tangent)
-            # hence p = center - R * left_normal(tangent).
+            # center = p + R * left_normal(tangent), so
+            # p = center - R * left_normal(tangent).
             px = cx + radius * math.sin(tangent_yaw)
             py = cy - radius * math.cos(tangent_yaw)
             points.append(
@@ -966,7 +970,6 @@ class TagApproachController(Node):
                 )
             )
 
-        # Force exact endpoint coordinates against accumulated trig error.
         points[0] = (sx, sy, wrap_angle(start_yaw))
         points[-1] = (
             ex,
@@ -1007,8 +1010,8 @@ class TagApproachController(Node):
             )
         return maximum
 
-    def _build_biarc_candidate(self, start_pose, goal_pose, ratio):
-        """Build one member of the biarc family using d1 / d2 = ratio."""
+    def _equal_biarc_distance(self, start_pose, goal_pose):
+        """Balanced d1=d2 biarc distance; used as the family search anchor."""
         x0, y0, yaw0 = start_pose
         x1, y1, yaw1 = goal_pose
 
@@ -1016,35 +1019,14 @@ class TagApproachController(Node):
         t0y = math.sin(yaw0)
         t1x = math.cos(yaw1)
         t1y = math.sin(yaw1)
-
         vx = x1 - x0
         vy = y1 - y0
-        chord_sq = vx * vx + vy * vy
-        if chord_sq < 1e-10:
-            return {
-                'path': [tuple(start_pose), tuple(goal_pose)],
-                'ratio': ratio,
-                'length': 0.0,
-                'deviation': 0.0,
-                'min_radius': float('inf'),
-                'sweep_1': 0.0,
-                'sweep_2': 0.0,
-            }
-
+        vv = vx * vx + vy * vy
         dot_t = t0x * t1x + t0y * t1y
 
-        # General biarc family:
-        #   d1 = ratio * d2
-        # with G1 continuity condition
-        #   2(1-t0.t1)d1*d2
-        # + 2 v.(d1*t0 + d2*t1)
-        # - v.v = 0.
-        a = 2.0 * (1.0 - dot_t) * ratio
-        b = 2.0 * (
-            vx * (ratio * t0x + t1x)
-            + vy * (ratio * t0y + t1y)
-        )
-        cc = -chord_sq
+        a = 1.0 - dot_t
+        b = vx * (t0x + t1x) + vy * (t0y + t1y)
+        cc = -0.5 * vv
 
         roots = []
         if abs(a) < 1e-10:
@@ -1062,35 +1044,87 @@ class TagApproachController(Node):
             ])
 
         positive = [value for value in roots if value > 1e-6]
-        if not positive:
+        return min(positive) if positive else None
+
+    def _build_biarc_candidate(self, start_pose, goal_pose, d1):
+        """Build one exact G1 biarc for a chosen first tangent distance d1."""
+        x0, y0, yaw0 = start_pose
+        x1, y1, yaw1 = goal_pose
+
+        t0x = math.cos(yaw0)
+        t0y = math.sin(yaw0)
+        t1x = math.cos(yaw1)
+        t1y = math.sin(yaw1)
+
+        vx = x1 - x0
+        vy = y1 - y0
+        vv = vx * vx + vy * vy
+        if vv < 1e-10:
+            return {
+                'path': [tuple(start_pose), tuple(goal_pose)],
+                'd1': 0.0,
+                'd2': 0.0,
+                'length': 0.0,
+                'deviation': 0.0,
+                'min_radius': float('inf'),
+                'sweep_1': 0.0,
+                'sweep_2': 0.0,
+            }
+
+        v_dot_t0 = vx * t0x + vy * t0y
+        v_dot_t1 = vx * t1x + vy * t1y
+        t_dot = t0x * t1x + t0y * t1y
+
+        # Exact biarc relation:
+        # d2 = (0.5*v.v - d1*v.t0)
+        #      / (v.t1 - d1*(t0.t1 - 1))
+        denominator = (
+            v_dot_t1
+            - d1 * (t_dot - 1.0)
+        )
+        if abs(denominator) < 1e-9:
             return None
 
-        # The smaller positive tangent distance avoids unnecessary loops.
-        d2 = min(positive)
-        d1 = ratio * d2
+        d2 = (
+            0.5 * vv
+            - d1 * v_dot_t0
+        ) / denominator
 
-        join_x = 0.5 * (
-            x0 + d1 * t0x
-            + x1 - d2 * t1x
-        )
-        join_y = 0.5 * (
-            y0 + d1 * t0y
-            + y1 - d2 * t1y
-        )
+        # Positive d1,d2 select the short, non-spiraling biarc family.
+        if d1 <= 1e-6 or d2 <= 1e-6:
+            return None
+
+        q1x = x0 + d1 * t0x
+        q1y = y0 + d1 * t0y
+        q2x = x1 - d2 * t1x
+        q2y = y1 - d2 * t1y
+
+        total_d = d1 + d2
+        join_x = (
+            q1x * d2 + q2x * d1
+        ) / total_d
+        join_y = (
+            q1y * d2 + q2y * d1
+        ) / total_d
 
         first, geometry_1 = self._sample_tangent_arc(
             (x0, y0),
             yaw0,
             (join_x, join_y),
         )
+        if first is None:
+            return None
 
-        # Construct the second arc backwards from the final pose. Reversing the
-        # sampled points gives a forward arc with the requested final tangent.
+        # Construct the second arc backwards from the final pose. Reversing it
+        # gives forward motion with the requested goal tangent.
         second_reverse, geometry_2_reverse = self._sample_tangent_arc(
             (x1, y1),
             wrap_angle(yaw1 + math.pi),
             (join_x, join_y),
         )
+        if second_reverse is None:
+            return None
+
         second = [
             (
                 px,
@@ -1100,13 +1134,10 @@ class TagApproachController(Node):
             for px, py, pyaw in reversed(second_reverse)
         ]
 
-        if not first or not second:
-            return None
-
         join_yaw_error = abs(
             angle_difference(first[-1][2], second[0][2])
         )
-        if join_yaw_error > math.radians(1.0):
+        if join_yaw_error > math.radians(0.5):
             return None
 
         path = first + second[1:]
@@ -1128,7 +1159,8 @@ class TagApproachController(Node):
 
         return {
             'path': path,
-            'ratio': ratio,
+            'd1': d1,
+            'd2': d2,
             'length': length,
             'deviation': deviation,
             'min_radius': min_radius,
@@ -1137,21 +1169,29 @@ class TagApproachController(Node):
         }
 
     def _build_biarc_path(self, start_pose, goal_pose):
-        """Choose a compact G1 biarc instead of forcing the equal-d solution."""
-        if self.biarc_ratio_samples <= 1:
-            ratios = [1.0]
-        else:
-            log_min = math.log(self.biarc_ratio_min)
-            log_max = math.log(self.biarc_ratio_max)
-            ratios = [
-                math.exp(
-                    log_min
-                    + (log_max - log_min)
-                    * index
-                    / (self.biarc_ratio_samples - 1)
-                )
-                for index in range(self.biarc_ratio_samples)
-            ]
+        """Search the exact G1 biarc family and choose a compact member."""
+        equal_d = self._equal_biarc_distance(
+            start_pose,
+            goal_pose,
+        )
+        if equal_d is None:
+            self.get_logger().warn(
+                'Biarc family is degenerate; falling back to direct SMC.'
+            )
+            return [tuple(start_pose), tuple(goal_pose)]
+
+        log_min = math.log(self.biarc_d1_factor_min)
+        log_max = math.log(self.biarc_d1_factor_max)
+        factors = [
+            math.exp(
+                log_min
+                + (log_max - log_min)
+                * index
+                / (self.biarc_d1_factor_samples - 1)
+            )
+            for index in range(self.biarc_d1_factor_samples)
+        ]
+        factors.append(1.0)
 
         candidates = []
         chord = math.hypot(
@@ -1159,18 +1199,18 @@ class TagApproachController(Node):
             goal_pose[1] - start_pose[1],
         )
 
-        for ratio in ratios:
+        for factor in factors:
             candidate = self._build_biarc_candidate(
                 start_pose,
                 goal_pose,
-                ratio,
+                equal_d * factor,
             )
             if candidate is None:
                 continue
 
-            # Prefer the shortest valid biarc, but gently penalize large bows
-            # away from the direct chord and extremely tight circles. This
-            # avoids the huge equal-d detours seen at oblique start headings.
+            # Primary objective: short path. Secondary objective: avoid a large
+            # outward bow. Very tight circles are also penalized because the
+            # SMC must track the reference with finite angular velocity.
             radius_penalty = 0.0
             if (
                 math.isfinite(candidate['min_radius'])
@@ -1180,14 +1220,24 @@ class TagApproachController(Node):
                     0.30 - candidate['min_radius']
                 )
 
+            sweep_penalty = 0.0
+            for sweep in (
+                candidate['sweep_1'],
+                candidate['sweep_2'],
+            ):
+                excess = max(
+                    0.0,
+                    abs(sweep) - math.radians(170.0),
+                )
+                sweep_penalty += 0.75 * excess
+
             candidate['score'] = (
                 candidate['length']
-                + 0.35 * candidate['deviation']
+                + 0.50 * candidate['deviation']
                 + radius_penalty
+                + sweep_penalty
             )
 
-            # A candidate several times longer than the endpoint separation is
-            # almost certainly the looping member of the family.
             if chord > 1e-6 and candidate['length'] > 3.0 * chord:
                 candidate['score'] += 5.0 * (
                     candidate['length'] - 3.0 * chord
@@ -1197,7 +1247,7 @@ class TagApproachController(Node):
 
         if not candidates:
             self.get_logger().warn(
-                'Biarc construction found no valid G1 candidate; '
+                'Biarc search found no positive-d1/d2 G1 solution; '
                 'falling back to direct SMC.'
             )
             return [tuple(start_pose), tuple(goal_pose)]
@@ -1206,7 +1256,7 @@ class TagApproachController(Node):
 
         self.get_logger().info(
             'Biarc selected: '
-            f'ratio d1/d2={best["ratio"]:.3f}, '
+            f'd1={best["d1"]:.3f} m, d2={best["d2"]:.3f} m, '
             f'length={best["length"]:.3f} m, '
             f'max_deviation={best["deviation"]:.3f} m, '
             f'min_radius={best["min_radius"]:.3f} m, '
