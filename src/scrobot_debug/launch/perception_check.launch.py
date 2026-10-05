@@ -50,7 +50,13 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(perception_pkg, 'launch', 'perception.launch.py')
         ),
-        launch_arguments={'use_sim_time': use_sim_time}.items(),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+            'enable_yolo': 'true',
+            'model_path': model_path,
+            'device': device,
+            'publish_debug_image': publish_debug_image,
+        }.items(),
     )
 
     spawn_shuttle = IncludeLaunchDescription(
