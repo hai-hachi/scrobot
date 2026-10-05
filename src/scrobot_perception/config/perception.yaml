@@ -55,15 +55,16 @@ depth_pointcloud_to_scan:
     min_height: 0.12
     max_height: 0.70
 
-    # D435i horizontal field of view, approximately 87 deg.
-    angle_min: -0.76
-    angle_max: 0.76
+    # Calibrated D435i depth HFOV = 1.5795850624055896 rad.
+    # Use exactly half the calibrated HFOV on each side.
+    angle_min: -0.7897925312027948
+    angle_max: 0.7897925312027948
     angle_increment: 0.00872664626
 
     scan_time: 0.06666666667
 
-    range_min: 0.20
-    range_max: 3.00
+    range_min: 0.30
+    range_max: 3.30
 
     queue_size: 1
     use_inf: true
