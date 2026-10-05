@@ -68,7 +68,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'tag_control_strategy',
-            default_value='pure_smc',
+            default_value='main_branch',
             choices=[
                 'pure_smc',
                 'main_branch',
@@ -79,12 +79,12 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'tag_max_linear_velocity',
-            default_value='0.45',
+            default_value='0.25',
             description='Tag approach linear speed limit [m/s].',
         ),
         DeclareLaunchArgument(
             'tag_max_angular_velocity',
-            default_value='0.75',
+            default_value='0.60',
             description='Tag approach angular speed limit [rad/s].',
         ),
         global_localizer,
