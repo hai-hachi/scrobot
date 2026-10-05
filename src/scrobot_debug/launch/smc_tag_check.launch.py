@@ -3,8 +3,11 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, OpaqueFunction, TimerAction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def include(package, launch_file, arguments=None):
@@ -21,15 +24,21 @@ def include(package, launch_file, arguments=None):
 
 
 def generate_launch_description():
+    debug_pkg = get_package_share_directory('scrobot_debug')
+
     use_sim_time = LaunchConfiguration('use_sim_time')
     target_distance = LaunchConfiguration('target_distance')
     preferred_tag_id = LaunchConfiguration('preferred_tag_id')
+    launch_rviz = LaunchConfiguration('launch_rviz')
 
     robot_x = LaunchConfiguration('robot_x')
     robot_y = LaunchConfiguration('robot_y')
+    robot_z = LaunchConfiguration('robot_z')
     robot_yaw = LaunchConfiguration('robot_yaw')
 
     stack_delay = LaunchConfiguration('stack_delay')
+    visualizer_delay = LaunchConfiguration('visualizer_delay')
+    rviz_delay = LaunchConfiguration('rviz_delay')
     approach_delay = LaunchConfiguration('approach_delay')
 
     simulation = include(
@@ -39,6 +48,7 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
             'x': robot_x,
             'y': robot_y,
+            'z': robot_z,
             'yaw': robot_yaw,
             'enable_magnetometer': 'false',
         },
@@ -84,6 +94,31 @@ def generate_launch_description():
         },
     )
 
+    visualizer = Node(
+        package='scrobot_debug',
+        executable='smc_tag_visualizer',
+        name='smc_tag_visualizer',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'tag_id': ParameterValue(preferred_tag_id, value_type=int),
+            'target_distance': ParameterValue(target_distance, value_type=float),
+        }],
+    )
+
+    rviz = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='smc_tag_rviz',
+        output='screen',
+        arguments=[
+            '-d',
+            os.path.join(debug_pkg, 'config', 'smc_tag.rviz'),
+        ],
+        parameters=[{'use_sim_time': use_sim_time}],
+        condition=IfCondition(launch_rviz),
+    )
+
     def send_approach(context):
         tag_id = preferred_tag_id.perform(context)
         distance = target_distance.perform(context)
@@ -121,15 +156,40 @@ def generate_launch_description():
             default_value='0',
             description='Court AprilTag ID used for the isolated SMC test.',
         ),
+        DeclareLaunchArgument(
+            'launch_rviz',
+            default_value='true',
+            choices=['true', 'false'],
+            description='Launch the lightweight SMC tag RViz view.',
+        ),
 
         # Near tag 0, intentionally displaced from its desired pose so the
         # controller must correct both position and heading.
-        DeclareLaunchArgument('robot_x', default_value='1.50'),
-        DeclareLaunchArgument('robot_y', default_value='1.80'),
-        DeclareLaunchArgument('robot_yaw', default_value='2.80'),
+        DeclareLaunchArgument(
+            'robot_x',
+            default_value='1.50',
+            description='Robot initial court X [m].',
+        ),
+        DeclareLaunchArgument(
+            'robot_y',
+            default_value='1.80',
+            description='Robot initial court Y [m].',
+        ),
+        DeclareLaunchArgument(
+            'robot_z',
+            default_value='0.003',
+            description='Robot initial Z [m].',
+        ),
+        DeclareLaunchArgument(
+            'robot_yaw',
+            default_value='2.80',
+            description='Robot initial yaw [rad].',
+        ),
 
         DeclareLaunchArgument('stack_delay', default_value='4.0'),
-        DeclareLaunchArgument('approach_delay', default_value='7.0'),
+        DeclareLaunchArgument('visualizer_delay', default_value='4.5'),
+        DeclareLaunchArgument('rviz_delay', default_value='5.5'),
+        DeclareLaunchArgument('approach_delay', default_value='8.0'),
 
         simulation,
         TimerAction(
@@ -141,6 +201,14 @@ def generate_launch_description():
                 global_localization,
                 telemetry,
             ],
+        ),
+        TimerAction(
+            period=visualizer_delay,
+            actions=[visualizer],
+        ),
+        TimerAction(
+            period=rviz_delay,
+            actions=[rviz],
         ),
         TimerAction(
             period=approach_delay,
