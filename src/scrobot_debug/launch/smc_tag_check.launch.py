@@ -29,6 +29,8 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     target_distance = LaunchConfiguration('target_distance')
     preferred_tag_id = LaunchConfiguration('preferred_tag_id')
+    position_tolerance = LaunchConfiguration('position_tolerance')
+    yaw_tolerance_deg = LaunchConfiguration('yaw_tolerance_deg')
     launch_rviz = LaunchConfiguration('launch_rviz')
 
     robot_x = LaunchConfiguration('robot_x')
@@ -81,7 +83,11 @@ def generate_launch_description():
     global_localization = include(
         'scrobot_localization',
         'global_localization.launch.py',
-        {'use_sim_time': use_sim_time},
+        {
+            'use_sim_time': use_sim_time,
+            'tag_position_tolerance': position_tolerance,
+            'tag_yaw_tolerance_deg': yaw_tolerance_deg,
+        },
     )
 
     telemetry = include(
@@ -177,6 +183,16 @@ def generate_launch_description():
             'preferred_tag_id',
             default_value='0',
             description='Court AprilTag ID used for the isolated SMC test.',
+        ),
+        DeclareLaunchArgument(
+            'position_tolerance',
+            default_value='0.05',
+            description='SMC planar desired-pose tolerance [m].',
+        ),
+        DeclareLaunchArgument(
+            'yaw_tolerance_deg',
+            default_value='5.0',
+            description='SMC desired-heading tolerance [deg].',
         ),
         DeclareLaunchArgument(
             'launch_rviz',
