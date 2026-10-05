@@ -45,7 +45,7 @@ Analyze:
 
 ```bash
 ros2 run scrobot_evaluation analyze_local_odom \
-  ~/scrobot_evaluation_runs/local_odom/local_odom_suite_01
+  ~/scrobot_ws/evaluation_results/local_odom/local_odom_suite_01
 ```
 
 ## Collection-session evaluation
