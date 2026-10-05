@@ -156,7 +156,7 @@ Expected behavior:
 1. YOLO sees the shuttle.
 2. The collection filter publishes it as eligible.
 3. The controller freezes the detected target in `odom`.
-4. SMC moves the collector to the 0.50 m pre-collection pose.
+4. SMC moves base_link to the 1.10 m pre-collection pose while facing the shuttle.
 5. The robot switches to straight collection at 0.30 m/s.
 6. The collector passes through the shuttle.
 7. Gazebo removes the shuttle and emits a collection event.
@@ -264,7 +264,7 @@ The integration passes when:
 1. YOLO produces a 3D shuttle detection.
 2. The collection filter reports at least one eligible shuttle.
 3. `/local_collect` accepts the goal.
-4. SMC_POSE visibly converges toward the pre-collection pose.
+4. SMC_POSE converges to the 1.10 m base_link pre-collection pose.
 5. STRAIGHT_COLLECT uses approximately 0.30 m/s with zero commanded yaw rate.
 6. The shuttle is physically removed by the Gazebo collection system.
 7. `/evaluation/shuttle_collected` emits the collection event.
