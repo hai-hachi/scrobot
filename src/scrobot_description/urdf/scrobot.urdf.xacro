@@ -31,11 +31,6 @@
   <xacro:arg name="wheel_collision_width" default="0.030"/>
   <xacro:property name="wheel_collision_width" value="$(arg wheel_collision_width)"/>
 
-  <xacro:property name="base_front_x" value="0.325"/>
-  <xacro:property name="base_rear_x" value="-0.420"/>
-  <xacro:property name="base_left_y" value="0.225"/>
-  <xacro:property name="base_right_y" value="-0.225"/>
-
   <xacro:property name="caster_x" value="-0.300"/>
   <xacro:property name="caster_y" value="0.160"/>
   <xacro:property name="caster_z" value="0.0085"/>
@@ -47,9 +42,6 @@
   <xacro:property name="caster_fork_com_y" value="0.0"/>
   <xacro:property name="caster_fork_com_z" value="-0.01513"/>
 
-  <xacro:property name="collector_radius" value="0.030"/>
-  <xacro:property name="collector_diameter" value="0.060"/>
-  <xacro:property name="collector_length" value="0.300"/>
   <xacro:property name="collector_x" value="0.165"/>
   <xacro:property name="collector_y" value="0.0"/>
   <xacro:property name="collector_z" value="-0.020"/>
@@ -62,10 +54,6 @@
   <!-- Positive pitch points the optical axis downward in this URDF chain. -->
   <xacro:property name="camera_pitch" value="${15.0 * pi / 180.0}"/>
   <xacro:property name="camera_yaw" value="0.0"/>
-
-  <xacro:property name="imu_x" value="-0.035"/>
-  <xacro:property name="imu_y" value="0.0"/>
-  <xacro:property name="imu_z" value="0.030"/>
 
   <xacro:property name="mag_x" value="-0.035"/>
   <xacro:property name="mag_y" value="0.0"/>
