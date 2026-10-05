@@ -57,10 +57,10 @@ class SmcTagVisualizer(Node):
 
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('odom_frame', 'odom')
-        self.declare_parameter('base_frame', 'base_footprint')
+        self.declare_parameter('base_frame', 'base_link')
         self.declare_parameter('mount_frame_prefix', 'tag_mount_')
         self.declare_parameter('tag_id', 0)
-        self.declare_parameter('target_distance', 0.80)
+        self.declare_parameter('target_distance', 0.90)
         self.declare_parameter('tag_size', 0.10)
         self.declare_parameter('publish_rate', 10.0)
         self.declare_parameter('path_publish_rate', 5.0)
@@ -115,7 +115,7 @@ class SmcTagVisualizer(Node):
         )
         self.goal_pub = self.create_publisher(
             PoseStamped,
-            '/debug/smc_tag/desired_camera_pose',
+            '/debug/smc_tag/desired_base_pose',
             latched_qos,
         )
         self.tag_pub = self.create_publisher(
@@ -142,8 +142,8 @@ class SmcTagVisualizer(Node):
         self.create_timer(1.0 / path_publish_rate, self._publish_path)
 
         self.get_logger().info(
-            'SMC tag RViz helper ready: '
-            f'tag={self.tag_id}, camera goal={self.target_distance:.2f} m, '
+            'Tag controller RViz helper ready: '
+            f'tag={self.tag_id}, base_link goal={self.target_distance:.2f} m, '
             'fixed frame=map.'
         )
 
@@ -210,13 +210,14 @@ class SmcTagVisualizer(Node):
 
         T_map_mount = transform_to_matrix(tf_map_mount.transform)
 
-        # Show the ideal COLOR CAMERA pose target directly from the known court
-        # tag geometry. This is available before AprilTag detection starts.
-        T_mount_camera_goal = xyz_rpy_to_matrix(
+        # Show the ideal base_link pose directly from the known court tag
+        # geometry. The rigid camera offset is absorbed into the chosen 0.90 m
+        # stand-off, so the SMC controlled-point offset is c = 0.
+        T_mount_base_goal = xyz_rpy_to_matrix(
             [self.target_distance, 0.0, 0.0],
             [0.0, 0.0, math.pi],
         )
-        T_map_camera_goal = T_map_mount @ T_mount_camera_goal
+        T_map_base_goal = T_map_mount @ T_mount_base_goal
 
         now = self.get_clock().now().to_msg()
 
@@ -248,10 +249,10 @@ class SmcTagVisualizer(Node):
         goal = PoseStamped()
         goal.header.frame_id = self.map_frame
         goal.header.stamp = now
-        goal.pose.position.x = float(T_map_camera_goal[0, 3])
-        goal.pose.position.y = float(T_map_camera_goal[1, 3])
+        goal.pose.position.x = float(T_map_base_goal[0, 3])
+        goal.pose.position.y = float(T_map_base_goal[1, 3])
         goal.pose.position.z = 0.03
-        goal_q = quaternion_from_matrix(T_map_camera_goal)
+        goal_q = quaternion_from_matrix(T_map_base_goal)
         goal.pose.orientation.x = float(goal_q[0])
         goal.pose.orientation.y = float(goal_q[1])
         goal.pose.orientation.z = float(goal_q[2])
