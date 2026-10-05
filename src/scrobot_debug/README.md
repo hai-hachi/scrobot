@@ -322,6 +322,39 @@ ros2 launch scrobot_debug rviz.launch.py
 They were removed from `scrobot_simulation` so the simulation package contains
 only Gazebo runtime functionality.
 
+
+## YOLO perception check
+
+Run the complete production shuttle-detection boundary in simulation:
+
+```bash
+ros2 launch scrobot_debug yolo_perception_check.launch.py \
+  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt
+```
+
+This starts the badminton-court simulation, SCROBOT camera streams,
+depth-to-color registration, one dynamic shuttle, the production
+`yolo_shuttle_detector`, and a terminal monitor.
+
+Expected data path:
+
+```text
+RGB -> YOLO bbox -> aligned depth -> color-camera deprojection
+    -> /perception/shuttle_detections_3d
+```
+
+The annotated image is published on:
+
+```text
+/perception/shuttle_debug/image
+```
+
+Detailed procedure:
+
+```text
+debug_md/yolo_perception.md
+```
+
 ## Detailed test procedures
 
 Subsystem test procedures are centralized in `debug_md/README.md`.
