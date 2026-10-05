@@ -56,7 +56,7 @@ class SweepMissionManager(Node):
         self.declare_parameter('frame_id', 'map')
         self.declare_parameter('base_frame', 'base_footprint')
         self.declare_parameter('odom_topic', '/odometry/filtered')
-        self.declare_parameter('raw_detection_topic', '/perception/shuttle_detections_3d')
+        self.declare_parameter('raw_detection_topic', '/perception/collectable_shuttle_detections_3d')
         self.declare_parameter('autostart', True)
         self.declare_parameter('tf_timeout', 0.05)
 
@@ -75,7 +75,7 @@ class SweepMissionManager(Node):
         self.declare_parameter('fixed_stop_max_tag_distance', 4.0)
 
         self.declare_parameter('initial_tag_id', -1)
-        self.declare_parameter('tag_approach_distance', 1.70)
+        self.declare_parameter('tag_approach_distance', 0.90)
         self.declare_parameter('tag_approach_timeout', 60.0)
         self.declare_parameter('relocalize_sample_count', 15)
         self.declare_parameter('relocalize_timeout', 15.0)
