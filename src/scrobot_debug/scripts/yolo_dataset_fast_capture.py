@@ -9,6 +9,7 @@ import random
 import struct
 import subprocess
 import time
+import zlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -142,6 +143,7 @@ class FastYoloDatasetCapture(Node):
         self.declare_parameter('camera_trigger_topic', '/yolo/camera/color/trigger')
         self.declare_parameter('trigger_retry_timeout_s', 2.0)
         self.declare_parameter('max_trigger_retries', 3)
+        self.declare_parameter('max_render_sync_attempts', 8)
         self.declare_parameter('target_images', 1200)
         self.declare_parameter('shuttle_count', 40)
         self.declare_parameter('spawn_workers', 8)
@@ -178,6 +180,7 @@ class FastYoloDatasetCapture(Node):
         self.camera_trigger_topic = str(self.get_parameter('camera_trigger_topic').value)
         self.trigger_retry_timeout_s = max(0.2, float(self.get_parameter('trigger_retry_timeout_s').value))
         self.max_trigger_retries = max(0, int(self.get_parameter('max_trigger_retries').value))
+        self.max_render_sync_attempts = max(2, int(self.get_parameter('max_render_sync_attempts').value))
         self.target_images = max(1, int(self.get_parameter('target_images').value))
         self.shuttle_count = max(1, int(self.get_parameter('shuttle_count').value))
         self.spawn_workers = max(1, int(self.get_parameter('spawn_workers').value))
@@ -247,6 +250,7 @@ class FastYoloDatasetCapture(Node):
         )
 
         self.latest_image = None
+        self.latest_image_crc = None
         self.image_seq = 0
         self.camera_info = None
         self.shuttles = []
@@ -288,6 +292,9 @@ class FastYoloDatasetCapture(Node):
         self.trigger_retry_count = 0
         self.trigger_phase = 'idle'
         self.trigger_image_seq = 0
+        self.pre_teleport_crc = None
+        self.candidate_render_crc = None
+        self.render_sync_attempts = 0
 
         self._prepare_output()
 
@@ -348,10 +355,12 @@ class FastYoloDatasetCapture(Node):
                     'focus_boxes',
                     'group_key',
                     'image_seq',
+                    'image_crc32',
                 ])
 
     def image_cb(self, msg):
         self.latest_image = msg
+        self.latest_image_crc = zlib.crc32(msg.data)
         self.image_seq += 1
 
     def camera_info_cb(self, msg):
@@ -602,18 +611,21 @@ class FastYoloDatasetCapture(Node):
         self.teleport_stamp_ns = self.get_clock().now().nanoseconds
         self.trigger_retry_count = 0
 
-        # Gazebo set_pose may return before Ogre has consumed the new scene pose.
-        # The first triggered image can therefore still show the previous camera
-        # viewpoint. Always request one flush frame and discard it. Only a second
-        # fresh frame is eligible for saving.
-        self.trigger_phase = 'flush'
+        # A fresh camera message is not proof that Ogre rendered the new pose:
+        # Gazebo can publish the previous pixels again after set_pose. Record the
+        # exact pre-teleport image content, then require a changed render followed
+        # by a second identical render before pairing it with labels.
+        self.pre_teleport_crc = self.latest_image_crc
+        self.candidate_render_crc = None
+        self.render_sync_attempts = 0
+        self.trigger_phase = 'wait_change'
         self.trigger_image_seq = self.image_seq
         if not self._trigger_camera():
             return False
 
         self.waiting_for_fresh_frame = True
         self.wait_rgb_wall_start = time.perf_counter()
-        self._set_state('WAITING_FOR_POSE_FLUSH_RGB')
+        self._set_state('WAITING_FOR_RENDER_CHANGE')
         return True
 
     def _next_view(self):
@@ -799,6 +811,7 @@ class FastYoloDatasetCapture(Node):
                 focus_boxes,
                 group_key,
                 self.image_seq,
+                f'{self.latest_image_crc:08x}' if self.latest_image_crc is not None else '',
             ])
 
         self.last_timings['write_ms'] = (
@@ -816,6 +829,9 @@ class FastYoloDatasetCapture(Node):
         self.last_saved_boxes = len(boxes)
         self.last_saved_focus_boxes = focus_boxes
         self.waiting_for_fresh_frame = False
+        self.pre_teleport_crc = None
+        self.candidate_render_crc = None
+        self.render_sync_attempts = 0
         self._set_state('FRAME_SAVED')
 
         self.get_logger().info(
@@ -845,6 +861,13 @@ class FastYoloDatasetCapture(Node):
         self.state = state
         self.publish_status(force=True)
 
+    def _trigger_for_render_sync(self, state):
+        self.trigger_image_seq = self.image_seq
+        if not self._trigger_camera():
+            return False
+        self._set_state(state)
+        return True
+
     def _recover_missing_triggered_frame(self):
         if self.last_trigger_wall_time is None:
             return False
@@ -855,23 +878,21 @@ class FastYoloDatasetCapture(Node):
 
         if self.trigger_retry_count < self.max_trigger_retries:
             self.trigger_retry_count += 1
-            phase_name = self.trigger_phase.upper()
-            self._set_state(f'RETRIGGERING_{phase_name}_RGB')
             self.get_logger().warning(
-                f'No fresh {self.trigger_phase} RGB after {elapsed:.2f}s; '
+                f'No RGB callback after {elapsed:.2f}s; '
                 f'retrigger {self.trigger_retry_count}/{self.max_trigger_retries}'
             )
-            self.trigger_image_seq = self.image_seq
-            if self._trigger_camera():
-                if self.trigger_phase == 'flush':
-                    self._set_state('WAITING_FOR_POSE_FLUSH_RGB')
-                else:
-                    self._set_state('WAITING_FOR_CAPTURE_RGB')
+            state = (
+                'WAITING_FOR_RENDER_CHANGE'
+                if self.trigger_phase == 'wait_change'
+                else 'WAITING_FOR_RENDER_STABLE'
+            )
+            self._trigger_for_render_sync(state)
             return True
 
         self.get_logger().warning(
-            f'No fresh {self.trigger_phase} RGB after '
-            f'{self.max_trigger_retries} retriggers; skipping this viewpoint.'
+            f'No RGB callback after {self.max_trigger_retries} retriggers; '
+            'skipping this viewpoint.'
         )
         self.waiting_for_fresh_frame = False
         self.wait_rgb_wall_start = None
@@ -880,6 +901,72 @@ class FastYoloDatasetCapture(Node):
         self.trigger_phase = 'idle'
         self._set_state('RGB_TIMEOUT_SKIP_VIEW')
         return True
+
+    def _handle_render_sync_frame(self):
+        current_crc = self.latest_image_crc
+        self.render_sync_attempts += 1
+        self.trigger_retry_count = 0
+
+        if self.trigger_phase == 'wait_change':
+            if current_crc == self.pre_teleport_crc:
+                if self.render_sync_attempts >= self.max_render_sync_attempts:
+                    self.get_logger().warning(
+                        'Camera pixels never changed after set_pose; '
+                        'skipping this viewpoint.'
+                    )
+                    self.waiting_for_fresh_frame = False
+                    self.wait_rgb_wall_start = None
+                    self.last_trigger_wall_time = None
+                    self.trigger_phase = 'idle'
+                    self._set_state('STALE_RENDER_SKIP_VIEW')
+                    return False
+
+                self.get_logger().warning(
+                    f'Stale pre-teleport RGB repeated; requesting another render '
+                    f'({self.render_sync_attempts}/{self.max_render_sync_attempts}).'
+                )
+                self._trigger_for_render_sync('WAITING_FOR_RENDER_CHANGE')
+                return False
+
+            # Pixels have changed: this is a candidate render of the new pose.
+            # Require one more trigger to return exactly the same pixels before
+            # accepting it as a stable render.
+            self.candidate_render_crc = current_crc
+            self.trigger_phase = 'wait_stable'
+            self._trigger_for_render_sync('WAITING_FOR_RENDER_STABLE')
+            return False
+
+        if self.trigger_phase == 'wait_stable':
+            if current_crc == self.candidate_render_crc:
+                self.last_trigger_wall_time = None
+                self.trigger_retry_count = 0
+                self.trigger_phase = 'idle'
+                return True
+
+            if self.render_sync_attempts >= self.max_render_sync_attempts:
+                self.get_logger().warning(
+                    'Rendered RGB never stabilized after set_pose; '
+                    'skipping this viewpoint.'
+                )
+                self.waiting_for_fresh_frame = False
+                self.wait_rgb_wall_start = None
+                self.last_trigger_wall_time = None
+                self.trigger_phase = 'idle'
+                self._set_state('UNSTABLE_RENDER_SKIP_VIEW')
+                return False
+
+            # The renderer changed again between confirmation frames. Treat the
+            # newest frame as the candidate and ask for another confirmation.
+            self.candidate_render_crc = current_crc
+            self._trigger_for_render_sync('WAITING_FOR_RENDER_STABLE')
+            return False
+
+        self.get_logger().warning(
+            f'Unexpected render-sync phase {self.trigger_phase}; skipping view.'
+        )
+        self.waiting_for_fresh_frame = False
+        self.trigger_phase = 'idle'
+        return False
 
     def capture_step(self):
         if self.finished:
@@ -904,40 +991,18 @@ class FastYoloDatasetCapture(Node):
             return
 
         if self.image_seq <= self.trigger_image_seq:
-            if self.trigger_phase == 'flush':
-                self._set_state('WAITING_FOR_POSE_FLUSH_RGB')
+            if self.trigger_phase == 'wait_change':
+                self._set_state('WAITING_FOR_RENDER_CHANGE')
             else:
-                self._set_state('WAITING_FOR_CAPTURE_RGB')
+                self._set_state('WAITING_FOR_RENDER_STABLE')
             self._recover_missing_triggered_frame()
             return
 
-        if self.trigger_phase == 'flush':
-            # Discard the first post-teleport render. Its timestamp may be new
-            # even if Ogre rendered it from the previous camera transform.
-            self.trigger_phase = 'capture'
-            self.trigger_retry_count = 0
-            self.trigger_image_seq = self.image_seq
-            self._set_state('POSE_FLUSHED_TRIGGERING_CAPTURE')
-            if not self._trigger_camera():
-                self.waiting_for_fresh_frame = False
-                self.trigger_phase = 'idle'
-                return
-            self._set_state('WAITING_FOR_CAPTURE_RGB')
+        if not self._handle_render_sync_frame():
             return
 
-        if self.trigger_phase != 'capture':
-            self.get_logger().warning(
-                f'Unexpected trigger phase {self.trigger_phase}; skipping view.'
-            )
-            self.waiting_for_fresh_frame = False
-            self.trigger_phase = 'idle'
-            return
-
-        # This is the second fresh frame after the teleport and is the only
-        # frame paired with labels from the commanded camera pose.
-        self.last_trigger_wall_time = None
-        self.trigger_retry_count = 0
-        self.trigger_phase = 'idle'
+        # The pixels changed from the pre-teleport image and then repeated
+        # identically on a second trigger. Only now are they paired with labels.
         self._set_state('SAVING_FRAME')
         self._save_current_frame()
 
