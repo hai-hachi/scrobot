@@ -188,17 +188,17 @@ POST-YOLO PERCEPTION CLEANUP TODO
 [x] Set LaserScan range_max = 3.30 m.
 [x] Set simulated depth far clip = 10.0 m.
 [x] Keep scan self-filter.
-[ ] Verify scan self-mask remains valid with final base geometry.
+[x] Verify scan self-mask remains valid with final base geometry.
 [x] Keep AprilTag configuration and interfaces.
 [x] Remove stale image_proc/rectification path/dependency.
 [ ] Verify simulated CameraInfo matches the already-recorded factory intrinsics.
 [x] Keep shuttle_tracker disabled/optional.
 [x] Add final real YOLO + aligned-depth node.
-[ ] Add scrobot_debug/launch/perception_check.launch.py.
-[ ] Add/update scrobot_debug/debug_md/perception.md.
+[x] Add scrobot_debug/launch/perception_check.launch.py.
+[x] Add/update scrobot_debug/debug_md/perception.md.
 [x] Add scrobot_perception/README.md architecture documentation.
 [ ] Update stale interface/docs that still show tracker as mandatory.
-[ ] Validate Nav2 and collision_monitor both consume filtered /depth/scan.
+[~] collision_monitor runtime validated with filtered /depth/scan during teleop/RViz test; Nav2 is configured for the same topic and will be runtime-validated with navigation/mission.
 
 
 YOLO PERCEPTION VALIDATION — 2026-10-05
