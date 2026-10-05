@@ -446,6 +446,87 @@ class CollectionSessionEvaluator(Node):
             self.end_time = now
             self.finalize(new_state)
 
+    def _begin_capture_target(self, now):
+        self.current_target_index += 1
+        self.current_target_start_time = now
+        self.current_target_start_remaining = self.remaining_shuttles
+        self.current_target_start_events = self.collection_event_count
+
+    def _queue_capture_verification(self, now):
+        if self.current_target_start_remaining is None:
+            return
+
+        self.capture_checks_started += 1
+        self.pending_capture_checks.append({
+            'pass_index': self.collection_passes,
+            'target_index': self.current_target_index,
+            'target_start_time': self.current_target_start_time,
+            'baseline_remaining': self.current_target_start_remaining,
+            'baseline_events': (
+                self.collection_event_count
+                if self.current_target_start_events is None
+                else self.current_target_start_events
+            ),
+            'deadline': now + self.capture_verification_delay,
+        })
+
+        self.current_target_start_time = None
+        self.current_target_start_remaining = None
+        self.current_target_start_events = None
+
+    def _process_capture_checks(self, now, force=False):
+        if not self.pending_capture_checks:
+            return
+
+        keep = []
+        for check in self.pending_capture_checks:
+            removed = max(
+                0,
+                int(check['baseline_remaining']) - int(self.remaining_shuttles),
+            )
+            if removed > 0:
+                result = 'PASS'
+            elif not force and now < check['deadline']:
+                keep.append(check)
+                continue
+            else:
+                result = 'FAIL'
+
+            event_delta = max(
+                0,
+                int(self.collection_event_count) - int(check['baseline_events']),
+            )
+            if result == 'PASS':
+                self.capture_checks_passed += 1
+                self.get_logger().info(
+                    'Capture verification PASS: '
+                    f'pass={check["pass_index"]}, '
+                    f'target={check["target_index"]}, '
+                    f'GT removed={removed}, events={event_delta}.'
+                )
+            else:
+                self.capture_checks_failed += 1
+                self.get_logger().warning(
+                    'Capture verification FAIL: local collection completed '
+                    f'pass={check["pass_index"]}, target={check["target_index"]}, '
+                    'but shuttle ground-truth count did not decrease.'
+                )
+
+            self.capture_writer.writerow([
+                check['pass_index'],
+                check['target_index'],
+                self.elapsed_s(check['target_start_time']),
+                self.elapsed_s(now),
+                check['baseline_remaining'],
+                self.remaining_shuttles,
+                removed,
+                event_delta,
+                result,
+            ])
+            self.capture_file.flush()
+
+        self.pending_capture_checks = keep
+
     def local_collect_phase_callback(self, msg):
         new_phase = msg.data.strip() or 'UNKNOWN'
         now = self.now_s()
@@ -462,6 +543,16 @@ class CollectionSessionEvaluator(Node):
             ])
             self.phase_file.flush()
             self.phase_enter_time = now
+
+            if new_phase == 'SMC_POSE':
+                self._begin_capture_target(now)
+
+            # A target is considered physically attempted only after its
+            # deliberate overrun completes and the controller returns to
+            # selection. Give the Gazebo bridge a short grace period before
+            # deciding whether ground truth actually decreased.
+            if previous == 'OVERRUN' and new_phase in ('SELECT', 'DONE'):
+                self._queue_capture_verification(now)
 
         self.local_collect_phase = new_phase
 
@@ -488,6 +579,9 @@ class CollectionSessionEvaluator(Node):
         if not self.active or self.finalized:
             return
 
+        now = self.now_s()
+        self._process_capture_checks(now)
+
         gt = self.latest_gt
         est = self.estimated_xy()
         if gt is None and est is None:
@@ -512,7 +606,6 @@ class CollectionSessionEvaluator(Node):
             error = math.hypot(est[0] - gt[0], est[1] - gt[1])
             self.position_error_sq.append(error * error)
 
-        now = self.now_s()
         self.trajectory_writer.writerow([
             now,
             self.elapsed_s(now),
