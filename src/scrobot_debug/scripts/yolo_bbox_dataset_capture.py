@@ -9,6 +9,7 @@ import random
 import shutil
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import rclpy
@@ -34,7 +35,9 @@ class NativeBBoxDatasetCapture(Node):
         self.declare_parameter('random_seed', 42)
         self.declare_parameter('camera_height', 0.28683059)
         self.declare_parameter('settle_time_s', 2.0)
-        self.declare_parameter('camera_apply_wait_s', 0.25)
+        self.declare_parameter('camera_apply_wait_s', 0.05)
+        self.declare_parameter('camera_apply_steps', 2)
+        self.declare_parameter('spawn_workers', 8)
         self.declare_parameter('sample_timeout_s', 5.0)
         self.declare_parameter('max_camera_sync_retries', 8)
         self.declare_parameter('pose_retry_wait_s', 0.50)
@@ -55,7 +58,9 @@ class NativeBBoxDatasetCapture(Node):
         self.rng = random.Random(int(self.get_parameter('random_seed').value))
         self.camera_height = float(self.get_parameter('camera_height').value)
         self.settle_time_s = max(0.0, float(self.get_parameter('settle_time_s').value))
-        self.camera_apply_wait_s = max(0.05, float(self.get_parameter('camera_apply_wait_s').value))
+        self.camera_apply_wait_s = max(0.0, float(self.get_parameter('camera_apply_wait_s').value))
+        self.camera_apply_steps = max(1, int(self.get_parameter('camera_apply_steps').value))
+        self.spawn_workers = max(1, int(self.get_parameter('spawn_workers').value))
         self.sample_timeout_s = max(1.0, float(self.get_parameter('sample_timeout_s').value))
         self.max_camera_sync_retries = max(1, int(self.get_parameter('max_camera_sync_retries').value))
         self.pose_retry_wait_s = max(0.10, float(self.get_parameter('pose_retry_wait_s').value))
@@ -87,12 +92,8 @@ class NativeBBoxDatasetCapture(Node):
         self.capture_phase = 'idle'
         self.pending_pose = None
         self.phase_started_wall = None
-        self.flush_raw_index = None
         self.capture_raw_index = None
         self.next_raw_index = 0
-        self.flush_hash = None
-        self.candidate_raw_index = None
-        self.candidate_hash = None
         self.accepted_hashes = set()
         self.last_accepted_hash = None
         self.camera_sync_retries = 0
@@ -152,17 +153,19 @@ class NativeBBoxDatasetCapture(Node):
         half_l = self.court_length * 0.5 - 0.15
         half_w = self.court_width * 0.5 - 0.15
 
+        specs = []
         for i in range(self.shuttle_count):
             x = self.rng.uniform(-half_l, half_l)
             y = self.rng.uniform(-half_w, half_w)
 
-            # Match the production simulation spawn convention exactly:
-            # model origin 50 mm above court, roll=0, pitch=90 deg, random yaw.
-            # They remain dynamic briefly so contact physics can settle them,
-            # then the whole world is paused before any dataset image is taken.
+            # Match production simulation convention exactly.
             roll = 0.0
             pitch = math.pi / 2.0
             yaw = self.rng.uniform(-math.pi, math.pi)
+            specs.append((i, x, y, roll, pitch, yaw))
+
+        def spawn_one(spec):
+            i, x, y, roll, pitch, yaw = spec
             cmd = [
                 'ros2','run','ros_gz_sim','create',
                 '-world',self.world_name,
@@ -171,10 +174,28 @@ class NativeBBoxDatasetCapture(Node):
                 '-x',f'{x:.9f}','-y',f'{y:.9f}','-z','0.050',
                 '-R',f'{roll:.9f}','-P',f'{pitch:.9f}','-Y',f'{yaw:.9f}'
             ]
-            r = self._run(cmd)
-            if r.returncode != 0:
-                raise RuntimeError(r.stdout)
-            self.shuttles.append((x,y))
+            result = self._run(cmd)
+            return spec, result
+
+        errors = []
+        workers = min(self.spawn_workers, self.shuttle_count)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [pool.submit(spawn_one, spec) for spec in specs]
+            for future in as_completed(futures):
+                spec, result = future.result()
+                if result.returncode != 0:
+                    errors.append((spec[0], result.stdout.strip()))
+
+        if errors:
+            detail = '; '.join(
+                f'{idx}: {msg}' for idx, msg in errors[:5]
+            )
+            raise RuntimeError(
+                f'{len(errors)} shuttle spawn(s) failed: {detail}'
+            )
+
+        # Keep target sampling deterministic, independent of worker completion.
+        self.shuttles = [(x, y) for _, x, y, _, _, _ in specs]
 
         self.spawned = True
         self.settle_started_wall = time.perf_counter()
@@ -193,6 +214,21 @@ class NativeBBoxDatasetCapture(Node):
         if r.returncode != 0 or 'data: true' not in r.stdout.lower():
             raise RuntimeError(
                 f'Failed to set world pause={paused}: {r.stdout.strip()}'
+            )
+
+    def _step_paused_world(self, steps=None):
+        count = self.camera_apply_steps if steps is None else max(1, int(steps))
+        r = self._run([
+            'gz', 'service',
+            '-s', f'/world/{self.world_name}/control',
+            '--reqtype', 'gz.msgs.WorldControl',
+            '--reptype', 'gz.msgs.Boolean',
+            '--timeout', '3000',
+            '--req', f'pause: true, multi_step: {count}',
+        ])
+        if r.returncode != 0 or 'data: true' not in r.stdout.lower():
+            raise RuntimeError(
+                f'Failed to step paused world by {count}: {r.stdout.strip()}'
             )
 
     @staticmethod
@@ -252,9 +288,7 @@ class NativeBBoxDatasetCapture(Node):
             self.pending_pose = self._sample_camera_pose()
             self.camera_sync_retries = 0
             self.pose_command_failures = 0
-            self.flush_raw_index = None
-            self.candidate_raw_index = None
-            self.candidate_hash = None
+            self.capture_raw_index = None
 
         x, y, yaw = self.pending_pose
         q = self._quat_from_rpy(0.0, self.camera_pitch, yaw)
@@ -296,8 +330,11 @@ class NativeBBoxDatasetCapture(Node):
 
         self.pose_command_failures = 0
 
-        # /set_pose queues WorldPoseCmd. Give paused Gazebo update iterations
-        # time to propagate it into the rendering scene before the first flush.
+        # /set_pose only queues WorldPoseCmd. The world is paused, so explicitly
+        # advance it enough iterations for UserCommands + Physics + Sensors to
+        # propagate the new model pose into Ogre before triggering the camera.
+        self._step_paused_world(self.camera_apply_steps)
+
         self.capture_phase = 'wait_camera_apply'
         self.phase_started_wall = time.perf_counter()
         self._set_state('WAITING_FOR_CAMERA_APPLY')
@@ -367,39 +404,35 @@ class NativeBBoxDatasetCapture(Node):
 
     def _reset_camera_capture(self):
         self.pending_pose = None
-        self.flush_raw_index = None
         self.capture_raw_index = None
-        self.candidate_raw_index = None
-        self.flush_hash = None
-        self.candidate_hash = None
         self.camera_sync_retries = 0
         self.pose_command_failures = 0
         self.capture_phase = 'idle'
         self.phase_started_wall = None
 
     def _retry_render_sync(self, reason):
-        # IMPORTANT: do not re-send set_pose here. A stale first render means
-        # Ogre has not caught up yet, not that the pose command necessarily
-        # failed. Keep the requested pose fixed and advance the renderer with
-        # additional triggered frames.
         self.camera_sync_retries += 1
 
         if self.camera_sync_retries > self.max_camera_sync_retries:
             self.get_logger().warning(
-                f'{reason}; abandoning this camera pose after '
-                f'{self.max_camera_sync_retries} render-sync retries.'
+                f'{reason}; skipping this camera pose after '
+                f'{self.max_camera_sync_retries} controlled-step retries.'
             )
             self._reset_camera_capture()
             self._set_state('CAMERA_SYNC_SKIP_POSE')
             return
 
         self.get_logger().warning(
-            f'{reason}; waiting for renderer at the SAME camera pose '
+            f'{reason}; advancing paused world and retrying same pose '
             f'({self.camera_sync_retries}/{self.max_camera_sync_retries}).'
         )
-        self.capture_phase = 'wait_render_retry'
+
+        # Advance the command / physics / render pipeline explicitly rather
+        # than burning camera renders while waiting for Ogre to catch up.
+        self._step_paused_world(self.camera_apply_steps)
+        self.capture_phase = 'wait_camera_apply'
         self.phase_started_wall = time.perf_counter()
-        self._set_state('WAITING_FOR_RENDER_RETRY')
+        self._set_state('WAITING_FOR_CAMERA_APPLY')
 
     def step(self):
         if self.finished:
@@ -424,8 +457,9 @@ class NativeBBoxDatasetCapture(Node):
                 self.scene_frozen = True
                 self._set_state('SCENE_FROZEN')
                 self.get_logger().info(
-                    'Scene frozen: shuttle physics stopped; only camera poses '
-                    'will change during dataset capture.'
+                    'Scene paused after shuttle settling. Camera moves use only '
+                    f'{self.camera_apply_steps} controlled 1 ms world step(s) '
+                    'before each native bbox render.'
                 )
                 return
 
@@ -446,8 +480,6 @@ class NativeBBoxDatasetCapture(Node):
                 self._command_next_camera_pose()
                 return
 
-            # A transport timeout is recoverable. Retry the SAME requested pose
-            # after a short wall-clock delay instead of terminating the run.
             if self.capture_phase == 'wait_pose_retry':
                 if (
                     time.perf_counter() - self.phase_started_wall
@@ -464,100 +496,31 @@ class NativeBBoxDatasetCapture(Node):
                 ):
                     return
 
-                # Render 1: unconditional flush. It may still be the old view.
-                self.flush_raw_index = self._trigger_raw_sample()
-                self.capture_phase = 'wait_flush'
-                self.phase_started_wall = time.perf_counter()
-                self._set_state('WAITING_FOR_FLUSH_SAMPLE')
-                return
-
-            if self.capture_phase == 'wait_flush':
-                if not self._raw_pair_ready(self.flush_raw_index):
-                    if (
-                        time.perf_counter() - self.phase_started_wall
-                        > self.sample_timeout_s
-                    ):
-                        self._retry_render_sync('flush sample timed out')
-                    return
-
-                # Never judge camera motion from the first post-set_pose render.
-                # Discard it unconditionally and request a candidate render.
-                self.candidate_raw_index = self._trigger_raw_sample()
-                self.capture_phase = 'wait_candidate'
-                self.phase_started_wall = time.perf_counter()
-                self._set_state('WAITING_FOR_CANDIDATE_SAMPLE')
-                return
-
-            if self.capture_phase == 'wait_render_retry':
-                if (
-                    time.perf_counter() - self.phase_started_wall
-                    < self.camera_apply_wait_s
-                ):
-                    return
-                self.candidate_raw_index = self._trigger_raw_sample()
-                self.capture_phase = 'wait_candidate'
-                self.phase_started_wall = time.perf_counter()
-                self._set_state('WAITING_FOR_CANDIDATE_SAMPLE')
-                return
-
-            if self.capture_phase == 'wait_candidate':
-                if not self._raw_pair_ready(self.candidate_raw_index):
-                    if (
-                        time.perf_counter() - self.phase_started_wall
-                        > self.sample_timeout_s
-                    ):
-                        self._retry_render_sync('candidate sample timed out')
-                    return
-
-                candidate_img, _ = self._raw_pair_paths(
-                    self.candidate_raw_index
-                )
-                self.candidate_hash = self._image_sha1(candidate_img)
-
-                # If this still equals the last accepted view, the renderer has
-                # not visibly adopted the new camera pose yet. Do NOT set_pose
-                # again; just allow another rendering update.
-                if (
-                    self.last_accepted_hash is not None
-                    and self.candidate_hash == self.last_accepted_hash
-                ):
-                    self._retry_render_sync(
-                        'renderer still returned the previous camera view'
-                    )
-                    return
-
-                # Render 3: confirmation at exactly the same commanded pose.
+                # One native bbox render should now correspond to the updated
+                # camera pose because paused simulation steps were forced above.
                 self.capture_raw_index = self._trigger_raw_sample()
-                self.capture_phase = 'wait_confirm'
+                self.capture_phase = 'wait_capture'
                 self.phase_started_wall = time.perf_counter()
-                self._set_state('WAITING_FOR_CONFIRMED_SAMPLE')
+                self._set_state('WAITING_FOR_NATIVE_SAMPLE')
                 return
 
-            if self.capture_phase == 'wait_confirm':
+            if self.capture_phase == 'wait_capture':
                 if not self._raw_pair_ready(self.capture_raw_index):
                     if (
                         time.perf_counter() - self.phase_started_wall
                         > self.sample_timeout_s
                     ):
-                        self._retry_render_sync('confirmation sample timed out')
+                        self._retry_render_sync('native sample timed out')
                     return
 
                 capture_img, _ = self._raw_pair_paths(self.capture_raw_index)
                 capture_hash = self._image_sha1(capture_img)
 
-                # Frozen world + unchanged camera pose must produce two
-                # consecutive identical renders. If the view changed again,
-                # use more renders at the same pose until it stabilizes.
-                if capture_hash != self.candidate_hash:
-                    self.candidate_hash = capture_hash
-                    self._retry_render_sync(
-                        'renderer changed between candidate and confirmation'
-                    )
-                    return
-
+                # Exact duplicate means the renderer still has the previous
+                # viewpoint. Advance controlled simulation steps and try again.
                 if capture_hash in self.accepted_hashes:
                     self._retry_render_sync(
-                        'candidate duplicates an already accepted frame'
+                        'renderer returned a previously accepted camera view'
                     )
                     return
 
