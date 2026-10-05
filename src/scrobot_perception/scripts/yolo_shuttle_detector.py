@@ -197,6 +197,7 @@ class YoloShuttleDetector(Node):
         self._depth_rejected = 0
         self._inference_ms_sum = 0.0
         self._last_stats_wall = time.perf_counter()
+        self._last_camera_info_warning_wall = 0.0
 
         self.get_logger().info(f"Loading YOLO model: {self.model_path}")
         self.model = YOLO(str(self.model_path))
@@ -281,10 +282,9 @@ class YoloShuttleDetector(Node):
         self._last_inference_wall = now_wall
 
         if self._camera_info is None:
-            self.get_logger().warn(
-                "Waiting for valid color CameraInfo...",
-                throttle_duration_sec=2.0,
-            )
+            if now_wall - self._last_camera_info_warning_wall >= 2.0:
+                self._last_camera_info_warning_wall = now_wall
+                self.get_logger().warn("Waiting for valid color CameraInfo...")
             return
 
         try:
