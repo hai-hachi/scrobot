@@ -21,6 +21,29 @@ multi-shuttle selection/reacquisition  PASS
 Nav2/RPP subsystem tests               PASS
 ```
 
+## Required preflight: physical shuttle removal
+
+Before the 50-shuttle mission, run one production local-collection pass:
+
+```bash
+ros2 launch scrobot_debug smc_shuttle_check.launch.py \
+  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt \
+  launch_rviz:=false
+```
+
+The debug collection monitor now cross-checks both the one-shot collection
+event and the authoritative shuttle ground-truth count.
+
+Do not start the final mission until the log contains:
+
+```text
+REMOVAL_PASS
+```
+
+`REMOVAL_FAIL` means the controller completed its physical pass but the
+dynamic shuttle did not disappear from Gazebo, and the collection simulation
+must be fixed before mission-level results are meaningful.
+
 ## One-command final regression
 
 The preferred final test is now:
@@ -184,7 +207,9 @@ The final integrated run passes when:
 9. sweep progress resumes instead of restarting;
 10. fixed-station AprilTag corrections succeed;
 11. collision monitoring remains active;
-12. the sweep reaches `COMPLETE` without manual intervention.
+12. every completed pickup has an authoritative Gazebo ground-truth removal;
+13. `capture_checks_failed = 0` in the evaluator summary;
+14. the sweep reaches `COMPLETE` without manual intervention.
 
 ## Record
 
