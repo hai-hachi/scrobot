@@ -49,7 +49,30 @@ def generate_texture(tag_id, params, output_path):
         )
     cell_px = texture_pixels // total_cells
     marker_px = active_cells * cell_px
-    marker = cv2.aruco.drawMarker(april_dictionary(), tag_id, marker_px, borderBits=1)
+    dictionary = april_dictionary()
+
+    # OpenCV ArUco Python API compatibility:
+    # - older OpenCV exposes drawMarker(...)
+    # - newer OpenCV exposes generateImageMarker(...)
+    if hasattr(cv2.aruco, 'generateImageMarker'):
+        marker = cv2.aruco.generateImageMarker(
+            dictionary,
+            tag_id,
+            marker_px,
+            borderBits=1,
+        )
+    elif hasattr(cv2.aruco, 'drawMarker'):
+        marker = cv2.aruco.drawMarker(
+            dictionary,
+            tag_id,
+            marker_px,
+            borderBits=1,
+        )
+    else:
+        raise RuntimeError(
+            'OpenCV ArUco module provides neither generateImageMarker() '
+            'nor drawMarker().'
+        )
     texture = np.full((texture_pixels, texture_pixels), 255, dtype=np.uint8)
     q = quiet_cells * cell_px
     texture[q:q + marker_px, q:q + marker_px] = marker
