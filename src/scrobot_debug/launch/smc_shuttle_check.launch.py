@@ -27,7 +27,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     model_path = LaunchConfiguration('model_path')
     device = LaunchConfiguration('device')
-    camera_standoff = LaunchConfiguration('camera_standoff')
+    base_standoff = LaunchConfiguration('base_standoff')
 
     shuttle_x = LaunchConfiguration('shuttle_x')
     shuttle_y = LaunchConfiguration('shuttle_y')
@@ -117,7 +117,7 @@ def generate_launch_description():
             local_params,
             {
                 'use_sim_time': use_sim_time,
-                'camera_standoff_distance': camera_standoff,
+                'base_standoff_distance': base_standoff,
             },
         ],
     )
@@ -169,9 +169,9 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument('device', default_value='0'),
         DeclareLaunchArgument(
-            'camera_standoff',
-            default_value='1.00',
-            description='Desired planar color-camera standoff from shuttle [m].',
+            'base_standoff',
+            default_value='1.10',
+            description='Desired planar base_link standoff from shuttle [m].',
         ),
 
         # Far enough to observe SMC convergence while remaining inside the
