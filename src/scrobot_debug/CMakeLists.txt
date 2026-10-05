@@ -141,6 +141,13 @@ install(
 )
 
 install(
+  PROGRAMS
+    scripts/yolo_bbox_dataset_capture.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME yolo_bbox_dataset_capture
+)
+
+install(
   DIRECTORY
     launch
     config
