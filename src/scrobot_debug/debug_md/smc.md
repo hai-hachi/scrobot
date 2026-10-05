@@ -317,13 +317,32 @@ Topics:
 ```text
 /court_markers
 /debug/smc_tag/tag_marker
-/debug/smc_tag/desired_base_pose
+/debug/tag_controller/goal_pose
 /debug/smc_tag/trajectory
 /debug/tag_controller/reference_path
 ```
 
 The biarc strategy publishes its generated path on the reference-path topic.
 The other strategies leave that path empty.
+
+The yellow final-pose arrow now comes directly from
+`/debug/tag_controller/goal_pose`, which is the exact `odom` goal used by the
+controller. The court-geometry visualizer still computes an independent ideal
+pose on `/debug/smc_tag/ideal_base_pose`, but that topic is not used for the
+controller-goal arrow.
+
+For `biarc_smc`, the goal is frozen once the biarc is generated so later
+AprilTag measurement filtering cannot move the desired pose away from the
+already-generated path endpoint.
+
+At generation time the controller verifies:
+
+```text
+endpoint_error=0.000000 m
+endpoint_yaw_error=0.000000 deg
+```
+
+up to floating-point precision.
 
 ## What to compare
 
