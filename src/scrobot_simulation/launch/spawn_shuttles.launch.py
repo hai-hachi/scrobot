@@ -11,6 +11,7 @@ def _spawn_shuttles(context):
     mode = LaunchConfiguration('mode').perform(context)
     batch = LaunchConfiguration('batch').perform(context).strip()
     count = LaunchConfiguration('count').perform(context).strip()
+    seed = LaunchConfiguration('seed').perform(context).strip()
     x = LaunchConfiguration('x').perform(context).strip()
     y = LaunchConfiguration('y').perform(context).strip()
 
@@ -26,6 +27,8 @@ def _spawn_shuttles(context):
         cmd += ['--batch', batch]
     if count:
         cmd += ['--count', count]
+    if seed:
+        cmd += ['--seed', seed]
     if x:
         cmd += ['--x', x]
     if y:
@@ -67,6 +70,14 @@ def generate_launch_description():
             description=(
                 'Optional shuttle-count override. Empty uses the selected '
                 'mode count from shuttle_spawn.yaml.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'seed',
+            default_value='',
+            description=(
+                'Optional integer layout seed for random/cluster/mixed modes. '
+                'Empty uses the YAML value or a new random seed.'
             ),
         ),
         DeclareLaunchArgument(
