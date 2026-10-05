@@ -312,7 +312,21 @@ Recommended first lateral sweep:
 y = -0.40 m ... +0.40 m
 ```
 
-The configured YOLO/depth acceptance range is camera-relative 0.50-1.68 m.
+The detector no longer uses the collection envelope as a camera-depth gate.
+Its aligned-depth validity interval is deliberately broad:
+
+```text
+camera depth validity = 0.20-3.00 m
+```
+
+Mission eligibility is evaluated later by `shuttle_collection_filter` after
+TF into `base_link`:
+
+```text
+0.50 m <= planar base_link range <= 1.80 m
+```
+
+This keeps sensor validity separate from mission policy.
 
 ## 9. Spawn several independent shuttle models
 
@@ -392,3 +406,115 @@ A functional pass requires:
 
 This check intentionally does not launch the optional shuttle tracker or mission
 controller. It validates the production detector boundary first.
+
+
+---
+
+## 13. Completed 3D accuracy validation
+
+A dedicated simulation-only monitor now compares the production YOLO + aligned
+depth estimate against Gazebo truth without feeding truth back into perception
+or control.
+
+Launch:
+
+```bash
+ros2 launch scrobot_debug yolo_perception_check.launch.py \
+  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt \
+  shuttle_x:=1.50 \
+  shuttle_y:=0.30
+```
+
+The monitor compares both measurements in `base_link` and reports:
+
+```text
+GT base_link x/y, range, bearing
+estimated base_link x/y, range, bearing
+x/y error
+planar error
+range error
+bearing error
+longitudinal error
+lateral error
+running RMSE
+```
+
+Representative completed tests:
+
+```text
+GT bearing +11.35 deg:
+planar RMSE       = 0.0270 m
+range RMSE        = 0.0224 m
+bearing RMSE      = 0.56 deg
+longitudinal RMSE = 0.0223 m
+lateral RMSE      = 0.0151 m
+
+GT bearing +26.67 deg:
+planar RMSE       = 0.0342 m
+range RMSE        = 0.0175 m
+bearing RMSE      = 1.25 deg
+longitudinal RMSE = 0.0172 m
+lateral RMSE      = 0.0296 m
+
+GT bearing -26.67 deg:
+planar RMSE       = 0.0512 m
+range RMSE        = 0.0415 m
+bearing RMSE      = 1.26 deg
+longitudinal RMSE = 0.0411 m
+lateral RMSE      = 0.0304 m
+```
+
+The off-axis lateral error is approximately 0.03 m and was accepted for the
+current collector geometry. The opposite-sign bearing errors at +/-26.67 deg
+are approximately symmetric and pull the estimate slightly toward the camera
+centerline. No further intrinsic/bbox-center tuning is required for the current
+mission unless real-world testing shows a larger error.
+
+The estimates were also very stable over repeated frames. The instantaneous
+error, RMSE, and maximum error remained nearly identical in each fixed-pose
+test, indicating systematic bias rather than frame-to-frame noise.
+
+## 14. Completed base_link range-gate validation
+
+The mission collection gate was tested with the production YOLO detector and
+Gazebo truth using:
+
+```text
+0.45 m -> reject
+0.55 m -> accept
+1.75 m -> accept
+1.85 m -> reject
+```
+
+All four cases passed.
+
+The dedicated launch is:
+
+```bash
+ros2 launch scrobot_debug yolo_range_gate_check.launch.py \
+  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt \
+  shuttle_x:=0.55 \
+  shuttle_y:=0.0
+```
+
+The range-gate monitor distinguishes a real filter decision from missing raw
+perception, so a YOLO miss cannot be counted as a successful rejection.
+
+## 15. Perception status
+
+The production shuttle perception chain is now considered validated for the
+simulation mission:
+
+```text
+YOLO 2D detection                  PASS
+aligned depth registration         PASS
+bbox ROI depth -> camera XYZ       PASS
+3D accuracy against Gazebo truth   PASS
+~0.03 m off-axis lateral error     ACCEPTED
+TF into base_link                  PASS
+0.50-1.80 m mission range gate     PASS
+multiple simultaneous detections   PASS
+```
+
+Further perception tuning is deferred unless the full mission or real-world
+tests expose a new failure mode.
