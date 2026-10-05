@@ -180,19 +180,20 @@ horizontal/vertical optical-axis angle
 TF health
 ```
 
-Current tuning values:
+Current tuning values after the range test:
 
 ```text
 default_target_distance       = 0.80 m
-relocalization_max_distance   = 10.5 m
-max_tag_distance              = 9.0 m
-min_decision_margin           = 20.0
+approach max_detection_distance = 10.0 m
+global max_tag_distance         = 10.0 m
+relocalization_max_distance     = 10.0 m
+min_decision_margin             = 20.0
 ```
 
-Important: `max_tag_distance = 9.0 m` is currently a stricter upstream gate
-than `relocalization_max_distance = 10.5 m`. Therefore the effective maximum
-accepted range remains 9.0 m until the recognition test is complete and that
-separate gate is deliberately retuned.
+The raw detector itself is not capped at 10.0 m. In simulation, tag 1 was
+observed at 11.694 m with decision margin 63.1, and the session maximum reached
+12.592 m. The 10.0 m value is therefore a deliberate eligibility limit for
+approach/relocalization, not the measured raw recognition limit.
 
 Drive toward/away from a tag and record where detection is stable rather than
 using a single farthest lucky detection.
