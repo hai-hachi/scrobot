@@ -40,6 +40,7 @@ class CollectionSessionEvaluator(Node):
         self.declare_parameter('sample_rate', 20.0)
         self.declare_parameter('path_publish_rate', 1.0)
         self.declare_parameter('tf_timeout', 0.02)
+        self.declare_parameter('capture_verification_delay', 0.75)
 
         # Permanent mission exclusion around the two net poles. Keeping these
         # values in the evaluator lets the report distinguish intentionally
@@ -66,6 +67,10 @@ class CollectionSessionEvaluator(Node):
         self.sample_rate = float(self.get_parameter('sample_rate').value)
         self.path_publish_rate = float(self.get_parameter('path_publish_rate').value)
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
+        self.capture_verification_delay = max(
+            0.0,
+            float(self.get_parameter('capture_verification_delay').value),
+        )
         self.pole_x = float(self.get_parameter('pole_x').value)
         self.pole_y_positions = [
             float(v) for v in self.get_parameter('pole_y_positions').value
@@ -135,6 +140,18 @@ class CollectionSessionEvaluator(Node):
         self.pass_start_time = None
         self.pass_start_collected = 0
 
+        # Verify that a completed physical pickup attempt is followed by an
+        # authoritative decrease in Gazebo shuttle ground truth. This is kept
+        # evaluation-only and never feeds mission control.
+        self.capture_checks_started = 0
+        self.capture_checks_passed = 0
+        self.capture_checks_failed = 0
+        self.pending_capture_checks = []
+        self.current_target_index = 0
+        self.current_target_start_time = None
+        self.current_target_start_remaining = None
+        self.current_target_start_events = None
+
         self.trajectory_file = open(
             self.output_dir / 'collection_trajectory.csv', 'w', newline=''
         )
@@ -168,6 +185,17 @@ class CollectionSessionEvaluator(Node):
             'collected_this_pass', 'collected_total', 'remaining_shuttles',
             'remaining_near_poles', 'remaining_eligible',
             'eligible_collection_rate_percent',
+        ])
+
+        self.capture_file = open(
+            self.output_dir / 'capture_verification.csv', 'w', newline=''
+        )
+        self.capture_writer = csv.writer(self.capture_file)
+        self.capture_writer.writerow([
+            'pass_index', 'target_index', 'target_start_elapsed_s',
+            'verification_elapsed_s', 'baseline_remaining',
+            'remaining_after', 'removed_by_ground_truth',
+            'collection_events_delta', 'result',
         ])
 
         sensor_qos = QoSProfile(
@@ -225,7 +253,8 @@ class CollectionSessionEvaluator(Node):
 
         self.get_logger().info(
             f'Collection session evaluator ready: {self.output_dir}; '
-            f'pole exclusion={self.pole_exclusion_radius:.2f} m.'
+            f'pole exclusion={self.pole_exclusion_radius:.2f} m, '
+            f'capture verification grace={self.capture_verification_delay:.2f} s.'
         )
 
     def now_s(self):
