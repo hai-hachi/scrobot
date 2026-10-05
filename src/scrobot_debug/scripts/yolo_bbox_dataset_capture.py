@@ -123,17 +123,26 @@ class NativeBBoxDatasetCapture(Node):
         for i in range(self.shuttle_count):
             x = self.rng.uniform(-half_l, half_l)
             y = self.rng.uniform(-half_w, half_w)
-            # Drop each shuttle slightly above the court with a random attitude.
-            # Physics then determines the final resting side/orientation.
-            roll = self.rng.uniform(-math.pi, math.pi)
-            pitch = self.rng.uniform(-math.pi, math.pi)
+            # Start close to a realistic side-resting attitude, then let the
+            # production collision model settle it. This avoids high-energy
+            # random drops that can jitter or tunnel with a 5.2 g body.
+            if self.rng.random() < 0.5:
+                roll = self.rng.choice((-1.0, 1.0)) * (
+                    math.pi / 2.0 + self.rng.uniform(-0.20, 0.20)
+                )
+                pitch = self.rng.uniform(-0.20, 0.20)
+            else:
+                roll = self.rng.uniform(-0.20, 0.20)
+                pitch = self.rng.choice((-1.0, 1.0)) * (
+                    math.pi / 2.0 + self.rng.uniform(-0.20, 0.20)
+                )
             yaw = self.rng.uniform(-math.pi, math.pi)
             cmd = [
                 'ros2','run','ros_gz_sim','create',
                 '-world',self.world_name,
                 '-name',f'yolo_shuttle_{i:03d}',
                 '-file',str(self.shuttle_sdf),
-                '-x',f'{x:.9f}','-y',f'{y:.9f}','-z','0.18',
+                '-x',f'{x:.9f}','-y',f'{y:.9f}','-z','0.080',
                 '-R',f'{roll:.9f}','-P',f'{pitch:.9f}','-Y',f'{yaw:.9f}'
             ]
             r = self._run(cmd)
@@ -218,12 +227,16 @@ class NativeBBoxDatasetCapture(Node):
         )
 
     def _split_for_index(self, idx):
-        v = idx % 20
-        if v < 14:
-            return 'train'
-        if v < 17:
-            return 'val'
-        return 'test'
+        # Interleave splits instead of putting the first 14 samples in train.
+        # The repeating 20-sample cycle is still 70/15/15, but even short
+        # smoke tests contain validation and test frames.
+        cycle = (
+            'train', 'train', 'val', 'train', 'test',
+            'train', 'train', 'train', 'val', 'train',
+            'test', 'train', 'train', 'train', 'val',
+            'train', 'test', 'train', 'train', 'train',
+        )
+        return cycle[idx % len(cycle)]
 
     def _convert_pending(self):
         img, box = self._raw_pair_paths(self.pending_raw_index)
