@@ -91,7 +91,10 @@ tag_approach_controller:
 
     # Tangent biarc path feeding the SMC.
     biarc_spacing: 0.08
-    biarc_lookahead: 0.35
+    biarc_lookahead: 0.30
+    biarc_d1_factor_min: 0.15
+    biarc_d1_factor_max: 6.0
+    biarc_d1_factor_samples: 81
 
     # Normal-ray baseline.
     ray_position_tolerance: 0.12
