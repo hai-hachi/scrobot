@@ -21,6 +21,13 @@ install(
   DESTINATION lib/${PROJECT_NAME}
 )
 
+install(
+  PROGRAMS
+    scripts/yolo_shuttle_detector.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME yolo_shuttle_detector
+)
+
 # GitHub-created files may not preserve executable mode. Install this node
 # with RENAME so CMake materializes an executable wrapper for symlink installs.
 install(
