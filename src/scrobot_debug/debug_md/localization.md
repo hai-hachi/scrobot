@@ -183,7 +183,7 @@ TF health
 Current tuning values after the range test:
 
 ```text
-default_target_distance       = 0.80 m
+default_target_distance       = 0.90 m
 approach max_detection_distance = 10.0 m
 global max_tag_distance         = 10.0 m
 relocalization_max_distance     = 10.0 m
@@ -228,7 +228,7 @@ vertical angle   ~= 0 deg
 
 ```bash
 ros2 action send_goal /approach_tag scrobot_interfaces/action/ApproachTag \
-  "{preferred_tag_id: -1, target_distance: 0.80, timeout_sec: 60.0}" --feedback
+  "{preferred_tag_id: -1, target_distance: 0.90, timeout_sec: 60.0}" --feedback
 ```
 
 With no acceptable tag, expected behavior is:
@@ -249,7 +249,7 @@ If a tag is found:
 search
  -> stop/observe
  -> lock best-facing tag
- -> drive to 0.80 m stand-off
+ -> drive to 0.90 m base_link stand-off
  -> final alignment
 ```
 
@@ -298,7 +298,7 @@ The recovery state must coexist with MANUAL pause/resume.
 - EKF is the sole `odom -> base_footprint` owner in production;
 - tag global localizer is the sole `map -> odom` owner;
 - no-tag search stops at measured 2*pi;
-- approach reaches the configured 0.80 m stand-off;
+- approach reaches the configured 0.90 m base_link stand-off;
 - 15-sample correction succeeds with valid centered observations;
 - `odom -> base_footprint` remains continuous during global correction;
 - recognition-range and image-center results are recorded before final range
