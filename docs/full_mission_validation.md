@@ -21,6 +21,30 @@ multi-shuttle selection/reacquisition  PASS
 Nav2/RPP subsystem tests               PASS
 ```
 
+## One-command final regression
+
+The preferred final test is now:
+
+```bash
+ros2 launch scrobot_debug full_mission_check.launch.py \
+  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt
+```
+
+Defaults:
+
+```text
+robot start    x=2.0 m, y=3.05 m, yaw=3.14159 rad
+layout         mixed
+shuttle count  50
+layout seed    20261003
+magnetometer   disabled
+evaluation     enabled
+RViz           disabled
+```
+
+Use `launch_rviz:=true` only when visual inspection is needed. The separate
+terminal procedure below remains useful for isolating startup failures.
+
 ## Build
 
 ```bash
