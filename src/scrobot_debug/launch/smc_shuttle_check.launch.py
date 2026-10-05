@@ -3,6 +3,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, TimerAction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
@@ -154,17 +155,23 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}],
     )
 
-    rviz = include(
-        'scrobot_debug',
-        'rviz.launch.py',
-        {
+    rviz = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('scrobot_debug'),
+                'launch',
+                'rviz.launch.py',
+            )
+        ),
+        launch_arguments={
             'use_sim_time': use_sim_time,
             'rviz_config': os.path.join(
                 get_package_share_directory('scrobot_debug'),
                 'config',
                 'smc_shuttle.rviz',
             ),
-        },
+        }.items(),
+        condition=IfCondition(launch_rviz),
     )
 
     collect_action = ExecuteProcess(
