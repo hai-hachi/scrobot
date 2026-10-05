@@ -40,9 +40,11 @@ class LocalCollectController(Node):
     """Local shuttle collection with an SMC pre-pose and straight pickup pass.
 
     The first currently eligible shuttle is frozen once in odom. A fixed
-    pre-collection pose is constructed with collector_link 0.50 m in front of
-    that shuttle and facing it. Sliding-mode control drives the collector point
-    to this pose. Once position and heading tolerances are satisfied, the robot
+    pre-collection pose is constructed with the color camera 1.00 m from the
+    shuttle in the ground plane and facing it. Sliding-mode control drives a
+    virtual centerline point at the camera's forward offset to this pose while
+    compensating the camera's lateral offset. Once position and heading
+    tolerances are satisfied, the robot
     switches to the deliberately simple straight collection rule:
         v = 0.30 m/s, omega = 0.
     When collector_link reaches the frozen shuttle point, the controller
@@ -58,6 +60,7 @@ class LocalCollectController(Node):
         self.declare_parameter('phase_topic', '/mission/local_collect_phase')
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_link')
+        self.declare_parameter('camera_frame', 'camera_color_frame')
         self.declare_parameter('collector_frame', 'collector_link')
         self.declare_parameter('control_rate', 30.0)
         self.declare_parameter('tf_timeout', 0.05)
@@ -66,7 +69,7 @@ class LocalCollectController(Node):
 
         self.declare_parameter('position_tolerance', 0.08)
         self.declare_parameter('reacquire_exclusion_radius', 0.12)
-        self.declare_parameter('precollect_distance', 0.50)
+        self.declare_parameter('camera_standoff_distance', 1.00)
         self.declare_parameter('precollect_position_tolerance', 0.03)
         self.declare_parameter('precollect_yaw_tolerance_deg', 5.0)
         self.declare_parameter('straight_collect_speed', 0.30)
@@ -79,7 +82,7 @@ class LocalCollectController(Node):
         self.declare_parameter('smc_eta', 0.8)
         self.declare_parameter('smc_phi', 0.05)
         self.declare_parameter('smc_krho', 0.8)
-        self.declare_parameter('collector_offset_c', 0.165)
+        # SMC control offset c is derived from the camera TF at runtime.
         self.declare_parameter('smc_max_angular_speed', 2.0)
         self.declare_parameter('smc_max_linear_speed', 0.50)
         self.declare_parameter('heading_stop_deg', 70.0)
@@ -93,6 +96,7 @@ class LocalCollectController(Node):
         self.phase_topic = str(self.get_parameter('phase_topic').value)
         self.odom_frame = str(self.get_parameter('odom_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
+        self.camera_frame = str(self.get_parameter('camera_frame').value)
         self.collector_frame = str(self.get_parameter('collector_frame').value)
         self.control_rate = float(self.get_parameter('control_rate').value)
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
@@ -103,7 +107,9 @@ class LocalCollectController(Node):
         self.reacquire_exclusion_radius = float(
             self.get_parameter('reacquire_exclusion_radius').value
         )
-        self.precollect_distance = float(self.get_parameter('precollect_distance').value)
+        self.camera_standoff_distance = float(
+            self.get_parameter('camera_standoff_distance').value
+        )
         self.precollect_position_tolerance = float(
             self.get_parameter('precollect_position_tolerance').value
         )
@@ -128,9 +134,6 @@ class LocalCollectController(Node):
         self.smc_eta = float(self.get_parameter('smc_eta').value)
         self.smc_phi = max(1e-6, float(self.get_parameter('smc_phi').value))
         self.smc_krho = float(self.get_parameter('smc_krho').value)
-        self.collector_offset_c = float(
-            self.get_parameter('collector_offset_c').value
-        )
         self.smc_max_angular_speed = abs(
             float(self.get_parameter('smc_max_angular_speed').value)
         )
@@ -180,8 +183,8 @@ class LocalCollectController(Node):
 
         self._phase('IDLE')
         self.get_logger().info(
-            'LocalCollect ready: SMC pre-pose at '
-            f'{self.precollect_distance:.2f} m, straight collect '
+            'LocalCollect ready: SMC camera pose at '
+            f'{self.camera_standoff_distance:.2f} m camera-relative, straight collect '
             f'{self.straight_collect_speed:.2f} m/s, '
             f'overrun={self.overrun_distance:.2f} m.'
         )
@@ -309,21 +312,47 @@ class LocalCollectController(Node):
         return None, 0.0, 0.0
 
     def _build_precollect_pose(self, target_odom):
-        collector = self._frame_pose_in_odom(self.collector_frame)
-        if collector is None:
+        camera = self._frame_pose_in_odom(self.camera_frame)
+        if camera is None:
             return None
 
-        dx = target_odom[0] - collector[0]
-        dy = target_odom[1] - collector[1]
+        tf_base_camera = self._lookup(self.base_frame, self.camera_frame)
+        if tf_base_camera is None:
+            return None
+
+        camera_dx = float(tf_base_camera.transform.translation.x)
+        camera_dy = float(tf_base_camera.transform.translation.y)
+
+        dx = target_odom[0] - camera[0]
+        dy = target_odom[1] - camera[1]
         if math.hypot(dx, dy) < 1e-6:
-            heading = collector[2]
+            heading = camera[2]
         else:
             heading = math.atan2(dy, dx)
 
+        # Desired COLOR CAMERA planar position exactly
+        # camera_standoff_distance from the frozen shuttle.
+        camera_goal_x = (
+            target_odom[0]
+            - self.camera_standoff_distance * math.cos(heading)
+        )
+        camera_goal_y = (
+            target_odom[1]
+            - self.camera_standoff_distance * math.sin(heading)
+        )
+
+        # The SMC derivation assumes the controlled point lies c metres on the
+        # robot centerline. Use c = camera forward X offset and compensate the
+        # actual camera lateral Y offset in the desired control-point pose.
+        control_offset_c = camera_dx
+        goal_x = camera_goal_x + camera_dy * math.sin(heading)
+        goal_y = camera_goal_y - camera_dy * math.cos(heading)
+
         return (
-            target_odom[0] - self.precollect_distance * math.cos(heading),
-            target_odom[1] - self.precollect_distance * math.sin(heading),
+            goal_x,
+            goal_y,
             wrap_angle(heading),
+            control_offset_c,
         )
 
     # ------------------------------------------------------------------
@@ -343,16 +372,19 @@ class LocalCollectController(Node):
         )
         self._publish_cmd(self.last_v, self.last_w)
 
-    def _smc_command(self, pre_pose, collector_pose):
-        px, py, ptheta = pre_pose
-        x, y, theta = collector_pose
+    def _smc_command(self, pre_pose, base_pose):
+        px, py, ptheta, control_offset_c = pre_pose
+        x, y, theta = base_pose
 
-        dx = px - x
-        dy = py - y
+        control_x = x + control_offset_c * math.cos(theta)
+        control_y = y + control_offset_c * math.sin(theta)
+
+        dx = px - control_x
+        dy = py - control_y
         rho = math.hypot(dx, dy)
         alpha = wrap_angle(math.atan2(dy, dx) - theta) if rho > 1e-9 else 0.0
 
-        # Lateral target error expressed in the collector/body frame.
+        # Lateral target error expressed in the robot/control-point frame.
         e_y = -math.sin(theta) * dx + math.cos(theta) * dy
         e_theta = wrap_angle(ptheta - theta)
 
@@ -360,7 +392,7 @@ class LocalCollectController(Node):
         sat = clamp(s / self.smc_phi, -1.0, 1.0)
 
         # The pre-pose reference is straight, therefore omega_R = 0.
-        denominator = 1.0 + self.smc_lambda * self.collector_offset_c
+        denominator = 1.0 + self.smc_lambda * control_offset_c
         omega = (
             self.smc_lambda
             * self.smc_reference_speed
@@ -385,15 +417,23 @@ class LocalCollectController(Node):
     # Collection phases
     # ------------------------------------------------------------------
 
-    def _drive_precollect_pose(self, pre_pose, goal_handle, feedback, deadline):
+    def _drive_precollect_pose(
+        self,
+        pre_pose,
+        target_odom,
+        goal_handle,
+        feedback,
+        deadline,
+    ):
         self._phase('SMC_POSE')
         feedback.phase = 'SMC_POSE'
         goal_handle.publish_feedback(feedback)
 
         self.get_logger().info(
-            'SMC pre-pose: '
-            f'x={pre_pose[0]:.3f}, y={pre_pose[1]:.3f}, '
-            f'yaw={math.degrees(pre_pose[2]):+.1f} deg.'
+            'SMC camera-relative pre-pose: '
+            f'control_xy=({pre_pose[0]:.3f},{pre_pose[1]:.3f}), '
+            f'yaw={math.degrees(pre_pose[2]):+.1f} deg, '
+            f'camera_standoff={self.camera_standoff_distance:.2f} m.'
         )
 
         period = 1.0 / max(self.control_rate, 1.0)
@@ -411,14 +451,14 @@ class LocalCollectController(Node):
                 self._stop()
                 return True, 'target timeout during SMC pose'
 
-            collector = self._frame_pose_in_odom(self.collector_frame)
-            if collector is None:
+            base = self._frame_pose_in_odom(self.base_frame)
+            if base is None:
                 self._stop()
                 time.sleep(period)
                 continue
 
             desired_v, desired_w, rho, alpha, e_y, e_theta, s = self._smc_command(
-                pre_pose, collector
+                pre_pose, base
             )
 
             feedback.range_m = float(rho)
@@ -430,11 +470,19 @@ class LocalCollectController(Node):
                 and abs(e_theta) <= self.precollect_yaw_tolerance
             ):
                 self._stop()
+                camera = self._frame_pose_in_odom(self.camera_frame)
+                camera_range = float('nan')
+                if camera is not None:
+                    camera_range = math.hypot(
+                        target_odom[0] - camera[0],
+                        target_odom[1] - camera[1],
+                    )
                 self.get_logger().info(
                     'SMC pre-pose reached: '
                     f'rho={rho:.4f} m, e_y={e_y:+.4f} m, '
                     f'e_theta={math.degrees(e_theta):+.2f} deg, '
-                    f's={s:+.4f}.'
+                    f's={s:+.4f}, '
+                    f'camera_range={camera_range:.3f} m.'
                 )
                 return True, 'pre-pose reached'
 
@@ -564,7 +612,11 @@ class LocalCollectController(Node):
             return True, 'pre-pose TF unavailable'
 
         completed, reason = self._drive_precollect_pose(
-            pre_pose, goal_handle, feedback, deadline
+            pre_pose,
+            target_odom,
+            goal_handle,
+            feedback,
+            deadline,
         )
         if not completed or reason.startswith('target timeout'):
             return completed, reason
