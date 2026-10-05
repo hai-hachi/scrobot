@@ -132,25 +132,57 @@ max angular     = 0.60 rad/s
 
 ## 3. Tangent biarc path feeding SMC
 
-A single circular arc cannot generally satisfy two arbitrary endpoint positions
-and both endpoint headings. Therefore this experiment uses a **biarc**:
+A single circular arc cannot generally satisfy arbitrary start/end positions
+and both endpoint headings. Therefore this experiment uses two circular arcs
+with a common tangent at their join:
 
 ```text
-robot pose
+robot pose P0, heading t0
    ╲
-    ) circular arc 1
-     )── tangent join ──(
-                       ) circular arc 2
-                      ╱
-                desired tag pose
+    ) arc 1
+     )── Pm, common tangent ──(
+                              ) arc 2
+                             ╱
+                goal P1, heading t1
 ```
 
-The two circular arcs join with a continuous tangent. The first arc is tangent
-to the robot starting heading and the second arc is tangent to the desired final
-heading.
+For tangent distances `d1` and `d2`:
 
-The generated path is not followed with RPP. Instead, a look-ahead pose on the
-biarc is continuously fed to the same SMC as a moving reference.
+```text
+q1 = P0 + d1*t0
+q2 = P1 - d2*t1
+
+d2 =
+  [0.5*(v·v) - d1*(v·t0)]
+  / [v·t1 - d1*(t0·t1 - 1)]
+
+v = P1 - P0
+```
+
+The join is the weighted blend:
+
+```text
+Pm = q1 * d2/(d1+d2)
+   + q2 * d1/(d1+d2)
+```
+
+The previous implementation forced `d1 = d2`. That balanced solution is valid
+but can bow far away from the direct route when the starting heading is
+oblique. The current implementation instead searches the positive-`d1,d2`
+G1-continuous biarc family and chooses a compact candidate using:
+
+```text
+short path length
+small maximum deviation from the endpoint chord
+no very tight-radius preference
+penalty for near-loop arc sweeps
+```
+
+The equal-`d` solution is retained as a guaranteed search anchor.
+
+The generated path is not followed with RPP. A pose approximately
+`biarc_lookahead` ahead of the nearest path point is fed to the same SMC as
+a moving reference.
 
 Run:
 
@@ -162,11 +194,31 @@ Current path parameters:
 
 ```text
 biarc_spacing   = 0.08 m
-biarc_lookahead = 0.35 m
+biarc_lookahead = 0.30 m
 ```
 
-This is the most promising experiment when pure pose SMC has a small capture
-region, because the SMC sees much smaller local lateral and heading errors.
+`biarc_spacing` is only the discretization interval used to sample the
+continuous circular arcs into `nav_msgs/Path` poses. With 0.08 m spacing,
+successive reference-path poses are approximately 8 cm apart. Reducing it gives
+more points and a smoother numerical path but does not change the underlying
+two circles.
+
+`biarc_lookahead` is different: it determines how far ahead of the robot the
+moving SMC reference is selected. The current value is 0.30 m.
+
+At path generation the controller logs the selected geometry:
+
+```text
+Biarc selected:
+d1=...
+d2=...
+length=...
+max_deviation=...
+min_radius=...
+sweeps=(..., ...) deg
+```
+
+This makes badly looping/overshooting candidates visible during testing.
 
 ## 4. Return to the tag normal ray, then SMC
 
