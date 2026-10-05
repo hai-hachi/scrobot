@@ -325,7 +325,8 @@ The lightweight comparison view shows:
 ```text
 court / net / poles
 selected tag
-desired base_link pose + heading
+ideal desired base_link pose + heading
+measured controller goal
 robot
 actual robot trajectory
 strategy reference path
@@ -336,23 +337,32 @@ Topics:
 ```text
 /court_markers
 /debug/smc_tag/tag_marker
+/debug/smc_tag/ideal_base_pose
 /debug/tag_controller/goal_pose
 /debug/smc_tag/trajectory
 /debug/tag_controller/reference_path
 ```
 
-The biarc strategy publishes its generated path on the reference-path topic.
-The other strategies leave that path empty.
+The two pose arrows intentionally show different quantities:
 
-The yellow final-pose arrow now comes directly from
-`/debug/tag_controller/goal_pose`, which is the exact `odom` goal used by the
-controller. The court-geometry visualizer still computes an independent ideal
-pose on `/debug/smc_tag/ideal_base_pose`, but that topic is not used for the
-controller-goal arrow.
+```text
+Desired Base Pose (yellow)
+  = exact ideal pose from the known court tag frame
+  = tag_mount + 0.90 m along the tag normal
+  = heading directly toward the tag
 
-For `biarc_smc`, the goal is frozen once the biarc is generated so later
-AprilTag measurement filtering cannot move the desired pose away from the
-already-generated path endpoint.
+Controller Goal (magenta)
+  = pose estimated from the current AprilTag observation
+  = the actual final pose used to generate/control the biarc
+```
+
+Therefore the biarc reference path must terminate at the magenta
+`Controller Goal`, while the separation between that endpoint and the yellow
+`Desired Base Pose` directly visualizes AprilTag pose-estimation error.
+
+For `biarc_smc`, the measured controller goal is frozen once the biarc is
+generated so later AprilTag measurement filtering cannot move the goal away
+from the already-generated path endpoint.
 
 At generation time the controller verifies:
 
