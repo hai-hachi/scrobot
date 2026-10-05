@@ -53,7 +53,7 @@ class LocalCollectController(Node):
     def __init__(self):
         super().__init__('local_collect_controller')
 
-        self.declare_parameter('raw_detection_topic', '/perception/shuttle_detections_3d')
+        self.declare_parameter('raw_detection_topic', '/perception/collectable_shuttle_detections_3d')
         self.declare_parameter('action_name', '/local_collect')
         self.declare_parameter('cmd_vel_topic', '/cmd_vel_approach')
         self.declare_parameter('phase_topic', '/mission/local_collect_phase')
