@@ -35,6 +35,7 @@ def generate_launch_description():
     shuttle_delay = LaunchConfiguration('shuttle_delay')
     detector_delay = LaunchConfiguration('detector_delay')
     monitor_delay = LaunchConfiguration('monitor_delay')
+    accuracy_delay = LaunchConfiguration('accuracy_delay')
 
     simulation = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -119,6 +120,19 @@ def generate_launch_description():
         }],
     )
 
+    accuracy_monitor = Node(
+        package='scrobot_debug',
+        executable='yolo_3d_accuracy_monitor',
+        name='yolo_3d_accuracy_monitor',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'report_rate': 1.0,
+            'stale_timeout': 2.0,
+            'base_frame': 'base_link',
+        }],
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'use_sim_time',
@@ -168,6 +182,11 @@ def generate_launch_description():
             default_value='6.0',
             description='Wait before starting terminal status monitor.',
         ),
+        DeclareLaunchArgument(
+            'accuracy_delay',
+            default_value='6.2',
+            description='Wait before starting YOLO-vs-Gazebo 3D accuracy monitor.',
+        ),
 
         simulation,
         TimerAction(
@@ -182,5 +201,9 @@ def generate_launch_description():
         TimerAction(
             period=monitor_delay,
             actions=[monitor],
+        ),
+        TimerAction(
+            period=accuracy_delay,
+            actions=[accuracy_monitor],
         ),
     ])
