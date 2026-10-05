@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import math
+import time
 
 import rclpy
 from geometry_msgs.msg import PoseArray
@@ -124,7 +125,11 @@ class CollectionTestMonitor(Node):
         self.robot_pose = None
         self.shuttles = []
         self.last_count = None
+        self.max_count_seen = 0
         self.total_collected = 0
+        self.removal_passes = 0
+        self.pending_collection_wall = None
+        self.removal_failure_reported_for = 0
 
         self.create_timer(1.0 / self.report_rate, self._report)
 
@@ -207,12 +212,46 @@ class CollectionTestMonitor(Node):
             self.pickup_half_width - abs(local[1]),
         )
 
+    def _check_removal_result(self):
+        if self.last_count is None or self.total_collected <= 0:
+            return
+
+        expected_remaining = max(
+            0, self.max_count_seen - self.total_collected
+        )
+        if self.last_count <= expected_remaining:
+            if self.removal_passes < self.total_collected:
+                self.removal_passes = self.total_collected
+                self.pending_collection_wall = None
+                self._emit(
+                    'REMOVAL_PASS '
+                    f'events={self.total_collected} '
+                    f'gt_remaining={self.last_count} '
+                    f'baseline={self.max_count_seen}'
+                )
+            return
+
+        if (
+            self.pending_collection_wall is not None
+            and time.monotonic() - self.pending_collection_wall >= 1.0
+            and self.removal_failure_reported_for < self.total_collected
+        ):
+            self.removal_failure_reported_for = self.total_collected
+            self._emit(
+                'REMOVAL_FAIL '
+                f'events={self.total_collected} '
+                f'gt_remaining={self.last_count} '
+                f'expected_at_most={expected_remaining}'
+            )
+
     def _shuttle_cb(self, msg):
         self.shuttles = list(msg.poses)
         count = len(self.shuttles)
+        self.max_count_seen = max(self.max_count_seen, count)
         if count != self.last_count:
             self._emit(f'GT_COUNT shuttles={count}')
             self.last_count = count
+        self._check_removal_result()
 
     def _collected_cb(self, msg):
         for pose in msg.poses:
@@ -220,6 +259,7 @@ class CollectionTestMonitor(Node):
             base = self._center_base(center)
             local = None if base is None else self._base_to_collector(base)
             self.total_collected += 1
+            self.pending_collection_wall = time.monotonic()
 
             if local is None:
                 self._emit(
@@ -234,7 +274,10 @@ class CollectionTestMonitor(Node):
                 f'{local[1]:+.4f},{local[2]:+.4f})m'
             )
 
+        self._check_removal_result()
+
     def _report(self):
+        self._check_removal_result()
         if self.robot_pose is None or not self.shuttles:
             return
 
