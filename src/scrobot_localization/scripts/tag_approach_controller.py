@@ -108,7 +108,6 @@ class TagApproachController(Node):
 
         self.declare_parameter('odom_frame', 'odom')
         self.declare_parameter('base_frame', 'base_link')
-        self.declare_parameter('camera_frame', 'camera_color_frame')
         self.declare_parameter('detections_topic', '/apriltag/detections')
         self.declare_parameter('observed_tag_prefix', 'observed_tag_')
         self.declare_parameter('cmd_vel_topic', '/cmd_vel_relocalization')
@@ -129,9 +128,8 @@ class TagApproachController(Node):
         self.declare_parameter('max_linear_velocity', 0.45)
         self.declare_parameter('max_angular_velocity', 0.75)
 
-        # Shared nonlinear SMC pose law. The controlled point is a virtual
-        # point on the robot centerline at the camera's forward X offset.
-        # The camera's small lateral Y offset is compensated in the goal.
+        # Shared nonlinear SMC pose law. The controlled point is base_link,
+        # therefore the kinematic offset is c = 0.
         self.declare_parameter('smc_reference_speed', 0.50)
         self.declare_parameter('smc_lambda', 2.00)
         self.declare_parameter('smc_ks', 1.60)
@@ -168,7 +166,6 @@ class TagApproachController(Node):
 
         self.odom_frame = str(self.get_parameter('odom_frame').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
-        self.camera_frame = str(self.get_parameter('camera_frame').value)
         self.detections_topic = str(self.get_parameter('detections_topic').value)
         self.observed_tag_prefix = str(
             self.get_parameter('observed_tag_prefix').value
