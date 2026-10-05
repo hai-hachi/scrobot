@@ -194,6 +194,13 @@ install(
 
 install(
   PROGRAMS
+    scripts/yolo_3d_accuracy_monitor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME yolo_3d_accuracy_monitor
+)
+
+install(
+  PROGRAMS
     scripts/perception_monitor.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME perception_monitor
