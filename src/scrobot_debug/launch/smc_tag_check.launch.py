@@ -29,6 +29,9 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     target_distance = LaunchConfiguration('target_distance')
     preferred_tag_id = LaunchConfiguration('preferred_tag_id')
+    controller_strategy = LaunchConfiguration('controller_strategy')
+    max_linear_velocity = LaunchConfiguration('max_linear_velocity')
+    max_angular_velocity = LaunchConfiguration('max_angular_velocity')
     position_tolerance = LaunchConfiguration('position_tolerance')
     yaw_tolerance_deg = LaunchConfiguration('yaw_tolerance_deg')
     launch_rviz = LaunchConfiguration('launch_rviz')
@@ -87,6 +90,9 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
             'tag_position_tolerance': position_tolerance,
             'tag_yaw_tolerance_deg': yaw_tolerance_deg,
+            'tag_control_strategy': controller_strategy,
+            'tag_max_linear_velocity': max_linear_velocity,
+            'tag_max_angular_velocity': max_angular_velocity,
         },
     )
 
@@ -176,13 +182,34 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'target_distance',
-            default_value='0.80',
-            description='Desired planar color-camera standoff from tag [m].',
+            default_value='0.90',
+            description='Desired planar base_link standoff from tag [m].',
         ),
         DeclareLaunchArgument(
             'preferred_tag_id',
             default_value='0',
-            description='Court AprilTag ID used for the isolated SMC test.',
+            description='Court AprilTag ID used for the isolated controller test.',
+        ),
+        DeclareLaunchArgument(
+            'controller_strategy',
+            default_value='pure_smc',
+            choices=[
+                'pure_smc',
+                'main_branch',
+                'biarc_smc',
+                'normal_ray_smc',
+            ],
+            description='Tag local approach strategy under test.',
+        ),
+        DeclareLaunchArgument(
+            'max_linear_velocity',
+            default_value='0.45',
+            description='Controller linear speed limit [m/s].',
+        ),
+        DeclareLaunchArgument(
+            'max_angular_velocity',
+            default_value='0.75',
+            description='Controller angular speed limit [rad/s].',
         ),
         DeclareLaunchArgument(
             'position_tolerance',
