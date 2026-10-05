@@ -131,27 +131,46 @@ restores the interruption checkpoint where needed and resumes the saved phase.
 Debug/telemetry monitors are not owned or launched by this package.
 
 ## `scrobot_perception`
-Owns shuttle perception adapters and tracking.
+Owns production camera perception and optional simulation adapters.
 
-Simulation path:
-
-```text
-/evaluation/shuttle_ground_truth
- -> fake_shuttle_detector
- -> /perception/shuttle_detections_3d
- -> shuttle_tracker
- -> /perception/tracked_shuttles
-```
-
-Future real path:
+Production shuttle path:
 
 ```text
-RGB -> YOLO -> detections_2d
-aligned depth + CameraInfo + detections_2d
- -> depth_localizer
- -> /perception/shuttle_detections_3d
- -> shuttle_tracker
+rectified RGB
+ -> yolo_shuttle_detector
+ -> /perception/shuttle_detections_2d
+                +
+RGB-aligned depth + color CameraInfo
+                |
+                v
+/perception/shuttle_detections_3d
+                |
+                v
+scrobot_mission/shuttle_collection_filter
 ```
+
+Obstacle path:
+
+```text
+depth PointCloud2
+ -> pointcloud_to_laserscan
+ -> depth_scan_self_filter
+ -> /camera/camera/depth/scan
+ -> collision_monitor + Nav2 costmaps
+```
+
+AprilTag path:
+
+```text
+rectified RGB + color CameraInfo
+ -> apriltag_ros
+ -> /apriltag/detections
+ -> scrobot_localization
+```
+
+`fake_shuttle_detector` is simulation/testing-only. `shuttle_tracker` is
+retained as optional legacy infrastructure and is not required by the current
+mission.
 
 ## `scrobot_simulation`
 Owns Gazebo runtime functionality only:
