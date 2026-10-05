@@ -68,14 +68,15 @@ class NativeBBoxDatasetCapture(Node):
         self.state = 'INIT'
         self.pending_raw_index = None
         self.pending_pose = None
+        self.pending_started_wall = None
         self.finished = False
 
         self._prepare_dirs()
         self.create_timer(0.05, self.step)
 
     def _prepare_dirs(self):
-        if self.raw_dir.exists():
-            shutil.rmtree(self.raw_dir)
+        # Raw directory is cleared by the launch file before Gazebo starts so
+        # BoundingBoxCameraSensor initializes its save counter at exactly zero.
         (self.raw_dir / 'images').mkdir(parents=True, exist_ok=True)
         (self.raw_dir / 'boxes').mkdir(parents=True, exist_ok=True)
 
@@ -196,6 +197,7 @@ class NativeBBoxDatasetCapture(Node):
 
         self.pending_raw_index = len(before)
         self.pending_pose = (x,y,yaw)
+        self.pending_started_wall = time.perf_counter()
         self._set_state('WAITING_FOR_NATIVE_SAMPLE')
 
     def _raw_pair_paths(self, idx):
@@ -246,6 +248,7 @@ class NativeBBoxDatasetCapture(Node):
         )
         self.pending_raw_index = None
         self.pending_pose = None
+        self.pending_started_wall = None
         self._set_state('FRAME_SAVED')
         return True
 
@@ -258,7 +261,20 @@ class NativeBBoxDatasetCapture(Node):
                 return
 
             if self.pending_raw_index is not None:
-                self._convert_pending()
+                if self._convert_pending():
+                    return
+                if (
+                    self.pending_started_wall is not None
+                    and time.perf_counter() - self.pending_started_wall > 5.0
+                ):
+                    self.get_logger().warning(
+                        f'Native sample {self.pending_raw_index} not written '
+                        'within 5.0 s; retrying a new viewpoint.'
+                    )
+                    self.pending_raw_index = None
+                    self.pending_pose = None
+                    self.pending_started_wall = None
+                    self._set_state('NATIVE_SAMPLE_TIMEOUT')
                 return
 
             if self.saved >= self.target_images:
