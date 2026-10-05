@@ -125,8 +125,8 @@ class TagApproachController(Node):
 
         self.declare_parameter('search_angular_velocity', 0.45)
         self.declare_parameter('search_rotation_rad', 2.0 * math.pi)
-        self.declare_parameter('max_linear_velocity', 0.45)
-        self.declare_parameter('max_angular_velocity', 0.75)
+        self.declare_parameter('max_linear_velocity', 0.25)
+        self.declare_parameter('max_angular_velocity', 0.60)
 
         # Shared nonlinear SMC pose law. The controlled point is base_link,
         # therefore the kinematic offset is c = 0.
@@ -138,7 +138,7 @@ class TagApproachController(Node):
         self.declare_parameter('smc_krho', 0.80)
         self.declare_parameter('heading_stop_deg', 70.0)
 
-        self.declare_parameter('control_strategy', 'pure_smc')
+        self.declare_parameter('control_strategy', 'main_branch')
 
         # Original main-branch direct-goal controller.
         self.declare_parameter('main_k_position', 0.80)
