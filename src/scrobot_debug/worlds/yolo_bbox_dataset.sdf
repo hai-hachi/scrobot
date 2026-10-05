@@ -19,11 +19,59 @@
       <shadows>true</shadows>
     </scene>
 
-    <light type="directional" name="sun">
-      <pose>0 0 8 0 0 0</pose>
-      <diffuse>0.9 0.9 0.9 1</diffuse>
-      <specular>0.1 0.1 0.1 1</specular>
-      <direction>-0.2 0.1 -1</direction>
+    <!-- Same six-side-light configuration as the simulation dataset world. -->
+    <light type="spot" name="court_light_left_1">
+      <pose>-4.5 4.6 7.0 0 0 0</pose>
+      <diffuse>0.95 0.95 0.92 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
+      <direction>0 -0.55 -0.84</direction>
+      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
+      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    <light type="spot" name="court_light_left_2">
+      <pose>0 4.6 7.0 0 0 0</pose>
+      <diffuse>0.95 0.95 0.92 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
+      <direction>0 -0.55 -0.84</direction>
+      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
+      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    <light type="spot" name="court_light_left_3">
+      <pose>4.5 4.6 7.0 0 0 0</pose>
+      <diffuse>0.95 0.95 0.92 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
+      <direction>0 -0.55 -0.84</direction>
+      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
+      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    <light type="spot" name="court_light_right_1">
+      <pose>-4.5 -4.6 7.0 0 0 0</pose>
+      <diffuse>0.95 0.95 0.92 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
+      <direction>0 0.55 -0.84</direction>
+      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
+      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    <light type="spot" name="court_light_right_2">
+      <pose>0 -4.6 7.0 0 0 0</pose>
+      <diffuse>0.95 0.95 0.92 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
+      <direction>0 0.55 -0.84</direction>
+      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
+      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    <light type="spot" name="court_light_right_3">
+      <pose>4.5 -4.6 7.0 0 0 0</pose>
+      <diffuse>0.95 0.95 0.92 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
+      <direction>0 0.55 -0.84</direction>
+      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
+      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
       <cast_shadows>true</cast_shadows>
     </light>
 
@@ -35,6 +83,16 @@
           <geometry><box><size>15.4 7.2 0.002</size></box></geometry>
           <material><ambient>0.045 0.265 0.145 1</ambient><diffuse>0.055 0.345 0.185 1</diffuse></material>
         </visual>
+        <collision name="court_collision">
+          <pose>0 0 -0.006 0 0 0</pose>
+          <geometry><box><size>15.4 7.2 0.01</size></box></geometry>
+          <surface>
+            <friction>
+              <ode><mu>0.9</mu><mu2>0.9</mu2></ode>
+            </friction>
+            <bounce><restitution_coefficient>0.0</restitution_coefficient></bounce>
+          </surface>
+        </collision>
         <visual name="line_y_p305"><pose>0 3.05 0.001 0 0 0</pose><geometry><box><size>13.44 0.04 0.002</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material></visual>
         <visual name="line_y_n305"><pose>0 -3.05 0.001 0 0 0</pose><geometry><box><size>13.44 0.04 0.002</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material></visual>
         <visual name="line_y_p259"><pose>0 2.59 0.001 0 0 0</pose><geometry><box><size>13.40 0.04 0.002</size></box></geometry><material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse></material></visual>
