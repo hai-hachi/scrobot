@@ -135,7 +135,7 @@ class LocalOdomLogger(Node):
         self.declare_parameter('imu_raw_topic', '/imu/data_raw')
         self.declare_parameter('imu_topic', '/imu/data')
         self.declare_parameter('joint_states_topic', '/joint_states')
-        self.declare_parameter('requested_cmd_topic', '/cmd_vel_manual')
+        self.declare_parameter('requested_cmd_topic', '/cmd_vel_manual_input')
         self.declare_parameter('final_cmd_topic', '/diff_drive_controller/cmd_vel')
         self.declare_parameter('test_state_topic', '/evaluation/local_odom_test_state')
 
