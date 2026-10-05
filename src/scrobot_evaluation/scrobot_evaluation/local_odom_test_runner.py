@@ -7,17 +7,23 @@ from geometry_msgs.msg import TwistStamped
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
+from std_srvs.srv import SetBool
 
 
 class LocalOdomTestRunner(Node):
+    """Drive repeatable odometry tests through the production MANUAL path."""
+
     def __init__(self):
         super().__init__('local_odom_test_runner')
 
         self.declare_parameter('test_type', 'suite')
-        self.declare_parameter('cmd_topic', '/cmd_vel_manual')
+        self.declare_parameter('cmd_topic', '/cmd_vel_manual_input')
         self.declare_parameter('state_topic', '/evaluation/local_odom_test_state')
         self.declare_parameter('base_frame', 'base_footprint')
         self.declare_parameter('publish_rate', 20.0)
+
+        self.declare_parameter('manage_manual_mode', True)
+        self.declare_parameter('mode_service', '/control/set_manual_mode')
 
         self.declare_parameter('start_delay', 3.0)
         self.declare_parameter('static_duration', 10.0)
@@ -39,6 +45,11 @@ class LocalOdomTestRunner(Node):
         self.state_topic = str(self.get_parameter('state_topic').value)
         self.base_frame = str(self.get_parameter('base_frame').value)
         publish_rate = float(self.get_parameter('publish_rate').value)
+
+        self.manage_manual_mode = bool(
+            self.get_parameter('manage_manual_mode').value
+        )
+        self.mode_service = str(self.get_parameter('mode_service').value)
 
         self.start_delay = max(0.0, float(self.get_parameter('start_delay').value))
         self.static_duration = max(0.0, float(self.get_parameter('static_duration').value))
@@ -91,16 +102,28 @@ class LocalOdomTestRunner(Node):
             state_qos,
         )
 
+        self.mode_client = (
+            self.create_client(SetBool, self.mode_service)
+            if self.manage_manual_mode else None
+        )
+        self.mode_future = None
+        self.requested_manual_state = None
+        self.manual_ready = not self.manage_manual_mode
+        self.auto_restored = not self.manage_manual_mode
+        self.last_service_wait_log = None
+
         self.segments = self.build_segments()
         self.segment_index = 0
         self.segment_start_time = None
         self.done = False
 
-        self.timer = self.create_timer(1.0 / publish_rate, self.update)
+        self.timer = self.create_timer(1.0 / max(publish_rate, 1.0), self.update)
 
+        self.publish_state('WAITING_FOR_MANUAL' if self.manage_manual_mode else 'START_DELAY')
         self.get_logger().info(
             f'Local odom test runner ready: test={self.test_type}, '
-            f'segments={len(self.segments)}'
+            f'cmd={self.cmd_topic}, segments={len(self.segments)}, '
+            f'manage_manual_mode={self.manage_manual_mode}.'
         )
 
     @staticmethod
@@ -256,16 +279,94 @@ class LocalOdomTestRunner(Node):
         msg.twist.angular.z = float(wz)
         self.cmd_pub.publish(msg)
 
+    def _poll_mode_request(self, manual):
+        if not self.manage_manual_mode:
+            return True
+
+        if self.mode_future is None:
+            if not self.mode_client.service_is_ready():
+                now = self.now_seconds()
+                if (
+                    self.last_service_wait_log is None
+                    or now - self.last_service_wait_log >= 2.0
+                ):
+                    self.get_logger().info(
+                        f'Waiting for control mode service {self.mode_service}...'
+                    )
+                    self.last_service_wait_log = now
+                return False
+
+            request = SetBool.Request()
+            request.data = bool(manual)
+            self.requested_manual_state = bool(manual)
+            self.mode_future = self.mode_client.call_async(request)
+            self.get_logger().info(
+                'Requesting control mode '
+                + ('MANUAL' if manual else 'AUTO')
+                + '.'
+            )
+            return False
+
+        if not self.mode_future.done():
+            return False
+
+        try:
+            response = self.mode_future.result()
+        except Exception as exc:
+            self.get_logger().error(
+                f'Control mode service failed: {exc}'
+            )
+            self.mode_future = None
+            return False
+
+        success = bool(response is not None and response.success)
+        message = '' if response is None else str(response.message)
+        requested = self.requested_manual_state
+        self.mode_future = None
+        self.requested_manual_state = None
+
+        if not success:
+            self.get_logger().error(
+                f'Control mode request rejected: {message}'
+            )
+            return False
+
+        self.get_logger().info(message or 'Control mode request succeeded.')
+        if requested:
+            self.manual_ready = True
+        else:
+            self.auto_restored = True
+        return True
+
+    def _finish_test(self):
+        self.publish_command(0.0, 0.0)
+
+        if self.manage_manual_mode and not self.auto_restored:
+            self.publish_state('RESTORING_AUTO')
+            if not self._poll_mode_request(False):
+                return
+
+        self.publish_state('DONE')
+        self.timer.cancel()
+        self.done = True
+        self.get_logger().info(
+            'Local odom test complete; control mode restored to AUTO.'
+            if self.manage_manual_mode
+            else 'Local odom test complete.'
+        )
+
     def update(self):
         if self.done:
             return
 
-        if self.segment_index >= len(self.segments):
+        if not self.manual_ready:
             self.publish_command(0.0, 0.0)
-            self.publish_state('DONE')
-            self.timer.cancel()
-            self.done = True
-            self.get_logger().info('Local odom test complete.')
+            self.publish_state('WAITING_FOR_MANUAL')
+            self._poll_mode_request(True)
+            return
+
+        if self.segment_index >= len(self.segments):
+            self._finish_test()
             return
 
         segment = self.segments[self.segment_index]
@@ -288,7 +389,6 @@ class LocalOdomTestRunner(Node):
             self.segment_start_time = None
 
     def destroy_node(self):
-        # Send several zeros before shutdown to leave the command chain safe.
         for _ in range(3):
             self.publish_command(0.0, 0.0)
         super().destroy_node()
