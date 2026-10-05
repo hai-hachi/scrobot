@@ -70,6 +70,7 @@ class LocalCollectController(Node):
         self.declare_parameter('base_standoff_distance', 1.10)
         self.declare_parameter('precollect_position_tolerance', 0.03)
         self.declare_parameter('precollect_yaw_tolerance_deg', 5.0)
+        self.declare_parameter('precollect_stable_time', 0.25)
         self.declare_parameter('straight_collect_speed', 0.30)
         self.declare_parameter('overrun_distance', 0.10)
         self.declare_parameter('overrun_speed', 0.25)
@@ -111,6 +112,9 @@ class LocalCollectController(Node):
         )
         self.precollect_yaw_tolerance = math.radians(
             float(self.get_parameter('precollect_yaw_tolerance_deg').value)
+        )
+        self.precollect_stable_time = max(
+            0.0, float(self.get_parameter('precollect_stable_time').value)
         )
         self.straight_collect_speed = max(
             0.0, float(self.get_parameter('straight_collect_speed').value)
@@ -452,6 +456,7 @@ class LocalCollectController(Node):
 
         period = 1.0 / max(self.control_rate, 1.0)
         previous = time.monotonic()
+        stable_since = None
         self.last_v = 0.0
         self.last_w = 0.0
 
@@ -479,23 +484,39 @@ class LocalCollectController(Node):
             feedback.bearing_deg = float(math.degrees(alpha))
             goal_handle.publish_feedback(feedback)
 
-            if (
+            pose_in_tolerance = (
                 rho <= self.precollect_position_tolerance
                 and abs(e_theta) <= self.precollect_yaw_tolerance
-            ):
+            )
+
+            if pose_in_tolerance:
+                # Do not trigger STRAIGHT_COLLECT just because an oscillating
+                # heading crosses the yaw tolerance for one control sample.
+                # Stop and require the full pre-pose to remain valid
+                # continuously for precollect_stable_time.
                 self._stop()
-                base_range = math.hypot(
-                    target_odom[0] - base[0],
-                    target_odom[1] - base[1],
-                )
-                self.get_logger().info(
-                    'SMC pre-pose reached: '
-                    f'rho={rho:.4f} m, e_y={e_y:+.4f} m, '
-                    f'e_theta={math.degrees(e_theta):+.2f} deg, '
-                    f's={s:+.4f}, '
-                    f'base_range={base_range:.3f} m.'
-                )
-                return True, 'pre-pose reached'
+                if stable_since is None:
+                    stable_since = now
+
+                if now - stable_since >= self.precollect_stable_time:
+                    base_range = math.hypot(
+                        target_odom[0] - base[0],
+                        target_odom[1] - base[1],
+                    )
+                    self.get_logger().info(
+                        'SMC pre-pose reached and stable: '
+                        f'rho={rho:.4f} m, e_y={e_y:+.4f} m, '
+                        f'e_theta={math.degrees(e_theta):+.2f} deg, '
+                        f's={s:+.4f}, '
+                        f'stable={self.precollect_stable_time:.2f} s, '
+                        f'base_range={base_range:.3f} m.'
+                    )
+                    return True, 'pre-pose reached and stable'
+
+                time.sleep(period)
+                continue
+
+            stable_since = None
 
             dt = max(1e-3, now - previous)
             previous = now
