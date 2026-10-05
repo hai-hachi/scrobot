@@ -116,7 +116,7 @@
 
           <clip>
             <near>0.20</near>
-            <far>6.0</far>
+            <far>10.0</far>
           </clip>
 
           <optical_frame_id>camera_depth_optical_frame</optical_frame_id>
