@@ -2,10 +2,10 @@
 <sdf version="1.10">
   <world name="yolo_dataset_native">
     <physics name="dataset_physics" type="ignored">
-      <!-- Dynamic shuttles need a normal contact timestep. Unlimited-rate
-           10 ms physics caused lightweight 5.2 g shuttles to jitter / tunnel. -->
+      <!-- Fine contact step for the 5.2 g shuttle, but run continuously as
+           fast as possible. Settled shuttles use allow_auto_disable=true. -->
       <max_step_size>0.001</max_step_size>
-      <real_time_factor>1.0</real_time_factor>
+      <real_time_factor>0.0</real_time_factor>
     </physics>
 
     <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
