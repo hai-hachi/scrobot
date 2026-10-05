@@ -178,13 +178,20 @@ no very tight-radius preference
 penalty for near-loop arc sweeps
 ```
 
-A separate bug was also fixed in the circular-arc sampler. The raw tangent
-solution produces a sweep of `2*half_sweep`, which may be greater than 180 deg
-for an oblique start. That selects the long way around the same circle. For the
-positive-`d1,d2` biarc family we require the short arc, so the sweep is now
-wrapped into `[-pi, pi]`.
+A second important biarc issue was found in the circular-arc sampler. A circular
+arc is not defined only by endpoint position and endpoint heading modulo
+`2*pi`; its forward travel direction must also remain consistent with the
+stored start tangent. Replacing a physically valid forward sweep such as
+`+270 deg` with the angle-equivalent `-90 deg` branch can reverse the motion
+relative to that tangent and make the path bow to the wrong side.
 
-The sampler now also verifies the natural sampled endpoint before any numerical
+The current implementation therefore keeps the physically consistent signed
+forward sweep produced by the tangent geometry. Compactness is enforced
+separately: a candidate is rejected if either individual forward arc exceeds
+`biarc_max_arc_sweep = 175 deg`, and the search continues through the
+positive-`d1,d2` biarc family.
+
+The sampler also verifies the natural sampled endpoint before any numerical
 snapping:
 
 ```text
@@ -202,6 +209,37 @@ The equal-`d` solution is retained as a guaranteed search anchor.
 The generated path is not followed with RPP. A pose approximately
 `biarc_lookahead` ahead of the nearest path point is fed to the same SMC as
 a moving reference.
+
+The first implementation froze the measured Controller Goal as soon as the
+initial biarc was generated. Testing showed why this reduced final accuracy:
+`main_branch` kept filtering later AprilTag observations while driving, whereas
+the frozen biarc stayed committed to the earlier measurement.
+
+Strategy 3 now uses live filtered goal refinement with gated replanning:
+
+```text
+new AprilTag observation
+   ↓
+update/filter Controller Goal
+   ↓
+goal moved enough?
+   ├─ no  → keep current biarc
+   └─ yes → rebuild from CURRENT robot pose to latest goal
+   ↓
+SMC tracks biarc look-ahead pose
+```
+
+Current replanning defaults:
+
+```text
+position change threshold = 0.04 m
+yaw change threshold      = 2.5 deg
+minimum replan interval   = 0.25 s
+terminal handoff distance = 1.25 m
+```
+
+Inside 1.25 m of the live goal, the biarc is cleared and control is handed to
+the original `main_branch` pose controller for terminal XY and yaw convergence.
 
 Run:
 
@@ -360,11 +398,17 @@ Therefore the biarc reference path must terminate at the magenta
 `Controller Goal`, while the separation between that endpoint and the yellow
 `Desired Base Pose` directly visualizes AprilTag pose-estimation error.
 
-For `biarc_smc`, the measured controller goal is frozen once the biarc is
-generated so later AprilTag measurement filtering cannot move the goal away
-from the already-generated path endpoint.
+For `biarc_smc`, the measured Controller Goal is no longer frozen. Later
+AprilTag observations continue to update the filtered goal. A replan occurs
+only when the filtered pose changes beyond the configured thresholds and the
+minimum replan interval has elapsed. Every replan starts from the current robot
+pose, not the original start pose.
 
-At generation time the controller verifies:
+While the biarc phase is active, the published path endpoint must coincide with
+the Controller Goal used for that plan. At terminal handoff an explicit empty
+transient-local `Path` is published so RViz does not retain a stale biarc.
+
+At each generation/replan the controller verifies:
 
 ```text
 endpoint_error=0.000000 m
@@ -392,11 +436,86 @@ number of stop/spin phases
 The most important test is robustness over different starting lateral offsets,
 not only one favorable start near the tag normal ray.
 
+
+---
+
+# AprilTag conclusions and lessons learned
+
+Final practical ranking from the strategy tests:
+
+```text
+1. main_branch
+   robust, simple, accurate from oblique starts
+
+2. biarc_smc
+   good large-error capture; live replan + main_branch terminal handoff
+
+3. pure_smc
+   useful local pose stabilizer but sensitive to large initial lateral error
+
+4. normal_ray_smc
+   robust geometric baseline but inefficient
+```
+
+Key lessons:
+
+- Pure pose SMC has a capture-region problem, not automatically a steady-state
+  error problem. With `s = e_theta + lambda*e_y`, large initial `e_y` can
+  dominate the surface and produce poor global approach behavior.
+- The yellow Desired Base Pose is the ideal pose from known court/tag geometry.
+  The magenta Controller Goal is estimated from the observed AprilTag and is
+  the pose actually used by the local controller.
+- `main_branch` performed unexpectedly well partly because it kept refining its
+  filtered goal from later AprilTag observations while the robot moved.
+- Biarc geometry must be validated at its natural sampled endpoint; do not hide
+  a bad candidate by overwriting its last pose.
+- Angle-equivalent wrapped sweeps are not always motion-equivalent. Preserve the
+  forward tangent direction and reject/search non-compact biarc candidates.
+- The hybrid tag controller works because each stage has a clear job: biarc +
+  SMC handles large-error capture, while live `main_branch` handles terminal
+  pose accuracy.
+- For SMC path-tracking lateral error, `lambda` is the first parameter to
+  inspect. Increasing it gives `e_y` more weight in the sliding surface, but
+  excessive `lambda` can again reduce the practical capture region.
+- `k_s` mainly changes convergence toward the sliding surface, `eta` strengthens
+  the reaching/robustness term, and `phi` sets the boundary-layer/chattering
+  tradeoff.
+- Final stopped error can also be dominated by `position_tolerance`. Once the
+  controller has handed off to `main_branch`, changing SMC gains cannot improve
+  an error that the terminal controller already accepts.
+
+The AprilTag SMC investigation is now considered complete enough to move on to
+the shuttle local-collection controller.
+
 ---
 
 # Shuttle SMC
 
-The shuttle controller now uses the same simplified convention:
+The first shuttle test deliberately uses **pure SMC only**. No biarc is used
+for shuttle approach in this baseline. The goal is to characterize the local
+SMC capture region directly before adding any path-shaping method.
+
+Current sequence:
+
+```text
+detect eligible shuttle
+   ↓
+freeze shuttle point in odom
+   ↓
+build fixed base_link pre-pose
+   ↓
+PURE SMC to pre-pose
+   ↓
+position + yaw tolerance satisfied
+   ↓
+STRAIGHT_COLLECT: v = 0.30 m/s, omega = 0
+   ↓
+collector reaches shuttle
+   ↓
+0.10 m overrun
+```
+
+The shuttle controller uses the same simplified convention:
 
 ```text
 controlled point = base_link
@@ -443,6 +562,27 @@ At the handoff:
 ```text
 base_range ~= 1.10 m
 ```
+
+For the first pure-SMC shuttle tests, record:
+
+```text
+initial shuttle range / bearing
+initial rho
+initial e_y
+initial e_theta
+maximum |e_y|
+pre-pose settling time
+final rho
+final e_y
+final e_theta
+base_range at handoff
+success / timeout / circling behavior
+```
+
+The main question is the shuttle SMC capture region: how much lateral and
+heading error can be corrected while the shuttle remains inside the useful
+camera region. Only after that is understood should a path-shaping method such
+as biarc be considered.
 
 The robot then runs straight over the frozen shuttle target.
 
