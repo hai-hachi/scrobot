@@ -106,17 +106,39 @@ def generate_launch_description():
         }],
     )
 
-    rviz = Node(
-        package='rviz2',
-        executable='rviz2',
-        name='smc_tag_rviz',
-        output='screen',
-        arguments=[
-            '-d',
-            os.path.join(debug_pkg, 'config', 'smc_tag.rviz'),
-        ],
-        parameters=[{'use_sim_time': use_sim_time}],
+    # Reuse the master debug RViz launcher so the existing court/net/pole
+    # visualizer remains the single source for court geometry. Only the RViz
+    # display config is replaced with the lightweight SMC-specific view.
+    rviz = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(debug_pkg, 'launch', 'rviz.launch.py')
+        ),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+            'rviz_config': os.path.join(debug_pkg, 'config', 'smc_tag.rviz'),
+        }.items(),
         condition=IfCondition(launch_rviz),
+    )
+
+    # The isolated tag-approach action intentionally does not run /relocalize,
+    # so the global localizer has not committed map->odom yet. For RViz only,
+    # anchor odom to the known Gazebo spawn pose. The SMC itself still controls
+    # entirely in odom and does not consume this transform.
+    debug_map_to_odom = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='smc_tag_debug_map_to_odom',
+        arguments=[
+            '--x', robot_x,
+            '--y', robot_y,
+            '--z', '0',
+            '--roll', '0',
+            '--pitch', '0',
+            '--yaw', robot_yaw,
+            '--frame-id', 'map',
+            '--child-frame-id', 'odom',
+        ],
+        output='screen',
     )
 
     def send_approach(context):
@@ -200,6 +222,7 @@ def generate_launch_description():
                 control,
                 global_localization,
                 telemetry,
+                debug_map_to_odom,
             ],
         ),
         TimerAction(
