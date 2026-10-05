@@ -2,7 +2,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, TimerAction
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, OpaqueFunction, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
@@ -84,20 +84,26 @@ def generate_launch_description():
         },
     )
 
-    approach = ExecuteProcess(
-        cmd=[
-            'ros2', 'action', 'send_goal',
-            '/approach_tag',
-            'scrobot_interfaces/action/ApproachTag',
-            [
-                '{preferred_tag_id: ', preferred_tag_id,
-                ', target_distance: ', target_distance,
-                ', timeout_sec: 30.0}',
-            ],
-            '--feedback',
-        ],
-        output='screen',
-    )
+    def send_approach(context):
+        tag_id = preferred_tag_id.perform(context)
+        distance = target_distance.perform(context)
+        goal = (
+            '{preferred_tag_id: ' + tag_id
+            + ', target_distance: ' + distance
+            + ', timeout_sec: 30.0}'
+        )
+        return [
+            ExecuteProcess(
+                cmd=[
+                    'ros2', 'action', 'send_goal',
+                    '/approach_tag',
+                    'scrobot_interfaces/action/ApproachTag',
+                    goal,
+                    '--feedback',
+                ],
+                output='screen',
+            )
+        ]
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -138,6 +144,6 @@ def generate_launch_description():
         ),
         TimerAction(
             period=approach_delay,
-            actions=[approach],
+            actions=[OpaqueFunction(function=send_approach)],
         ),
     ])
