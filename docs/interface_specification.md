@@ -1,187 +1,154 @@
 # SC Robot Interface Specification
 
-Updated for the current ROS 2 Jazzy / Gazebo Harmonic implementation.
+Authoritative public ROS interfaces for the current ROS 2 Jazzy stack.
 
-## TF
-
-Primary transform chain:
+## Frames
 
 ```text
 map -> odom -> base_footprint -> base_link
                          |
+                         +--> collector_link
                          +--> camera_color_optical_frame
                          +--> camera_depth_optical_frame
                          +--> camera_imu_optical_frame
 ```
 
-`map -> odom` is produced by global localization. `odom -> base_footprint`
-is the local odometry chain.
+Ownership:
+
+- `map -> odom`: `tag_global_localizer`
+- `odom -> base_footprint`: EKF
+- fixed robot transforms: robot_state_publisher
 
 ## Control
 
-### `/cmd_vel_manual`
-Manual velocity command source used by keyboard teleoperation and tests.
+| Interface | Type / role |
+| --- | --- |
+| `/cmd_vel_nav` | stamped Nav2 command source |
+| `/cmd_vel_approach` | stamped local collection command source |
+| `/cmd_vel_relocalization` | stamped tag-approach command source |
+| `/cmd_vel_manual_input` | operator input before manual-mode gating |
+| `/cmd_vel_manual` | manual source owned by `manual_mode_manager` |
+| `/cmd_vel_auto` | autonomous mux output |
+| `/cmd_vel_selected` | AUTO/MANUAL mux output |
+| `/cmd_vel_smoothed` | velocity-smoother output |
+| `/diff_drive_controller/cmd_vel` | final collision-monitored command |
+| `/control/set_manual_mode` | `std_srvs/srv/SetBool` |
+| `/control/manual_mode` | latched `std_msgs/msg/Bool` |
+| `/control/mode` | latched `std_msgs/msg/String` |
 
-### `/diff_drive_controller/cmd_vel`
-Final velocity command consumed by the differential-drive controller.
+Odometry and feedback:
 
-### `/diff_drive_controller/odom`
-Wheel-odometry output.
+```text
+/diff_drive_controller/odom
+/joint_states
+/odometry/filtered
+```
 
-### `/joint_states`
-Wheel and joint feedback.
+## Localization actions
 
-## Localization
+### /approach_tag
 
-### `/imu/data_raw`
-Raw robot IMU input.
+Type: `scrobot_interfaces/action/ApproachTag`
 
-### `/imu/data`
-Filtered/orientation-aware IMU output where configured.
+Find a usable tag and reach the requested tag-facing stand-off pose.
 
-### `/odometry/filtered`
-EKF local odometry output.
+### /relocalize
 
-### `/approach_tag`
-Type: `scrobot_interfaces/action/ApproachTag`.
+Type: `scrobot_interfaces/action/Relocalize`
 
-### `/relocalize`
-Type: `scrobot_interfaces/action/Relocalize`.
+Collect a stationary AprilTag sample batch and update `map -> odom`.
 
-AprilTag localization owns global correction of `map -> odom`.
+## Mission action
+
+### /local_collect
+
+Type: `scrobot_interfaces/action/LocalCollect`
+
+Collect currently eligible visible shuttles until no new eligible target
+remains, cancellation occurs, or timeout is reached.
+
+Mission status:
+
+```text
+/mission/state
+/mission/local_collect_phase
+/mission/sweep_path
+/mission/relocalization_stops
+/mission/current_goal
+```
 
 ## Camera
 
-### `/camera/camera/color/image_raw`
-Rectified RGB stream used directly by AprilTag and YOLO.
-
-### `/camera/camera/color/camera_info`
-Type: `sensor_msgs/msg/CameraInfo`.
-
-Used by AprilTag and by the YOLO aligned-depth deprojection path.
-
-Validated simulation CameraInfo:
-
 ```text
-color 1280x720
-fx = 906.94
-fy = 906.94
-cx = 640.00
-cy = 360.00
+/camera/camera/color/image_raw
+/camera/camera/color/camera_info
+/camera/camera/depth/image_raw
+/camera/camera/depth/camera_info
+/camera/camera/aligned_depth_to_color/image_raw
+/camera/camera/depth/points
+/camera/camera/depth/scan_raw
+/camera/camera/depth/scan
+/camera/camera/imu
 ```
 
-### `/camera/camera/depth/camera_info`
-Validated simulation CameraInfo:
+Validated simulated CameraInfo:
 
 ```text
-depth 848x480
-fx = 420.29
-fy = 420.29
-cx = 424.00
-cy = 240.00
-```
-
-### `/camera/camera/aligned_depth_to_color/image_raw`
-Depth registered into the RGB/color image geometry.
-
-### `/camera/camera/depth/points`
-Type: `sensor_msgs/msg/PointCloud2`.
-
-Input to `pointcloud_to_laserscan`; the full point cloud is not used
-downstream after scan conversion.
-
-### `/camera/camera/depth/scan`
-Type: `sensor_msgs/msg/LaserScan`.
-
-Filtered obstacle scan used by collision monitoring and Nav2 costmaps.
-
-Current scan geometry:
-
-```text
-height band = 0.12-0.70 m
-HFOV        = +/-0.7897925312 rad
-range       = 0.30-3.30 m
+color 1280x720  fx=906.94 fy=906.94 cx=640 cy=360
+depth  848x480  fx=420.29 fy=420.29 cx=424 cy=240
 ```
 
 ## Shuttle perception
 
-### `/perception/shuttle_detections_2d`
-Type: `vision_msgs/msg/Detection2DArray`.
+### /perception/shuttle_detections_2d
 
-Frame: `camera_color_optical_frame`.
+Type: `vision_msgs/msg/Detection2DArray`
 
-Publisher: `yolo_shuttle_detector`.
+YOLO image detections.
 
-Contains YOLO shuttle bounding boxes and confidence scores.
+### /perception/shuttle_detections_3d
 
-### `/perception/shuttle_detections_3d`
-Type: `vision_msgs/msg/Detection3DArray`.
+Type: `vision_msgs/msg/Detection3DArray`
 
-Frame: `camera_color_optical_frame`.
+Production YOLO + aligned-depth result in
+`camera_color_optical_frame`. Camera-depth validity is 0.20-3.00 m.
 
-Production publisher: `yolo_shuttle_detector`.
+### /perception/collectable_shuttle_detections_3d
 
-The detector combines the YOLO bbox with RGB-aligned depth and deprojects the
-measurement with the color CameraInfo intrinsic matrix.
+Type: `vision_msgs/msg/Detection3DArray`
 
-Simulation/testing may alternatively publish this same interface using
-`fake_shuttle_detector`, but the fake detector is not part of the production
-vision path.
+Mission-filtered detections. Eligibility is evaluated in `base_link` using
+0.50-1.80 m planar range plus net-pole exclusion.
 
-QoS: sensor-data / Best Effort.
+### /perception/shuttle_debug/image
 
-The current production mission consumes these camera-relative detections
-directly through `shuttle_collection_filter`; persistent IDs are not required.
-
-### `/perception/collectable_shuttle_detections_3d`
-Type: `vision_msgs/msg/Detection3DArray`.
-
-Publisher: `shuttle_collection_filter`.
-
-Contains detections that pass mission-specific range and net-pole exclusion
-checks. The local collection controller consumes this topic.
-
-### Optional tracker topics
-
-`shuttle_tracker` remains available only if a future persistent court-wide
-shuttle map is desired.
-
-```text
-/perception/tracked_shuttles
-/perception/visible_tracked_shuttles
-```
-
-These topics are not required by the current production mission.
+Optional annotated RGB debug image.
 
 ## AprilTag perception
 
-### `/apriltag/detections`
+```text
+/apriltag/detections
+```
+
 Type: `apriltag_msgs/msg/AprilTagDetectionArray`.
 
-Publisher: `apriltag_ros`.
+AprilTag quality gating and global correction belong to
+`scrobot_localization`.
 
-The localization package performs quality gating and global pose correction.
+## Simulation-only truth
 
-## Simulation-only ground truth
+```text
+/evaluation/ground_truth_odom       nav_msgs/msg/Odometry
+/evaluation/shuttle_ground_truth    geometry_msgs/msg/PoseArray
+/evaluation/shuttle_collected       geometry_msgs/msg/PoseArray
+```
 
-### `/evaluation/ground_truth_odom`
-Type: `nav_msgs/msg/Odometry`.
+These interfaces are forbidden as production mission/navigation inputs.
 
-Robot truth for simulation evaluation.
+## QoS and time
 
-### `/evaluation/shuttle_ground_truth`
-Type: `geometry_msgs/msg/PoseArray`.
+Simulation uses Gazebo `/clock` and `use_sim_time: true`.
 
-Shuttle-only Gazebo truth. It may drive the simulation-only fake detector, but
-must not feed production mission logic directly.
-
-### `/evaluation/shuttle_collected`
-Type: `geometry_msgs/msg/PoseArray`.
-
-One-shot simulated shuttle collection events.
-
-## Timing and QoS
-
-All simulation nodes use `use_sim_time: true` and Gazebo `/clock`.
-High-rate image, depth, scan, and raw detection streams use sensor-data QoS /
-Best Effort unless a specific consumer requires otherwise.
+High-rate camera, IMU, scan, and raw detection topics generally use sensor-data
+Best Effort QoS. Mission state and selected debug geometry use explicit
+reliable/transient-local QoS where late-joiner behavior is required.
