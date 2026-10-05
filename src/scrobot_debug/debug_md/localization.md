@@ -110,6 +110,63 @@ Boolean value is: True
 
 ## 4. AprilTag recognition-range / centering test
 
+Use the existing `localization_check.launch.py`; no SMC action is required for
+this test.
+
+### Court-corner start
+
+Start at the positive-X / positive-Y court corner and point approximately
+toward tag 0:
+
+```bash
+ros2 launch scrobot_debug localization_check.launch.py \
+  robot_x:=6.70 \
+  robot_y:=3.05 \
+  robot_z:=0.003 \
+  robot_yaw:=3.14159
+```
+
+Keep RViz off for the first range run to save resources. If visual inspection is
+useful:
+
+```bash
+ros2 launch scrobot_debug localization_check.launch.py \
+  robot_x:=6.70 \
+  robot_y:=3.05 \
+  robot_z:=0.003 \
+  robot_yaw:=3.14159 \
+  launch_rviz:=true
+```
+
+The launch already starts the production perception, EKF, control stack,
+AprilTag global-localization nodes, and `localization_monitor`.
+
+### Manual driving
+
+In a second terminal:
+
+```bash
+source ~/scrobot_ws/install/setup.bash
+ros2 run scrobot_control manual_teleop
+```
+
+Then:
+
+```text
+M       enter MANUAL
+1-9     set speed to 0.1-0.9
+W/S     forward/backward
+A/D     rotate left/right
+SPACE   stop
+R       return to AUTO
+Q       quit
+```
+
+For range testing, use a low speed such as `2` or `3` and drive slowly
+toward/away from the tag while watching the monitor.
+
+### Monitor
+
 The `localization_monitor` reports:
 
 ```text
@@ -139,6 +196,24 @@ separate gate is deliberately retuned.
 
 Drive toward/away from a tag and record where detection is stable rather than
 using a single farthest lucky detection.
+
+For the court-corner run, first distinguish three cases:
+
+```text
+TAGS=none
+  -> detector did not recognize a tag in that frame.
+
+id=0 margin=... r=... max=...
+  -> raw AprilTag recognition is working at that distance.
+
+raw detection present but later relocalization rejected
+  -> recognition range is okay; a separate quality gate is rejecting it.
+```
+
+The corner start is intentionally oblique to tag 0, so it measures a realistic
+corner-case recognition limit rather than the best possible normal-incidence
+range. After that, repeat on/near the tag normal ray if a best-case maximum
+range is needed.
 
 For the preferred observation pose, use the monitor's image-center offsets.
 The desired tag pose is near the optical center:
