@@ -66,6 +66,7 @@
       <ground_truth_topic>/evaluation/shuttle_ground_truth_gz</ground_truth_topic>
       <collected_topic>/evaluation/shuttle_collected_gz</collected_topic>
       <collector_link>collector_link</collector_link>
+      <enable_collection>true</enable_collection>
       <pickup_half_length>0.030</pickup_half_length>
       <pickup_half_width>0.150</pickup_half_width>
       <shuttle_center_offset_z>0.045</shuttle_center_offset_z>
