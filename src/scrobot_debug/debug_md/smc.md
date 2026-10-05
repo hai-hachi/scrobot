@@ -1,41 +1,48 @@
-# SMC Pose-Control Tests
+# SMC and AprilTag Approach Strategy Tests
 
-Two isolated tests validate the same nonlinear SMC pose-control idea against
-the two precision targets used by SCROBOT:
+This guide compares four AprilTag local-approach strategies and validates the
+simplified shuttle SMC geometry.
+
+## Shared pose convention
+
+The local SMC controlled point is now the planar `base_link` pose itself:
+
+```text
+c = 0
+```
+
+The rigid camera offset is absorbed into the desired base pose instead of being
+carried inside the controller model.
+
+Current desired poses:
 
 ```text
 AprilTag:
-camera -> 0.80 m observation pose -> STOP
+base_link = 0.90 m in front of the tag
+heading   = directly toward the tag
 
 Shuttle:
-camera -> 1.00 m staging pose -> straight collection at 0.30 m/s
+base_link = 1.10 m from the shuttle
+heading   = directly toward the shuttle
+then straight collect at 0.30 m/s
 ```
 
-Both desired standoff distances are defined relative to the color camera in the
-ground plane. They are not base_link or collector-link distances.
-
-## Shared SMC law
-
-The controlled point is a virtual point on the robot centerline at the camera's
-forward X offset `c`. The real camera lateral Y offset is compensated when
-constructing the desired pose.
+The SMC law is therefore:
 
 ```text
 s = e_theta + lambda * e_y
 
 omega =
-  [ lambda * v_R * sin(e_theta)
-    + k_s * s
-    + eta * sat(s / phi) ]
-  / [1 + lambda * c]
+    lambda * v_R * sin(e_theta)
+  + k_s * s
+  + eta * sat(s / phi)
 
 v = k_rho * rho * cos(alpha)
 ```
 
-If `|alpha|` exceeds the heading-stop threshold, linear velocity is set to
-zero until the robot turns sufficiently toward the pose.
+For large `alpha`, linear motion is stopped until the heading is acceptable.
 
-Current common baseline gains:
+Current baseline gains:
 
 ```text
 v_R      = 0.50 m/s
@@ -44,327 +51,283 @@ k_s      = 1.60
 eta      = 0.50
 phi      = 0.08
 k_rho    = 0.80
-heading stop = 70 deg
 ```
-
-The velocity limits remain target-specific.
 
 ---
 
-# Test A - AprilTag SMC
+# AprilTag strategy comparison
 
-## Goal
+All four launches use the same:
 
-Verify:
+- Gazebo court and tags
+- AprilTag detector
+- tag selection logic
+- 10.0 m approach eligibility limit
+- desired base_link pose at 0.90 m
+- EKF/control stack
+- RViz court visualizer
+- robot-start launch arguments
+
+Only the local motion strategy changes.
+
+The shared test launch remains:
 
 ```text
-search / select tag
- -> construct desired COLOR CAMERA pose
- -> camera standoff = 0.80 m
- -> camera/robot faces tag
- -> SMC converges
- -> robot stops
+smc_tag_check.launch.py
 ```
 
-The test starts near tag 0 but intentionally displaced from the desired pose so
-both position and heading must converge.
+The four wrapper launches below select one controller strategy each.
 
-Default robot start:
+## 1. Pure SMC
+
+This is the direct pose SMC already tested:
 
 ```text
-x   = 1.50 m
-y   = 1.80 m
-z   = 0.003 m
-yaw = 2.80 rad
+current pose
+   ↓
+SMC directly to final base pose
+   ↓
+0.90 m + final heading
 ```
 
-All spawn components are launch arguments:
+Run:
+
+```bash
+ros2 launch scrobot_debug tag_strategy_1_pure_smc.launch.py
+```
+
+This is the baseline that showed strong dependence on initial lateral error.
+
+## 2. Original main-branch controller
+
+This reproduces the original main-branch motion law:
 
 ```text
+turn toward goal position
+   ↓
+drive directly toward goal position
+   ↓
+position tolerance reached
+   ↓
+rotate in place to final tag-facing heading
+```
+
+Run:
+
+```bash
+ros2 launch scrobot_debug tag_strategy_2_main_branch.launch.py
+```
+
+For a fair comparison, it uses the current 0.90 m desired pose and current tag
+selection/range logic, while the movement law and original speed limits are:
+
+```text
+k_position      = 0.80
+k_heading       = 1.80
+k_final_yaw     = 1.80
+heading limit   = 35 deg
+max linear      = 0.25 m/s
+max angular     = 0.60 rad/s
+```
+
+## 3. Tangent biarc path feeding SMC
+
+A single circular arc cannot generally satisfy two arbitrary endpoint positions
+and both endpoint headings. Therefore this experiment uses a **biarc**:
+
+```text
+robot pose
+   ╲
+    ) circular arc 1
+     )── tangent join ──(
+                       ) circular arc 2
+                      ╱
+                desired tag pose
+```
+
+The two circular arcs join with a continuous tangent. The first arc is tangent
+to the robot starting heading and the second arc is tangent to the desired final
+heading.
+
+The generated path is not followed with RPP. Instead, a look-ahead pose on the
+biarc is continuously fed to the same SMC as a moving reference.
+
+Run:
+
+```bash
+ros2 launch scrobot_debug tag_strategy_3_biarc_smc.launch.py
+```
+
+Current path parameters:
+
+```text
+biarc_spacing   = 0.08 m
+biarc_lookahead = 0.35 m
+```
+
+This is the most promising experiment when pure pose SMC has a small capture
+region, because the SMC sees much smaller local lateral and heading errors.
+
+## 4. Return to the tag normal ray, then SMC
+
+This deliberately implements the simple geometric baseline:
+
+```text
+lock tag
+  ↓
+rotate perpendicular to tag normal
+  ↓
+drive sideways in world geometry until near normal ray
+  ↓
+stop
+  ↓
+rotate to face tag
+  ↓
+pure SMC to final 0.90 m pose
+```
+
+Run:
+
+```bash
+ros2 launch scrobot_debug tag_strategy_4_normal_ray.launch.py
+```
+
+Current handoff parameters:
+
+```text
+normal-ray lateral tolerance = 0.12 m
+ray heading tolerance        = 8 deg
+crossing speed               = 0.30 m/s
+```
+
+This strategy is intentionally inefficient. During the perpendicular crossing
+phase it does almost nothing to reduce longitudinal error, and it requires extra
+in-place rotations. It is retained because it gives a very clear comparison:
+if it is robust but slow, that confirms the main issue is the pure SMC capture
+region rather than final pose accuracy.
+
+---
+
+# Common AprilTag test arguments
+
+All four strategy launches expose:
+
+```text
+target_distance
+preferred_tag_id
 robot_x
 robot_y
 robot_z
 robot_yaw
+position_tolerance
+yaw_tolerance_deg
+launch_rviz
 ```
 
-Example farther start for tag 0:
-
-```bash
-ros2 launch scrobot_debug smc_tag_check.launch.py \
-  robot_x:=2.90 \
-  robot_y:=0.20 \
-  robot_yaw:=2.35619
-```
-
-This places the robot several metres from tag 0 while initially pointing
-approximately toward it. You can move farther still as long as the tag remains
-inside the detector's usable range and view angle.
-
-## Build
-
-```bash
-cd ~/scrobot_ws
-git checkout perception-yolo-v2
-git pull
-
-colcon build --symlink-install \
-  --packages-up-to \
-  scrobot_debug \
-  scrobot_localization \
-  scrobot_perception \
-  scrobot_control \
-  scrobot_simulation
-
-source install/setup.bash
-```
-
-## Run
-
-```bash
-ros2 launch scrobot_debug smc_tag_check.launch.py
-```
-
-The test reuses the master `scrobot_debug/rviz.launch.py`, so the existing
-`court_visualizer` remains the source of the badminton court, net, and poles.
-Only the RViz display profile is replaced with the lightweight
-`config/smc_tag.rviz`.
-
-The SMC view intentionally contains only:
+Default desired pose:
 
 ```text
-Court / net / poles
-Robot model
-Selected AprilTag marker
-Desired color-camera pose + heading
-Robot trajectory
+target_distance = 0.90 m
+position tolerance = 0.05 m
+yaw tolerance = 5 deg
+stable time = 0.25 s
 ```
 
-It does not load Nav2 costmaps, collision polygons, shuttle ground truth, or
-other mission displays.
+Example far start:
 
-### RViz topic/QoS setup
+```bash
+ros2 launch scrobot_debug tag_strategy_3_biarc_smc.launch.py \
+  robot_x:=6.70 \
+  robot_y:=3.05 \
+  robot_yaw:=3.14159
+```
+
+Use the same start pose for all four tests when comparing them.
+
+## RViz
+
+The tests reuse the master `scrobot_debug/rviz.launch.py` and existing
+`court_visualizer`.
+
+The lightweight comparison view shows:
+
+```text
+court / net / poles
+selected tag
+desired base_link pose + heading
+robot
+actual robot trajectory
+strategy reference path
+```
+
+Topics:
 
 ```text
 /court_markers
-  MarkerArray
-  Reliable + Transient Local
-
 /debug/smc_tag/tag_marker
-  Marker
-  Reliable + Transient Local
-
-/debug/smc_tag/desired_camera_pose
-  PoseStamped
-  Reliable + Transient Local
-
+/debug/smc_tag/desired_base_pose
 /debug/smc_tag/trajectory
-  Path
-  Reliable + Transient Local
+/debug/tag_controller/reference_path
 ```
 
-RViz uses the same durability/reliability settings. The transient-local debug
-topics are published before RViz starts, so the target pose and court geometry
-remain available when RViz subscribes.
+The biarc strategy publishes its generated path on the reference-path topic.
+The other strategies leave that path empty.
 
-The fixed frame is `map`. Because this isolated approach test does not execute
-`/relocalize`, a debug-only static `map -> odom` transform is created from the
-known Gazebo spawn pose. This transform is only for visualization; the SMC
-controller itself still works entirely in `odom`.
+## What to compare
 
-Startup order is intentionally:
+For each strategy, use the same initial pose and record:
 
 ```text
-Gazebo / robot
-  ↓
-perception + EKF + control + tag nodes + debug map->odom
-  ↓
-SMC visualization publisher
-  ↓
-master RViz + court_visualizer
-  ↓
-/approach_tag goal
+success / failure
+total approach time
+travel distance
+final rho
+final e_y
+final e_theta
+final base-to-tag range
+path shape
+number of stop/spin phases
 ```
 
-so TF, latched markers, and the trajectory publisher are ready before the robot
-starts moving.
-
-The launch automatically sends:
-
-```text
-/approach_tag
-preferred_tag_id = 0
-target_distance  = 0.80 m
-timeout          = 30 s
-```
-
-Expected phases:
-
-```text
-search
-  ↓
-observe
-  ↓
-smc_pose
-  ↓
-stable
-  ↓
-SUCCESS
-```
-
-Expected convergence log:
-
-```text
-Tag SMC pose reached:
-rho=...
-e_y=...
-e_theta=...
-s=...
-camera_range=... m
-```
-
-Current tag handoff tolerances:
-
-```text
-position_tolerance = 0.05 m
-yaw_tolerance      = 5 deg
-stable_time        = 0.25 s
-```
-
-The position test is the 2D Euclidean error `rho` of the SMC controlled point
-around the desired camera pose, not merely a radial distance-to-tag threshold.
-
-For convergence experiments the debug launch exposes both tolerances:
-
-```bash
-ros2 launch scrobot_debug smc_tag_check.launch.py \
-  position_tolerance:=0.02 \
-  yaw_tolerance_deg:=3.0
-```
-
-Tightening the tolerance is preferable to adding an integral term before the
-actual residual error is measured. If a repeatable nonzero bias remains after
-the SMC is allowed to converge, first check camera/tag geometry, velocity
-deadband, and SMC boundary-layer tuning before adding integral action.
-
-The final controller behavior is STOP. It does not drive through the tag.
-
-Useful checks:
-
-```bash
-ros2 topic echo /cmd_vel_relocalization
-```
-
-```bash
-ros2 topic echo /apriltag/detections
-```
-
-```bash
-ros2 run tf2_ros tf2_echo base_footprint camera_color_frame
-```
-
-Override the camera standoff:
-
-```bash
-ros2 launch scrobot_debug smc_tag_check.launch.py \
-  target_distance:=0.80
-```
-
-The action may also be tested manually after the stack is running:
-
-```bash
-ros2 action send_goal \
-  /approach_tag \
-  scrobot_interfaces/action/ApproachTag \
-  "{preferred_tag_id: 0, target_distance: 0.80, timeout_sec: 30.0}" \
-  --feedback
-```
-
-## Tag pass criteria
-
-1. Tag 0 is detected and locked.
-2. The controller reaches `smc_pose`.
-3. Both position and heading errors converge.
-4. The camera ends approximately 0.80 m from the tag in the intended
-   observation geometry.
-5. The tag remains visible at convergence.
-6. The controller outputs zero velocity in `stable`.
-7. The action succeeds.
+The most important test is robustness over different starting lateral offsets,
+not only one favorable start near the tag normal ray.
 
 ---
 
-# Test B - Shuttle SMC
+# Shuttle SMC
 
-## Goal
-
-Verify:
+The shuttle controller now uses the same simplified convention:
 
 ```text
-YOLO + aligned depth
- -> freeze shuttle position in odom
- -> construct desired COLOR CAMERA pose
- -> camera standoff = 1.00 m
- -> camera/robot faces shuttle
- -> SMC converges
- -> switch to straight collection
- -> v = 0.30 m/s, omega = 0
- -> shuttle collected
+controlled point = base_link
+c = 0
+desired stand-off = 1.10 m from frozen shuttle
 ```
 
-Default shuttle position:
+After convergence:
 
 ```text
-x = 1.50 m
-y = 0.30 m
+STRAIGHT_COLLECT:
+v     = 0.30 m/s
+omega = 0
 ```
 
-This keeps the initial shuttle inside the validated YOLO range while providing
-enough position and lateral error to observe SMC convergence.
-
-## Build
-
-Use the same build above, adding the mission package:
-
-```bash
-cd ~/scrobot_ws
-
-colcon build --symlink-install \
-  --packages-up-to \
-  scrobot_debug \
-  scrobot_perception \
-  scrobot_mission \
-  scrobot_control \
-  scrobot_localization \
-  scrobot_simulation
-
-source install/setup.bash
-```
-
-## Run
+Run:
 
 ```bash
 ros2 launch scrobot_debug smc_shuttle_check.launch.py \
   model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt
 ```
 
-The launch automatically sends a 30 s `/local_collect` goal.
+Override the base stand-off if needed:
 
-Expected phases:
-
-```text
-SELECT
-  ↓
-SMC_POSE
-  ↓
-STRAIGHT_COLLECT
-  ↓
-OVERRUN
-  ↓
-SELECT
-  ↓
-DONE
+```bash
+ros2 launch scrobot_debug smc_shuttle_check.launch.py \
+  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt \
+  base_standoff:=1.10
 ```
 
-Expected SMC convergence log:
+Expected convergence line:
 
 ```text
 SMC pre-pose reached:
@@ -372,101 +335,13 @@ rho=...
 e_y=...
 e_theta=...
 s=...
-camera_range=... m
+base_range=... m
 ```
 
-At the handoff, `camera_range` should be approximately:
+At the handoff:
 
 ```text
-1.00 m
+base_range ~= 1.10 m
 ```
 
-After the handoff:
-
-```text
-v     = 0.30 m/s
-omega = 0
-```
-
-Useful checks:
-
-```bash
-ros2 topic echo /mission/local_collect_phase
-```
-
-```bash
-ros2 topic echo /cmd_vel_approach
-```
-
-```bash
-ros2 topic echo /debug/telemetry
-```
-
-```bash
-ros2 topic echo /evaluation/shuttle_collected
-```
-
-View YOLO:
-
-```bash
-rqt_image_view
-```
-
-Select:
-
-```text
-/perception/shuttle_debug/image
-```
-
-Override the camera standoff:
-
-```bash
-ros2 launch scrobot_debug smc_shuttle_check.launch.py \
-  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt \
-  camera_standoff:=1.00
-```
-
-Different initial shuttle:
-
-```bash
-ros2 launch scrobot_debug smc_shuttle_check.launch.py \
-  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt \
-  shuttle_x:=1.55 \
-  shuttle_y:=-0.25
-```
-
-## Shuttle pass criteria
-
-1. YOLO reports the shuttle.
-2. The collection filter marks it eligible.
-3. The controller freezes a target in odom.
-4. SMC reduces pose error and reaches the staging pose.
-5. Camera planar standoff at handoff is approximately 1.00 m.
-6. Heading points toward the shuttle.
-7. Controller switches to `STRAIGHT_COLLECT`.
-8. Straight phase commands approximately 0.30 m/s and zero yaw rate.
-9. The physical Gazebo shuttle is collected.
-10. The action ends successfully.
-
----
-
-# Interpretation
-
-The shared design is:
-
-```text
-target-specific pose construction
-             ↓
-       shared SMC law
-             ↓
-       pose converged
-        /          \
-     TAG          SHUTTLE
-      ↓              ↓
-     STOP       straight 0.30 m/s
-      ↓              ↓
-relocalize         collect
-```
-
-The key design difference is therefore after SMC convergence, not the pose
-controller itself.
+The robot then runs straight over the frozen shuttle target.
