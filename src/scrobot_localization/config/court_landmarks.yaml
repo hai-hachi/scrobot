@@ -21,8 +21,7 @@ tag_global_localizer:
     quiet_border_cells: 1
     texture_pixels: 1024
 
-    # Retained for compatibility with older localization tuning notes.
-    # Retained for compatibility with older localization tuning notes.
+    # Smoothing retained by the global localizer.
     filter_tau: 0.25
     min_decision_margin: 20.0
     max_tag_distance: 10.0
@@ -62,15 +61,14 @@ tag_approach_controller:
     selection_min_samples: 3
     pending_detection_max_age: 0.25
 
-    # Search ends from measured accumulated yaw, not a fixed time approximation.
     # Search completion is based on measured accumulated yaw, not elapsed time.
     search_angular_velocity: 0.45
     search_rotation_rad: 6.283185307179586
     max_linear_velocity: 0.45
     max_angular_velocity: 0.75
 
-    # Nonlinear SMC pose controller. The observation pose is defined at the
-    # color camera; default_target_distance is camera-relative.
+    # Alternative SMC strategy parameters retained for regression tests.
+    # The production desired pose is defined at base_link.
     smc_reference_speed: 0.50
     smc_lambda: 2.00
     smc_ks: 1.60
@@ -79,9 +77,9 @@ tag_approach_controller:
     smc_krho: 0.80
     heading_stop_deg: 70.0
 
-    # Default production controller; debug launches override this for the
-    # comparison experiments.
-    control_strategy: pure_smc
+    # Proven production controller. Debug launches may override this to
+    # compare the SMC / biarc / normal-ray alternatives.
+    control_strategy: main_branch
 
     # Original main-branch direct-goal controller.
     main_k_position: 0.80
