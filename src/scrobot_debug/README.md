@@ -357,14 +357,22 @@ debug_md/yolo_perception.md
 
 ## SMC pose-control checks
 
-Two isolated launches validate the same nonlinear SMC pose-control concept for
-the two precision targets:
+AprilTag approach now has four controlled-comparison launches:
 
 ```bash
-# AprilTag: 0.80 m color-camera observation pose, then stop.
-ros2 launch scrobot_debug smc_tag_check.launch.py
+ros2 launch scrobot_debug tag_strategy_1_pure_smc.launch.py
+ros2 launch scrobot_debug tag_strategy_2_main_branch.launch.py
+ros2 launch scrobot_debug tag_strategy_3_biarc_smc.launch.py
+ros2 launch scrobot_debug tag_strategy_4_normal_ray.launch.py
+```
 
-# Shuttle: 1.00 m color-camera staging pose, then straight collection.
+All four use the same 0.90 m `base_link` tag observation pose. The biarc test
+feeds a tangent two-arc reference path into the SMC; the normal-ray test is an
+intentionally simple rotate/cross/rotate baseline.
+
+Shuttle SMC uses `c = 0` and a 1.10 m `base_link` staging pose:
+
+```bash
 ros2 launch scrobot_debug smc_shuttle_check.launch.py \
   model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt
 ```
