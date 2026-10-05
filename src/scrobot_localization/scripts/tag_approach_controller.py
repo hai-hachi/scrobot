@@ -1464,6 +1464,9 @@ class TagApproachController(Node):
             self.last_tag_bearing = float('nan')
             self.last_face_angle = float('nan')
             self.stable_since = None
+            self.reference_path = []
+            self.path_progress_index = 0
+            self.ray_heading = None
             self.search_last_yaw = None
             self.search_accumulated_yaw = 0.0
 
