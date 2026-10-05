@@ -95,6 +95,7 @@ tag_approach_controller:
     biarc_d1_factor_min: 0.15
     biarc_d1_factor_max: 6.0
     biarc_d1_factor_samples: 81
+    biarc_max_arc_sweep_deg: 175.0
 
     # Normal-ray baseline.
     ray_position_tolerance: 0.12
