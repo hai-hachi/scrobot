@@ -110,14 +110,26 @@ confidence_threshold  = 0.10
 iou_threshold         = 0.70
 max_detection_rate    = 15 Hz
 
-camera-relative range = 0.50-1.68 m
+camera depth validity = 0.20-3.00 m
 
-depth ROI scale       = 0.40
+depth ROI scale        = 0.40
 depth percentile      = 25%
 ```
 
-The low confidence threshold intentionally favors recall. Downstream range,
-depth, TF, and collection logic provide additional filtering.
+The low confidence threshold intentionally favors recall.
+
+The detector's 0.20-3.00 m range is only a broad validity gate on aligned
+camera depth. It is deliberately not the collection range.
+
+Mission-side shuttle eligibility is evaluated later after transforming each 3D
+detection into `base_link`:
+
+```text
+0.50 m <= planar base_link range <= 1.80 m
+```
+
+This separation prevents the camera-frame depth sampler from silently deciding
+a mission-level collection condition.
 
 ## Run on the training laptop / simulation
 
@@ -172,8 +184,13 @@ YOLO only supplies the 2D box.
 For each box the detector:
 
 1. takes the inner portion of the bbox,
-2. removes invalid/out-of-range depth pixels,
+2. removes invalid/non-finite depth and values outside the broad camera-depth
+   validity interval,
 3. uses a foreground-biased depth percentile,
 4. deprojects the bbox center using the color CameraInfo matrix.
+
+The resulting point remains in the color optical frame. Mission collection
+range filtering is intentionally deferred until TF can express that point in
+`base_link`.
 
 This is more robust for a thin shuttlecock than trusting one center pixel.
