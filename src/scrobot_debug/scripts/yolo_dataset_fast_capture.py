@@ -75,6 +75,15 @@ def world_to_frame(frame_t, frame_q, point_world):
     return quat_rotate(quat_conjugate(frame_q), point_world - frame_t)
 
 
+def quat_to_rotmat(q):
+    x, y, z, w = quat_normalize(q)
+    return np.array([
+        [1.0 - 2.0*(y*y + z*z), 2.0*(x*y - z*w), 2.0*(x*z + y*w)],
+        [2.0*(x*y + z*w), 1.0 - 2.0*(x*x + z*z), 2.0*(y*z - x*w)],
+        [2.0*(x*z - y*w), 2.0*(y*z + x*w), 1.0 - 2.0*(x*x + y*y)],
+    ], dtype=np.float64)
+
+
 def load_stl_vertices(path):
     path = Path(path)
     raw = path.read_bytes()
@@ -217,8 +226,18 @@ class FastYoloDatasetCapture(Node):
         sim_share = Path(get_package_share_directory('scrobot_simulation'))
         debug_share = Path(get_package_share_directory('scrobot_debug'))
 
-        self.mesh_vertices = load_stl_vertices(
-            sim_share / 'models' / 'shuttle' / 'meshes' / 'shuttle.STL'
+        # Render the detailed shuttle.STL in Gazebo, but label from the accepted
+        # low-poly octagonal envelope. Projecting the detailed mesh meant
+        # 156,846 vertex records per shuttle, i.e. >6.2 million Python vertex
+        # projections per image with 40 shuttles.
+        label_vertices = load_stl_vertices(
+            sim_share / 'models' / 'shuttle' / 'meshes'
+            / 'shuttle_collision_octagonal.stl'
+        )
+        self.label_mesh_vertices = np.unique(label_vertices, axis=0)
+        self.get_logger().info(
+            f'Label envelope vertices: {len(self.label_mesh_vertices)} '
+            '(detailed visual mesh remains unchanged in Gazebo)'
         )
         self.static_shuttle_sdf = (
             debug_share / 'models' / 'yolo_shuttle_visual' / 'model.sdf'
@@ -252,6 +271,15 @@ class FastYoloDatasetCapture(Node):
         self.last_saved_split = ''
         self.last_saved_boxes = 0
         self.last_saved_focus_boxes = 0
+        self.last_reported_state = None
+        self.last_timings = {
+            'teleport_ms': 0.0,
+            'trigger_ms': 0.0,
+            'wait_rgb_ms': 0.0,
+            'label_ms': 0.0,
+            'write_ms': 0.0,
+        }
+        self.wait_rgb_wall_start = None
 
         self._prepare_output()
 
@@ -278,7 +306,6 @@ class FastYoloDatasetCapture(Node):
         # runs with real_time_factor=0 (as fast as possible), so this loop is not
         # gated by a deliberate simulation settle interval.
         self.create_timer(0.01, self.capture_step)
-        self.create_timer(0.50, self.publish_status)
 
         self.get_logger().info(
             f'FAST YOLO dataset capture target={self.target_images}, '
@@ -365,10 +392,16 @@ class FastYoloDatasetCapture(Node):
             yaw = self.rng.uniform(-math.pi, math.pi)
             pitch = math.pi / 2.0
             q = quat_from_rpy(0.0, pitch, yaw)
+            shuttle_t = np.array([x, y, self.shuttle_z], dtype=np.float64)
+            shuttle_r = quat_to_rotmat(q)
+            world_vertices = (
+                (shuttle_r @ self.label_mesh_vertices.T).T + shuttle_t
+            )
             specs.append({
                 'name': f'yolo_shuttle_{index:03d}',
-                't': np.array([x, y, self.shuttle_z], dtype=np.float64),
+                't': shuttle_t,
                 'q': q,
+                'world_vertices': world_vertices,
                 'roll': 0.0,
                 'pitch': pitch,
                 'yaw': yaw,
@@ -404,7 +437,7 @@ class FastYoloDatasetCapture(Node):
             )
 
     def _spawn_scene(self):
-        self.state = 'SPAWNING_STATIC_SHUTTLES'
+        self._set_state('SPAWNING_STATIC_SHUTTLES')
         specs = self._sample_shuttle_layout()
 
         failures = []
@@ -430,7 +463,7 @@ class FastYoloDatasetCapture(Node):
 
         self.shuttles = specs
         self.scene_spawned = True
-        self.state = 'STATIC_SCENE_READY'
+        self._set_state('STATIC_SCENE_READY')
         self.get_logger().info(
             f'Spawned {len(self.shuttles)} static visual-only shuttles.'
         )
@@ -493,6 +526,7 @@ class FastYoloDatasetCapture(Node):
         return None
 
     def _trigger_camera(self):
+        t0 = time.perf_counter()
         cmd = [
             'gz', 'topic',
             '-t', self.camera_trigger_topic,
@@ -506,8 +540,9 @@ class FastYoloDatasetCapture(Node):
             stderr=subprocess.STDOUT,
             text=True,
         )
+        self.last_timings['trigger_ms'] = (time.perf_counter() - t0) * 1000.0
         if result.returncode != 0:
-            self.state = 'CAMERA_TRIGGER_FAILED'
+            self._set_state('CAMERA_TRIGGER_FAILED')
             self.get_logger().error(
                 'Camera trigger failed: ' + result.stdout.strip()
             )
@@ -515,6 +550,7 @@ class FastYoloDatasetCapture(Node):
         return True
 
     def _teleport_camera(self, position, yaw):
+        t0 = time.perf_counter()
         q = quat_from_rpy(0.0, self.camera_pitch, yaw)
 
         request = (
@@ -541,8 +577,9 @@ class FastYoloDatasetCapture(Node):
             text=True,
         )
 
+        self.last_timings['teleport_ms'] = (time.perf_counter() - t0) * 1000.0
         if result.returncode != 0:
-            self.state = 'CAMERA_TELEPORT_FAILED'
+            self._set_state('CAMERA_TELEPORT_FAILED')
             self.get_logger().error(
                 'Camera set_pose failed: ' + result.stdout.strip()
             )
@@ -557,7 +594,8 @@ class FastYoloDatasetCapture(Node):
             return False
 
         self.waiting_for_fresh_frame = True
-        self.state = 'WAITING_FOR_TRIGGERED_RGB'
+        self.wait_rgb_wall_start = time.perf_counter()
+        self._set_state('WAITING_FOR_TRIGGERED_RGB')
         return True
 
     def _next_view(self):
@@ -573,7 +611,7 @@ class FastYoloDatasetCapture(Node):
 
         position, yaw, kind = sampled
         self.pose_kind = kind
-        self.state = 'TELEPORTING_RGB_RIG'
+        self._set_state('TELEPORTING_RGB_RIG')
         self._teleport_camera(position, yaw)
 
     def _camera_optical_pose(self):
@@ -582,36 +620,37 @@ class FastYoloDatasetCapture(Node):
         )
         return self.camera_position, optical_q
 
-    def _project_shuttle(self, shuttle, camera_t, camera_q):
+    def _project_shuttle(self, shuttle, camera_t, world_to_camera_r):
         info = self.camera_info
         fx = float(info.k[0])
         fy = float(info.k[4])
         cx = float(info.k[2])
         cy = float(info.k[5])
 
-        center_cam = world_to_frame(camera_t, camera_q, shuttle['t'])
+        center_delta = shuttle['t'] - camera_t
+        center_cam = world_to_camera_r @ center_delta
         center_range = float(np.linalg.norm(center_cam))
 
-        uv = []
-        for vertex in self.mesh_vertices:
-            point_world = shuttle['t'] + quat_rotate(shuttle['q'], vertex)
-            point_cam = world_to_frame(camera_t, camera_q, point_world)
-            x, y, z = point_cam
-
-            if z <= 1e-4:
-                continue
-
-            uv.append((
-                fx * x / z + cx,
-                fy * y / z + cy,
-            ))
-
-        if len(uv) < 3:
+        # Fast center/FOV rejection before touching the envelope vertices.
+        if center_cam[2] <= 0.02:
             return None
 
-        arr = np.asarray(uv, dtype=np.float64)
-        u0, v0 = np.min(arr[:, 0]), np.min(arr[:, 1])
-        u1, v1 = np.max(arr[:, 0]), np.max(arr[:, 1])
+        points_cam = (
+            world_to_camera_r
+            @ (shuttle['world_vertices'] - camera_t).T
+        ).T
+        points_cam = points_cam[points_cam[:, 2] > 1e-4]
+
+        if len(points_cam) < 3:
+            return None
+
+        u = fx * points_cam[:, 0] / points_cam[:, 2] + cx
+        v = fy * points_cam[:, 1] / points_cam[:, 2] + cy
+
+        u0 = float(np.min(u))
+        u1 = float(np.max(u))
+        v0 = float(np.min(v))
+        v1 = float(np.max(v))
 
         if u1 < 0 or v1 < 0 or u0 >= info.width or v0 >= info.height:
             return None
@@ -623,7 +662,6 @@ class FastYoloDatasetCapture(Node):
 
         bw = u1 - u0
         bh = v1 - v0
-
         if bw < self.min_box_pixels or bh < self.min_box_pixels:
             return None
 
@@ -660,7 +698,9 @@ class FastYoloDatasetCapture(Node):
         return split, key
 
     def _save_current_frame(self):
+        label_t0 = time.perf_counter()
         camera_t, camera_q = self._camera_optical_pose()
+        world_to_camera_r = quat_to_rotmat(camera_q).T
 
         boxes = []
         focus_boxes = 0
@@ -668,7 +708,7 @@ class FastYoloDatasetCapture(Node):
             projected = self._project_shuttle(
                 shuttle,
                 camera_t,
-                camera_q,
+                world_to_camera_r,
             )
             if projected is None:
                 continue
@@ -677,16 +717,21 @@ class FastYoloDatasetCapture(Node):
             if self.min_focus_range <= projected[4] <= self.max_focus_range:
                 focus_boxes += 1
 
+        self.last_timings['label_ms'] = (
+            time.perf_counter() - label_t0
+        ) * 1000.0
+
         if self.pose_kind == 'target' and focus_boxes <= 0:
             self.waiting_for_fresh_frame = False
-            self.state = 'TARGET_VIEW_REJECTED'
+            self._set_state('TARGET_VIEW_REJECTED')
             return
 
         if not boxes and self.rng.random() >= self.negative_keep_probability:
             self.waiting_for_fresh_frame = False
-            self.state = 'NEGATIVE_VIEW_SKIPPED'
+            self._set_state('NEGATIVE_VIEW_SKIPPED')
             return
 
+        write_t0 = time.perf_counter()
         split, group_key = self._split_for_camera_pose()
         stem = f'{self.session_name}_gazebo_{self.frame_index:07d}'
 
@@ -726,35 +771,57 @@ class FastYoloDatasetCapture(Node):
                 group_key,
             ])
 
+        self.last_timings['write_ms'] = (
+            time.perf_counter() - write_t0
+        ) * 1000.0
+        if self.wait_rgb_wall_start is not None:
+            self.last_timings['wait_rgb_ms'] = (
+                time.perf_counter() - self.wait_rgb_wall_start
+            ) * 1000.0
+            self.wait_rgb_wall_start = None
+
         self.frame_index += 1
         self.saved_images += 1
         self.last_saved_split = split
         self.last_saved_boxes = len(boxes)
         self.last_saved_focus_boxes = focus_boxes
         self.waiting_for_fresh_frame = False
-        self.state = 'FRAME_SAVED'
+        self._set_state('FRAME_SAVED')
 
-        if self.saved_images % 25 == 0 or self.saved_images == self.target_images:
-            self.get_logger().info(
-                f'FAST_DATASET saved={self.saved_images}/{self.target_images} '
-                f'split={split} boxes={len(boxes)} focus={focus_boxes}'
-            )
+        self.get_logger().info(
+            'FRAME '
+            f'{self.saved_images}/{self.target_images} '
+            f'[{100.0*self.saved_images/max(1,self.target_images):.1f}%] '
+            f'split={split} boxes={len(boxes)} focus={focus_boxes} | '
+            f"set_pose={self.last_timings['teleport_ms']:.0f}ms "
+            f"trigger={self.last_timings['trigger_ms']:.0f}ms "
+            f"wait_rgb={self.last_timings['wait_rgb_ms']:.0f}ms "
+            f"label={self.last_timings['label_ms']:.1f}ms "
+            f"write={self.last_timings['write_ms']:.1f}ms"
+        )
+        self.publish_status(force=True)
 
         if self.saved_images >= self.target_images:
             self.finished = True
-            self.state = 'COMPLETE'
+            self._set_state('COMPLETE')
             self.get_logger().info(
                 f'Fast dataset complete: {self.saved_images} images in {self.output_dir}'
             )
             self.finalize_partial_dataset(reason='complete')
             self.create_timer(0.10, lambda: rclpy.shutdown())
 
+    def _set_state(self, state):
+        if state == self.state:
+            return
+        self.state = state
+        self.publish_status(force=True)
+
     def capture_step(self):
         if self.finished:
             return
 
         if self.latest_image is None or self.camera_info is None:
-            self.state = 'WAITING_FOR_CAMERA'
+            self._set_state('WAITING_FOR_CAMERA')
             if not self.initial_trigger_sent:
                 self.initial_trigger_sent = self._trigger_camera()
             return
@@ -763,7 +830,7 @@ class FastYoloDatasetCapture(Node):
             try:
                 self._spawn_scene()
             except Exception as exc:
-                self.state = 'STATIC_SCENE_SPAWN_FAILED'
+                self._set_state('STATIC_SCENE_SPAWN_FAILED')
                 self.get_logger().error(str(exc))
             return
 
@@ -772,10 +839,10 @@ class FastYoloDatasetCapture(Node):
             return
 
         if self._image_stamp_ns(self.latest_image) <= self.teleport_stamp_ns:
-            self.state = 'WAITING_FOR_TRIGGERED_RGB'
+            self._set_state('WAITING_FOR_TRIGGERED_RGB')
             return
 
-        self.state = 'SAVING_FRAME'
+        self._set_state('SAVING_FRAME')
         self._save_current_frame()
 
     def finalize_partial_dataset(self, reason='stopped'):
@@ -830,42 +897,28 @@ class FastYoloDatasetCapture(Node):
             f"training_ready={usable}"
         )
 
-    def publish_status(self):
-        status = {
-            'mode': 'fast_rgb_only_triggered',
-            'state': self.state,
-            'saved_images': self.saved_images,
-            'target_images': self.target_images,
-            'progress_pct': round(
-                100.0 * self.saved_images / max(1, self.target_images),
-                2,
-            ),
-            'pose_attempts': self.pose_attempts,
-            'pose_kind': self.pose_kind,
-            'inputs': {
-                'image': self.latest_image is not None,
-                'camera_info': self.camera_info is not None,
-                'static_scene': self.scene_spawned,
-            },
-            'shuttle_count': len(self.shuttles),
-            'last_split': self.last_saved_split,
-            'last_boxes': self.last_saved_boxes,
-            'last_focus_boxes': self.last_saved_focus_boxes,
-            'output_dir': str(self.output_dir),
-        }
+    def publish_status(self, force=False):
+        if not force and self.state == self.last_reported_state:
+            return
+
+        self.last_reported_state = self.state
+        progress = 100.0 * self.saved_images / max(1, self.target_images)
+
+        line = (
+            f'{self.state} | '
+            f'{self.saved_images}/{self.target_images} ({progress:.1f}%) | '
+            f'attempt={self.pose_attempts} view={self.pose_kind} | '
+            f'last={self.last_saved_split or "-"} '
+            f'boxes={self.last_saved_boxes} focus={self.last_saved_focus_boxes}'
+        )
 
         msg = String()
-        msg.data = json.dumps(status, sort_keys=True)
+        msg.data = line
         self.status_pub.publish(msg)
 
-        self.get_logger().info(
-            'DATASET_STATUS '
-            f"mode=fast state={self.state} "
-            f"saved={self.saved_images}/{self.target_images} "
-            f"attempts={self.pose_attempts} "
-            f"scene={self.scene_spawned} "
-            f"shuttles={len(self.shuttles)}"
-        )
+        # Console only on state changes / saved frames. No sim-time heartbeat,
+        # so unlimited simulation time cannot flood repeated identical logs.
+        self.get_logger().info(f'DATASET {line}')
 
 
 def main(args=None):
