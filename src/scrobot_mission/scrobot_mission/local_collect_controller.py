@@ -5,13 +5,13 @@ import threading
 import time
 
 import rclpy
-from geometry_msgs.msg import Point, PointStamped, TwistStamped
+from geometry_msgs.msg import Point, PointStamped, PoseStamped, TwistStamped
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from rclpy.time import Time
 from scrobot_interfaces.action import LocalCollect
 from std_msgs.msg import String
@@ -156,10 +156,25 @@ class LocalCollectController(Node):
         self.last_w = 0.0
 
         reliable_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
+        debug_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
         self.cmd_pub = self.create_publisher(
             TwistStamped, self.cmd_vel_topic, reliable_qos
         )
         self.phase_pub = self.create_publisher(String, self.phase_topic, reliable_qos)
+        self.debug_target_pub = self.create_publisher(
+            PointStamped,
+            '/debug/smc_shuttle/target',
+            debug_qos,
+        )
+        self.debug_pre_pose_pub = self.create_publisher(
+            PoseStamped,
+            '/debug/smc_shuttle/pre_pose',
+            debug_qos,
+        )
         self.create_subscription(
             Detection3DArray,
             self.raw_detection_topic,
@@ -220,6 +235,28 @@ class LocalCollectController(Node):
         self.last_v = 0.0
         self.last_w = 0.0
         self._publish_cmd(0.0, 0.0)
+
+    def _publish_debug_geometry(self, target_odom, pre_pose):
+        stamp = self.get_clock().now().to_msg()
+
+        target = PointStamped()
+        target.header.frame_id = self.odom_frame
+        target.header.stamp = stamp
+        target.point.x = float(target_odom[0])
+        target.point.y = float(target_odom[1])
+        target.point.z = float(target_odom[2])
+        self.debug_target_pub.publish(target)
+
+        goal = PoseStamped()
+        goal.header.frame_id = self.odom_frame
+        goal.header.stamp = stamp
+        goal.pose.position.x = float(pre_pose[0])
+        goal.pose.position.y = float(pre_pose[1])
+        goal.pose.position.z = 0.03
+        half = 0.5 * pre_pose[2]
+        goal.pose.orientation.z = math.sin(half)
+        goal.pose.orientation.w = math.cos(half)
+        self.debug_pre_pose_pub.publish(goal)
 
     # ------------------------------------------------------------------
     # TF / geometry
@@ -584,6 +621,10 @@ class LocalCollectController(Node):
         if pre_pose is None:
             self._stop()
             return True, 'pre-pose TF unavailable'
+
+        # Latched debug geometry lets RViz start after the target lock without
+        # losing the exact frozen shuttle point or the desired SMC pre-pose.
+        self._publish_debug_geometry(target_odom, pre_pose)
 
         completed, reason = self._drive_precollect_pose(
             pre_pose,
