@@ -28,6 +28,7 @@ def generate_launch_description():
     model_path = LaunchConfiguration('model_path')
     device = LaunchConfiguration('device')
     base_standoff = LaunchConfiguration('base_standoff')
+    launch_rviz = LaunchConfiguration('launch_rviz')
 
     shuttle_x = LaunchConfiguration('shuttle_x')
     shuttle_y = LaunchConfiguration('shuttle_y')
@@ -36,6 +37,8 @@ def generate_launch_description():
     perception_delay = LaunchConfiguration('perception_delay')
     shuttle_delay = LaunchConfiguration('shuttle_delay')
     controller_delay = LaunchConfiguration('controller_delay')
+    visualizer_delay = LaunchConfiguration('visualizer_delay')
+    rviz_delay = LaunchConfiguration('rviz_delay')
     action_delay = LaunchConfiguration('action_delay')
 
     local_params = os.path.join(
@@ -143,6 +146,27 @@ def generate_launch_description():
         },
     )
 
+    shuttle_visualizer = Node(
+        package='scrobot_debug',
+        executable='smc_shuttle_visualizer',
+        name='smc_shuttle_visualizer',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
+    )
+
+    rviz = include(
+        'scrobot_debug',
+        'rviz.launch.py',
+        {
+            'use_sim_time': use_sim_time,
+            'rviz_config': os.path.join(
+                get_package_share_directory('scrobot_debug'),
+                'config',
+                'smc_shuttle.rviz',
+            ),
+        },
+    )
+
     collect_action = ExecuteProcess(
         cmd=[
             'ros2', 'action', 'send_goal',
@@ -173,6 +197,12 @@ def generate_launch_description():
             default_value='1.10',
             description='Desired planar base_link standoff from shuttle [m].',
         ),
+        DeclareLaunchArgument(
+            'launch_rviz',
+            default_value='true',
+            choices=['true', 'false'],
+            description='Launch shuttle SMC RViz debug view.',
+        ),
 
         # Far enough to observe SMC convergence while remaining inside the
         # validated YOLO depth range.
@@ -183,6 +213,8 @@ def generate_launch_description():
         DeclareLaunchArgument('stack_delay', default_value='4.0'),
         DeclareLaunchArgument('shuttle_delay', default_value='5.0'),
         DeclareLaunchArgument('controller_delay', default_value='5.5'),
+        DeclareLaunchArgument('visualizer_delay', default_value='5.8'),
+        DeclareLaunchArgument('rviz_delay', default_value='6.2'),
         DeclareLaunchArgument('action_delay', default_value='8.0'),
 
         simulation,
@@ -196,5 +228,7 @@ def generate_launch_description():
             period=controller_delay,
             actions=[collection_filter, local_collect, telemetry],
         ),
+        TimerAction(period=visualizer_delay, actions=[shuttle_visualizer]),
+        TimerAction(period=rviz_delay, actions=[rviz]),
         TimerAction(period=action_delay, actions=[collect_action]),
     ])
