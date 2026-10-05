@@ -2,7 +2,9 @@
 
 ## Local odometry
 
-Start simulation, control, and local localization, then:
+Start simulation, production perception, control, and local localization,
+then. YOLO may remain disabled; perception is required for the filtered depth
+scan used by the production collision monitor:
 
 ```bash
 ros2 launch scrobot_evaluation local_odom_eval.launch.py \
