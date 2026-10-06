@@ -5,26 +5,48 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import EnvironmentVariable, Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import (
+    Command,
+    EnvironmentVariable,
+    FindExecutable,
+    LaunchConfiguration,
+    PathJoinSubstitution,
+)
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
+def include(package, launch_file, arguments=None, condition=None):
+    return IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory(package),
+                'launch',
+                launch_file,
+            )
+        ),
+        launch_arguments=(arguments or {}).items(),
+        condition=condition,
+    )
+
+
 def generate_launch_description():
     bringup_pkg = get_package_share_directory('scrobot_bringup')
     control_pkg = get_package_share_directory('scrobot_control')
-    localization_pkg = get_package_share_directory('scrobot_localization')
-    perception_pkg = get_package_share_directory('scrobot_perception')
-    navigation_pkg = get_package_share_directory('scrobot_navigation')
-    hardware_pkg = get_package_share_directory('scrobot_hardware')
 
     serial_port = LaunchConfiguration('serial_port')
     baud_rate = LaunchConfiguration('baud_rate')
-    launch_navigation = LaunchConfiguration('launch_navigation')
-    launch_global_localization = LaunchConfiguration('launch_global_localization')
-    launch_magnetometer = LaunchConfiguration('launch_magnetometer')
     camera_config = LaunchConfiguration('camera_config')
+    model_path = LaunchConfiguration('model_path')
+    device = LaunchConfiguration('device')
+    enable_yolo = LaunchConfiguration('enable_yolo')
+
+    launch_global_localization = LaunchConfiguration(
+        'launch_global_localization'
+    )
+    launch_navigation = LaunchConfiguration('launch_navigation')
+    launch_mission = LaunchConfiguration('launch_mission')
 
     xacro_file = PathJoinSubstitution([
         FindPackageShare('scrobot_description'),
@@ -57,7 +79,6 @@ def generate_launch_description():
         }],
     )
 
-    # Jazzy controller_manager receives the URDF from /robot_description.
     controller_manager = Node(
         package='controller_manager',
         executable='ros2_control_node',
@@ -72,11 +93,10 @@ def generate_launch_description():
         ],
     )
 
-    control_stack = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(control_pkg, 'launch', 'control_stack.launch.py')
-        ),
-        launch_arguments={'use_sim_time': 'false'}.items(),
+    control_stack = include(
+        'scrobot_control',
+        'control_stack.launch.py',
+        {'use_sim_time': 'false'},
     )
 
     realsense = Node(
@@ -91,57 +111,60 @@ def generate_launch_description():
         ],
     )
 
-    magnetometer = Node(
-        package='scrobot_hardware',
-        executable='magnetometer_5883l.py',
-        name='magnetometer_5883l',
-        output='screen',
-        parameters=[
-            os.path.join(hardware_pkg, 'config', 'magnetometer.yaml'),
-            {'use_sim_time': False},
-        ],
-        condition=IfCondition(launch_magnetometer),
-    )
-
-    localization = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(localization_pkg, 'launch', 'localization.launch.py')
-        ),
-        launch_arguments={'use_sim_time': 'false'}.items(),
-    )
-
-    perception = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(perception_pkg, 'launch', 'hardware_perception.launch.py')
-        ),
-        launch_arguments={
+    localization = include(
+        'scrobot_localization',
+        'localization.launch.py',
+        {
             'use_sim_time': 'false',
-            'launch_apriltag': 'true',
-            'launch_depth_scan': 'true',
-        }.items(),
+            'use_magnetometer': 'false',
+            'use_sensor_qos_transformer': 'true',
+        },
     )
 
-    global_localization = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(localization_pkg, 'launch', 'global_localization.launch.py')
-        ),
-        launch_arguments={'use_sim_time': 'false'}.items(),
+    perception = include(
+        'scrobot_perception',
+        'perception.launch.py',
+        {
+            'use_sim_time': 'false',
+            'enable_yolo': enable_yolo,
+            'model_path': model_path,
+            'device': device,
+            'publish_debug_image': 'false',
+        },
+    )
+
+    # These are useful for subsystem testing. The full sweep mission already
+    # launches both global localization and Nav2 internally, so leave these
+    # disabled when launch_mission:=true.
+    global_localization = include(
+        'scrobot_localization',
+        'global_localization.launch.py',
+        {'use_sim_time': 'false'},
         condition=IfCondition(launch_global_localization),
     )
 
-    navigation = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(navigation_pkg, 'launch', 'navigation.launch.py')
-        ),
-        launch_arguments={'use_sim_time': 'false'}.items(),
+    navigation = include(
+        'scrobot_navigation',
+        'navigation.launch.py',
+        {'use_sim_time': 'false'},
         condition=IfCondition(launch_navigation),
+    )
+
+    mission = include(
+        'scrobot_mission',
+        'sweep_mission.launch.py',
+        {'use_sim_time': 'false'},
+        condition=IfCondition(launch_mission),
     )
 
     return LaunchDescription([
         DeclareLaunchArgument(
             'serial_port',
-            default_value=EnvironmentVariable('SCROBOT_SERIAL_PORT', default_value='/dev/ttyAMA0'),
-            description='STM32 UART device. Override with SCROBOT_SERIAL_PORT on non-Pi hosts.',
+            default_value=EnvironmentVariable(
+                'SCROBOT_SERIAL_PORT',
+                default_value='/dev/ttyTHS1',
+            ),
+            description='STM32 protocol-v2 UART device.',
         ),
         DeclareLaunchArgument(
             'baud_rate',
@@ -150,35 +173,54 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'camera_config',
-            default_value=os.path.join(bringup_pkg, 'config', 'realsense_pi.yaml'),
-            description='RealSense YAML profile. Pi uses the lightweight profile by default.',
+            default_value=os.path.join(
+                bringup_pkg, 'config', 'realsense.yaml'
+            ),
+            description='D435i production RGB-D + IMU profile.',
         ),
         DeclareLaunchArgument(
-            'launch_magnetometer',
-            default_value='false',
+            'model_path',
+            default_value=EnvironmentVariable(
+                'SCROBOT_YOLO_MODEL',
+                default_value='',
+            ),
+            description='Production shuttle YOLO model.',
+        ),
+        DeclareLaunchArgument(
+            'device',
+            default_value='0',
+            description='Ultralytics inference device on the Orin.',
+        ),
+        DeclareLaunchArgument(
+            'enable_yolo',
+            default_value='true',
             choices=['true', 'false'],
-            description='Launch the external 5883L magnetometer when installed.',
         ),
         DeclareLaunchArgument(
             'launch_global_localization',
-            default_value='true',
+            default_value='false',
             choices=['true', 'false'],
-            description='Launch AprilTag map->odom localization and approach action.',
+            description='Standalone AprilTag global localization for testing.',
         ),
         DeclareLaunchArgument(
             'launch_navigation',
             default_value='false',
             choices=['true', 'false'],
-            description='Launch Nav2 servers. Mission movement is not autostarted.',
+            description='Standalone Nav2 bringup for testing.',
         ),
-
+        DeclareLaunchArgument(
+            'launch_mission',
+            default_value='false',
+            choices=['true', 'false'],
+            description='Start the autonomous sweep mission. Disabled by default for safe hardware bringup.',
+        ),
         robot_state_publisher,
         controller_manager,
         realsense,
-        magnetometer,
         control_stack,
         localization,
         perception,
         global_localization,
         navigation,
+        mission,
     ])
