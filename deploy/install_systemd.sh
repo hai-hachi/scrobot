@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE_USER="${SUDO_USER:-${USER}}"
 START_SCRIPT="${ROOT_DIR}/deploy/start_robot.sh"
-SERIAL_PORT="${SCROBOT_SERIAL_PORT:-/dev/ttyAMA0}"
+SERIAL_PORT="${SCROBOT_SERIAL_PORT:-/dev/ttyTHS1}"
 
 if [[ "${EUID}" -eq 0 ]]; then
   echo "Run this as the robot user; the script will use sudo when needed." >&2
