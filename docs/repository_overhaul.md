@@ -79,6 +79,28 @@ geometry, D435i-only localization, tag recovery, Nav2 footprint, mission limits,
 SMC handoff and documentation—are represented by newer or independently
 implemented versions in the consolidated final tree.
 
+## Consolidation result
+
+The audited tree was merged to `main` on 2026-10-06 with merge commit:
+
+```text
+d94d204b8c99a91f09b3b63741155ed20f347b00
+Merge validated repository overhaul into main
+```
+
+The merge has two parents: the previous `main` head and the audited
+`repo-overhaul-20261006` head. The resulting tree is exactly the audited
+consolidation tree, so both histories are retained without reintroducing stale
+files from the older main line.
+
+The previous production head is additionally preserved at:
+
+```text
+archive/main-pre-overhaul-20261006
+```
+
+GitHub pull request #4 records the consolidation review and merge.
+
 ## Final branch policy
 
 After merge, `main` is the production branch.
