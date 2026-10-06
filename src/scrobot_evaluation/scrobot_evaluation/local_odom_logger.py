@@ -149,6 +149,7 @@ class LocalOdomLogger(Node):
         self.declare_parameter('output_root', '~/scrobot_evaluation_runs/local_odom')
         self.declare_parameter('run_name', '')
         self.declare_parameter('flush_every_samples', 50)
+        self.declare_parameter('done_record_duration', 0.50)
 
         self.ground_truth_topic = str(
             self.get_parameter('ground_truth_topic').value
@@ -178,6 +179,10 @@ class LocalOdomLogger(Node):
         self.flush_every_samples = max(
             1,
             int(self.get_parameter('flush_every_samples').value),
+        )
+        self.done_record_duration = max(
+            0.0,
+            float(self.get_parameter('done_record_duration').value),
         )
 
         output_root = os.path.expanduser(
@@ -214,6 +219,8 @@ class LocalOdomLogger(Node):
         self.latest_requested_cmd = None
         self.latest_final_cmd = None
         self.test_state = 'UNKNOWN'
+        self.done_received_time = None
+        self.shutdown_requested = False
 
         self.timing = {
             'ground_truth': TimingStats(),
@@ -419,6 +426,8 @@ class LocalOdomLogger(Node):
 
     def test_state_callback(self, msg):
         self.test_state = msg.data
+        if self.test_state == 'DONE' and self.done_received_time is None:
+            self.done_received_time = self.now_seconds()
 
     @staticmethod
     def values_or_nan(value, count):
@@ -472,6 +481,19 @@ class LocalOdomLogger(Node):
         self.sample_count += 1
         if self.sample_count % self.flush_every_samples == 0:
             self.samples_file.flush()
+
+        if (
+            not self.shutdown_requested
+            and self.done_received_time is not None
+            and self.now_seconds() - self.done_received_time
+            >= self.done_record_duration
+        ):
+            self.shutdown_requested = True
+            self.get_logger().info(
+                'DONE hold complete; closing local odometry evaluation.'
+            )
+            if rclpy.ok():
+                rclpy.shutdown()
 
     def write_timing_summary(self):
         path = self.output_dir / 'timing_summary.csv'
