@@ -33,7 +33,11 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(localization_pkg, 'launch', 'localization.launch.py')
         ),
-        launch_arguments={'use_sim_time': 'false'}.items(),
+        launch_arguments={
+            'use_sim_time': 'false',
+            'use_magnetometer': 'false',
+            'use_sensor_qos_transformer': 'true',
+        }.items(),
     )
 
     return LaunchDescription([
