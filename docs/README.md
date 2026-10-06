@@ -11,7 +11,9 @@ details belong in each package README; repeatable test commands belong in
 - [interface_specification.md](interface_specification.md) - stable ROS topics,
   actions, frames, and simulation-only truth interfaces.
 - [full_mission_validation.md](full_mission_validation.md) - final integrated
-  simulation run and acceptance criteria.
+  simulation result and acceptance criteria.
+- [repository_overhaul.md](repository_overhaul.md) - branch audit, retained
+  hardware work, and consolidation decisions.
 
 Historical systematic-test plans, old ROS graphs, and duplicate node
 specifications were removed after their results were folded into the package
