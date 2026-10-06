@@ -1,14 +1,24 @@
+# Goal
+# -1 selects any valid court tag; current explicit IDs are 0..3.
 int32 preferred_tag_id
+# Desired tag stand-off distance in metres; <= 0 uses the server default.
 float32 target_distance
+# Overall action timeout in seconds; <= 0 uses the server default.
 float32 timeout_sec
 ---
+# Result
 bool success
 int32 tag_id
+# Final observed tag distance in metres; -1 means no valid finite value.
 float32 final_distance
+# Final observed tag bearing in radians.
 float32 final_bearing
 string message
 ---
+# Feedback
 int32 tag_id
+# Current observed tag distance in metres; -1 means unavailable.
 float32 distance
+# Current observed tag bearing in radians.
 float32 bearing
 string phase

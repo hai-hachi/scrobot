@@ -1,0 +1,28 @@
+/camera/camera:
+  ros__parameters:
+    # Lightweight real-hardware profile for depth + IMU validation on RPi 4B.
+    enable_color: false
+
+    enable_depth: true
+    depth_module.depth_profile: "848,480,15"
+    depth_module.depth_format: "Z16"
+
+    enable_infra: false
+    enable_infra1: false
+    enable_infra2: false
+
+    enable_gyro: true
+    enable_accel: true
+    unite_imu_method: 2
+
+    # Keep all expensive RGB-D post-processing off for this test.
+    align_depth.enable: false
+    pointcloud.enable: false
+    enable_sync: false
+
+    # URDF owns the camera TF tree.
+    publish_tf: false
+
+    initial_reset: false
+    reconnect_timeout: 6.0
+    diagnostics_period: 1.0

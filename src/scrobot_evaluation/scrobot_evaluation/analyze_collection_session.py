@@ -187,7 +187,7 @@ def plot_collection_passes(rows, output_dir):
     ax.set_title('Local-collection pass duration')
     ax.grid(True, axis='y')
     for i, count in enumerate(collected):
-        ax.text(i, duration[i], f'{int(count)} shuttle(s)', ha='center', va='bottom')
+        ax.text(i, duration[i], f'{int(count)}', ha='center', va='bottom')
     save_figure(fig, output_dir, 'collection_pass_duration')
 
 
@@ -216,6 +216,9 @@ def print_summary(run_dir):
         ('Eligible collection rate [%]', 'eligible_collection_rate_percent'),
         ('Overall collection rate [%]', 'overall_collection_rate_percent'),
         ('Local-collect passes', 'collection_passes'),
+        ('Capture checks started', 'capture_checks_started'),
+        ('Capture checks passed', 'capture_checks_passed'),
+        ('Capture checks failed', 'capture_checks_failed'),
         ('GT path [m]', 'ground_truth_path_m'),
         ('Estimated path [m]', 'estimated_path_m'),
         ('Position RMSE [m]', 'position_rmse_m'),

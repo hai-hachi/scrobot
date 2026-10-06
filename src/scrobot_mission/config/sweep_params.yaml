@@ -4,8 +4,9 @@ sweep_mission_manager:
     base_frame: base_footprint
     odom_topic: /odometry/filtered
 
-    # Mission interrupts only for collection-eligible shuttles: <= 1.68 m from
-    # robot and outside the 0.10 m pole exclusion zones.
+    # Mission interrupts only for collection-eligible shuttles:
+    # 0.50-1.80 m planar range in base_link and outside the pole exclusion
+    # zones. The collection filter is the authoritative eligibility gate.
     raw_detection_topic: /perception/collectable_shuttle_detections_3d
 
     autostart: true
@@ -37,9 +38,9 @@ sweep_mission_manager:
     fixed_stop_max_tag_distance: 4.0
 
     initial_tag_id: -1
-    tag_approach_distance: 1.70
-    # At 0.45 rad/s, 18 s covers > 360 deg if no tag is detected.
-    tag_approach_timeout: 18.0
+    tag_approach_distance: 0.90
+    # Overall approach timeout; the no-tag search itself ends after measured 2pi yaw.
+    tag_approach_timeout: 60.0
     tag_recovery_max_attempts: 3
     relocalize_sample_count: 15
     relocalize_timeout: 15.0
@@ -54,11 +55,18 @@ sweep_mission_manager:
     join_acceptance_distance: 0.40
     enable_shuttle_interrupts: true
 
-    # Keep the existing test controls available while integrating collection.
-    enable_test_controls: true
+    # AUTO/MANUAL resume behavior. Small operator corrections resume the saved
+    # mission phase directly; larger displacement returns to the interruption
+    # checkpoint with Nav2 before continuing.
+    manual_resume_return_distance: 0.15
+    manual_resume_return_yaw_deg: 10.0
+
+    # Production mission disables debug command/RViz-goal injection. Dedicated
+    # scrobot_debug launches may override these parameters when required.
+    enable_test_controls: false
     test_command_topic: /mission/test_command
     test_goal_topic: /mission/test_goal
-    accept_rviz_goal_topic: true
+    accept_rviz_goal_topic: false
     rviz_goal_topic: /goal_pose
 
     local_collect_timeout: 120.0

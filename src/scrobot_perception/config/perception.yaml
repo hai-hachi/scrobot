@@ -29,6 +29,21 @@ apriltag:
       sizes: [0.100, 0.100, 0.100, 0.100]
 
 
+depth_scan_self_filter:
+  ros__parameters:
+    use_sim_time: true
+
+    input_topic: /camera/camera/depth/scan_raw
+    output_topic: /camera/camera/depth/scan
+
+    # Mask only scan rays that land inside the robot's own body footprint.
+    # Physical body is approximately x=+0.325/-0.450 m, y=+/-0.225 m.
+    self_min_x: -0.45
+    self_max_x: 0.34
+    self_min_y: -0.24
+    self_max_y: 0.24
+
+
 depth_pointcloud_to_scan:
   ros__parameters:
     use_sim_time: true
@@ -40,15 +55,16 @@ depth_pointcloud_to_scan:
     min_height: 0.12
     max_height: 0.70
 
-    # D435i horizontal field of view, approximately 87 deg.
-    angle_min: -0.76
-    angle_max: 0.76
+    # Calibrated D435i depth HFOV = 1.5795850624055896 rad.
+    # Use exactly half the calibrated HFOV on each side.
+    angle_min: -0.7897925312027948
+    angle_max: 0.7897925312027948
     angle_increment: 0.00872664626
 
     scan_time: 0.06666666667
 
-    range_min: 0.20
-    range_max: 3.00
+    range_min: 0.30
+    range_max: 3.30
 
     queue_size: 1
     use_inf: true

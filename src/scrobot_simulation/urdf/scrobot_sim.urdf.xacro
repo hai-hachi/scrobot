@@ -1,6 +1,13 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="scrobot">
 
+  <xacro:arg name="enable_magnetometer" default="false"/>
+  <xacro:arg name="drive_contact_mu" default="5.0"/>
+  <xacro:arg name="caster_contact_mu" default="0.05"/>
+  <xacro:arg
+    name="controller_params"
+    default="$(find scrobot_control)/config/controllers.yaml"/>
+
   <!-- Real robot geometry -->
   <xacro:include
     filename="$(find scrobot_description)/urdf/scrobot.urdf.xacro"/>
@@ -13,8 +20,26 @@
   <xacro:include
     filename="$(find scrobot_simulation)/urdf/physics_gazebo.xacro"/>
 
-  <xacro:scrobot_gazebo_sensors/>
-  <xacro:scrobot_gazebo_physics/>
+  <xacro:scrobot_gazebo_sensors enable_magnetometer="$(arg enable_magnetometer)"/>
+  <xacro:scrobot_gazebo_physics
+    drive_contact_mu="$(arg drive_contact_mu)"
+    caster_contact_mu="$(arg caster_contact_mu)"/>
+
+  <!-- Gazebo-only ground-truth odometry. Keep simulation/evaluation plugins
+       out of scrobot_description so the real robot URDF stays hardware-only. -->
+  <gazebo>
+    <plugin
+      filename="gz-sim-odometry-publisher-system"
+      name="gz::sim::systems::OdometryPublisher">
+      <odom_frame>world</odom_frame>
+      <robot_base_frame>base_footprint</robot_base_frame>
+      <odom_publish_frequency>50.0</odom_publish_frequency>
+      <odom_topic>/evaluation/scrobot/ground_truth_odom_gz</odom_topic>
+      <tf_topic>/evaluation/scrobot/ground_truth_tf_gz</tf_topic>
+      <dimensions>2</dimensions>
+      <gaussian_noise>0.0</gaussian_noise>
+    </plugin>
+  </gazebo>
 
   <ros2_control name="GazeboSimSystem" type="system">
     <hardware>
@@ -55,7 +80,7 @@
     <plugin
       filename="libgz_ros2_control-system.so"
       name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-      <parameters>$(find scrobot_control)/config/controllers.yaml</parameters>
+      <parameters>$(arg controller_params)</parameters>
     </plugin>
   </gazebo>
 </robot>

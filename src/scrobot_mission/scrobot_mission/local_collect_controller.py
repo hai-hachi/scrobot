@@ -5,13 +5,13 @@ import threading
 import time
 
 import rclpy
-from geometry_msgs.msg import Point, PointStamped, TwistStamped
+from geometry_msgs.msg import Point, PointStamped, PoseStamped, TwistStamped
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from rclpy.time import Time
 from scrobot_interfaces.action import LocalCollect
 from std_msgs.msg import String
@@ -39,22 +39,25 @@ def detection_position(detection):
 class LocalCollectController(Node):
     """Local shuttle collection with an SMC pre-pose and straight pickup pass.
 
-    The first currently eligible shuttle is frozen once in odom. A fixed
-    pre-collection pose is constructed with collector_link 0.50 m in front of
-    that shuttle and facing it. Sliding-mode control drives the collector point
-    to this pose. Once position and heading tolerances are satisfied, the robot
+    The first currently eligible shuttle is frozen once in odom. For a target
+    farther than the nominal stand-off, a pre-collection pose is constructed
+    with base_link 1.10 m from the shuttle in the ground plane and facing it.
+    If the shuttle is already closer than that stand-off, the pre-pose is
+    clamped to the current base position so the controller aligns in place
+    instead of requesting an unreachable pose behind the robot. Sliding-mode
+    control acts directly on
+    the base_link planar pose with controlled-point offset c = 0. Once position
+    and heading tolerances are satisfied, the robot
     switches to the deliberately simple straight collection rule:
         v = 0.30 m/s, omega = 0.
-    The validated SMC law includes the reference-speed heading term and the
-    original turn-first gate for large position-bearing error. When
-    collector_link reaches the frozen shuttle point, the controller continues
-    through it by the configured 0.10 m overrun.
+    When collector_link reaches the frozen shuttle point, the controller
+    continues through it by the configured 0.10 m overrun.
     """
 
     def __init__(self):
         super().__init__('local_collect_controller')
 
-        self.declare_parameter('raw_detection_topic', '/perception/shuttle_detections_3d')
+        self.declare_parameter('raw_detection_topic', '/perception/collectable_shuttle_detections_3d')
         self.declare_parameter('action_name', '/local_collect')
         self.declare_parameter('cmd_vel_topic', '/cmd_vel_approach')
         self.declare_parameter('phase_topic', '/mission/local_collect_phase')
@@ -65,32 +68,25 @@ class LocalCollectController(Node):
         self.declare_parameter('tf_timeout', 0.05)
         self.declare_parameter('detection_max_age', 0.30)
         self.declare_parameter('target_timeout', 12.0)
-        self.declare_parameter('smc_debug_period', 1.0)
 
         self.declare_parameter('position_tolerance', 0.08)
         self.declare_parameter('reacquire_exclusion_radius', 0.12)
-        self.declare_parameter('precollect_distance', 0.50)
+        self.declare_parameter('base_standoff_distance', 1.10)
         self.declare_parameter('precollect_position_tolerance', 0.03)
         self.declare_parameter('precollect_yaw_tolerance_deg', 5.0)
-        self.declare_parameter('handoff_position_tolerance', 0.08)
-        self.declare_parameter('handoff_yaw_tolerance_deg', 8.0)
+        self.declare_parameter('precollect_stable_time', 0.25)
         self.declare_parameter('straight_collect_speed', 0.30)
         self.declare_parameter('overrun_distance', 0.10)
         self.declare_parameter('overrun_speed', 0.25)
 
         self.declare_parameter('smc_reference_speed', 0.50)
         self.declare_parameter('smc_lambda', 2.0)
-        self.declare_parameter('smc_ks', 1.60)
-        self.declare_parameter('smc_eta', 0.50)
-        self.declare_parameter('smc_phi', 0.08)
+        self.declare_parameter('smc_ks', 2.0)
+        self.declare_parameter('smc_eta', 0.8)
+        self.declare_parameter('smc_phi', 0.05)
         self.declare_parameter('smc_krho', 0.8)
-        self.declare_parameter('collector_offset_c', 0.165)
-        self.declare_parameter('smc_max_angular_speed', 1.80)
+        self.declare_parameter('smc_max_angular_speed', 2.0)
         self.declare_parameter('smc_max_linear_speed', 0.50)
-
-        # Preserve the old turn-first behavior only while the collector is
-        # still far enough from the pre-pose for alpha to be geometrically
-        # meaningful. Near the goal, continue normal SMC.
         self.declare_parameter('heading_stop_deg', 70.0)
 
         self.declare_parameter('max_linear_accel', 1.0)
@@ -107,30 +103,22 @@ class LocalCollectController(Node):
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
         self.detection_max_age = float(self.get_parameter('detection_max_age').value)
         self.target_timeout = float(self.get_parameter('target_timeout').value)
-        self.smc_debug_period = max(
-            0.1, float(self.get_parameter('smc_debug_period').value)
-        )
 
         self.position_tolerance = float(self.get_parameter('position_tolerance').value)
         self.reacquire_exclusion_radius = float(
             self.get_parameter('reacquire_exclusion_radius').value
         )
-        self.precollect_distance = float(self.get_parameter('precollect_distance').value)
+        self.base_standoff_distance = float(
+            self.get_parameter('base_standoff_distance').value
+        )
         self.precollect_position_tolerance = float(
             self.get_parameter('precollect_position_tolerance').value
         )
         self.precollect_yaw_tolerance = math.radians(
             float(self.get_parameter('precollect_yaw_tolerance_deg').value)
         )
-        self.handoff_position_tolerance = max(
-            self.precollect_position_tolerance,
-            float(self.get_parameter('handoff_position_tolerance').value),
-        )
-        self.handoff_yaw_tolerance = max(
-            self.precollect_yaw_tolerance,
-            math.radians(
-                float(self.get_parameter('handoff_yaw_tolerance_deg').value)
-            ),
+        self.precollect_stable_time = max(
+            0.0, float(self.get_parameter('precollect_stable_time').value)
         )
         self.straight_collect_speed = max(
             0.0, float(self.get_parameter('straight_collect_speed').value)
@@ -150,9 +138,6 @@ class LocalCollectController(Node):
         self.smc_eta = float(self.get_parameter('smc_eta').value)
         self.smc_phi = max(1e-6, float(self.get_parameter('smc_phi').value))
         self.smc_krho = float(self.get_parameter('smc_krho').value)
-        self.collector_offset_c = float(
-            self.get_parameter('collector_offset_c').value
-        )
         self.smc_max_angular_speed = abs(
             float(self.get_parameter('smc_max_angular_speed').value)
         )
@@ -173,16 +158,31 @@ class LocalCollectController(Node):
 
         self.raw_points = []
         self.raw_frame = ''
-        self.raw_stamp_ros_s = 0.0
+        self.raw_stamp_monotonic = 0.0
         self.action_active = False
         self.last_v = 0.0
         self.last_w = 0.0
 
         reliable_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
+        debug_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
         self.cmd_pub = self.create_publisher(
             TwistStamped, self.cmd_vel_topic, reliable_qos
         )
         self.phase_pub = self.create_publisher(String, self.phase_topic, reliable_qos)
+        self.debug_target_pub = self.create_publisher(
+            PointStamped,
+            '/debug/smc_shuttle/target',
+            debug_qos,
+        )
+        self.debug_pre_pose_pub = self.create_publisher(
+            PoseStamped,
+            '/debug/smc_shuttle/pre_pose',
+            debug_qos,
+        )
         self.create_subscription(
             Detection3DArray,
             self.raw_detection_topic,
@@ -202,8 +202,8 @@ class LocalCollectController(Node):
 
         self._phase('IDLE')
         self.get_logger().info(
-            'LocalCollect ready: SMC pre-pose at '
-            f'{self.precollect_distance:.2f} m, straight collect '
+            'LocalCollect ready: SMC base_link pose at '
+            f'{self.base_standoff_distance:.2f} m from shuttle, straight collect '
             f'{self.straight_collect_speed:.2f} m/s, '
             f'overrun={self.overrun_distance:.2f} m.'
         )
@@ -212,16 +212,12 @@ class LocalCollectController(Node):
     # Perception / action plumbing
     # ------------------------------------------------------------------
 
-    def _now_ros_s(self):
-        """Return ROS time in seconds so simulation obeys /clock."""
-        return self.get_clock().now().nanoseconds / 1e9
-
     def _detections_cb(self, msg):
         points = [detection_position(d) for d in msg.detections]
         with self.lock:
             self.raw_points = points
             self.raw_frame = msg.header.frame_id
-            self.raw_stamp_ros_s = self._now_ros_s()
+            self.raw_stamp_monotonic = time.monotonic()
 
     def _goal_cb(self, _request):
         with self.lock:
@@ -247,6 +243,28 @@ class LocalCollectController(Node):
         self.last_v = 0.0
         self.last_w = 0.0
         self._publish_cmd(0.0, 0.0)
+
+    def _publish_debug_geometry(self, target_odom, pre_pose):
+        stamp = self.get_clock().now().to_msg()
+
+        target = PointStamped()
+        target.header.frame_id = self.odom_frame
+        target.header.stamp = stamp
+        target.point.x = float(target_odom[0])
+        target.point.y = float(target_odom[1])
+        target.point.z = float(target_odom[2])
+        self.debug_target_pub.publish(target)
+
+        goal = PoseStamped()
+        goal.header.frame_id = self.odom_frame
+        goal.header.stamp = stamp
+        goal.pose.position.x = float(pre_pose[0])
+        goal.pose.position.y = float(pre_pose[1])
+        goal.pose.position.z = 0.03
+        half = 0.5 * pre_pose[2]
+        goal.pose.orientation.z = math.sin(half)
+        goal.pose.orientation.w = math.cos(half)
+        self.debug_pre_pose_pub.publish(goal)
 
     # ------------------------------------------------------------------
     # TF / geometry
@@ -299,7 +317,7 @@ class LocalCollectController(Node):
 
     def _fresh_points_snapshot(self):
         with self.lock:
-            age = max(0.0, self._now_ros_s() - self.raw_stamp_ros_s)
+            age = time.monotonic() - self.raw_stamp_monotonic
             if age > self.detection_max_age:
                 return '', []
             return self.raw_frame, list(self.raw_points)
@@ -335,20 +353,45 @@ class LocalCollectController(Node):
         return None, 0.0, 0.0
 
     def _build_precollect_pose(self, target_odom):
-        collector = self._frame_pose_in_odom(self.collector_frame)
-        if collector is None:
+        base = self._frame_pose_in_odom(self.base_frame)
+        if base is None:
             return None
 
-        dx = target_odom[0] - collector[0]
-        dy = target_odom[1] - collector[1]
+        dx = target_odom[0] - base[0]
+        dy = target_odom[1] - base[1]
         if math.hypot(dx, dy) < 1e-6:
-            heading = collector[2]
+            heading = base[2]
         else:
             heading = math.atan2(dy, dx)
 
+        current_range = math.hypot(dx, dy)
+
+        # Do not place the staging pose behind the robot when a shuttle is
+        # already closer than the nominal stand-off. That geometry creates a
+        # deadlock for the forward-only SMC law: alpha ~= pi stops v while
+        # e_y ~= 0 and e_theta ~= 0 also make omega ~= 0.
+        #
+        # For close targets, clamp the stand-off to the current range. The
+        # resulting goal position is the current base position, so SMC only
+        # aligns the heading toward the frozen shuttle before the deliberate
+        # straight pickup pass.
+        effective_standoff = min(
+            self.base_standoff_distance,
+            current_range,
+        )
+
+        goal_x = (
+            target_odom[0]
+            - effective_standoff * math.cos(heading)
+        )
+        goal_y = (
+            target_odom[1]
+            - effective_standoff * math.sin(heading)
+        )
+
         return (
-            target_odom[0] - self.precollect_distance * math.cos(heading),
-            target_odom[1] - self.precollect_distance * math.sin(heading),
+            goal_x,
+            goal_y,
             wrap_angle(heading),
         )
 
@@ -369,32 +412,30 @@ class LocalCollectController(Node):
         )
         self._publish_cmd(self.last_v, self.last_w)
 
-    def _smc_command(self, pre_pose, collector_pose):
+    def _smc_command(self, pre_pose, base_pose):
         px, py, ptheta = pre_pose
-        x, y, theta = collector_pose
+        x, y, theta = base_pose
 
         dx = px - x
         dy = py - y
         rho = math.hypot(dx, dy)
         alpha = wrap_angle(math.atan2(dy, dx) - theta) if rho > 1e-9 else 0.0
 
-        # Lateral target error expressed in the collector/body frame.
+        # Lateral target error expressed in the base_link frame.
         e_y = -math.sin(theta) * dx + math.cos(theta) * dy
         e_theta = wrap_angle(ptheta - theta)
 
         s = e_theta + self.smc_lambda * e_y
         sat = clamp(s / self.smc_phi, -1.0, 1.0)
 
-        # Accepted SMC law used by the validated simulation controller.
-        # The reference heading is straight, so omega_R = 0.
-        denominator = 1.0 + self.smc_lambda * self.collector_offset_c
+        # c = 0 and omega_R = 0.
         omega = (
             self.smc_lambda
             * self.smc_reference_speed
             * math.sin(e_theta)
             + self.smc_ks * s
             + self.smc_eta * sat
-        ) / denominator
+        )
         omega = clamp(
             omega,
             -self.smc_max_angular_speed,
@@ -402,10 +443,8 @@ class LocalCollectController(Node):
         )
 
         v = self.smc_krho * rho * math.cos(alpha)
-
         if abs(alpha) >= self.heading_stop:
             v = 0.0
-
         v = clamp(v, 0.0, self.smc_max_linear_speed)
 
         return v, omega, rho, alpha, e_y, e_theta, s
@@ -414,21 +453,33 @@ class LocalCollectController(Node):
     # Collection phases
     # ------------------------------------------------------------------
 
-    def _drive_precollect_pose(self, pre_pose, goal_handle, feedback, deadline):
+    def _drive_precollect_pose(
+        self,
+        pre_pose,
+        target_odom,
+        goal_handle,
+        feedback,
+        deadline,
+    ):
         self._phase('SMC_POSE')
         feedback.phase = 'SMC_POSE'
         goal_handle.publish_feedback(feedback)
 
+        effective_standoff = math.hypot(
+            target_odom[0] - pre_pose[0],
+            target_odom[1] - pre_pose[1],
+        )
         self.get_logger().info(
-            'SMC pre-pose: '
-            f'x={pre_pose[0]:.3f}, y={pre_pose[1]:.3f}, '
-            f'yaw={math.degrees(pre_pose[2]):+.1f} deg.'
+            'SMC base-link pre-pose: '
+            f'goal_xy=({pre_pose[0]:.3f},{pre_pose[1]:.3f}), '
+            f'yaw={math.degrees(pre_pose[2]):+.1f} deg, '
+            f'standoff={effective_standoff:.3f} m '
+            f'(nominal={self.base_standoff_distance:.2f} m).'
         )
 
         period = 1.0 / max(self.control_rate, 1.0)
-        previous = self._now_ros_s()
-        next_debug = previous
-        last_metrics = None
+        previous = time.monotonic()
+        stable_since = None
         self.last_v = 0.0
         self.last_w = 0.0
 
@@ -437,105 +488,60 @@ class LocalCollectController(Node):
                 self._stop()
                 return False, 'canceled during SMC pose'
 
-            now = self._now_ros_s()
+            now = time.monotonic()
             if now >= deadline:
                 self._stop()
-                if last_metrics is None:
-                    self.get_logger().error(
-                        'SMC target timeout before a valid collector pose was available.'
-                    )
-                else:
-                    (
-                        rho,
-                        alpha,
-                        e_y,
-                        e_theta,
-                        s,
-                        desired_v,
-                        desired_w,
-                    ) = last_metrics
-                    turn_first = abs(alpha) >= self.heading_stop
-                    self.get_logger().error(
-                        'SMC target timeout: '
-                        f'mode={"TURN_FIRST" if turn_first else "SMC"}, '
-                        f'rho={rho:.4f} m, alpha={math.degrees(alpha):+.2f} deg, '
-                        f'e_y={e_y:+.4f} m, '
-                        f'e_theta={math.degrees(e_theta):+.2f} deg, '
-                        f's={s:+.4f}, v_cmd={desired_v:+.3f} m/s, '
-                        f'w_cmd={desired_w:+.3f} rad/s.'
-                    )
-                return False, 'target timeout during SMC pose'
+                return True, 'target timeout during SMC pose'
 
-            collector = self._frame_pose_in_odom(self.collector_frame)
-            if collector is None:
+            base = self._frame_pose_in_odom(self.base_frame)
+            if base is None:
                 self._stop()
                 time.sleep(period)
                 continue
 
             desired_v, desired_w, rho, alpha, e_y, e_theta, s = self._smc_command(
-                pre_pose, collector
-            )
-
-            last_metrics = (
-                rho,
-                alpha,
-                e_y,
-                e_theta,
-                s,
-                desired_v,
-                desired_w,
+                pre_pose, base
             )
 
             feedback.range_m = float(rho)
             feedback.bearing_deg = float(math.degrees(alpha))
             goal_handle.publish_feedback(feedback)
 
-            if now >= next_debug:
-                turn_first = abs(alpha) >= self.heading_stop
-                self.get_logger().info(
-                    'SMC state: '
-                    f'mode={"TURN_FIRST" if turn_first else "SMC"}, '
-                    f'rho={rho:.4f} m, alpha={math.degrees(alpha):+.2f} deg, '
-                    f'e_y={e_y:+.4f} m, '
-                    f'e_theta={math.degrees(e_theta):+.2f} deg, '
-                    f's={s:+.4f}, v_cmd={desired_v:+.3f} m/s, '
-                    f'w_cmd={desired_w:+.3f} rad/s.'
-                )
-                next_debug = now + self.smc_debug_period
-
-            if (
+            pose_in_tolerance = (
                 rho <= self.precollect_position_tolerance
                 and abs(e_theta) <= self.precollect_yaw_tolerance
-            ):
-                self._stop()
-                self.get_logger().info(
-                    'SMC pre-pose reached: '
-                    f'rho={rho:.4f} m, e_y={e_y:+.4f} m, '
-                    f'e_theta={math.degrees(e_theta):+.2f} deg, '
-                    f's={s:+.4f}.'
-                )
-                return True, 'pre-pose reached'
+            )
 
-            # The 0.30 m-wide collector does not need millimetre-perfect pose
-            # convergence before the straight pickup pass. If SMC is already
-            # within this practical handoff envelope, stop regulating the
-            # pre-pose and let the straight collector pass take over.
-            if (
-                rho <= self.handoff_position_tolerance
-                and abs(e_theta) <= self.handoff_yaw_tolerance
-            ):
+            if pose_in_tolerance:
+                # Do not trigger STRAIGHT_COLLECT just because an oscillating
+                # heading crosses the yaw tolerance for one control sample.
+                # Stop and require the full pre-pose to remain valid
+                # continuously for precollect_stable_time.
                 self._stop()
-                self.get_logger().info(
-                    'SMC practical handoff accepted: '
-                    f'rho={rho:.4f} m <= {self.handoff_position_tolerance:.4f} m, '
-                    f'e_y={e_y:+.4f} m, '
-                    f'e_theta={math.degrees(e_theta):+.2f} deg <= '
-                    f'{math.degrees(self.handoff_yaw_tolerance):.2f} deg; '
-                    'switching to straight collection.'
-                )
-                return True, 'practical pre-pose handoff'
+                if stable_since is None:
+                    stable_since = now
 
-            dt = max(0.0, now - previous)
+                if now - stable_since >= self.precollect_stable_time:
+                    base_range = math.hypot(
+                        target_odom[0] - base[0],
+                        target_odom[1] - base[1],
+                    )
+                    self.get_logger().info(
+                        'SMC pre-pose reached and stable: '
+                        f'rho={rho:.4f} m, e_y={e_y:+.4f} m, '
+                        f'e_theta={math.degrees(e_theta):+.2f} deg, '
+                        f's={s:+.4f}, '
+                        f'stable={self.precollect_stable_time:.2f} s, '
+                        f'base_range={base_range:.3f} m.'
+                    )
+                    return True, 'pre-pose reached and stable'
+
+                time.sleep(period)
+                continue
+
+            stable_since = None
+
+            dt = max(1e-3, now - previous)
             previous = now
             self._send_slewed(desired_v, desired_w, dt)
             time.sleep(period)
@@ -553,7 +559,7 @@ class LocalCollectController(Node):
         )
 
         period = 1.0 / max(self.control_rate, 1.0)
-        previous = self._now_ros_s()
+        previous = time.monotonic()
         desired_speed = min(
             self.straight_collect_speed,
             self.smc_max_linear_speed,
@@ -564,11 +570,10 @@ class LocalCollectController(Node):
                 self._stop()
                 return False, 'canceled during straight collection'
 
-            now = self._now_ros_s()
+            now = time.monotonic()
             if now >= deadline:
                 self._stop()
-                self.get_logger().error('Target timeout during straight collection.')
-                return False, 'target timeout during straight collection'
+                return True, 'target timeout during straight collection'
 
             local = self._point_to_frame(
                 self.collector_frame,
@@ -591,7 +596,7 @@ class LocalCollectController(Node):
                 self._stop()
                 return True, 'collector reached target'
 
-            dt = max(0.0, now - previous)
+            dt = max(1e-3, now - previous)
             previous = now
             self._send_slewed(desired_speed, 0.0, dt)
             time.sleep(period)
@@ -603,22 +608,10 @@ class LocalCollectController(Node):
         if self.overrun_distance <= 0.0 or self.overrun_speed <= 0.0:
             return True, 'collector reached target'
 
-        period = 1.0 / max(self.control_rate, 1.0)
-        start = None
-        while rclpy.ok() and start is None:
-            if goal_handle.is_cancel_requested:
-                self._stop()
-                return False, 'canceled before overrun'
-            if self._now_ros_s() >= deadline:
-                self._stop()
-                self.get_logger().error(
-                    'Target timeout while waiting for collector TF before overrun.'
-                )
-                return False, 'target timeout before overrun'
-            start = self._frame_pose_in_odom(self.collector_frame)
-            if start is None:
-                self._stop()
-                time.sleep(period)
+        start = self._frame_pose_in_odom(self.collector_frame)
+        if start is None:
+            self._stop()
+            return True, 'collector reached target; overrun TF unavailable'
 
         self._phase('OVERRUN')
         feedback.phase = 'OVERRUN'
@@ -628,7 +621,8 @@ class LocalCollectController(Node):
             f'Collector reached target; overrunning {self.overrun_distance:.2f} m.'
         )
 
-        previous = self._now_ros_s()
+        period = 1.0 / max(self.control_rate, 1.0)
+        previous = time.monotonic()
         desired_speed = min(self.overrun_speed, self.smc_max_linear_speed)
 
         while rclpy.ok():
@@ -636,11 +630,10 @@ class LocalCollectController(Node):
                 self._stop()
                 return False, 'canceled during overrun'
 
-            now = self._now_ros_s()
+            now = time.monotonic()
             if now >= deadline:
                 self._stop()
-                self.get_logger().error('Target timeout during overrun.')
-                return False, 'target timeout during overrun'
+                return True, 'target timeout during overrun'
 
             current = self._frame_pose_in_odom(self.collector_frame)
             if current is None:
@@ -657,7 +650,7 @@ class LocalCollectController(Node):
                 self._stop()
                 return True, 'collector reached target + overrun'
 
-            dt = max(0.0, now - previous)
+            dt = max(1e-3, now - previous)
             previous = now
             self._send_slewed(desired_speed, 0.0, dt)
             time.sleep(period)
@@ -666,15 +659,23 @@ class LocalCollectController(Node):
         return False, 'ROS shutdown during overrun'
 
     def _drive_target(self, target_odom, goal_handle, feedback):
-        deadline = self._now_ros_s() + self.target_timeout
+        deadline = time.monotonic() + self.target_timeout
 
         pre_pose = self._build_precollect_pose(target_odom)
         if pre_pose is None:
             self._stop()
-            return False, 'pre-pose TF unavailable'
+            return True, 'pre-pose TF unavailable'
+
+        # Latched debug geometry lets RViz start after the target lock without
+        # losing the exact frozen shuttle point or the desired SMC pre-pose.
+        self._publish_debug_geometry(target_odom, pre_pose)
 
         completed, reason = self._drive_precollect_pose(
-            pre_pose, goal_handle, feedback, deadline
+            pre_pose,
+            target_odom,
+            goal_handle,
+            feedback,
+            deadline,
         )
         if not completed or reason.startswith('target timeout'):
             return completed, reason
@@ -700,7 +701,7 @@ class LocalCollectController(Node):
 
         attempted_odom = []
         attempted_count = 0
-        spree_started = self._now_ros_s()
+        spree_started = time.monotonic()
         overall_timeout = float(goal_handle.request.timeout_sec)
         if overall_timeout <= 0.0:
             overall_timeout = 120.0
@@ -718,7 +719,7 @@ class LocalCollectController(Node):
                     result.message = 'Local collection canceled.'
                     return result
 
-                if self._now_ros_s() - spree_started >= overall_timeout:
+                if time.monotonic() - spree_started >= overall_timeout:
                     self._stop()
                     self._phase('DONE')
                     goal_handle.succeed()
@@ -752,20 +753,11 @@ class LocalCollectController(Node):
                 )
 
                 if not completed:
-                    self._stop()
+                    self._phase('CANCELED')
+                    goal_handle.canceled()
                     result.success = False
                     result.targets_attempted = attempted_count
                     result.message = reason
-
-                    if reason.startswith('canceled'):
-                        self._phase('CANCELED')
-                        goal_handle.canceled()
-                    else:
-                        self._phase('FAILED')
-                        goal_handle.abort()
-                        self.get_logger().error(
-                            f'Local target {attempted_count} failed: {reason}.'
-                        )
                     return result
 
                 self.get_logger().info(

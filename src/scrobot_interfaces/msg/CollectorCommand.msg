@@ -1,0 +1,4 @@
+float64 brush_left_rpm
+float64 brush_right_rpm
+float64 conveyor_rpm
+bool enable

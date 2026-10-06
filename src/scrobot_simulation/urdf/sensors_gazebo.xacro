@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="scrobot_gazebo_sensors">
+  <xacro:macro name="scrobot_gazebo_sensors" params="enable_magnetometer:=false">
 
     <!-- ====================================================== -->
     <!-- D435i combined IMU                                     -->
@@ -29,6 +29,23 @@
 
 
     <!-- ====================================================== -->
+    <!-- Separate 5883L magnetometer                            -->
+    <!-- ====================================================== -->
+
+    <xacro:if value="${enable_magnetometer}">
+      <gazebo reference="mag_link">
+        <sensor name="magnetometer_5883l" type="magnetometer">
+          <always_on>true</always_on>
+          <update_rate>50.0</update_rate>
+          <visualize>false</visualize>
+          <topic>/imu/mag</topic>
+          <gz_frame_id>mag_link</gz_frame_id>
+        </sensor>
+      </gazebo>
+    </xacro:if>
+
+
+    <!-- ====================================================== -->
     <!-- D435i COLOR CAMERA                                     -->
     <!-- ====================================================== -->
 
@@ -42,8 +59,12 @@
         <gz_frame_id>camera_color_optical_frame</gz_frame_id>
 
         <camera name="d435i_color_camera">
-          <!-- D435i RGB HFOV ~= 69.4 deg -->
-          <horizontal_fov>1.2112585008840648</horizontal_fov>
+          <!--
+            Match the factory calibration of the project's physical D435i
+            at 1280x720.  fx=906.940246582031 px gives HFOV=70.418899 deg.
+            Keep the simulated stream at 15 Hz for current system testing.
+          -->
+          <horizontal_fov>1.229041640167034</horizontal_fov>
 
           <camera_info_topic>/camera/color/camera_info</camera_info_topic>
 
@@ -78,8 +99,12 @@
         <gz_frame_id>camera_depth_optical_frame</gz_frame_id>
 
         <camera name="d435i_depth_camera">
-          <!-- D435i depth HFOV ~= 87 deg -->
-          <horizontal_fov>1.5184364492350666</horizontal_fov>
+          <!--
+            Match the factory calibration of the project's physical D435i
+            depth stream at 848x480.  fx=420.289855957031 px gives
+            HFOV=90.503557 deg.  Keep the simulated stream at 15 Hz.
+          -->
+          <horizontal_fov>1.5795850624055896</horizontal_fov>
 
           <camera_info_topic>/camera/depth/camera_info</camera_info_topic>
 
@@ -90,8 +115,8 @@
           </image>
 
           <clip>
-            <near>0.17</near>
-            <far>6.0</far>
+            <near>0.20</near>
+            <far>10.0</far>
           </clip>
 
           <optical_frame_id>camera_depth_optical_frame</optical_frame_id>

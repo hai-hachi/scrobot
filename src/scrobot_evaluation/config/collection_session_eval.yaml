@@ -15,11 +15,15 @@ collection_session_evaluator:
     # Must match the final collection filter geometry.
     pole_x: 0.0
     pole_y_positions: [3.05, -3.05]
-    pole_exclusion_radius: 0.10
+    pole_exclusion_radius: 0.60
 
     sample_rate: 20.0
     path_publish_rate: 1.0
     tf_timeout: 0.02
+
+    # After an OVERRUN completes, allow the Gazebo removal request and bridge
+    # to propagate before declaring a physical pickup verification failure.
+    capture_verification_delay: 0.75
 
     output_root: ~/scrobot_ws/evaluation_results/collection_session
     run_name: ""

@@ -83,13 +83,13 @@ def generate_launch_description():
     bridge_config = os.path.join(
         simulation_pkg,
         'config',
-        'bridge.yaml'
+        'ros_gz_bridge.yaml'
     )
 
     bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        name='ros_gz_bridge',
+        name='simulation_bridge',
         output='screen',
         parameters=[
             {
@@ -101,7 +101,7 @@ def generate_launch_description():
     image_bridge = Node(
         package='ros_gz_image',
         executable='image_bridge',
-        name='ros_gz_image',
+        name='camera_image_bridge',
         output='screen',
         arguments=[
             '/camera/color',

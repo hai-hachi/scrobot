@@ -6,14 +6,16 @@ shuttle_collection_filter:
     map_frame: map
     tf_timeout: 0.05
 
-    # Only leave the sweep for nearby shuttles. Farther shuttles will be picked
-    # up naturally on a later sweep pass instead of causing long out-and-back trips.
-    max_target_range: 1.68
+    # Current validated YOLO/depth operating envelope for local collection.
+    # Range is evaluated after transforming the detected point to base_link,
+    # regardless of the original camera/detection frame.
+    min_target_range: 0.50
+    max_target_range: 1.80
 
     # Ignore shuttles close to either badminton-net pole.
     pole_x: 0.0
     pole_y_positions: [3.05, -3.05]
-    pole_exclusion_radius: 0.10
+    pole_exclusion_radius: 0.60
 
 local_collect_controller:
   ros__parameters:
@@ -42,17 +44,15 @@ local_collect_controller:
     position_tolerance: 0.08
     reacquire_exclusion_radius: 0.12
 
-    # Pose the collector center 0.50 m in front of the frozen shuttle, aligned
-    # toward it, before starting the straight collection pass.
-    precollect_distance: 0.50
+    # First place base_link 1.10 m from the frozen shuttle in the ground
+    # plane, aligned toward it. Then start the straight collection pass.
+    base_standoff_distance: 1.10
     precollect_position_tolerance: 0.03
     precollect_yaw_tolerance_deg: 5.0
 
-    # Practical handoff to the 0.30 m-wide collector. The strict 0.03 m / 5 deg
-    # condition is still accepted first, but this envelope prevents SMC from
-    # stalling a few centimetres from the pre-pose when straight pickup is safe.
-    handoff_position_tolerance: 0.08
-    handoff_yaw_tolerance_deg: 8.0
+    # Prevent an oscillating heading from triggering straight collection just
+    # because it crosses the yaw tolerance for one control sample.
+    precollect_stable_time: 0.25
 
     # After the pose phase, collection is intentionally straight.
     straight_collect_speed: 0.30
@@ -67,27 +67,26 @@ local_collect_controller:
     # Sliding surface:
     #   s = e_theta + lambda * e_y
     #
-    # Angular control:
-    #   omega = [omega_R + lambda*v_R*sin(e_theta)
-    #            + k_s*s + eta*sat(s/phi)] / [1 + lambda*c]
+    # Angular control with c = 0:
+    #   omega = omega_R + lambda*v_R*sin(e_theta)
+    #           + k_s*s + eta*sat(s/phi)
     #
     # The pre-collection reference is straight, so omega_R = 0.
     # Translation:
     #   v = k_rho * rho * cos(alpha)
     smc_reference_speed: 0.50
-    smc_lambda: 2.00
-    smc_ks: 1.60
-    smc_eta: 0.50
-    smc_phi: 0.08
+    smc_lambda: 2.50
+    smc_ks: 1.20
+    smc_eta: 0.40
+    smc_phi: 0.30
     smc_krho: 0.80
-    collector_offset_c: 0.165
-    smc_max_angular_speed: 1.80
+    smc_max_angular_speed: 1.00
     smc_max_linear_speed: 0.50
 
-    # Rotate first for large position-heading error, matching the validated
-    # local-collect controller behavior.
+    # Rotate first for large position-heading error, matching the previous
+    # local-collect behavior.
     heading_stop_deg: 70.0
 
     # Kinematic command slew limits retained from the robot design.
     max_linear_accel: 1.00
-    max_angular_accel: 1.00
+    max_angular_accel: 2.00

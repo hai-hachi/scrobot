@@ -15,9 +15,9 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='scrobot',
-    maintainer_email='user@example.com',
-    description='Evaluation tools for SC Robot localization, odometry, navigation, and collection sessions.',
+    maintainer='sea',
+    maintainer_email='hai.hachi.154@gmail.com',
+    description='Evaluation tools for SC Robot odometry and shuttle-collection sessions.',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [

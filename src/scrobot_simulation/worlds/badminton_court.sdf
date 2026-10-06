@@ -52,119 +52,220 @@
       filename="gz-sim-magnetometer-system"
       name="gz::sim::systems::Magnetometer"/>
 
-    <!-- Indoor lighting from both sides of the court -->
-    <light type="point" name="fluorescent_side_left">
+    <!--
+      World-level shuttle manager. It publishes shuttle-only ground truth and
+      removes a shuttle when its collection-center point enters the collector
+      pickup rectangle. The shuttle collection center is defined 45 mm along
+      local +Z from the shuttle model origin. The pickup rectangle is
+      300 mm wide x 60 mm long and centered directly on collector_link.
+    -->
+    <plugin filename="libshuttle_manager_system.so"
+            name="scrobot_simulation::ShuttleManagerSystem">
+      <robot_model>scrobot</robot_model>
+      <update_rate>30.0</update_rate>
+      <ground_truth_topic>/evaluation/shuttle_ground_truth_gz</ground_truth_topic>
+      <collected_topic>/evaluation/shuttle_collected_gz</collected_topic>
+      <collector_link>collector_link</collector_link>
+      <enable_collection>true</enable_collection>
+
+      <!--
+        Fallback fixed transform from the Gazebo robot model frame
+        (base_footprint) to collector_link. Gazebo may reduce fixed URDF
+        joints, so collector_link is not guaranteed to exist as an ECS link
+        entity even though robot_state_publisher still publishes its TF.
+        base_footprint -> base_link = +0.050 m Z and
+        base_link -> collector_link = (+0.165, 0, -0.020) m.
+      -->
+      <collector_offset_x>0.165</collector_offset_x>
+      <collector_offset_y>0.0</collector_offset_y>
+      <collector_offset_z>0.030</collector_offset_z>
+      <collector_offset_roll>0.0</collector_offset_roll>
+      <collector_offset_pitch>0.0</collector_offset_pitch>
+      <collector_offset_yaw>0.0</collector_offset_yaw>
+
+      <pickup_half_length>0.030</pickup_half_length>
+      <pickup_half_width>0.150</pickup_half_width>
+      <shuttle_center_offset_z>0.045</shuttle_center_offset_z>
+    </plugin>
+
+    <!--
+      Badminton venue lighting approximation.
+      BWF guidance calls for even court lighting at a minimum 1000 lux for
+      high-level sanctioned play and recommends side-positioned luminaires
+      rather than fixtures directly above the playing area. Gazebo light power
+      is not a calibrated lux meter, so these six symmetric side luminaires are
+      tuned for even RGB-camera illumination and good white-shuttle contrast.
+    -->
+    <scene>
+      <ambient>0.08 0.08 0.08 1</ambient>
+      <background>0.025 0.030 0.035 1</background>
+      <shadows>true</shadows>
+    </scene>
+
+    <light type="spot" name="court_light_left_1">
+      <pose>-4.5 4.6 7.0 0 0 0</pose>
+      <diffuse>0.95 0.95 0.92 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
+      <direction>0 -0.55 -0.84</direction>
+      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
+      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
       <cast_shadows>true</cast_shadows>
-      <pose>0 -4.5 8 0 0 0</pose>
-      <diffuse>0.4 0.4 0.4 1</diffuse>
-      <specular>0.15 0.15 0.15 1</specular>
-      <attenuation>
-        <range>16</range>
-        <linear>0.01</linear>
-        <constant>1.0</constant>
-        <quadratic>0.001</quadratic>
-      </attenuation>
+    </light>
+    <light type="spot" name="court_light_left_2">
+      <pose>0 4.6 7.0 0 0 0</pose>
+      <diffuse>0.95 0.95 0.92 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
+      <direction>0 -0.55 -0.84</direction>
+      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
+      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    <light type="spot" name="court_light_left_3">
+      <pose>4.5 4.6 7.0 0 0 0</pose>
+      <diffuse>0.95 0.95 0.92 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
+      <direction>0 -0.55 -0.84</direction>
+      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
+      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    <light type="spot" name="court_light_right_1">
+      <pose>-4.5 -4.6 7.0 0 0 0</pose>
+      <diffuse>0.95 0.95 0.92 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
+      <direction>0 0.55 -0.84</direction>
+      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
+      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    <light type="spot" name="court_light_right_2">
+      <pose>0 -4.6 7.0 0 0 0</pose>
+      <diffuse>0.95 0.95 0.92 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
+      <direction>0 0.55 -0.84</direction>
+      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
+      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
+      <cast_shadows>true</cast_shadows>
+    </light>
+    <light type="spot" name="court_light_right_3">
+      <pose>4.5 -4.6 7.0 0 0 0</pose>
+      <diffuse>0.95 0.95 0.92 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
+      <direction>0 0.55 -0.84</direction>
+      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
+      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
+      <cast_shadows>true</cast_shadows>
     </light>
 
-    <light type="point" name="fluorescent_side_right">
-      <cast_shadows>true</cast_shadows>
-      <pose>0 4.5 8 0 0 0</pose>
-      <diffuse>0.4 0.4 0.4 1</diffuse>
-      <specular>0.15 0.15 0.15 1</specular>
-      <attenuation>
-        <range>16</range>
-        <linear>0.01</linear>
-        <constant>1.0</constant>
-        <quadratic>0.001</quadratic>
-      </attenuation>
-    </light>
-
-    <!-- Floor -->
+    <!--
+      Venue floor + tournament-style green badminton mat.
+      The 15.4 x 7.2 m mat matches the published size and green colour of the
+      BWF-approved Yonex AC367 court mat. The exact manufacturer's RGB value is
+      not published, so the Gazebo material is a visually representative matte
+      tournament green rather than a claimed colorimetric match.
+    -->
     <model name="court_floor">
-
       <static>true</static>
-
       <link name="floor_link">
-
         <collision name="floor_collision">
-
-          <geometry>
-            <box>
-              <size>18 10 0.02</size>
-            </box>
-          </geometry>
-
+          <geometry><box><size>20.0 12.0 0.02</size></box></geometry>
           <surface>
-
-            <friction>
-
-              <ode>
-                <mu>1.0</mu>
-                <mu2>1.0</mu2>
-              </ode>
-
-            </friction>
-
+            <friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
           </surface>
-
         </collision>
 
-        <visual name="floor_visual">
-          <geometry>
-            <box>
-              <size>18.0 10.0 0.02</size>
-            </box>
-          </geometry>
-
+        <visual name="venue_floor_visual">
+          <!-- Keep the dark venue surface 2 mm below the court-mat surface.
+               This removes coplanar black/green z-fighting in Ogre2. -->
+          <pose>0 0 -0.001 0 0 0</pose>
+          <geometry><box><size>20.0 12.0 0.018</size></box></geometry>
           <material>
-            <ambient>0.15 0.45 0.25 1</ambient>
-            <diffuse>0.15 0.45 0.25 1</diffuse>
+            <ambient>0.055 0.060 0.065 1</ambient>
+            <diffuse>0.075 0.080 0.085 1</diffuse>
+            <specular>0.02 0.02 0.02 1</specular>
           </material>
         </visual>
 
+        <visual name="badminton_mat_visual">
+          <!-- Mat top surface is exactly z=0. Court lines start at z=0 and
+               extend upward, so they render cleanly without z-fighting. -->
+          <pose>0 0 0.009 0 0 0</pose>
+          <geometry><box><size>15.4 7.2 0.002</size></box></geometry>
+          <material>
+            <ambient>0.045 0.265 0.145 1</ambient>
+            <diffuse>0.055 0.345 0.185 1</diffuse>
+            <specular>0.015 0.015 0.015 1</specular>
+          </material>
+        </visual>
       </link>
-
       <pose>0 0 -0.01 0 0 0</pose>
-
     </model>
 
-    <!-- <model name="test_box">
-
+    <!--
+      Simulation safety boundary. These walls are outside the badminton mat
+      and are not part of the regulation court geometry; they only prevent the
+      robot from driving off the finite simulated venue floor.
+      Interior clear area: approximately 19.8 x 11.8 m.
+    -->
+    <model name="simulation_safety_boundary">
       <static>true</static>
+      <link name="boundary_link">
 
-      <pose>3 0 0.5 0 0 0</pose>
-
-      <link name="link">
-
-        <collision name="collision">
-
-          <geometry>
-            <box>
-              <size>0.5 0.5 1.0</size>
-            </box>
-          </geometry>
-
+        <collision name="wall_x_positive_collision">
+          <pose>9.95 0 0.20 0 0 0</pose>
+          <geometry><box><size>0.10 12.0 0.40</size></box></geometry>
         </collision>
-
-
-        <visual name="visual">
-
-          <geometry>
-            <box>
-              <size>0.5 0.5 1.0</size>
-            </box>
-          </geometry>
-
+        <visual name="wall_x_positive_visual">
+          <pose>9.95 0 0.20 0 0 0</pose>
+          <geometry><box><size>0.10 12.0 0.40</size></box></geometry>
           <material>
-            <ambient>0.8 0.2 0.2 1</ambient>
-            <diffuse>0.8 0.2 0.2 1</diffuse>
+            <ambient>0.10 0.10 0.11 1</ambient>
+            <diffuse>0.14 0.14 0.15 1</diffuse>
           </material>
+        </visual>
 
+        <collision name="wall_x_negative_collision">
+          <pose>-9.95 0 0.20 0 0 0</pose>
+          <geometry><box><size>0.10 12.0 0.40</size></box></geometry>
+        </collision>
+        <visual name="wall_x_negative_visual">
+          <pose>-9.95 0 0.20 0 0 0</pose>
+          <geometry><box><size>0.10 12.0 0.40</size></box></geometry>
+          <material>
+            <ambient>0.10 0.10 0.11 1</ambient>
+            <diffuse>0.14 0.14 0.15 1</diffuse>
+          </material>
+        </visual>
+
+        <collision name="wall_y_positive_collision">
+          <pose>0 5.95 0.20 0 0 0</pose>
+          <geometry><box><size>19.8 0.10 0.40</size></box></geometry>
+        </collision>
+        <visual name="wall_y_positive_visual">
+          <pose>0 5.95 0.20 0 0 0</pose>
+          <geometry><box><size>19.8 0.10 0.40</size></box></geometry>
+          <material>
+            <ambient>0.10 0.10 0.11 1</ambient>
+            <diffuse>0.14 0.14 0.15 1</diffuse>
+          </material>
+        </visual>
+
+        <collision name="wall_y_negative_collision">
+          <pose>0 -5.95 0.20 0 0 0</pose>
+          <geometry><box><size>19.8 0.10 0.40</size></box></geometry>
+        </collision>
+        <visual name="wall_y_negative_visual">
+          <pose>0 -5.95 0.20 0 0 0</pose>
+          <geometry><box><size>19.8 0.10 0.40</size></box></geometry>
+          <material>
+            <ambient>0.10 0.10 0.11 1</ambient>
+            <diffuse>0.14 0.14 0.15 1</diffuse>
+          </material>
         </visual>
 
       </link>
+    </model>
 
-    </model> -->
 
     <model name="court_markings">
 

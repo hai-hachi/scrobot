@@ -44,7 +44,7 @@ ekf_filter_node:
     #
     # vy = 0 is retained as the non-holonomic differential-drive constraint.
     # Wheel yaw / yaw-rate are deliberately NOT fused here; heading is owned
-    # by the D435i IMU path below.
+    # by the D435i IMU path below (optional magnetometer support is handled upstream).
 
     odom0: /diff_drive_controller/odom
 

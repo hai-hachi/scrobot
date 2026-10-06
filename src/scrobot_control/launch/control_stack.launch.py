@@ -15,6 +15,7 @@ def generate_launch_description():
         'command_pipeline.yaml',
     )
     use_sim_time = LaunchConfiguration('use_sim_time')
+    manual_command_timeout = LaunchConfiguration('manual_command_timeout')
 
     joint_state_broadcaster_spawner = Node(
         package='controller_manager',
@@ -38,14 +39,36 @@ def generate_launch_description():
         output='screen',
     )
 
-    # Stage 1: autonomous command arbitration only.
+    manual_mode_manager = Node(
+        package='scrobot_control',
+        executable='manual_mode_manager',
+        name='manual_mode_manager',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'command_timeout': manual_command_timeout,
+        }],
+    )
+
+    # Stage 1: autonomous command arbitration.
     twist_mux = Node(
         package='twist_mux',
         executable='twist_mux',
         name='twist_mux',
         output='screen',
         parameters=[pipeline_params, {'use_sim_time': use_sim_time}],
-        remappings=[('cmd_vel_out', '/cmd_vel_muxed')],
+        remappings=[('cmd_vel_out', '/cmd_vel_auto')],
+    )
+
+    # Stage 2: explicit AUTO/MANUAL selection. Manual mode has higher
+    # priority, but both modes remain inside the production safety path.
+    control_mode_mux = Node(
+        package='twist_mux',
+        executable='twist_mux',
+        name='control_mode_mux',
+        output='screen',
+        parameters=[pipeline_params, {'use_sim_time': use_sim_time}],
+        remappings=[('cmd_vel_out', '/cmd_vel_selected')],
     )
 
     velocity_smoother = Node(
@@ -55,7 +78,7 @@ def generate_launch_description():
         output='screen',
         parameters=[pipeline_params, {'use_sim_time': use_sim_time}],
         remappings=[
-            ('cmd_vel', '/cmd_vel_muxed'),
+            ('cmd_vel', '/cmd_vel_selected'),
             ('cmd_vel_smoothed', '/cmd_vel_smoothed'),
         ],
     )
@@ -66,18 +89,6 @@ def generate_launch_description():
         name='collision_monitor',
         output='screen',
         parameters=[pipeline_params, {'use_sim_time': use_sim_time}],
-    )
-
-    # Stage 2: final output arbitration. Safe autonomous commands pass through
-    # normally; manual teleop has higher priority and intentionally bypasses
-    # collision_monitor so the operator can back out of a stop condition.
-    manual_override_mux = Node(
-        package='twist_mux',
-        executable='twist_mux',
-        name='manual_override_mux',
-        output='screen',
-        parameters=[pipeline_params, {'use_sim_time': use_sim_time}],
-        remappings=[('cmd_vel_out', '/diff_drive_controller/cmd_vel')],
     )
 
     lifecycle_manager = Node(
@@ -98,11 +109,17 @@ def generate_launch_description():
             default_value='true',
             choices=['true', 'false'],
         ),
+        DeclareLaunchArgument(
+            'manual_command_timeout',
+            default_value='0.60',
+            description='Manual keyboard command deadman timeout [s]. Long enough to bridge normal key-repeat startup delay.',
+        ),
         joint_state_broadcaster_spawner,
         diff_drive_controller_spawner,
+        manual_mode_manager,
         twist_mux,
+        control_mode_mux,
         velocity_smoother,
         collision_monitor,
-        manual_override_mux,
         lifecycle_manager,
     ])

@@ -8,6 +8,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/Relocalize.action"
   "action/ApproachTag.action"
   "action/LocalCollect.action"
+  "msg/CollectorCommand.msg"
+  "msg/HardwareStatus.msg"
 )
 
 ament_export_dependencies(rosidl_default_runtime)

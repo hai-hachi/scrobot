@@ -40,13 +40,6 @@ install(
 )
 
 install(
-  PROGRAMS
-    scrobot_mission/shuttle_debug_monitor.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME shuttle_debug_monitor
-)
-
-install(
   DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}
 )

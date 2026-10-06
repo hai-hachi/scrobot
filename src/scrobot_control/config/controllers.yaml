@@ -52,8 +52,7 @@ diff_drive_controller:
     open_loop: false
     position_feedback: true
 
-    # Temporary.
-    # Later EKF will publish odom -> base_footprint.
+    # Production EKF is the sole odom -> base_footprint TF owner.
     enable_odom_tf: false
 
 

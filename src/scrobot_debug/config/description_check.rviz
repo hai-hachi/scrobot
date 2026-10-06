@@ -1,0 +1,126 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Robot1
+        - /TF1
+      Splitter Ratio: 0.62
+    Tree Height: 700
+  - Class: rviz_common/Selection
+    Name: Selection
+  - Class: rviz_common/Views
+    Name: Views
+
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Base Grid
+      Enabled: true
+      Value: true
+      Alpha: 0.5
+      Cell Size: 0.1
+      Color: 120; 120; 120
+      Line Style:
+        Line Width: 0.01
+        Value: Lines
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 20
+      Reference Frame: <Fixed Frame>
+
+    - Class: rviz_default_plugins/RobotModel
+      Name: Robot
+      Enabled: true
+      Value: true
+      Alpha: 1
+      Collision Enabled: true
+      Description File: ""
+      Description Source: Topic
+      Description Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: true
+        Link Tree Style: Links in Alphabetic Order
+      Mass Properties:
+        Inertia: false
+        Mass: false
+      TF Prefix: ""
+      Update Interval: 0
+      Visual Enabled: true
+
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Value: true
+      Frame Timeout: 15
+      Marker Scale: 0.10
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Update Interval: 0
+      Filter (blacklist): ""
+      Filter (whitelist): ""
+      Frames:
+        All Enabled: true
+      Tree: {}
+
+  Enabled: true
+  Global Options:
+    Background Color: 40; 40; 40
+    Fixed Frame: base_footprint
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 1.4
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.06
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: -0.02
+        Y: 0
+        Z: 0.12
+      Name: Robot Orbit
+      Near Clip Distance: 0.01
+      Pitch: 0.45
+      Target Frame: base_footprint
+      Value: Orbit (rviz_default_plugins)
+      Yaw: 0.75
+    Saved: ~
+
+Window Geometry:
+  Displays:
+    collapsed: false
+  Selection:
+    collapsed: true
+  Views:
+    collapsed: false
+  Height: 900
+  Width: 1400
+  X: 50
+  Y: 50

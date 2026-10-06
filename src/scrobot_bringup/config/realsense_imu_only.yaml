@@ -1,0 +1,24 @@
+/camera/camera:
+  ros__parameters:
+    # Lightweight RealSense profile for IMU/localization validation on Raspberry Pi 4B.
+    enable_color: false
+    enable_depth: false
+    enable_infra: false
+    enable_infra1: false
+    enable_infra2: false
+
+    enable_gyro: true
+    enable_accel: true
+    unite_imu_method: 2
+
+    # No RGB-D processing in this launch.
+    align_depth.enable: false
+    pointcloud.enable: false
+    enable_sync: false
+
+    # URDF owns the TF tree.
+    publish_tf: false
+
+    initial_reset: false
+    reconnect_timeout: 6.0
+    diagnostics_period: 1.0

@@ -1,0 +1,24 @@
+depth_obstacle_scan:
+  ros__parameters:
+    use_sim_time: false
+    target_frame: base_footprint
+
+    # Ignore the floor and objects too high to matter to the chassis.
+    min_height: 0.08
+    max_height: 0.70
+
+    range_min: 0.20
+    range_max: 3.00
+
+    # D435i horizontal field of view (~87 deg), expressed in base frame.
+    angle_min: -0.80
+    angle_max: 0.80
+    angle_increment: 0.00872664626
+
+    # Subsample the 848x480 depth image to keep Pi 4B CPU use low.
+    row_stride: 8
+    col_stride: 4
+
+    depth_scale: 0.001
+    scan_time: 0.10
+    output_rate_hz: 10.0

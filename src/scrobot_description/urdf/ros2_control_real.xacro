@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro
+    name="scrobot_real_ros2_control"
+    params="serial_port baud_rate">
+
+    <ros2_control name="ScrobotRealSystem" type="system">
+      <hardware>
+        <plugin>scrobot_hardware/ScrobotSystemHardware</plugin>
+
+        <!-- STM32 USART6 protocol v2 -->
+        <param name="serial_port">${serial_port}</param>
+        <param name="baud_rate">${baud_rate}</param>
+
+        <!--
+          FEEDBACK contains raw timer counts plus sign-corrected RPM.
+          Firmware APP_ENCODER_SIGN_WR=-1, APP_ENCODER_SIGN_WL=+1.
+          Apply signs only to raw count deltas on the Pi.
+        -->
+        <param name="counts_per_wheel_rev">3264.0</param>
+        <param name="right_count_sign">-1.0</param>
+        <param name="left_count_sign">1.0</param>
+
+        <!-- Logical ROS wheel commands map directly to firmware WR/WL references. -->
+        <param name="right_command_sign">1.0</param>
+        <param name="left_command_sign">1.0</param>
+
+        <param name="max_wheel_rpm">100.0</param>
+        <param name="max_brush_rpm">400.0</param>
+        <param name="max_conveyor_rpm">80.0</param>
+
+        <!-- Firmware feedback is 100 Hz; firmware command timeout is 200 ms. -->
+        <param name="feedback_timeout_ms">250</param>
+        <param name="collector_timeout_ms">500</param>
+        <param name="handshake_timeout_ms">750</param>
+        <param name="arm_timeout_ms">300</param>
+      </hardware>
+
+      <joint name="left_wheel_joint">
+        <command_interface name="velocity"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <joint name="right_wheel_joint">
+        <command_interface name="velocity"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+    </ros2_control>
+
+  </xacro:macro>
+</robot>

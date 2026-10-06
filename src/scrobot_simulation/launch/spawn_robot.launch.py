@@ -30,6 +30,10 @@ def generate_launch_description():
     y = LaunchConfiguration('y')
     z = LaunchConfiguration('z')
     yaw = LaunchConfiguration('yaw')
+    enable_magnetometer = LaunchConfiguration('enable_magnetometer')
+    drive_contact_mu = LaunchConfiguration('drive_contact_mu')
+    caster_contact_mu = LaunchConfiguration('caster_contact_mu')
+    controller_params = LaunchConfiguration('controller_params')
 
     # ==========================================================
     # Simulation robot Xacro
@@ -41,9 +45,10 @@ def generate_launch_description():
     #   - ros2_control
     #   - gz_ros2_control
     #
-    # Simulation uses a 1 mm wheel collision width to approximate
-    # the line contact assumed by ideal differential-drive odometry.
-    # The real/default description still uses the physical 30 mm tire.
+    # The visual / physical wheel remains 30 mm wide, but Gazebo intentionally
+    # uses a 1 mm collision width. This narrow line-contact approximation was
+    # retained because the full-width collision produced excessive lateral
+    # skid in the differential-drive simulation.
     # ==========================================================
 
     xacro_file = PathJoinSubstitution([
@@ -58,6 +63,14 @@ def generate_launch_description():
             ' ',
             xacro_file,
             ' wheel_collision_width:=0.001',
+            ' enable_magnetometer:=',
+            enable_magnetometer,
+            ' drive_contact_mu:=',
+            drive_contact_mu,
+            ' caster_contact_mu:=',
+            caster_contact_mu,
+            ' controller_params:=',
+            controller_params,
         ]),
         value_type=str,
     )
@@ -141,6 +154,37 @@ def generate_launch_description():
             'yaw',
             default_value='0.0',
             description='Initial robot yaw [rad].',
+        ),
+
+        DeclareLaunchArgument(
+            'enable_magnetometer',
+            default_value='false',
+            choices=['true', 'false'],
+            description='Enable the optional legacy HMC5883L simulation sensor.',
+        ),
+        DeclareLaunchArgument(
+            'drive_contact_mu',
+            default_value='5.0',
+            description=(
+                'Gazebo drive-wheel contact friction coefficient. '
+                'Tuned value; not a measured material coefficient.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'caster_contact_mu',
+            default_value='0.05',
+            description=(
+                'Gazebo passive-caster contact friction coefficient.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'controller_params',
+            default_value=PathJoinSubstitution([
+                FindPackageShare('scrobot_control'),
+                'config',
+                'controllers.yaml',
+            ]),
+            description='ros2_control controller YAML loaded by Gazebo.',
         ),
 
         robot_state_publisher,

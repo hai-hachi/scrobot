@@ -2,23 +2,25 @@
 <package format="3">
   <name>scrobot_evaluation</name>
   <version>0.1.0</version>
-  <description>Evaluation tools for SC Robot localization, odometry, navigation, sweep missions, and shuttle-collection sessions.</description>
+  <description>Repeatable odometry and full shuttle-collection mission evaluation for SC Robot.</description>
   <maintainer email="hai.hachi.154@gmail.com">sea</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
 
   <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
   <exec_depend>rclpy</exec_depend>
+
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
-  <exec_depend>tf2_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>tf_transformations</exec_depend>
-  <exec_depend>launch</exec_depend>
-  <exec_depend>launch_ros</exec_depend>
+
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-matplotlib</exec_depend>
 

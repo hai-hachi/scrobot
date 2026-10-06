@@ -1,169 +1,164 @@
 # SC Robot Interface Specification
 
-Updated for the current ROS 2 Jazzy / Gazebo Harmonic branch.
+Authoritative public ROS interfaces for the current ROS 2 Jazzy stack.
 
-## TF
-
-Primary transform chain:
+## Frames
 
 ```text
 map -> odom -> base_footprint -> base_link
                          |
+                         +--> collector_link
                          +--> camera_color_optical_frame
                          +--> camera_depth_optical_frame
                          +--> camera_imu_optical_frame
 ```
 
-`map -> odom` is produced by the global localization stack. `odom -> base_footprint` is the local odometry chain.
+Ownership:
+- `map -> odom`: `tag_global_localizer`
+- `odom -> base_footprint`: EKF
+- fixed robot transforms: `robot_state_publisher`
 
 ## Control
 
-### `/cmd_vel_manual`
-Manual velocity command source used by keyboard teleoperation and tests.
+| Interface | Type / role |
+| --- | --- |
+| `/cmd_vel_nav` | stamped Nav2 command source |
+| `/cmd_vel_approach` | stamped local collection command source |
+| `/cmd_vel_relocalization` | stamped tag-approach command source |
+| `/cmd_vel_manual_input` | operator input before manual-mode gating |
+| `/cmd_vel_manual` | manual source owned by `manual_mode_manager` |
+| `/cmd_vel_auto` | autonomous mux output |
+| `/cmd_vel_selected` | AUTO/MANUAL mux output |
+| `/cmd_vel_smoothed` | velocity-smoother output |
+| `/diff_drive_controller/cmd_vel` | final collision-monitored command |
+| `/control/set_manual_mode` | `std_srvs/srv/SetBool` |
+| `/control/manual_mode` | latched `std_msgs/msg/Bool` |
+| `/control/mode` | latched `std_msgs/msg/String` |
 
-### `/diff_drive_controller/cmd_vel`
-Final velocity command consumed by the differential-drive controller.
-
-### `/diff_drive_controller/odom`
-Wheel-odometry output.
-
-### `/joint_states`
-Wheel and joint feedback.
-
-## Localization
-
-### `/imu/data_raw`
-Raw robot IMU input.
-
-### `/imu/data`
-Filtered/orientation-aware IMU output where configured.
-
-### `/odometry/filtered`
-EKF local odometry output.
-
-### `/approach_tag`
-Type: `scrobot_interfaces/action/ApproachTag`
-
-Goal:
+Odometry and feedback:
 
 ```text
-int32 preferred_tag_id
-float32 target_distance
-float32 timeout_sec
+/diff_drive_controller/odom
+/joint_states
+/odometry/filtered
 ```
 
-Purpose: search for and approach a suitable AprilTag before localization correction.
+## Physical hardware
 
-### `/relocalize`
-Type: `scrobot_interfaces/action/Relocalize`
+| Interface | Type / role |
+| --- | --- |
+| `/hardware/collector_command` | `scrobot_interfaces/msg/CollectorCommand` |
+| `/hardware/status` | `scrobot_interfaces/msg/HardwareStatus` |
+| `SCROBOT_SERIAL_PORT` | STM32 UART override; default `/dev/ttyTHS1` |
+| UART | protocol v2, 1,000,000 baud |
 
-Goal:
+`CollectorCommand` carries left/right brush RPM, conveyor RPM and enable.
+`HardwareStatus` reports connection/arming/safety flags, protocol/firmware
+version, wheel state and collector feedback.
+
+## Actions
+
+### /approach_tag
+
+Type: `scrobot_interfaces/action/ApproachTag`.
+
+Find a usable tag and reach the requested tag-facing stand-off pose.
+
+### /relocalize
+
+Type: `scrobot_interfaces/action/Relocalize`.
+
+Collect a stationary AprilTag sample batch and update `map -> odom`.
+
+### /local_collect
+
+Type: `scrobot_interfaces/action/LocalCollect`.
+
+Collect currently eligible visible shuttles until no new eligible target
+remains, cancellation occurs, or timeout is reached.
+
+Mission status:
 
 ```text
-int32 preferred_tag_id
-int32 sample_count
-float32 timeout_sec
+/mission/state
+/mission/local_collect_phase
+/mission/sweep_path
+/mission/relocalization_stops
+/mission/current_goal
 ```
-
-Purpose: estimate/correct `map -> odom` while stationary using AprilTag observations.
 
 ## Camera
 
-### `/camera/camera/color/camera_info`
-Type: `sensor_msgs/msg/CameraInfo`
+Primary D435i interfaces:
 
-Used by the fake detector for RGB field-of-view projection and by the planned real RGB-D shuttle-localization path.
+```text
+/camera/camera/color/image_raw
+/camera/camera/color/camera_info
+/camera/camera/depth/image_rect_raw
+/camera/camera/depth/camera_info
+/camera/camera/aligned_depth_to_color/image_raw
+/camera/camera/depth/points
+/camera/camera/depth/scan_raw
+/camera/camera/depth/scan
+/camera/camera/imu
+```
 
-### `/camera/camera/depth/points`
-Type: `sensor_msgs/msg/PointCloud2`
-
-Used for geometric obstacle handling such as collision monitoring / Nav2 costmaps.
+Not every launch enables every derived RGB-D product. The production YOLO node
+requires color, aligned depth-to-color and color CameraInfo.
 
 ## Shuttle perception
 
-### `/perception/detections_2d`
-Type: `vision_msgs/msg/Detection2DArray`
+### /perception/shuttle_detections_2d
 
-Frame: `camera_color_optical_frame`
+Type: `vision_msgs/msg/Detection2DArray`.
 
-Planned next-step real YOLO output. Sensor-data QoS.
+YOLO image detections.
 
-### `/perception/shuttle_detections_3d`
-Type: `vision_msgs/msg/Detection3DArray`
+### /perception/shuttle_detections_3d
 
-Frame: `camera_depth_optical_frame`
+Type: `vision_msgs/msg/Detection3DArray`.
 
-Publisher:
+YOLO + aligned-depth result in `camera_color_optical_frame`.
+Camera-depth validity is 0.20-3.00 m.
 
-- simulation: `fake_shuttle_detector`
-- real robot: planned YOLO + depth-localizer path
+### /perception/collectable_shuttle_detections_3d
 
-Subscriber: `shuttle_tracker`
+Type: `vision_msgs/msg/Detection3DArray`.
 
-QoS: sensor-data / best effort.
+Mission-filtered detections. Eligibility is evaluated in `base_link` using
+0.50-1.80 m planar range plus the net-pole exclusion.
 
-Persistent identity is intentionally not assigned here.
+### /perception/shuttle_debug/image
 
-### `/perception/tracked_shuttles`
-Type: `vision_msgs/msg/Detection3DArray`
+Optional annotated RGB image.
 
-Frame: `map`
-
-Publisher: `shuttle_tracker`
-
-Subscribers: mission logic, final approach, visualization/debug tools.
-
-QoS: Reliable.
-
-Each `Detection3D.id` is a stable tracker-owned integer string while the track remains alive.
-
-Current tracker defaults:
+## AprilTag perception
 
 ```text
-publish_rate             10 Hz
-association_distance     0.30 m
-position_alpha           0.50
-stale_timeout            1.50 s
-tf_timeout               0.05 s
-fallback_to_latest_tf    true
+/apriltag/detections
 ```
 
-## Simulation-only ground truth
+Type: `apriltag_msgs/msg/AprilTagDetectionArray`.
 
-### `/evaluation/ground_truth_odom`
-Type: `nav_msgs/msg/Odometry`
+Quality gating, tag approach and global correction belong to
+`scrobot_localization`.
 
-Purpose: robot pose reference for simulation evaluation and fake-perception geometry.
+## Simulation-only evaluation truth
 
-This remains the primary truth source used by `scrobot_evaluation` local-odometry tests.
+```text
+/evaluation/ground_truth_odom       nav_msgs/msg/Odometry
+/evaluation/shuttle_ground_truth    geometry_msgs/msg/PoseArray
+/evaluation/shuttle_collected       geometry_msgs/msg/PoseArray
+/evaluation/ground_truth_path       nav_msgs/msg/Path
+/evaluation/estimated_path          nav_msgs/msg/Path
+```
 
-### `/evaluation/ground_truth_tf`
-Type: `tf2_msgs/msg/TFMessage`
+These interfaces must not feed production mission/navigation decisions.
 
-Source: Gazebo dynamic pose bridge.
+## QoS and time
 
-Purpose: evaluation/debug only. Gazebo entity names may be lost by the `Pose_V -> TFMessage` bridge and therefore this topic is not used to identify shuttles.
+Simulation uses Gazebo `/clock` and `use_sim_time: true`.
 
-### `/evaluation/shuttle_ground_truth_gz`
-Gazebo type: `gz.msgs.Pose_V`
-
-Publisher: `shuttle_activity_system`.
-
-Contains only shuttle model world poses.
-
-### `/evaluation/shuttle_ground_truth`
-ROS type: `geometry_msgs/msg/PoseArray`
-
-Bridge of `/evaluation/shuttle_ground_truth_gz`.
-
-Subscriber: simulation-only `fake_shuttle_detector`.
-
-This topic does not replace `/evaluation/ground_truth_odom` or alter `scrobot_evaluation`.
-
-## Timing rule
-
-All simulation nodes should use `use_sim_time: true` and consume `/clock`. Fake shuttle detections are stamped using the latest Gazebo ground-truth odometry stamp so the timestamp is in the same clock domain as TF. `shuttle_tracker` prefers exact measurement-time TF and can fall back to the latest TF during startup/timing skew.
-
-## QoS rule
-
-High-rate sensors use sensor-data QoS / Best Effort unless a specific consumer requires otherwise. Persistent mission-level products such as `/perception/tracked_shuttles` use Reliable QoS.
+Physical D435i sensor input uses SensorDataQoS where required. Mission state and
+selected debug/visualization geometry use reliable/transient-local QoS so RViz
+and evaluators can join late without losing the current state.

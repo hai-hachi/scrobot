@@ -4,12 +4,10 @@ from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import (
-    AppendEnvironmentVariable,
     DeclareLaunchArgument,
     IncludeLaunchDescription,
     TimerAction,
 )
-from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
@@ -20,12 +18,7 @@ def generate_launch_description():
         'scrobot_simulation'
     )
 
-    description_pkg = get_package_share_directory(
-        'scrobot_description'
-    )
-
     use_sim_time = LaunchConfiguration('use_sim_time')
-    launch_rviz = LaunchConfiguration('rviz')
     world = LaunchConfiguration('world')
     gz_verbosity = LaunchConfiguration('gz_verbosity')
     world_name = LaunchConfiguration('world_name')
@@ -35,21 +28,12 @@ def generate_launch_description():
     y = LaunchConfiguration('y')
     z = LaunchConfiguration('z')
     yaw = LaunchConfiguration('yaw')
+    enable_magnetometer = LaunchConfiguration('enable_magnetometer')
+    drive_contact_mu = LaunchConfiguration('drive_contact_mu')
+    caster_contact_mu = LaunchConfiguration('caster_contact_mu')
+    controller_params = LaunchConfiguration('controller_params')
 
     spawn_delay = LaunchConfiguration('spawn_delay')
-
-    description_share_parent = os.path.dirname(description_pkg)
-    simulation_models = os.path.join(simulation_pkg, 'models')
-
-    add_description_resources = AppendEnvironmentVariable(
-        name='GZ_SIM_RESOURCE_PATH',
-        value=description_share_parent,
-    )
-
-    add_simulation_models = AppendEnvironmentVariable(
-        name='GZ_SIM_RESOURCE_PATH',
-        value=simulation_models,
-    )
 
     # gazebo.launch.py provides:
     #   RGB image   -> ros_gz_image -> /camera/camera/color/image_raw
@@ -89,6 +73,10 @@ def generate_launch_description():
             'y': y,
             'z': z,
             'yaw': yaw,
+            'enable_magnetometer': enable_magnetometer,
+            'drive_contact_mu': drive_contact_mu,
+            'caster_contact_mu': caster_contact_mu,
+            'controller_params': controller_params,
         }.items(),
     )
 
@@ -97,31 +85,17 @@ def generate_launch_description():
         actions=[spawn_robot],
     )
 
-    realsense_processing = IncludeLaunchDescription(
+    depth_to_color_registration = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
                 simulation_pkg,
                 'launch',
-                'depth_registration.launch.py',
+                'depth_to_color_registration.launch.py',
             )
         ),
         launch_arguments={
             'use_sim_time': use_sim_time,
         }.items(),
-    )
-
-    rviz = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                simulation_pkg,
-                'launch',
-                'rviz.launch.py',
-            )
-        ),
-        launch_arguments={
-            'use_sim_time': use_sim_time,
-        }.items(),
-        condition=IfCondition(launch_rviz),
     )
 
     return LaunchDescription([
@@ -130,12 +104,6 @@ def generate_launch_description():
             default_value='true',
             choices=['true', 'false'],
             description='Use Gazebo simulation time.',
-        ),
-        DeclareLaunchArgument(
-            'rviz',
-            default_value='false',
-            choices=['true', 'false'],
-            description='Launch RViz.',
         ),
         DeclareLaunchArgument(
             'world',
@@ -186,12 +154,33 @@ def generate_launch_description():
             default_value='2.0',
             description='Delay before spawning robot [s].',
         ),
-
-        add_description_resources,
-        add_simulation_models,
+        DeclareLaunchArgument(
+            'enable_magnetometer',
+            default_value='false',
+            choices=['true', 'false'],
+            description='Enable the optional legacy HMC5883L simulation sensor.',
+        ),
+        DeclareLaunchArgument(
+            'drive_contact_mu',
+            default_value='5.0',
+            description='Gazebo drive-wheel contact friction coefficient.',
+        ),
+        DeclareLaunchArgument(
+            'caster_contact_mu',
+            default_value='0.05',
+            description='Gazebo passive-caster contact friction coefficient.',
+        ),
+        DeclareLaunchArgument(
+            'controller_params',
+            default_value=os.path.join(
+                get_package_share_directory('scrobot_control'),
+                'config',
+                'controllers.yaml',
+            ),
+            description='ros2_control controller YAML loaded by Gazebo.',
+        ),
 
         gazebo,
         delayed_spawn_robot,
-        realsense_processing,
-        rviz,
+        depth_to_color_registration,
     ])

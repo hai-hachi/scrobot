@@ -1,24 +1,29 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="scrobot_gazebo_physics">
+  <xacro:macro
+    name="scrobot_gazebo_physics"
+    params="drive_contact_mu:=5.0 caster_contact_mu:=0.05">
 
     <!-- ============================================================ -->
-    <!-- Idealized drive-wheel contact for local-odometry evaluation  -->
+    <!-- Narrow line-contact drive-wheel model tuned for stable traction -->
     <!-- ============================================================ -->
     <!--
-      The local-odometry evaluation assumes pure rolling between the
-      two drive wheels and the court. High wheel friction and zero
-      force-dependent slip make Gazebo approximate that assumption.
+      The visual / physical tire remains 30 mm wide in scrobot_description,
+      while spawn_robot.launch.py overrides only the Gazebo collision width to
+      1 mm. The narrow contact patch is intentional: the full-width collision
+      produced excessive lateral skid for this differential-drive model.
 
-      fdir1 follows the wheel rolling direction (link +X). Both
-      friction directions are kept high so the wheel contact does not
-      slide appreciably during straight, rotation, or arc tests.
+      Both contact directions still use configurable friction coefficients and
+      force-dependent slip remains disabled. These are simulation-stability
+      values, not measured tire/material coefficients.
+
+      fdir1 follows the wheel rolling direction (link +X).
     -->
 
     <gazebo reference="left_wheel_link">
-      <mu1>20.0</mu1>
-      <mu2>20.0</mu2>
+      <mu1>${drive_contact_mu}</mu1>
+      <mu2>${drive_contact_mu}</mu2>
       <fdir1>1 0 0</fdir1>
       <slip1>0.0</slip1>
       <slip2>0.0</slip2>
@@ -26,8 +31,8 @@
     </gazebo>
 
     <gazebo reference="right_wheel_link">
-      <mu1>20.0</mu1>
-      <mu2>20.0</mu2>
+      <mu1>${drive_contact_mu}</mu1>
+      <mu2>${drive_contact_mu}</mu2>
       <fdir1>1 0 0</fdir1>
       <slip1>0.0</slip1>
       <slip2>0.0</slip2>
@@ -39,20 +44,20 @@
     <!-- Passive casters                                             -->
     <!-- ============================================================ -->
     <!--
-      Keep caster-ground friction very small so caster swivel / wheel
-      contact does not dominate the ideal differential-drive test.
-      The casters still support the robot physically in simulation.
+      Keep caster-ground friction low enough for passive swiveling, but
+      not effectively frictionless. This reduces unrealistic caster
+      skating while allowing the drive wheels to dominate traction.
     -->
 
     <gazebo reference="left_caster_wheel_link">
-      <mu1>0.01</mu1>
-      <mu2>0.01</mu2>
+      <mu1>${caster_contact_mu}</mu1>
+      <mu2>${caster_contact_mu}</mu2>
       <maxContacts>10</maxContacts>
     </gazebo>
 
     <gazebo reference="right_caster_wheel_link">
-      <mu1>0.01</mu1>
-      <mu2>0.01</mu2>
+      <mu1>${caster_contact_mu}</mu1>
+      <mu2>${caster_contact_mu}</mu2>
       <maxContacts>10</maxContacts>
     </gazebo>
 

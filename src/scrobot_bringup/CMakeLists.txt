@@ -14,7 +14,11 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-# No launch/config resources are present in this package yet.
-# Add install(DIRECTORY ...) when those directories contain files.
+install(
+  DIRECTORY
+    config
+    launch
+  DESTINATION share/${PROJECT_NAME}
+)
 
 ament_package()

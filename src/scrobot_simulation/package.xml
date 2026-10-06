@@ -3,21 +3,17 @@
 <package format="3">
   <name>scrobot_simulation</name>
   <version>0.0.0</version>
-  <description>Gazebo Harmonic simulation package for SC Robot, including the court world, shuttle simulation, sensor bridges, robot spawning, visualization, and simulation utilities.</description>
+  <description>Gazebo Harmonic runtime simulation for SC Robot: world, robot spawn, sensors, bridges, shuttle models, and simulation plugins.</description>
   <maintainer email="hai.hachi.154@gmail.com">sea</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>rclcpp</depend>
-  <depend>geometry_msgs</depend>
-  <depend>std_msgs</depend>
-  <depend>visualization_msgs</depend>
-
   <build_depend>gz-plugin2</build_depend>
   <build_depend>gz-sim8</build_depend>
   <build_depend>gz-msgs10</build_depend>
   <build_depend>gz-transport13</build_depend>
+  <build_depend>scrobot_localization</build_depend>
   <exec_depend>gz-plugin2</exec_depend>
   <exec_depend>gz-sim8</exec_depend>
   <exec_depend>gz-msgs10</exec_depend>
@@ -28,6 +24,7 @@
   <exec_depend>launch_ros</exec_depend>
 
   <exec_depend>scrobot_description</exec_depend>
+  <exec_depend>scrobot_localization</exec_depend>
   <exec_depend>scrobot_control</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
@@ -38,17 +35,15 @@
   <exec_depend>gz_ros2_control</exec_depend>
 
   <exec_depend>rosgraph_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>tf2_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
 
   <exec_depend>depth_image_proc</exec_depend>
   <exec_depend>rclcpp_components</exec_depend>
-  <exec_depend>rviz2</exec_depend>
-
-  <exec_depend>python3-opencv</exec_depend>
-  <exec_depend>python3-numpy</exec_depend>
-  <exec_depend>python3-yaml</exec_depend>
+  <depend>python3-opencv</depend>
+  <depend>python3-numpy</depend>
+  <depend>python3-yaml</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

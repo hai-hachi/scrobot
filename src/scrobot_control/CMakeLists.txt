@@ -21,10 +21,22 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Python tools are maintained as source scripts with .py suffixes, but the
+# installed ROS executables use stable command names. The RENAME form also
+# avoids --symlink-install preserving a non-executable mode from GitHub-created
+# files.
 install(
   PROGRAMS
-    scripts/wasd_teleop.py
+    scripts/manual_mode_manager.py
   DESTINATION lib/${PROJECT_NAME}
+  RENAME manual_mode_manager
+)
+
+install(
+  PROGRAMS
+    scripts/manual_teleop.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME manual_teleop
 )
 
 ament_package()

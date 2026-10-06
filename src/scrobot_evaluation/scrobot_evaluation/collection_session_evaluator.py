@@ -40,13 +40,14 @@ class CollectionSessionEvaluator(Node):
         self.declare_parameter('sample_rate', 20.0)
         self.declare_parameter('path_publish_rate', 1.0)
         self.declare_parameter('tf_timeout', 0.02)
+        self.declare_parameter('capture_verification_delay', 0.75)
 
         # Permanent mission exclusion around the two net poles. Keeping these
         # values in the evaluator lets the report distinguish intentionally
         # ignored pole-adjacent shuttles from actual collection misses.
         self.declare_parameter('pole_x', 0.0)
         self.declare_parameter('pole_y_positions', [3.05, -3.05])
-        self.declare_parameter('pole_exclusion_radius', 0.10)
+        self.declare_parameter('pole_exclusion_radius', 0.60)
 
         self.declare_parameter(
             'output_root',
@@ -66,6 +67,10 @@ class CollectionSessionEvaluator(Node):
         self.sample_rate = float(self.get_parameter('sample_rate').value)
         self.path_publish_rate = float(self.get_parameter('path_publish_rate').value)
         self.tf_timeout = float(self.get_parameter('tf_timeout').value)
+        self.capture_verification_delay = max(
+            0.0,
+            float(self.get_parameter('capture_verification_delay').value),
+        )
         self.pole_x = float(self.get_parameter('pole_x').value)
         self.pole_y_positions = [
             float(v) for v in self.get_parameter('pole_y_positions').value
@@ -135,6 +140,18 @@ class CollectionSessionEvaluator(Node):
         self.pass_start_time = None
         self.pass_start_collected = 0
 
+        # Verify that a completed physical pickup attempt is followed by an
+        # authoritative decrease in Gazebo shuttle ground truth. This is kept
+        # evaluation-only and never feeds mission control.
+        self.capture_checks_started = 0
+        self.capture_checks_passed = 0
+        self.capture_checks_failed = 0
+        self.pending_capture_checks = []
+        self.current_target_index = 0
+        self.current_target_start_time = None
+        self.current_target_start_remaining = None
+        self.current_target_start_events = None
+
         self.trajectory_file = open(
             self.output_dir / 'collection_trajectory.csv', 'w', newline=''
         )
@@ -168,6 +185,17 @@ class CollectionSessionEvaluator(Node):
             'collected_this_pass', 'collected_total', 'remaining_shuttles',
             'remaining_near_poles', 'remaining_eligible',
             'eligible_collection_rate_percent',
+        ])
+
+        self.capture_file = open(
+            self.output_dir / 'capture_verification.csv', 'w', newline=''
+        )
+        self.capture_writer = csv.writer(self.capture_file)
+        self.capture_writer.writerow([
+            'pass_index', 'target_index', 'target_start_elapsed_s',
+            'verification_elapsed_s', 'baseline_remaining',
+            'remaining_after', 'removed_by_ground_truth',
+            'collection_events_delta', 'result',
         ])
 
         sensor_qos = QoSProfile(
@@ -225,7 +253,8 @@ class CollectionSessionEvaluator(Node):
 
         self.get_logger().info(
             f'Collection session evaluator ready: {self.output_dir}; '
-            f'pole exclusion={self.pole_exclusion_radius:.2f} m.'
+            f'pole exclusion={self.pole_exclusion_radius:.2f} m, '
+            f'capture verification grace={self.capture_verification_delay:.2f} s.'
         )
 
     def now_s(self):
@@ -408,6 +437,21 @@ class CollectionSessionEvaluator(Node):
                 self.fixed_relocalizations += 1
             if new_state == 'LOCAL_COLLECT':
                 self._start_collection_pass(now)
+
+                # local_collect_phase is transient-local and may already hold
+                # SMC_POSE before the mission state becomes active. In that
+                # case there will be no later transition *into* SMC_POSE for
+                # local_collect_phase_callback() to observe. Seed the current
+                # target from the cached phase so target 1 is still verified.
+                if self.phase_enter_time is None:
+                    self.phase_enter_time = now
+                if (
+                    self.current_target_start_remaining is None
+                    and self.local_collect_phase
+                    in ('SMC_POSE', 'STRAIGHT_COLLECT', 'OVERRUN')
+                ):
+                    self._begin_capture_target(now)
+
             if previous == 'LOCAL_COLLECT' and new_state != 'LOCAL_COLLECT':
                 self._finish_collection_pass(now)
 
@@ -416,6 +460,91 @@ class CollectionSessionEvaluator(Node):
         if self.active and new_state in ('COMPLETE', 'ERROR'):
             self.end_time = now
             self.finalize(new_state)
+
+    def _begin_capture_target(self, now):
+        # Ignore duplicate/replayed phase notifications for the same target.
+        if self.current_target_start_remaining is not None:
+            return
+
+        self.current_target_index += 1
+        self.current_target_start_time = now
+        self.current_target_start_remaining = self.remaining_shuttles
+        self.current_target_start_events = self.collection_event_count
+
+    def _queue_capture_verification(self, now):
+        if self.current_target_start_remaining is None:
+            return
+
+        self.capture_checks_started += 1
+        self.pending_capture_checks.append({
+            'pass_index': self.collection_passes,
+            'target_index': self.current_target_index,
+            'target_start_time': self.current_target_start_time,
+            'baseline_remaining': self.current_target_start_remaining,
+            'baseline_events': (
+                self.collection_event_count
+                if self.current_target_start_events is None
+                else self.current_target_start_events
+            ),
+            'deadline': now + self.capture_verification_delay,
+        })
+
+        self.current_target_start_time = None
+        self.current_target_start_remaining = None
+        self.current_target_start_events = None
+
+    def _process_capture_checks(self, now, force=False):
+        if not self.pending_capture_checks:
+            return
+
+        keep = []
+        for check in self.pending_capture_checks:
+            removed = max(
+                0,
+                int(check['baseline_remaining']) - int(self.remaining_shuttles),
+            )
+            if removed > 0:
+                result = 'PASS'
+            elif not force and now < check['deadline']:
+                keep.append(check)
+                continue
+            else:
+                result = 'FAIL'
+
+            event_delta = max(
+                0,
+                int(self.collection_event_count) - int(check['baseline_events']),
+            )
+            if result == 'PASS':
+                self.capture_checks_passed += 1
+                self.get_logger().info(
+                    'Capture verification PASS: '
+                    f'pass={check["pass_index"]}, '
+                    f'target={check["target_index"]}, '
+                    f'GT removed={removed}, events={event_delta}.'
+                )
+            else:
+                self.capture_checks_failed += 1
+                self.get_logger().warning(
+                    'Capture verification FAIL: local collection completed '
+                    f'pass={check["pass_index"]}, target={check["target_index"]}, '
+                    'but shuttle ground-truth count did not decrease.'
+                )
+
+            self.capture_writer.writerow([
+                check['pass_index'],
+                check['target_index'],
+                self.elapsed_s(check['target_start_time']),
+                self.elapsed_s(now),
+                check['baseline_remaining'],
+                self.remaining_shuttles,
+                removed,
+                event_delta,
+                result,
+            ])
+            self.capture_file.flush()
+
+        self.pending_capture_checks = keep
 
     def local_collect_phase_callback(self, msg):
         new_phase = msg.data.strip() or 'UNKNOWN'
@@ -433,6 +562,16 @@ class CollectionSessionEvaluator(Node):
             ])
             self.phase_file.flush()
             self.phase_enter_time = now
+
+            if new_phase == 'SMC_POSE':
+                self._begin_capture_target(now)
+
+            # A target is considered physically attempted only after its
+            # deliberate overrun completes and the controller returns to
+            # selection. Give the Gazebo bridge a short grace period before
+            # deciding whether ground truth actually decreased.
+            if previous == 'OVERRUN' and new_phase in ('SELECT', 'DONE'):
+                self._queue_capture_verification(now)
 
         self.local_collect_phase = new_phase
 
@@ -459,6 +598,9 @@ class CollectionSessionEvaluator(Node):
         if not self.active or self.finalized:
             return
 
+        now = self.now_s()
+        self._process_capture_checks(now)
+
         gt = self.latest_gt
         est = self.estimated_xy()
         if gt is None and est is None:
@@ -483,7 +625,6 @@ class CollectionSessionEvaluator(Node):
             error = math.hypot(est[0] - gt[0], est[1] - gt[1])
             self.position_error_sq.append(error * error)
 
-        now = self.now_s()
         self.trajectory_writer.writerow([
             now,
             self.elapsed_s(now),
@@ -550,6 +691,11 @@ class CollectionSessionEvaluator(Node):
         if self.pass_start_time is not None:
             self._finish_collection_pass(self.end_time)
 
+        # By COMPLETE / ERROR the last local-collect target has had ample time
+        # to propagate through Gazebo ground truth. Resolve anything still
+        # pending so the summary cannot silently omit a failed pickup.
+        self._process_capture_checks(self.end_time, force=True)
+
         if self.state_enter_time is not None and self.state not in ('UNKNOWN', 'IDLE'):
             self.state_durations[self.state] += max(
                 0.0, self.end_time - self.state_enter_time
@@ -583,6 +729,7 @@ class CollectionSessionEvaluator(Node):
             self.state_file,
             self.phase_file,
             self.collection_file,
+            self.capture_file,
         ):
             handle.flush()
 
@@ -611,6 +758,8 @@ class CollectionSessionEvaluator(Node):
                 'remaining_near_poles', 'remaining_eligible',
                 'overall_collection_rate_percent', 'eligible_collection_rate_percent',
                 'collection_passes',
+                'capture_checks_started', 'capture_checks_passed',
+                'capture_checks_failed',
                 'ground_truth_path_m', 'estimated_path_m', 'path_length_error_m',
                 'position_rmse_m', 'distance_per_collected_m', 'time_per_collected_s',
                 'fixed_relocalizations', 'fixed_relocalization_time_s',
@@ -631,6 +780,9 @@ class CollectionSessionEvaluator(Node):
                 self.overall_collection_rate_percent(),
                 self.eligible_collection_rate_percent(),
                 self.collection_passes,
+                self.capture_checks_started,
+                self.capture_checks_passed,
+                self.capture_checks_failed,
                 self.gt_distance,
                 self.est_distance,
                 path_error,
@@ -652,6 +804,9 @@ class CollectionSessionEvaluator(Node):
             f'{self.eligible_shuttles()} eligible, '
             f'eligible_rate={self.eligible_collection_rate_percent():.1f}%, '
             f'GT distance={self.gt_distance:.1f}m, '
+            f'capture_checks={self.capture_checks_passed}/'
+            f'{self.capture_checks_started} passed '
+            f'(failed={self.capture_checks_failed}), '
             f'event_crosscheck={self.collection_event_count} '
             f'(delta={event_delta:+d}).'
         )
@@ -665,6 +820,7 @@ class CollectionSessionEvaluator(Node):
             self.state_file,
             self.phase_file,
             self.collection_file,
+            self.capture_file,
         ):
             if not handle.closed:
                 handle.close()
@@ -680,7 +836,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':
