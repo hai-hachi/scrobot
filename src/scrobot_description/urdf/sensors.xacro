@@ -4,55 +4,14 @@
   <xacro:include
     filename="$(find scrobot_description)/urdf/realsense_d435i.xacro"/>
 
-  <xacro:macro name="tiny_sensor_inertial">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="0.0001"/>
-      <inertia
-        ixx="1e-8" ixy="0" ixz="0"
-        iyy="1e-8" iyz="0"
-        izz="1e-8"/>
-    </inertial>
-  </xacro:macro>
-
-  <!--
-    Robot-side sensor mounting.
-
-    D435i internal geometry is defined in realsense_d435i.xacro.
-
-    The 5883L magnetometer is a physically separate robot sensor,
-    so it remains directly attached to base_link using the existing
-    mag_x / mag_y / mag_z parameters.
-  -->
   <xacro:macro name="scrobot_sensors">
-
-    <!-- ====================================================== -->
-    <!-- Intel RealSense D435i                                  -->
-    <!-- ====================================================== -->
-
+    <!-- Intel RealSense D435i. Internal camera/IMU frame geometry lives in
+         realsense_d435i.xacro; this origin is the measured robot mount. -->
     <xacro:scrobot_d435i parent="base_link" name="camera">
       <origin
         xyz="${camera_x} ${camera_y} ${camera_z}"
         rpy="${camera_roll} ${camera_pitch} ${camera_yaw}"/>
     </xacro:scrobot_d435i>
-
-
-    <!-- ====================================================== -->
-    <!-- Separate 5883L magnetometer                            -->
-    <!-- ====================================================== -->
-
-    <link name="mag_link">
-      <xacro:tiny_sensor_inertial/>
-    </link>
-
-    <joint name="mag_joint" type="fixed">
-      <parent link="base_link"/>
-      <child link="mag_link"/>
-      <origin
-        xyz="${mag_x} ${mag_y} ${mag_z}"
-        rpy="0 0 0"/>
-    </joint>
-
   </xacro:macro>
 
 </robot>
