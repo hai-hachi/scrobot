@@ -118,7 +118,6 @@ private:
   bool invalid_output_{false};
   bool tx_queue_drop_{false};
   bool invalid_command_{false};
-  std::string last_disarm_reason_{"boot"};
 
   uint32_t status_flags_{0};
   uint32_t control_tick_{0};
