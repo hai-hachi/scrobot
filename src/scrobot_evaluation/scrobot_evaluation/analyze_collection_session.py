@@ -187,7 +187,7 @@ def plot_collection_passes(rows, output_dir):
     ax.set_title('Local-collection pass duration')
     ax.grid(True, axis='y')
     for i, count in enumerate(collected):
-        ax.text(i, duration[i], f'{int(count)} shuttle(s)', ha='center', va='bottom')
+        ax.text(i, duration[i], f'{int(count)}', ha='center', va='bottom')
     save_figure(fig, output_dir, 'collection_pass_duration')
 
 
