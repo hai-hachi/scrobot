@@ -133,6 +133,14 @@ class CollectionTestMonitor(Node):
         self.total_collected = 0
         self.removal_passes = 0
 
+        # Event/ground-truth verification is independent of the low-rate
+        # geometry reporter. This is the authoritative PASS path: whenever the
+        # number of disappeared GT shuttles catches up with the number of
+        # collection events, those removals are verified even if the brief
+        # pickup-zone crossing was not sampled by _report().
+        self.event_verify_wall = None
+        self.event_failure_reported_for = 0
+
         # A physical removal attempt begins as soon as the independently
         # calculated shuttle center enters the pickup rectangle. This lets the
         # monitor detect the important failure mode where the Gazebo collection
@@ -236,7 +244,72 @@ class CollectionTestMonitor(Node):
             f'events_start={self.zone_attempt_start_events}'
         )
 
+    def _clear_zone_attempt(self):
+        self.zone_attempt_wall = None
+        self.zone_attempt_start_count = None
+        self.zone_attempt_start_events = None
+        self.zone_attempt_failed = False
+
+    def _check_event_ground_truth_result(self):
+        """Cross-check collection events against authoritative GT removals."""
+        if self.last_count is None:
+            return False
+
+        removed_total = max(
+            0,
+            int(self.max_count_seen) - int(self.last_count),
+        )
+
+        # The bridge callbacks may arrive in either order. Once both the event
+        # count and GT disappearance agree, emit PASS immediately. This path
+        # does not depend on the 2 Hz geometry monitor catching the roughly
+        # 0.24 s pickup-zone transit.
+        if (
+            self.total_collected > self.removal_passes
+            and removed_total >= self.total_collected
+        ):
+            newly_verified = self.total_collected - self.removal_passes
+            self.removal_passes = self.total_collected
+            self.event_verify_wall = None
+            self._clear_zone_attempt()
+            self._emit(
+                'REMOVAL_PASS '
+                f'new={newly_verified} '
+                f'events={self.total_collected} '
+                f'gt_removed={removed_total} '
+                f'gt_remaining={self.last_count} '
+                f'baseline={self.max_count_seen}'
+            )
+            return True
+
+        # If an event arrived first, allow the GT bridge a short grace period.
+        # This catches the opposite failure mode: event published but the model
+        # was not actually removed from authoritative shuttle ground truth.
+        if self.total_collected > removed_total:
+            if self.event_verify_wall is None:
+                self.event_verify_wall = time.monotonic()
+            elif (
+                time.monotonic() - self.event_verify_wall
+                >= self.removal_grace
+                and self.event_failure_reported_for < self.total_collected
+            ):
+                self.event_failure_reported_for = self.total_collected
+                self._emit(
+                    'REMOVAL_FAIL '
+                    'missing=ground_truth_removal '
+                    f'events={self.total_collected} '
+                    f'gt_removed={removed_total} '
+                    f'gt_remaining={self.last_count}'
+                )
+        else:
+            self.event_verify_wall = None
+
+        return False
+
     def _check_removal_result(self):
+        if self._check_event_ground_truth_result():
+            return
+
         if self.zone_attempt_wall is None or self.last_count is None:
             return
 
@@ -246,20 +319,6 @@ class CollectionTestMonitor(Node):
         event_seen = (
             int(self.total_collected) > int(self.zone_attempt_start_events)
         )
-
-        if removed and event_seen:
-            self.removal_passes += 1
-            self._emit(
-                'REMOVAL_PASS '
-                f'events={self.total_collected} '
-                f'gt_remaining={self.last_count} '
-                f'gt_start={self.zone_attempt_start_count}'
-            )
-            self.zone_attempt_wall = None
-            self.zone_attempt_start_count = None
-            self.zone_attempt_start_events = None
-            self.zone_attempt_failed = False
-            return
 
         if (
             not self.zone_attempt_failed
@@ -368,7 +427,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':
