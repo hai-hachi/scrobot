@@ -389,8 +389,12 @@ class LocalOdomTestRunner(Node):
             self.segment_start_time = None
 
     def destroy_node(self):
-        for _ in range(3):
-            self.publish_command(0.0, 0.0)
+        if rclpy.ok():
+            for _ in range(3):
+                try:
+                    self.publish_command(0.0, 0.0)
+                except Exception:
+                    break
         super().destroy_node()
 
 
@@ -403,7 +407,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':
