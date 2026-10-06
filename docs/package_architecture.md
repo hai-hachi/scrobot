@@ -1,13 +1,15 @@
 # SC Robot Package Architecture
 
-SC Robot uses ROS 2 Jazzy with Gazebo Harmonic in simulation. The same
-production ROS interfaces are intended for the Jetson Orin Nano robot.
+SC Robot uses ROS 2 Jazzy. Gazebo Harmonic provides the repeatable simulation
+environment; the physical target is Jetson Orin Nano + STM32F411 + D435i.
 
 ## Packages
 
 ```text
 scrobot_description
 scrobot_simulation
+scrobot_hardware
+scrobot_bringup
 scrobot_control
 scrobot_localization
 scrobot_perception
@@ -22,28 +24,47 @@ scrobot_debug
 
 ### scrobot_description
 
-Hardware-neutral URDF/Xacro, meshes, joints, links, collector geometry, and
-camera frame tree.
+Hardware-neutral geometry, meshes, joints, links, collector geometry and D435i
+frame tree. Physical `ros2_control` is opt-in through
+`use_real_hardware:=true`; simulation injects its own Gazebo control system.
 
 ### scrobot_simulation
 
-Gazebo world, robot spawn, simulated sensors, bridges, production shuttle
-physics, shuttle spawning, generated AprilTag assets, and evaluation truth.
+Gazebo world, robot spawn, simulated sensors and bridges, repeatable shuttle
+layouts, AprilTag assets, world-level physical shuttle removal, and
+simulation-only evaluation truth.
+
+### scrobot_hardware
+
+Physical STM32 protocol-v2 `hardware_interface::SystemInterface`. It owns the
+1 Mbaud serial link, wheel encoder/velocity exchange, ARM/DISARM handshake,
+collector motor command transport, and hardware status reporting.
+
+### scrobot_bringup
+
+Physical Jetson composition: robot description, controller manager, D435i,
+control stack, local localization and production perception. Global
+localization, Nav2 and the mission are opt-in so hardware bringup does not move
+the robot unexpectedly.
 
 ### scrobot_control
 
-ROS 2 control, autonomous command arbitration, AUTO/MANUAL mode, velocity
-smoothing, collision monitoring, and manual teleoperation.
+Controller spawners, autonomous command arbitration, AUTO/MANUAL mode,
+velocity smoothing, collision monitoring and manual teleoperation.
 
 ### scrobot_localization
 
 D435i IMU conversion/filtering, wheel+IMU EKF, tag approach, stationary
-AprilTag global correction, and ownership of `map -> odom`.
+AprilTag global correction and ownership of `map -> odom`. Physical D435i
+bringup uses the local SensorDataQoS-compatible IMU transformer; simulation can
+use the stock `imu_transformer`.
 
 ### scrobot_perception
 
-Production AprilTag detection, depth PointCloud2 -> LaserScan processing,
-self-filtering, and YOLO + aligned-depth shuttle 3D reconstruction.
+Production AprilTag detection, depth obstacle scan processing and
+YOLO + aligned-depth shuttle 3D reconstruction. Simulation uses
+PointCloud2 -> LaserScan plus self filtering. A lightweight direct
+depth-image -> LaserScan node is retained for physical hardware fallback/tests.
 
 ### scrobot_navigation
 
@@ -53,42 +74,50 @@ current path controller.
 ### scrobot_mission
 
 Four-pass sweep generation, shuttle diversion, local collection, fixed-station
-relocalization, exact checkpoint return, AUTO/MANUAL mission pause/resume, and
+relocalization, checkpoint return/resume, AUTO/MANUAL mission pause/resume and
 tag-search recovery.
 
 ### scrobot_interfaces
 
-Project action definitions only.
+Project actions:
+- `Relocalize.action`
+- `ApproachTag.action`
+- `LocalCollect.action`
+
+Physical hardware messages:
+- `CollectorCommand.msg`
+- `HardwareStatus.msg`
 
 ### scrobot_evaluation
 
-Simulation logging, repeatable trajectories, mission metrics, and analysis.
+Repeatable local-odometry logging/analysis and full collection-session metrics.
 
 ### scrobot_debug
 
-Debug-only launch composition, monitors, RViz, test worlds, dataset generation,
-and isolated regression fixtures. Production packages do not depend on it.
+Debug-only launch composition, telemetry, RViz, test worlds, dataset tooling and
+isolated regression fixtures. Production packages do not depend on it.
 
 ## TF ownership
 
 ```text
-map                  scrobot_localization/tag_global_localizer
+map                  tag_global_localizer
  |
  v
-odom                 scrobot_localization EKF
+odom                 EKF
  |
  v
 base_footprint
  |
  v
-base_link            robot_state_publisher / scrobot_description
+base_link            robot_state_publisher
  |
  +--> collector_link
  +--> wheels/casters
  +--> D435i frames
 ```
 
-Production `diff_drive_controller` has `enable_odom_tf: false`.
+`diff_drive_controller` has `enable_odom_tf: false`; the EKF is the sole
+owner of `odom -> base_footprint`.
 
 ## Shuttle perception and collection
 
@@ -120,8 +149,9 @@ shuttle_collection_filter
 /local_collect
    |
    +-- freeze target in odom
-   +-- base_link pre-pose at 1.10 m
-   +-- pure SMC convergence
+   +-- nominal base_link staging distance 1.10 m
+   +-- clamp staging to current range for already-close targets
+   +-- SMC pose convergence
    +-- stable 0.25 s
    +-- straight pickup at 0.30 m/s
    +-- 0.10 m overrun
@@ -130,7 +160,9 @@ shuttle_collection_filter
 The validated simulation off-axis lateral perception error is approximately
 0.03 m at about +/-26.7 deg bearing.
 
-## Obstacle path
+## Obstacle paths
+
+Simulation / production RGB-D path:
 
 ```text
 D435i depth PointCloud2
@@ -141,12 +173,12 @@ D435i depth PointCloud2
    -> collision_monitor + Nav2 costmaps
 ```
 
-Current scan envelope:
+Physical low-load fallback/test path:
 
 ```text
-height 0.12-0.70 m
-HFOV   +/-0.7897925312 rad
-range  0.30-3.30 m
+D435i depth image + CameraInfo
+   -> depth_obstacle_scan
+   -> /camera/camera/depth/scan
 ```
 
 ## AprilTag path
@@ -156,13 +188,13 @@ rectified RGB + color CameraInfo
    -> apriltag_ros
    -> /apriltag/detections
    -> tag approach
-   -> 0.90 m base_link tag-facing pose
+   -> 0.90 m tag-facing pose
    -> /relocalize (15 stationary samples)
    -> map -> odom correction
 ```
 
-The production tag approach uses `main_branch`; alternative SMC/biarc
-strategies are retained only as debug regressions.
+The production approach strategy is `main_branch`; alternative controller
+strategies are debug-only.
 
 ## Mission flow
 
@@ -176,7 +208,7 @@ initial tag search/approach
       yes -> save checkpoint pose/index
            -> cancel FollowPath
            -> local collection spree
-           -> Nav2 return to original checkpoint
+           -> Nav2 return to checkpoint
            -> resume saved path index
  -> fixed tag station?
       yes -> relocalize -> restore sweep heading
@@ -184,9 +216,6 @@ initial tag search/approach
 ```
 
 ## Simulation versus robot
-
-Simulation substitutes Gazebo sources for physical devices but keeps production
-topics and frames where practical.
 
 Simulation-only truth:
 
@@ -196,5 +225,12 @@ Simulation-only truth:
 /evaluation/shuttle_collected
 ```
 
-These topics are for debug/evaluation only and must not feed production mission
-or navigation decisions.
+These interfaces are forbidden as production mission/navigation inputs.
+
+Physical-only interfaces:
+
+```text
+/hardware/collector_command
+/hardware/status
+/dev/ttyTHS1 @ 1,000,000 baud
+```
