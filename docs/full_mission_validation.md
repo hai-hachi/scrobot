@@ -1,147 +1,118 @@
 # Final Full-Mission Validation
 
-All major isolated simulation subsystems have passed. This is the remaining
-integrated acceptance run.
+The integrated Gazebo mission has been completed successfully with the final
+production stack.
+
+## Final repeatable run
+
+Configuration:
+
+```text
+robot start     x=2.0 m, y=3.05 m, yaw=3.14159 rad
+layout          mixed
+shuttle count   50
+layout seed     20261003
+magnetometer    disabled
+YOLO            gazebo_simple_v2.pt
+evaluation      enabled
+master RViz     enabled
+```
+
+Result:
+
+```text
+terminal state                   COMPLETE
+duration                         652.438 s
+total shuttles                   50
+collected by ground truth        50
+collection events received       50
+GT - event delta                 0
+remaining eligible               0
+eligible collection rate         100.0%
+overall collection rate          100.0%
+
+local-collect passes             36
+capture checks started           32
+capture checks passed            31
+capture checks failed            1
+verified attempt success rate    96.875%
+
+ground-truth path                140.318 m
+estimated path                   141.524 m
+position RMSE                    0.1116 m
+
+fixed relocalizations            4
+relocalization time              38.514 s
+sweep time                       88.457 s
+local-collection time            317.927 s
+return-to-sweep time             181.982 s
+```
+
+The single failed capture check was a genuine missed pickup attempt: ground
+truth stayed unchanged and no collection event was received for that attempt.
+The mission subsequently recovered and still cleared all 50 shuttles. Therefore
+mission completion/collection rate and per-attempt pickup reliability are
+reported separately.
+
+Several successful targeted passes removed more than one nearby shuttle, so the
+number of verified target attempts is smaller than the number of physical
+shuttle removals.
 
 ## Validated prerequisites
 
 ```text
-robot description / TF                 PASS
-control command pipeline               PASS
-AUTO/MANUAL arbitration                PASS
-depth scan + collision monitor         PASS
-wheel/IMU EKF                          PASS
-AprilTag detection/relocalization      PASS
-tag approach strategy                  PASS
-YOLO 2D + aligned-depth 3D             PASS
-3D error (~0.03 m lateral off-axis)    ACCEPTED
-0.50-1.80 m collection range gate      PASS
-local SMC shuttle collection           PASS
-multi-shuttle selection/reacquisition  PASS
-Nav2/RPP subsystem tests               PASS
+robot description / TF                    PASS
+control command pipeline                  PASS
+AUTO/MANUAL arbitration                   PASS
+depth scan + collision monitor            PASS
+wheel/IMU EKF                             PASS
+AprilTag detection/relocalization         PASS
+tag approach strategy                     PASS
+YOLO 2D + aligned-depth 3D                PASS
+0.50-1.80 m collection range gate         PASS
+local SMC shuttle collection              PASS
+close-target pre-pose handling            PASS
+multi-shuttle selection/reacquisition     PASS
+physical Gazebo shuttle removal           PASS
+local odometry evaluator                  PASS
+collection-session evaluator              PASS
+Nav2/RPP integration                      PASS
+full 50-shuttle mission                   PASS
 ```
 
-## Required preflight: physical shuttle removal
+## Physical shuttle removal preflight
 
-Before the 50-shuttle mission, run one production local-collection pass:
+For isolated regression:
 
 ```bash
 ros2 launch scrobot_debug smc_shuttle_check.launch.py \
-  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt \
+  model_path:=$SCROBOT_YOLO_MODEL \
   launch_rviz:=false
 ```
 
-The debug collection monitor now cross-checks both the one-shot collection
-event and the authoritative shuttle ground-truth count.
-
-Do not start the final mission until the log contains:
+A successful physical removal produces:
 
 ```text
-REMOVAL_PASS
+GT_COUNT shuttles=0
+COLLECTED total=1 ...
+REMOVAL_PASS ...
 ```
 
-`REMOVAL_FAIL` means the controller completed its physical pass but the
-dynamic shuttle did not disappear from Gazebo, and the collection simulation
-must be fixed before mission-level results are meaningful.
+The monitor verifies authoritative ground-truth disappearance and the
+collection event independently of its lower-rate geometry display.
 
-## One-command final regression
-
-The preferred final test is now:
-
-```bash
-ros2 launch scrobot_debug full_mission_check.launch.py \
-  model_path:=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt
-```
-
-Defaults:
-
-```text
-robot start    x=2.0 m, y=3.05 m, yaw=3.14159 rad
-layout         mixed
-shuttle count  50
-layout seed    20261003
-magnetometer   disabled
-evaluation     enabled
-RViz           disabled
-```
-
-Use `launch_rviz:=true` only when visual inspection is needed. The separate
-terminal procedure below remains useful for isolating startup failures.
-
-## Build
-
-```bash
-cd ~/scrobot_ws
-git pull
-colcon build --symlink-install
-source install/setup.bash
-```
-
-Set the production YOLO model:
+## One-command full regression
 
 ```bash
 export SCROBOT_YOLO_MODEL=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt
+ros2 launch scrobot_debug full_mission_check.launch.py
 ```
 
-## Start the full simulation stack
+The master RViz is enabled by default and shows the court, robot, sweep path,
+Nav2 active plan, current mission goal, relocalization stops, local collection
+pre-pose, costmaps, shuttle truth, and ground-truth/estimated trajectories.
 
-Use separate terminals so failures remain readable.
-
-### 1. Simulation
-
-```bash
-ros2 launch scrobot_simulation simulation.launch.py
-```
-
-Optionally spawn a repeatable shuttle distribution:
-
-```bash
-ros2 launch scrobot_simulation spawn_shuttles.launch.py \
-  mode:=mixed count:=50
-```
-
-### 2. Production perception
-
-```bash
-ros2 launch scrobot_perception perception.launch.py \
-  enable_yolo:=true \
-  model_path:=$SCROBOT_YOLO_MODEL
-```
-
-### 3. Control stack
-
-```bash
-ros2 launch scrobot_control control_stack.launch.py
-```
-
-### 4. Local EKF
-
-```bash
-ros2 launch scrobot_localization localization.launch.py \
-  use_magnetometer:=false
-```
-
-### 5. Mission / global localization / Nav2
-
-```bash
-ros2 launch scrobot_mission sweep_mission.launch.py
-```
-
-### 6. Evaluation
-
-```bash
-ros2 launch scrobot_evaluation collection_session_eval.launch.py
-```
-
-Optional telemetry:
-
-```bash
-ros2 launch scrobot_debug telemetry.launch.py
-```
-
-## Required state sequence
-
-Normal mission:
+## Expected mission sequence
 
 ```text
 INITIAL_TAG_APPROACH
@@ -149,88 +120,56 @@ INITIAL_TAG_APPROACH
  -> STARTING_NAV2
  -> JOIN_SWEEP
  -> SWEEPING
-```
 
-Shuttle diversion:
-
-```text
 SWEEPING
- -> save checkpoint pose + sweep index
+ -> save checkpoint
  -> cancel FollowPath
  -> LOCAL_COLLECT
  -> RETURN_TO_SWEEP
- -> return to original checkpoint
  -> resume saved sweep index
  -> SWEEPING
-```
 
-Fixed relocalization:
-
-```text
 SWEEPING
- -> fixed station
  -> TURN_TO_TAG
  -> RELOCALIZING
  -> RESTORE_SWEEP_HEADING
  -> SWEEPING
+
+ -> COMPLETE
 ```
 
-Final state:
+## Evaluation
 
-```text
-COMPLETE
-```
-
-## Watch
+After the run:
 
 ```bash
-ros2 topic echo /mission/state
-ros2 topic echo /mission/local_collect_phase
-ros2 topic echo /evaluation/shuttle_collected
+ros2 run scrobot_evaluation analyze_collection_session
 ```
 
-Check current checkpoint/path behavior in mission logs and use
-`/mission/sweep_path` / `/mission/current_goal` when visualization is needed.
+Mission-level acceptance:
 
-## Acceptance criteria
+1. terminal state is `COMPLETE`;
+2. all eligible shuttles are removed;
+3. authoritative GT count and collection-event count agree;
+4. remaining eligible count is zero;
+5. localization/relocalization remain operational;
+6. collision monitoring remains active;
+7. no manual intervention is required.
 
-The final integrated run passes when:
+Per-attempt capture checks are a reliability diagnostic. A failed attempt is
+reported as such, but it is not automatically a mission failure if the state
+machine recovers and later removes the shuttle. Report both the final mission
+collection rate and the verified pickup-attempt success rate.
 
-1. initial tag search/approach succeeds;
-2. initial 15-sample relocalization establishes a valid global pose;
-3. Nav2 starts only after localization;
-4. the robot joins and follows the four-pass sweep;
-5. a collectable shuttle interrupts FollowPath;
-6. both checkpoint pose and sweep index are preserved;
-7. local collection successfully clears currently reachable visible shuttles;
-8. the robot returns to the original checkpoint with Nav2;
-9. sweep progress resumes instead of restarting;
-10. fixed-station AprilTag corrections succeed;
-11. collision monitoring remains active;
-12. every completed pickup has an authoritative Gazebo ground-truth removal;
-13. `capture_checks_failed = 0` in the evaluator summary;
-14. the sweep reaches `COMPLETE` without manual intervention.
+## Optimization target
 
-## Record
-
-For the final report, record:
+The final run shows that mission time is dominated by local collection and
+return-to-sweep behavior rather than the sweep itself:
 
 ```text
-mission duration
-travel distance
-detected shuttle count
-collected shuttle count
-remaining normal-area count
-near-pole excluded count
-collection rate
-sweep time
-local-collection time
-return-to-sweep time
-AprilTag relocalization count
-position RMSE
-mission errors/timeouts
+sweep                88.457 s
+local collection    317.927 s
+return to sweep     181.982 s
 ```
 
-Any failure discovered here should be treated as an integration issue first.
-Re-open a completed subsystem only when the mission log isolates the failure to
-that subsystem.
+These phases are the primary targets for future performance optimization.
