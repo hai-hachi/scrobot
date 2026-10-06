@@ -67,6 +67,22 @@
       <collected_topic>/evaluation/shuttle_collected_gz</collected_topic>
       <collector_link>collector_link</collector_link>
       <enable_collection>true</enable_collection>
+
+      <!--
+        Fallback fixed transform from the Gazebo robot model frame
+        (base_footprint) to collector_link. Gazebo may reduce fixed URDF
+        joints, so collector_link is not guaranteed to exist as an ECS link
+        entity even though robot_state_publisher still publishes its TF.
+        base_footprint -> base_link = +0.050 m Z and
+        base_link -> collector_link = (+0.165, 0, -0.020) m.
+      -->
+      <collector_offset_x>0.165</collector_offset_x>
+      <collector_offset_y>0.0</collector_offset_y>
+      <collector_offset_z>0.030</collector_offset_z>
+      <collector_offset_roll>0.0</collector_offset_roll>
+      <collector_offset_pitch>0.0</collector_offset_pitch>
+      <collector_offset_yaw>0.0</collector_offset_yaw>
+
       <pickup_half_length>0.030</pickup_half_length>
       <pickup_half_width>0.150</pickup_half_width>
       <shuttle_center_offset_z>0.045</shuttle_center_offset_z>
