@@ -68,6 +68,7 @@ class CollectionTestMonitor(Node):
         self.declare_parameter('pickup_half_length', 0.030)
         self.declare_parameter('pickup_half_width', 0.150)
         self.declare_parameter('report_rate', 2.0)
+        self.declare_parameter('removal_grace', 1.0)
         self.declare_parameter('event_topic', '/debug/collection_test')
 
         self.center_offset_z = float(
@@ -87,6 +88,9 @@ class CollectionTestMonitor(Node):
         )
         self.report_rate = max(
             0.2, float(self.get_parameter('report_rate').value)
+        )
+        self.removal_grace = max(
+            0.1, float(self.get_parameter('removal_grace').value)
         )
         self.event_topic = str(
             self.get_parameter('event_topic').value
@@ -128,8 +132,15 @@ class CollectionTestMonitor(Node):
         self.max_count_seen = 0
         self.total_collected = 0
         self.removal_passes = 0
-        self.pending_collection_wall = None
-        self.removal_failure_reported_for = 0
+
+        # A physical removal attempt begins as soon as the independently
+        # calculated shuttle center enters the pickup rectangle. This lets the
+        # monitor detect the important failure mode where the Gazebo collection
+        # plugin emits no event at all.
+        self.zone_attempt_wall = None
+        self.zone_attempt_start_count = None
+        self.zone_attempt_start_events = None
+        self.zone_attempt_failed = False
 
         self.create_timer(1.0 / self.report_rate, self._report)
 
@@ -212,36 +223,60 @@ class CollectionTestMonitor(Node):
             self.pickup_half_width - abs(local[1]),
         )
 
+    def _start_zone_attempt(self):
+        if self.zone_attempt_wall is not None or self.last_count is None:
+            return
+        self.zone_attempt_wall = time.monotonic()
+        self.zone_attempt_start_count = int(self.last_count)
+        self.zone_attempt_start_events = int(self.total_collected)
+        self.zone_attempt_failed = False
+        self._emit(
+            'PICKUP_ZONE_ENTER '
+            f'gt_start={self.zone_attempt_start_count} '
+            f'events_start={self.zone_attempt_start_events}'
+        )
+
     def _check_removal_result(self):
-        if self.last_count is None or self.total_collected <= 0:
+        if self.zone_attempt_wall is None or self.last_count is None:
             return
 
-        expected_remaining = max(
-            0, self.max_count_seen - self.total_collected
+        removed = (
+            int(self.last_count) < int(self.zone_attempt_start_count)
         )
-        if self.last_count <= expected_remaining:
-            if self.removal_passes < self.total_collected:
-                self.removal_passes = self.total_collected
-                self.pending_collection_wall = None
-                self._emit(
-                    'REMOVAL_PASS '
-                    f'events={self.total_collected} '
-                    f'gt_remaining={self.last_count} '
-                    f'baseline={self.max_count_seen}'
-                )
+        event_seen = (
+            int(self.total_collected) > int(self.zone_attempt_start_events)
+        )
+
+        if removed and event_seen:
+            self.removal_passes += 1
+            self._emit(
+                'REMOVAL_PASS '
+                f'events={self.total_collected} '
+                f'gt_remaining={self.last_count} '
+                f'gt_start={self.zone_attempt_start_count}'
+            )
+            self.zone_attempt_wall = None
+            self.zone_attempt_start_count = None
+            self.zone_attempt_start_events = None
+            self.zone_attempt_failed = False
             return
 
         if (
-            self.pending_collection_wall is not None
-            and time.monotonic() - self.pending_collection_wall >= 1.0
-            and self.removal_failure_reported_for < self.total_collected
+            not self.zone_attempt_failed
+            and time.monotonic() - self.zone_attempt_wall >= self.removal_grace
         ):
-            self.removal_failure_reported_for = self.total_collected
+            missing = []
+            if not event_seen:
+                missing.append('collection_event')
+            if not removed:
+                missing.append('ground_truth_removal')
+            self.zone_attempt_failed = True
             self._emit(
                 'REMOVAL_FAIL '
+                f'missing={"+".join(missing) if missing else "unknown"} '
                 f'events={self.total_collected} '
                 f'gt_remaining={self.last_count} '
-                f'expected_at_most={expected_remaining}'
+                f'gt_start={self.zone_attempt_start_count}'
             )
 
     def _shuttle_cb(self, msg):
@@ -259,7 +294,6 @@ class CollectionTestMonitor(Node):
             base = self._center_base(center)
             local = None if base is None else self._base_to_collector(base)
             self.total_collected += 1
-            self.pending_collection_wall = time.monotonic()
 
             if local is None:
                 self._emit(
@@ -306,6 +340,9 @@ class CollectionTestMonitor(Node):
         )
         x_margin, y_margin = self._margins(local)
         inside = self._inside(local)
+        if inside:
+            self._start_zone_attempt()
+        self._check_removal_result()
 
         q = pose.orientation
         self._emit(
