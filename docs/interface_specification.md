@@ -14,10 +14,9 @@ map -> odom -> base_footprint -> base_link
 ```
 
 Ownership:
-
 - `map -> odom`: `tag_global_localizer`
 - `odom -> base_footprint`: EKF
-- fixed robot transforms: robot_state_publisher
+- fixed robot transforms: `robot_state_publisher`
 
 ## Control
 
@@ -44,25 +43,36 @@ Odometry and feedback:
 /odometry/filtered
 ```
 
-## Localization actions
+## Physical hardware
+
+| Interface | Type / role |
+| --- | --- |
+| `/hardware/collector_command` | `scrobot_interfaces/msg/CollectorCommand` |
+| `/hardware/status` | `scrobot_interfaces/msg/HardwareStatus` |
+| `SCROBOT_SERIAL_PORT` | STM32 UART override; default `/dev/ttyTHS1` |
+| UART | protocol v2, 1,000,000 baud |
+
+`CollectorCommand` carries left/right brush RPM, conveyor RPM and enable.
+`HardwareStatus` reports connection/arming/safety flags, protocol/firmware
+version, wheel state and collector feedback.
+
+## Actions
 
 ### /approach_tag
 
-Type: `scrobot_interfaces/action/ApproachTag`
+Type: `scrobot_interfaces/action/ApproachTag`.
 
 Find a usable tag and reach the requested tag-facing stand-off pose.
 
 ### /relocalize
 
-Type: `scrobot_interfaces/action/Relocalize`
+Type: `scrobot_interfaces/action/Relocalize`.
 
 Collect a stationary AprilTag sample batch and update `map -> odom`.
 
-## Mission action
-
 ### /local_collect
 
-Type: `scrobot_interfaces/action/LocalCollect`
+Type: `scrobot_interfaces/action/LocalCollect`.
 
 Collect currently eligible visible shuttles until no new eligible target
 remains, cancellation occurs, or timeout is reached.
@@ -79,10 +89,12 @@ Mission status:
 
 ## Camera
 
+Primary D435i interfaces:
+
 ```text
 /camera/camera/color/image_raw
 /camera/camera/color/camera_info
-/camera/camera/depth/image_raw
+/camera/camera/depth/image_rect_raw
 /camera/camera/depth/camera_info
 /camera/camera/aligned_depth_to_color/image_raw
 /camera/camera/depth/points
@@ -91,38 +103,34 @@ Mission status:
 /camera/camera/imu
 ```
 
-Validated simulated CameraInfo:
-
-```text
-color 1280x720  fx=906.94 fy=906.94 cx=640 cy=360
-depth  848x480  fx=420.29 fy=420.29 cx=424 cy=240
-```
+Not every launch enables every derived RGB-D product. The production YOLO node
+requires color, aligned depth-to-color and color CameraInfo.
 
 ## Shuttle perception
 
 ### /perception/shuttle_detections_2d
 
-Type: `vision_msgs/msg/Detection2DArray`
+Type: `vision_msgs/msg/Detection2DArray`.
 
 YOLO image detections.
 
 ### /perception/shuttle_detections_3d
 
-Type: `vision_msgs/msg/Detection3DArray`
+Type: `vision_msgs/msg/Detection3DArray`.
 
-Production YOLO + aligned-depth result in
-`camera_color_optical_frame`. Camera-depth validity is 0.20-3.00 m.
+YOLO + aligned-depth result in `camera_color_optical_frame`.
+Camera-depth validity is 0.20-3.00 m.
 
 ### /perception/collectable_shuttle_detections_3d
 
-Type: `vision_msgs/msg/Detection3DArray`
+Type: `vision_msgs/msg/Detection3DArray`.
 
 Mission-filtered detections. Eligibility is evaluated in `base_link` using
-0.50-1.80 m planar range plus net-pole exclusion.
+0.50-1.80 m planar range plus the net-pole exclusion.
 
 ### /perception/shuttle_debug/image
 
-Optional annotated RGB debug image.
+Optional annotated RGB image.
 
 ## AprilTag perception
 
@@ -132,23 +140,25 @@ Optional annotated RGB debug image.
 
 Type: `apriltag_msgs/msg/AprilTagDetectionArray`.
 
-AprilTag quality gating and global correction belong to
+Quality gating, tag approach and global correction belong to
 `scrobot_localization`.
 
-## Simulation-only truth
+## Simulation-only evaluation truth
 
 ```text
 /evaluation/ground_truth_odom       nav_msgs/msg/Odometry
 /evaluation/shuttle_ground_truth    geometry_msgs/msg/PoseArray
 /evaluation/shuttle_collected       geometry_msgs/msg/PoseArray
+/evaluation/ground_truth_path       nav_msgs/msg/Path
+/evaluation/estimated_path          nav_msgs/msg/Path
 ```
 
-These interfaces are forbidden as production mission/navigation inputs.
+These interfaces must not feed production mission/navigation decisions.
 
 ## QoS and time
 
 Simulation uses Gazebo `/clock` and `use_sim_time: true`.
 
-High-rate camera, IMU, scan, and raw detection topics generally use sensor-data
-Best Effort QoS. Mission state and selected debug geometry use explicit
-reliable/transient-local QoS where late-joiner behavior is required.
+Physical D435i sensor input uses SensorDataQoS where required. Mission state and
+selected debug/visualization geometry use reliable/transient-local QoS so RViz
+and evaluators can join late without losing the current state.
