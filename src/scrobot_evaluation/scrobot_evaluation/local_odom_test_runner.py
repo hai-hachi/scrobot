@@ -355,6 +355,9 @@ class LocalOdomTestRunner(Node):
             if self.manage_manual_mode
             else 'Local odom test complete.'
         )
+        self.shutdown_timer = self.create_timer(
+            0.25, self._shutdown_after_done
+        )
 
         # Let the DONE state propagate to the logger, then terminate this
         # process automatically. The evaluation launch should not require an
@@ -362,6 +365,12 @@ class LocalOdomTestRunner(Node):
         self.shutdown_timer = self.create_timer(
             0.25, self._shutdown_after_done
         )
+
+    def _shutdown_after_done(self):
+        if self.shutdown_timer is not None:
+            self.shutdown_timer.cancel()
+        if rclpy.ok():
+            rclpy.shutdown()
 
     def _shutdown_after_done(self):
         if self.shutdown_timer is not None:
