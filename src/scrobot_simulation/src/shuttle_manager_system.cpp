@@ -5,6 +5,7 @@
 #include <string>
 
 #include <gz/msgs/pose_v.pb.h>
+#include <gz/math/Pose3.hh>
 #include <gz/math/Vector3.hh>
 #include <gz/plugin/Register.hh>
 #include <gz/sim/Model.hh>
@@ -47,6 +48,23 @@ public:
       "shuttle_center_offset_z", this->shuttleCenterOffsetZ_).first;
     this->enableCollection_ = _sdf->Get<bool>(
       "enable_collection", this->enableCollection_).first;
+
+    // Gazebo's URDF -> SDF conversion may reduce fixed joints and therefore
+    // remove collector_link as an independent ECS link entity. Keep an
+    // explicit collector pose relative to the robot model as a deterministic
+    // fallback for that case. The current robot model frame is base_footprint.
+    this->collectorOffsetX_ = _sdf->Get<double>(
+      "collector_offset_x", this->collectorOffsetX_).first;
+    this->collectorOffsetY_ = _sdf->Get<double>(
+      "collector_offset_y", this->collectorOffsetY_).first;
+    this->collectorOffsetZ_ = _sdf->Get<double>(
+      "collector_offset_z", this->collectorOffsetZ_).first;
+    this->collectorOffsetRoll_ = _sdf->Get<double>(
+      "collector_offset_roll", this->collectorOffsetRoll_).first;
+    this->collectorOffsetPitch_ = _sdf->Get<double>(
+      "collector_offset_pitch", this->collectorOffsetPitch_).first;
+    this->collectorOffsetYaw_ = _sdf->Get<double>(
+      "collector_offset_yaw", this->collectorOffsetYaw_).first;
 
     if (this->updateRate_ <= 0.0) this->updateRate_ = 10.0;
     if (this->pickupHalfLength_ <= 0.0) this->pickupHalfLength_ = 0.030;
@@ -91,14 +109,42 @@ public:
     // Shuttle ground truth is independent of the collection mechanism. Keep
     // publishing poses even if the robot / collector link is temporarily not
     // resolvable (for example in dataset-generation or startup transients).
-    const bool collectorReady =
-      this->enableCollection_ &&
+    const bool robotReady =
+      this->robotEntity_ != gz::sim::kNullEntity &&
+      _ecm.HasEntity(this->robotEntity_);
+
+    // Prefer the actual collector_link entity when Gazebo preserves the fixed
+    // joint. If URDF fixed-joint reduction has lumped collector_link into the
+    // robot body, reconstruct the same fixed collector pose from the robot
+    // model pose. Collection must not silently disable merely because the
+    // fixed link no longer exists as an ECS entity.
+    const bool collectorEntityReady =
       this->collectorEntity_ != gz::sim::kNullEntity &&
       _ecm.HasEntity(this->collectorEntity_);
 
+    const bool collectorReady =
+      this->enableCollection_ && robotReady;
+
     gz::math::Pose3d collectorPose;
     if (collectorReady)
-      collectorPose = gz::sim::worldPose(this->collectorEntity_, _ecm);
+    {
+      if (collectorEntityReady)
+      {
+        collectorPose = gz::sim::worldPose(this->collectorEntity_, _ecm);
+      }
+      else
+      {
+        const auto robotPose = gz::sim::worldPose(this->robotEntity_, _ecm);
+        const gz::math::Pose3d collectorOffset(
+          this->collectorOffsetX_,
+          this->collectorOffsetY_,
+          this->collectorOffsetZ_,
+          this->collectorOffsetRoll_,
+          this->collectorOffsetPitch_,
+          this->collectorOffsetYaw_);
+        collectorPose = robotPose * collectorOffset;
+      }
+    }
 
     gz::msgs::Pose_V shuttleGroundTruthMsg;
     gz::msgs::Pose_V collectedMsg;
@@ -214,6 +260,16 @@ private:
   double pickupHalfWidth_{0.150};
   double shuttleCenterOffsetZ_{0.045};
   bool enableCollection_{true};
+
+  // Fallback fixed transform from robot model frame (base_footprint) to
+  // collector_link. XY / yaw drive the 2D pickup decision; Z is kept exact so
+  // debug geometry remains consistent with the URDF.
+  double collectorOffsetX_{0.165};
+  double collectorOffsetY_{0.0};
+  double collectorOffsetZ_{0.030};
+  double collectorOffsetRoll_{0.0};
+  double collectorOffsetPitch_{0.0};
+  double collectorOffsetYaw_{0.0};
 
   std::chrono::steady_clock::duration updatePeriod_{};
   std::chrono::steady_clock::duration lastUpdate_{};
