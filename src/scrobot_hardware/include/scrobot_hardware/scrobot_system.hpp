@@ -90,7 +90,7 @@ private:
   static double rad_s_to_rpm(double rad_s);
 
   int serial_fd_{-1};
-  std::string serial_port_{"/dev/ttyAMA0"};
+  std::string serial_port_{"/dev/ttyTHS1"};
   int baud_rate_{1000000};
 
   double counts_per_wheel_rev_{3264.0};
