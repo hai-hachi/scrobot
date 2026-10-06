@@ -217,6 +217,27 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /mission/current_goal
 
+    - Class: rviz_default_plugins/Pose
+      Name: Local Collect Pre-Pose
+      Enabled: true
+      Value: true
+      Alpha: 1
+      Color: 246; 211; 45
+      Shape: Arrow
+      Shaft Length: 0.25
+      Shaft Radius: 0.018
+      Head Length: 0.10
+      Head Radius: 0.045
+      Axes Length: 0.30
+      Axes Radius: 0.02
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /debug/smc_shuttle/pre_pose
+
     - Class: rviz_default_plugins/PoseArray
       Name: Shuttle Ground Truth
       Enabled: true
@@ -321,8 +342,8 @@ Visualization Manager:
 
     - Class: rviz_default_plugins/Path
       Name: Evaluation Ground Truth Path
-      Enabled: false
-      Value: false
+      Enabled: true
+      Value: true
       Alpha: 1
       Buffer Length: 1
       Color: 0; 200; 255
@@ -339,8 +360,8 @@ Visualization Manager:
 
     - Class: rviz_default_plugins/Path
       Name: Evaluation Estimated Path
-      Enabled: false
-      Value: false
+      Enabled: true
+      Value: true
       Alpha: 0.85
       Buffer Length: 1
       Color: 255; 0; 255
