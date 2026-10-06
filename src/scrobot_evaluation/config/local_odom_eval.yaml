@@ -26,6 +26,9 @@ local_odom_logger:
     run_name: ""
     flush_every_samples: 50
 
+    # Fixed post-test tail for reproducible DONE stability metrics.
+    done_record_duration: 0.50
+
 
 local_odom_test_runner:
   ros__parameters:
