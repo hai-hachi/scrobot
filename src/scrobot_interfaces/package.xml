@@ -2,7 +2,7 @@
 <package format="3">
   <name>scrobot_interfaces</name>
   <version>0.0.0</version>
-  <description>Project-specific ROS 2 actions for SC Robot localization and shuttle collection.</description>
+  <description>Project-specific ROS 2 actions and hardware messages for SC Robot.</description>
   <maintainer email="hai.hachi.154@gmail.com">sea</maintainer>
   <license>Apache-2.0</license>
 
