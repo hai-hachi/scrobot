@@ -437,6 +437,21 @@ class CollectionSessionEvaluator(Node):
                 self.fixed_relocalizations += 1
             if new_state == 'LOCAL_COLLECT':
                 self._start_collection_pass(now)
+
+                # local_collect_phase is transient-local and may already hold
+                # SMC_POSE before the mission state becomes active. In that
+                # case there will be no later transition *into* SMC_POSE for
+                # local_collect_phase_callback() to observe. Seed the current
+                # target from the cached phase so target 1 is still verified.
+                if self.phase_enter_time is None:
+                    self.phase_enter_time = now
+                if (
+                    self.current_target_start_remaining is None
+                    and self.local_collect_phase
+                    in ('SMC_POSE', 'STRAIGHT_COLLECT', 'OVERRUN')
+                ):
+                    self._begin_capture_target(now)
+
             if previous == 'LOCAL_COLLECT' and new_state != 'LOCAL_COLLECT':
                 self._finish_collection_pass(now)
 
@@ -447,6 +462,10 @@ class CollectionSessionEvaluator(Node):
             self.finalize(new_state)
 
     def _begin_capture_target(self, now):
+        # Ignore duplicate/replayed phase notifications for the same target.
+        if self.current_target_start_remaining is not None:
+            return
+
         self.current_target_index += 1
         self.current_target_start_time = now
         self.current_target_start_remaining = self.remaining_shuttles
