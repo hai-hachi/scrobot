@@ -39,9 +39,13 @@ def detection_position(detection):
 class LocalCollectController(Node):
     """Local shuttle collection with an SMC pre-pose and straight pickup pass.
 
-    The first currently eligible shuttle is frozen once in odom. A fixed
-    pre-collection pose is constructed with base_link 1.10 m from the shuttle
-    in the ground plane and facing it. Sliding-mode control acts directly on
+    The first currently eligible shuttle is frozen once in odom. For a target
+    farther than the nominal stand-off, a pre-collection pose is constructed
+    with base_link 1.10 m from the shuttle in the ground plane and facing it.
+    If the shuttle is already closer than that stand-off, the pre-pose is
+    clamped to the current base position so the controller aligns in place
+    instead of requesting an unreachable pose behind the robot. Sliding-mode
+    control acts directly on
     the base_link planar pose with controlled-point offset c = 0. Once position
     and heading tolerances are satisfied, the robot
     switches to the deliberately simple straight collection rule:
@@ -360,15 +364,29 @@ class LocalCollectController(Node):
         else:
             heading = math.atan2(dy, dx)
 
-        # Desired base_link pose exactly base_standoff_distance from the
-        # frozen shuttle. The SMC controlled-point offset is c = 0.
+        current_range = math.hypot(dx, dy)
+
+        # Do not place the staging pose behind the robot when a shuttle is
+        # already closer than the nominal stand-off. That geometry creates a
+        # deadlock for the forward-only SMC law: alpha ~= pi stops v while
+        # e_y ~= 0 and e_theta ~= 0 also make omega ~= 0.
+        #
+        # For close targets, clamp the stand-off to the current range. The
+        # resulting goal position is the current base position, so SMC only
+        # aligns the heading toward the frozen shuttle before the deliberate
+        # straight pickup pass.
+        effective_standoff = min(
+            self.base_standoff_distance,
+            current_range,
+        )
+
         goal_x = (
             target_odom[0]
-            - self.base_standoff_distance * math.cos(heading)
+            - effective_standoff * math.cos(heading)
         )
         goal_y = (
             target_odom[1]
-            - self.base_standoff_distance * math.sin(heading)
+            - effective_standoff * math.sin(heading)
         )
 
         return (
@@ -447,11 +465,16 @@ class LocalCollectController(Node):
         feedback.phase = 'SMC_POSE'
         goal_handle.publish_feedback(feedback)
 
+        effective_standoff = math.hypot(
+            target_odom[0] - pre_pose[0],
+            target_odom[1] - pre_pose[1],
+        )
         self.get_logger().info(
             'SMC base-link pre-pose: '
             f'goal_xy=({pre_pose[0]:.3f},{pre_pose[1]:.3f}), '
             f'yaw={math.degrees(pre_pose[2]):+.1f} deg, '
-            f'base_standoff={self.base_standoff_distance:.2f} m.'
+            f'standoff={effective_standoff:.3f} m '
+            f'(nominal={self.base_standoff_distance:.2f} m).'
         )
 
         period = 1.0 / max(self.control_rate, 1.0)
