@@ -172,9 +172,12 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'launch_rviz',
-            default_value='false',
+            default_value='true',
             choices=['true', 'false'],
-            description='Enable global RViz during the final mission.',
+            description=(
+                'Enable the master RViz view with court, sweep path, '
+                'mission goals, costmaps, and evaluation trajectories.'
+            ),
         ),
         DeclareLaunchArgument(
             'run_evaluation',
