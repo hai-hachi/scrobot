@@ -9,7 +9,6 @@ bool tx_queue_drop
 bool invalid_command
 
 uint32 status_flags
-string last_disarm_reason
 uint32 control_tick
 uint16 last_setpoint_seq
 uint16 feedback_sequence
