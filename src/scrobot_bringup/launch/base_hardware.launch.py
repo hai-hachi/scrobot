@@ -85,8 +85,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'serial_port',
-            default_value=EnvironmentVariable('SCROBOT_SERIAL_PORT', default_value='/dev/ttyAMA0'),
-            description='STM32 UART device. Override with SCROBOT_SERIAL_PORT on non-Pi hosts.',
+            default_value=EnvironmentVariable('SCROBOT_SERIAL_PORT', default_value='/dev/ttyTHS1'),
+            description='STM32 protocol-v2 UART device. Override with SCROBOT_SERIAL_PORT if needed.',
         ),
         DeclareLaunchArgument(
             'baud_rate',
