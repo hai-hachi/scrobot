@@ -2,7 +2,6 @@
 
 import math
 import threading
-import time
 
 import rclpy
 from apriltag_msgs.msg import AprilTagDetectionArray
@@ -488,6 +487,16 @@ class TagApproachController(Node):
             f'strategy={self.control_strategy}.'
         )
 
+    def _now_seconds(self):
+        """Current ROS time in seconds.
+
+        In simulation this follows /clock, so controller sampling windows,
+        detection freshness and action deadlines remain tied to sensor time
+        instead of host wall-clock performance. On hardware ROS time follows
+        the system clock.
+        """
+        return self.get_clock().now().nanoseconds * 1e-9
+
     def goal_callback(self, goal_request):
         with self.lock:
             if self.active:
@@ -544,7 +553,7 @@ class TagApproachController(Node):
 
             self.current_goal_handle = goal_handle
             self.action_future = future
-            self.action_deadline = time.monotonic() + timeout
+            self.action_deadline = self._now_seconds() + timeout
 
         self.control_timer.reset()
 
@@ -566,7 +575,7 @@ class TagApproachController(Node):
             if not self.active:
                 return
             self.pending_detection = msg
-            self.pending_detection_received = time.monotonic()
+            self.pending_detection_received = self._now_seconds()
 
     def build_candidate(self, detection, stamp, target_distance):
         tag_id = int(detection.id)
@@ -665,7 +674,7 @@ class TagApproachController(Node):
             locked_tag = self.tracked_tag_id
             target_distance = self.target_distance
 
-        now = time.monotonic()
+        now = self._now_seconds()
         if received is not None and now - received > self.pending_detection_max_age:
             with self.lock:
                 if self.pending_detection is msg:
@@ -840,7 +849,7 @@ class TagApproachController(Node):
                 best['goal_y'],
                 best['goal_yaw'],
             ]
-            self.last_tag_seen = time.monotonic()
+            self.last_tag_seen = self._now_seconds()
             self.last_tag_distance = best['distance']
             self.last_tag_bearing = best['bearing']
             self.last_face_angle = best['face_angle']
@@ -1584,7 +1593,7 @@ class TagApproachController(Node):
         if goal_handle is None:
             return
 
-        now = time.monotonic()
+        now = self._now_seconds()
         recent = (
             last_seen is not None
             and now - last_seen <= self.tag_lost_timeout
