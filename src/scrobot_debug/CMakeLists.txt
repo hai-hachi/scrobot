@@ -177,6 +177,13 @@ install(
 
 install(
   PROGRAMS
+    scripts/apriltag_image_overlay.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME apriltag_image_overlay
+)
+
+install(
+  PROGRAMS
     scripts/smc_shuttle_visualizer.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME smc_shuttle_visualizer
