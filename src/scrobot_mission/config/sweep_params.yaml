@@ -71,6 +71,14 @@ sweep_mission_manager:
 
     local_collect_timeout: 120.0
 
+    # Presentation / parking pose. Production mission launch keeps this
+    # optional; the full-mission regression enables it and spawns at the same
+    # location.
+    return_to_idle: false
+    idle_x: 6.771
+    idle_y: 3.721
+    idle_yaw: -2.356194490192345
+
     nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
     action_retry_period: 0.25
     controller_id: FollowPath
