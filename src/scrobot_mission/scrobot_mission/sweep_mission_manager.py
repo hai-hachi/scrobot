@@ -88,9 +88,9 @@ class SweepMissionManager(Node):
         # pose. The full-mission regression enables this and spawns the robot
         # at the same pose so start and finish are identical.
         self.declare_parameter('return_to_idle', False)
-        self.declare_parameter('idle_x', 6.70)
-        self.declare_parameter('idle_y', 3.65)
-        self.declare_parameter('idle_yaw', -2.356194490192345)
+        self.declare_parameter('idle_x', 8.19)
+        self.declare_parameter('idle_y', 1.70)
+        self.declare_parameter('idle_yaw', 3.14159)
 
         self.declare_parameter('spin_time_allowance', 10.0)
         self.declare_parameter('nav2_lifecycle_service', '/lifecycle_manager_navigation/manage_nodes')
