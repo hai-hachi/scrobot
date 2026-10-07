@@ -179,11 +179,11 @@ def generate_launch_description():
             description='Repeatable shuttle-layout seed.',
         ),
 
-        # Designated top-right idle/parking pose. It lies about 9.5 m along
+        # Designated top-right idle/parking pose. It lies about 9.4 m along
         # tag 1's inward viewing ray, giving a useful near-10 m AprilTag
         # presentation case. The mission returns here with Nav2 before COMPLETE.
-        DeclareLaunchArgument('robot_x', default_value='6.771'),
-        DeclareLaunchArgument('robot_y', default_value='3.721'),
+        DeclareLaunchArgument('robot_x', default_value='6.70'),
+        DeclareLaunchArgument('robot_y', default_value='3.65'),
         DeclareLaunchArgument('robot_z', default_value='0.003'),
         DeclareLaunchArgument(
             'robot_yaw',
