@@ -39,6 +39,7 @@ def generate_launch_description():
     robot_yaw = LaunchConfiguration('robot_yaw')
 
     launch_rviz = LaunchConfiguration('launch_rviz')
+    return_to_idle = LaunchConfiguration('return_to_idle')
     run_evaluation = LaunchConfiguration('run_evaluation')
     evaluation_run_name = LaunchConfiguration('evaluation_run_name')
 
@@ -104,7 +105,7 @@ def generate_launch_description():
         'sweep_mission.launch.py',
         {
             'use_sim_time': use_sim_time,
-            'return_to_idle': 'true',
+            'return_to_idle': return_to_idle,
             'idle_x': robot_x,
             'idle_y': robot_y,
             'idle_yaw': robot_yaw,
@@ -179,16 +180,13 @@ def generate_launch_description():
             description='Repeatable shuttle-layout seed.',
         ),
 
-        # Designated top-right idle/parking pose. It lies about 9.4 m along
-        # tag 1's inward viewing ray, giving a useful near-10 m AprilTag
-        # presentation case. The mission returns here with Nav2 before COMPLETE.
-        DeclareLaunchArgument('robot_x', default_value='6.70'),
-        DeclareLaunchArgument('robot_y', default_value='3.65'),
+        # Preserve the validated regression start by default. For presentation
+        # recording, override these with the designated top-right idle pose
+        # (6.70, 3.65, -2.35619) and set return_to_idle:=true.
+        DeclareLaunchArgument('robot_x', default_value='2.0'),
+        DeclareLaunchArgument('robot_y', default_value='3.05'),
         DeclareLaunchArgument('robot_z', default_value='0.003'),
-        DeclareLaunchArgument(
-            'robot_yaw',
-            default_value='-2.356194490192345',
-        ),
+        DeclareLaunchArgument('robot_yaw', default_value='3.14159'),
 
         DeclareLaunchArgument(
             'launch_rviz',
@@ -197,6 +195,15 @@ def generate_launch_description():
             description=(
                 'Enable the master RViz view with court, sweep path, '
                 'mission goals, costmaps, and evaluation trajectories.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'return_to_idle',
+            default_value='false',
+            choices=['true', 'false'],
+            description=(
+                'After the sweep, use Nav2 to return to the original spawn/idle '
+                'pose before publishing COMPLETE.'
             ),
         ),
         DeclareLaunchArgument(
