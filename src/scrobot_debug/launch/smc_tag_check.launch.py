@@ -35,6 +35,7 @@ def generate_launch_description():
     position_tolerance = LaunchConfiguration('position_tolerance')
     yaw_tolerance_deg = LaunchConfiguration('yaw_tolerance_deg')
     launch_rviz = LaunchConfiguration('launch_rviz')
+    rviz_config = LaunchConfiguration('rviz_config')
 
     robot_x = LaunchConfiguration('robot_x')
     robot_y = LaunchConfiguration('robot_y')
@@ -136,7 +137,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             'use_sim_time': use_sim_time,
-            'rviz_config': os.path.join(debug_pkg, 'config', 'smc_tag.rviz'),
+            'rviz_config': rviz_config,
         }.items(),
         condition=IfCondition(launch_rviz),
     )
@@ -235,7 +236,16 @@ def generate_launch_description():
             'launch_rviz',
             default_value='true',
             choices=['true', 'false'],
-            description='Launch the lightweight SMC tag RViz view.',
+            description='Launch the AprilTag controller RViz view.',
+        ),
+        DeclareLaunchArgument(
+            'rviz_config',
+            default_value=os.path.join(
+                debug_pkg,
+                'config',
+                'smc_tag.rviz',
+            ),
+            description='RViz config used by the isolated AprilTag test.',
         ),
 
         # Near tag 0, intentionally displaced from its desired pose so the
