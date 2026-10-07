@@ -182,7 +182,7 @@ def generate_launch_description():
 
         # Preserve the validated regression start by default. For presentation
         # recording, override these with the designated top-right idle pose
-        # (6.70, 3.65, -2.35619) and set return_to_idle:=true.
+        # (8.19, 1.70, 3.14159) and set return_to_idle:=true.
         DeclareLaunchArgument('robot_x', default_value='2.0'),
         DeclareLaunchArgument('robot_y', default_value='3.05'),
         DeclareLaunchArgument('robot_z', default_value='0.003'),
