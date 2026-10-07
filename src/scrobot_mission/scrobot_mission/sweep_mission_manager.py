@@ -42,6 +42,7 @@ class MissionState(Enum):
     RESTORE_SWEEP_HEADING = auto()
     LOCAL_COLLECT = auto()
     RETURN_TO_SWEEP = auto()
+    RETURN_TO_IDLE = auto()
     PAUSED = auto()
     COMPLETE = auto()
     ERROR = auto()
@@ -82,6 +83,15 @@ class SweepMissionManager(Node):
         self.declare_parameter('relocalize_due_distance', 15.0)
 
         self.declare_parameter('local_collect_timeout', 120.0)
+
+        # Optional final Nav2 leg back to a designated presentation/parking
+        # pose. The full-mission regression enables this and spawns the robot
+        # at the same pose so start and finish are identical.
+        self.declare_parameter('return_to_idle', False)
+        self.declare_parameter('idle_x', 6.771)
+        self.declare_parameter('idle_y', 3.721)
+        self.declare_parameter('idle_yaw', -2.356194490192345)
+
         self.declare_parameter('spin_time_allowance', 10.0)
         self.declare_parameter('nav2_lifecycle_service', '/lifecycle_manager_navigation/manage_nodes')
         self.declare_parameter('action_retry_period', 0.25)
@@ -116,6 +126,10 @@ class SweepMissionManager(Node):
         self.relocalize_timeout = float(self.get_parameter('relocalize_timeout').value)
         self.relocalize_due_distance = float(self.get_parameter('relocalize_due_distance').value)
         self.local_collect_timeout = float(self.get_parameter('local_collect_timeout').value)
+        self.return_to_idle = bool(self.get_parameter('return_to_idle').value)
+        self.idle_x = float(self.get_parameter('idle_x').value)
+        self.idle_y = float(self.get_parameter('idle_y').value)
+        self.idle_yaw = float(self.get_parameter('idle_yaw').value)
         self.spin_time_allowance = float(self.get_parameter('spin_time_allowance').value)
         self.action_retry_period = float(self.get_parameter('action_retry_period').value)
         self.controller_id = str(self.get_parameter('controller_id').value)
@@ -160,6 +174,9 @@ class SweepMissionManager(Node):
         self.path_pub = self.create_publisher(Path, '/mission/sweep_path', state_qos)
         self.stops_pub = self.create_publisher(PoseArray, '/mission/relocalization_stops', state_qos)
         self.goal_pub = self.create_publisher(PoseStamped, '/mission/current_goal', state_qos)
+        self.idle_pose_pub = self.create_publisher(
+            PoseStamped, '/mission/idle_pose', state_qos
+        )
 
         self.create_subscription(Odometry, self.odom_topic, self._odom_cb, reliable_qos)
         self.create_subscription(
@@ -183,6 +200,7 @@ class SweepMissionManager(Node):
         self.start_timer = self.create_timer(0.10, self._start_once)
         self.tick_timer = self.create_timer(self.action_retry_period, self._tick)
         self._publish_state()
+        self._publish_idle_pose()
 
     # ------------------------------------------------------------------
     # State / TF / geometry helpers
@@ -236,6 +254,16 @@ class SweepMissionManager(Node):
         msg.header.frame_id = self.frame_id
         msg.pose = copy.deepcopy(pose)
         return msg
+
+    def _idle_pose(self):
+        return self._pose_xy_yaw(
+            self.idle_x,
+            self.idle_y,
+            self.idle_yaw,
+        )
+
+    def _publish_idle_pose(self):
+        self.idle_pose_pub.publish(self._pose_stamped(self._idle_pose()))
 
     def _path_from_points(self, start_index, end_index=None, final_stop=None):
         path = Path()
@@ -462,6 +490,11 @@ class SweepMissionManager(Node):
             self.checkpoint_pose = None
             self.diversion_pending = False
             self._start_sweep_follow()
+        elif purpose == 'idle_return':
+            self._set_state(MissionState.COMPLETE)
+            self.get_logger().info(
+                'Returned to designated idle pose; mission complete.'
+            )
 
     def _cancel_navigation(self, reason):
         self.nav_cancel_reason = reason
@@ -490,7 +523,7 @@ class SweepMissionManager(Node):
         )
         if len(path.poses) < 2:
             if purpose == 'sweep_end':
-                self._set_state(MissionState.COMPLETE)
+                self._finish_sweep()
                 return
             self._begin_relocalization_stop()
             return
@@ -538,8 +571,22 @@ class SweepMissionManager(Node):
             self._begin_relocalization_stop()
         else:
             self.current_path_index = max(0, len(self.sweep_points) - 1)
+            self._finish_sweep()
+
+    def _finish_sweep(self):
+        self.get_logger().info('Sweep complete.')
+        if not self.return_to_idle:
             self._set_state(MissionState.COMPLETE)
-            self.get_logger().info('Sweep complete.')
+            return
+
+        self._set_state(MissionState.RETURN_TO_IDLE)
+        self._publish_idle_pose()
+        self.get_logger().info(
+            'Returning to designated idle pose with Nav2: '
+            f'x={self.idle_x:.2f}, y={self.idle_y:.2f}, '
+            f'yaw={math.degrees(self.idle_yaw):.1f} deg.'
+        )
+        self._send_navigation(self._idle_pose(), 'idle_return')
 
     def _cancel_follow(self, reason):
         self.follow_cancel_reason = reason
