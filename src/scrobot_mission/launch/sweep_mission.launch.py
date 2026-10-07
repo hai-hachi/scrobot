@@ -79,8 +79,8 @@ def generate_launch_description():
             default_value='false',
             choices=['true', 'false'],
         ),
-        DeclareLaunchArgument('idle_x', default_value='6.771'),
-        DeclareLaunchArgument('idle_y', default_value='3.721'),
+        DeclareLaunchArgument('idle_x', default_value='6.70'),
+        DeclareLaunchArgument('idle_y', default_value='3.65'),
         DeclareLaunchArgument(
             'idle_yaw',
             default_value='-2.356194490192345',
