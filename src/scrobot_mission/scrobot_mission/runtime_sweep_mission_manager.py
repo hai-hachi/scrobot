@@ -296,6 +296,7 @@ class RuntimeSweepMissionManager(SweepMissionManager):
 
         if resume_state in (
             MissionState.RETURN_TO_SWEEP,
+            MissionState.RETURN_TO_IDLE,
             MissionState.TAG_RECOVERY_RETURN,
         ):
             if self.manual_nav_pose is None or not self.manual_nav_purpose:
@@ -842,6 +843,11 @@ class RuntimeSweepMissionManager(SweepMissionManager):
             self.checkpoint_pose = None
             self.diversion_pending = False
             self._start_sweep_follow()
+        elif purpose == 'idle_return':
+            self._set_state(MissionState.COMPLETE)
+            self.get_logger().info(
+                'Returned to designated idle pose; mission complete.'
+            )
         elif purpose == 'test_goal':
             self.get_logger().info('Reached test goal; returning to saved sweep checkpoint.')
             self._start_test_return()
