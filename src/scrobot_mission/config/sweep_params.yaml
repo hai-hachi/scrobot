@@ -75,9 +75,9 @@ sweep_mission_manager:
     # optional; the full-mission regression enables it and spawns at the same
     # location.
     return_to_idle: false
-    idle_x: 6.70
-    idle_y: 3.65
-    idle_yaw: -2.356194490192345
+    idle_x: 8.19
+    idle_y: 1.70
+    idle_yaw: 3.14159
 
     nav2_lifecycle_service: /lifecycle_manager_navigation/manage_nodes
     action_retry_period: 0.25
