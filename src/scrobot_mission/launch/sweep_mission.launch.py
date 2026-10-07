@@ -16,6 +16,10 @@ def generate_launch_description():
     sweep_params = os.path.join(mission_pkg, 'config', 'sweep_params.yaml')
     local_collect_params = os.path.join(mission_pkg, 'config', 'local_collect.yaml')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    return_to_idle = LaunchConfiguration('return_to_idle')
+    idle_x = LaunchConfiguration('idle_x')
+    idle_y = LaunchConfiguration('idle_y')
+    idle_yaw = LaunchConfiguration('idle_yaw')
 
     global_localization = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -52,7 +56,16 @@ def generate_launch_description():
         executable='sweep_mission_manager',
         name='sweep_mission_manager',
         output='screen',
-        parameters=[sweep_params, {'use_sim_time': use_sim_time}],
+        parameters=[
+            sweep_params,
+            {
+                'use_sim_time': use_sim_time,
+                'return_to_idle': return_to_idle,
+                'idle_x': idle_x,
+                'idle_y': idle_y,
+                'idle_yaw': idle_yaw,
+            },
+        ],
     )
 
     return LaunchDescription([
@@ -60,6 +73,17 @@ def generate_launch_description():
             'use_sim_time',
             default_value='true',
             choices=['true', 'false'],
+        ),
+        DeclareLaunchArgument(
+            'return_to_idle',
+            default_value='false',
+            choices=['true', 'false'],
+        ),
+        DeclareLaunchArgument('idle_x', default_value='6.771'),
+        DeclareLaunchArgument('idle_y', default_value='3.721'),
+        DeclareLaunchArgument(
+            'idle_yaw',
+            default_value='-2.356194490192345',
         ),
         global_localization,
         navigation,
