@@ -27,6 +27,7 @@ def generate_launch_description():
 
     model_path = LaunchConfiguration('model_path')
     device = LaunchConfiguration('device')
+    publish_debug_image = LaunchConfiguration('publish_debug_image')
 
     shuttle_mode = LaunchConfiguration('shuttle_mode')
     shuttle_count = LaunchConfiguration('shuttle_count')
@@ -83,7 +84,7 @@ def generate_launch_description():
             'enable_yolo': 'true',
             'model_path': model_path,
             'device': device,
-            'publish_debug_image': 'false',
+            'publish_debug_image': publish_debug_image,
         },
     )
 
@@ -101,7 +102,13 @@ def generate_launch_description():
     mission = include(
         'scrobot_mission',
         'sweep_mission.launch.py',
-        {'use_sim_time': use_sim_time},
+        {
+            'use_sim_time': use_sim_time,
+            'return_to_idle': 'true',
+            'idle_x': robot_x,
+            'idle_y': robot_y,
+            'idle_yaw': robot_yaw,
+        },
     )
 
     telemetry = include(
@@ -146,6 +153,15 @@ def generate_launch_description():
             default_value='0',
             description='Ultralytics inference device.',
         ),
+        DeclareLaunchArgument(
+            'publish_debug_image',
+            default_value='true',
+            choices=['true', 'false'],
+            description=(
+                'Publish annotated YOLO RGB to '
+                '/perception/shuttle_debug/image for RQt/presentation capture.'
+            ),
+        ),
 
         DeclareLaunchArgument(
             'shuttle_mode',
@@ -163,12 +179,16 @@ def generate_launch_description():
             description='Repeatable shuttle-layout seed.',
         ),
 
-        # Start near the positive-Y net post and face approximately toward the
-        # net so the initial AprilTag acquisition starts from a known geometry.
-        DeclareLaunchArgument('robot_x', default_value='2.0'),
-        DeclareLaunchArgument('robot_y', default_value='3.05'),
+        # Designated top-right idle/parking pose. It lies about 9.5 m along
+        # tag 1's inward viewing ray, giving a useful near-10 m AprilTag
+        # presentation case. The mission returns here with Nav2 before COMPLETE.
+        DeclareLaunchArgument('robot_x', default_value='6.771'),
+        DeclareLaunchArgument('robot_y', default_value='3.721'),
         DeclareLaunchArgument('robot_z', default_value='0.003'),
-        DeclareLaunchArgument('robot_yaw', default_value='3.14159'),
+        DeclareLaunchArgument(
+            'robot_yaw',
+            default_value='-2.356194490192345',
+        ),
 
         DeclareLaunchArgument(
             'launch_rviz',
