@@ -119,6 +119,14 @@ def generate_launch_description():
         }],
     )
 
+    image_overlay = Node(
+        package='scrobot_debug',
+        executable='apriltag_image_overlay',
+        name='apriltag_image_overlay',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
+    )
+
     # Reuse the master debug RViz launcher so the existing court/net/pole
     # visualizer remains the single source for court geometry. Only the RViz
     # display config is replaced with the lightweight SMC-specific view.
@@ -277,7 +285,7 @@ def generate_launch_description():
         ),
         TimerAction(
             period=visualizer_delay,
-            actions=[visualizer],
+            actions=[visualizer, image_overlay],
         ),
         TimerAction(
             period=rviz_delay,
