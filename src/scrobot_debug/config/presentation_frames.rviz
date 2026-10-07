@@ -1,0 +1,140 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Court Grid
+      Enabled: true
+      Value: true
+      Alpha: 0.25
+      Cell Size: 1
+      Color: 120; 120; 120
+      Line Style:
+        Line Width: 0.02
+        Value: Lines
+      Plane: XY
+      Plane Cell Count: 20
+      Reference Frame: <Fixed Frame>
+
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Court / Net / Poles
+      Enabled: true
+      Value: true
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /court_markers
+
+    - Class: rviz_default_plugins/RobotModel
+      Name: Transparent Robot
+      Enabled: true
+      Value: true
+      Alpha: 0.28
+      Collision Enabled: false
+      Description Source: Topic
+      Description Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      TF Prefix: ""
+      Update Interval: 0
+      Visual Enabled: true
+
+    - Class: rviz_default_plugins/TF
+      Name: Robot TF Frames
+      Enabled: true
+      Value: true
+      Frame Timeout: 15
+      Marker Scale: 0.16
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Update Interval: 0
+      Frames:
+        All Enabled: true
+      Tree: {}
+
+    - Class: rviz_default_plugins/Axes
+      Name: base_link
+      Enabled: true
+      Value: true
+      Length: 0.30
+      Radius: 0.015
+      Reference Frame: base_link
+
+    - Class: rviz_default_plugins/Axes
+      Name: collector_link
+      Enabled: true
+      Value: true
+      Length: 0.24
+      Radius: 0.012
+      Reference Frame: collector_link
+
+    - Class: rviz_default_plugins/Axes
+      Name: camera_color_optical_frame
+      Enabled: true
+      Value: true
+      Length: 0.20
+      Radius: 0.010
+      Reference Frame: camera_color_optical_frame
+
+    - Class: rviz_default_plugins/PoseArray
+      Name: Shuttle Ground Truth
+      Enabled: true
+      Value: true
+      Alpha: 1
+      Color: 255; 0; 0
+      Shape: Axes
+      Axes Length: 0.14
+      Axes Radius: 0.008
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /evaluation/shuttle_ground_truth
+
+  Enabled: true
+  Global Options:
+    Background Color: 40; 40; 40
+    Fixed Frame: map
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Robot Close-up
+      Distance: 2.2
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0.20
+      Pitch: 0.45
+      Yaw: 0.75
+      Target Frame: base_link
+      Near Clip Distance: 0.01
+      Value: Orbit (rviz_default_plugins)
+    Saved: ~
+
+Window Geometry:
+  Height: 900
+  Width: 1500
+  X: 40
+  Y: 40
