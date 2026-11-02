@@ -60,11 +60,13 @@
 
         <camera name="d435i_color_camera">
           <!--
-            Match the factory calibration of the project's physical D435i
-            at 1280x720.  fx=906.940246582031 px gives HFOV=70.418899 deg.
-            Keep the simulated stream at 15 Hz for current system testing.
+            Match the calibrated SCROBOT D435i RGB stream at 1280x720.
+            fx=fy=1024.2141 px, cx=640 px, cy=360 px.
+            For 1280 px image width this gives HFOV=64.0 deg.
+            Gazebo derives the centered principal point and square-pixel
+            focal length from the image dimensions and horizontal FOV.
           -->
-          <horizontal_fov>1.229041640167034</horizontal_fov>
+          <horizontal_fov>1.117010720035761</horizontal_fov>
 
           <camera_info_topic>/camera/color/camera_info</camera_info_topic>
 
@@ -100,9 +102,9 @@
 
         <camera name="d435i_depth_camera">
           <!--
-            Match the factory calibration of the project's physical D435i
-            depth stream at 848x480.  fx=420.289855957031 px gives
-            HFOV=90.503557 deg.  Keep the simulated stream at 15 Hz.
+            Match the physical D435i depth stream at 848x480.
+            fx=420.289855957031 px gives HFOV=90.503557 deg.
+            Keep the simulated stream at 15 Hz.
           -->
           <horizontal_fov>1.5795850624055896</horizontal_fov>
 
