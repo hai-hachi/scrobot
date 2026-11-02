@@ -1,7 +1,10 @@
-# Final Full-Mission Validation
+# Full-Mission Validation
 
-The integrated Gazebo mission has been completed successfully with the final
-production stack.
+The integrated Gazebo mission has completed successfully with the production
+autonomy stack. The 50/50 result below is the **pre-freeze benchmark** recorded
+before the final RGB calibration correction on 3 November 2026. It remains a
+useful system benchmark, but it must not be labeled as the frozen simulation
+baseline until the post-calibration acceptance run passes.
 
 ## Final repeatable run
 
@@ -173,3 +176,50 @@ return to sweep     181.982 s
 ```
 
 These phases are the primary targets for future performance optimization.
+
+
+## Simulation-freeze acceptance run
+
+After the frozen camera calibration is applied, run the complete acceptance
+sequence again before tagging the simulation release.
+
+Camera requirements:
+
+```text
+RGB       1280x720 @ 15 Hz
+fx, fy    1024.2141 px
+cx, cy    640 px, 360 px
+HFOV      64.0 deg
+
+Depth     848x480 @ 15 Hz
+fx        420.289855957031 px
+HFOV      90.503557 deg
+```
+
+Acceptance sequence:
+
+1. verify `/camera/color/camera_info` and `/camera/depth/camera_info`;
+2. run AprilTag detection and global-localization regression;
+3. run YOLO/aligned-depth regression across the 0.50-1.80 m collection range;
+4. run the isolated SMC shuttle-removal regression;
+5. run the multi-shuttle local-collection regression;
+6. run sweep diversion, checkpoint return, and resume;
+7. run the 50-shuttle mixed layout with seed `20261003`.
+
+Frozen-baseline requirements:
+
+```text
+terminal state                   COMPLETE
+collected by ground truth        50 / 50
+collection events received       50
+GT - event delta                 0
+remaining eligible               0
+eligible collection rate         100%
+overall collection rate          100%
+manual interventions             0
+```
+
+Record the exact YOLO model SHA256 and environment manifest produced by
+`yoloshuttle/scripts/freeze_model_manifest.py` with the final result. Only
+after this post-calibration run passes should the result replace the
+pre-freeze benchmark above and the simulation release be tagged.

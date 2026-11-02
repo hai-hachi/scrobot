@@ -90,6 +90,26 @@ ros2 launch scrobot_debug full_mission_check.launch.py
 The validated repeatable run collected 50/50 shuttles and reached
 `COMPLETE`. Master RViz is enabled by default.
 
+### Frozen simulation camera calibration
+
+The final simulation-freeze branch uses the calibrated D435i geometry:
+
+```text
+RGB    1280x720 @ 15 Hz
+       fx = fy = 1024.2141 px
+       cx = 640 px
+       cy = 360 px
+       HFOV = 64.0 deg
+
+Depth  848x480 @ 15 Hz
+       fx = 420.289855957031 px
+       HFOV = 90.503557 deg
+```
+
+The production Gazebo camera and the event-driven YOLO dataset camera use the
+same RGB HFOV. Any change to these intrinsics invalidates the frozen full-mission
+benchmark and requires the final regression to be rerun.
+
 ## Physical Orin bringup
 
 See [docker/ORIN.md](docker/ORIN.md). The physical launch is deliberately
