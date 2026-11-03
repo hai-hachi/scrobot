@@ -71,6 +71,7 @@ class HealthMonitor(Node):
     def __init__(self):
         super().__init__("scrobot_health_monitor")
 
+        self.declare_parameter("expect_clock", True)
         self.declare_parameter("expect_mission", True)
         self.declare_parameter("expect_perception", True)
         self.declare_parameter("expect_localization", True)
@@ -80,6 +81,7 @@ class HealthMonitor(Node):
         self.declare_parameter("auto_snapshot", False)
         self.declare_parameter("snapshot_cooldown_sec", 90.0)
 
+        self.expect_clock = bool(self.get_parameter("expect_clock").value)
         self.expect_mission = bool(self.get_parameter("expect_mission").value)
         self.expect_perception = bool(self.get_parameter("expect_perception").value)
         self.expect_localization = bool(self.get_parameter("expect_localization").value)
@@ -380,6 +382,7 @@ class HealthMonitor(Node):
 
         return {
             "ready": now - self.started >= self.startup_grace,
+            "expect_clock": self.expect_clock,
             "expect_mission": self.expect_mission,
             "expect_perception": self.expect_perception,
             "expect_localization": self.expect_localization,
