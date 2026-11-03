@@ -5,6 +5,7 @@ scrobot_health_monitor:
     startup_grace_sec: 25.0
 
     # Full-mission defaults. Set false for a minimal Gazebo-only launch.
+    expect_clock: true
     expect_mission: true
     expect_perception: true
     expect_localization: true
