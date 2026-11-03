@@ -22,6 +22,7 @@ def generate_launch_description():
     model_path = LaunchConfiguration('model_path')
     device = LaunchConfiguration('device')
     publish_debug_image = LaunchConfiguration('publish_debug_image')
+    max_detection_rate = LaunchConfiguration('max_detection_rate')
     apriltag = Node(
         package='apriltag_ros',
         executable='apriltag_node',
@@ -74,6 +75,7 @@ def generate_launch_description():
                 'model_path': model_path,
                 'device': device,
                 'publish_debug_image': publish_debug_image,
+                'max_detection_rate': max_detection_rate,
             },
         ],
     )
@@ -107,6 +109,11 @@ def generate_launch_description():
             'publish_debug_image',
             default_value='false',
             choices=['true', 'false'],
+        ),
+        DeclareLaunchArgument(
+            'max_detection_rate',
+            default_value='15.0',
+            description='YOLO inference rate ceiling [Hz]; keep 15 for validated baseline.',
         ),
         apriltag,
         depth_scan_self_filter,
