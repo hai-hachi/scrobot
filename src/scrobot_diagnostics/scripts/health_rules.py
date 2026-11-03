@@ -79,8 +79,8 @@ ACTIONS = {
     "MOTION_STALLED": "Final velocity is nonzero but odometry is stationary; check controller and Gazebo physics.",
     "MISSION_NO_COMMAND": "Mission expects travel but command pipeline is idle; inspect Nav2 action/lifecycle.",
     "MISSION_STATE_TIMEOUT": "Inspect the pending ROS action and corresponding server logs.",
-    "RGB_STALE": "Check Gazebo RGB sensor and ros_gz_image bridge.",
-    "DEPTH_STALE": "Check Gazebo depth sensor and ros_gz_image bridge.",
+    "RGB_STALE": "Check RGB CameraInfo, image bridge and YOLO freshness.",
+    "DEPTH_STALE": "Check depth CameraInfo and the depth sensor/bridge.",
     "YOLO_STALE": "Check YOLO model, image/depth synchronization and detector process.",
     "MISSION_NOT_STARTED": "Check whether the mission launch and node are running.",
 }
