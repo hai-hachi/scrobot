@@ -28,6 +28,9 @@ def generate_launch_description():
     model_path = LaunchConfiguration('model_path')
     device = LaunchConfiguration('device')
     publish_debug_image = LaunchConfiguration('publish_debug_image')
+    yolo_max_detection_rate = LaunchConfiguration('yolo_max_detection_rate')
+    gz_headless = LaunchConfiguration('gz_headless')
+    gz_verbosity = LaunchConfiguration('gz_verbosity')
 
     shuttle_mode = LaunchConfiguration('shuttle_mode')
     shuttle_count = LaunchConfiguration('shuttle_count')
@@ -64,6 +67,8 @@ def generate_launch_description():
             'z': robot_z,
             'yaw': robot_yaw,
             'enable_magnetometer': 'false',
+            'gz_headless': gz_headless,
+            'gz_verbosity': gz_verbosity,
         },
     )
 
@@ -91,6 +96,7 @@ def generate_launch_description():
             'model_path': model_path,
             'device': device,
             'publish_debug_image': publish_debug_image,
+            'max_detection_rate': yolo_max_detection_rate,
         },
     )
 
@@ -177,8 +183,27 @@ def generate_launch_description():
             description='Ultralytics inference device.',
         ),
         DeclareLaunchArgument(
-            'publish_debug_image',
+            'gz_headless',
             default_value='true',
+            choices=['true', 'false'],
+            description=(
+                'Run Gazebo server-only (-s); RGB/depth sensors still render. '
+                'Set false to show the Gazebo GUI.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'gz_verbosity',
+            default_value='2',
+            description='Warnings/errors without high-volume Gazebo info logs.',
+        ),
+        DeclareLaunchArgument(
+            'yolo_max_detection_rate',
+            default_value='15.0',
+            description='YOLO limit [Hz]. Use 15 for the validated benchmark.',
+        ),
+        DeclareLaunchArgument(
+            'publish_debug_image',
+            default_value='false',
             choices=['true', 'false'],
             description=(
                 'Publish annotated YOLO RGB to '
@@ -212,7 +237,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'launch_telemetry',
-            default_value='true',
+            default_value='false',
             description='Keep legacy one-line terminal telemetry (can disable when using UI).',
         ),
         DeclareLaunchArgument(
@@ -237,7 +262,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'launch_rviz',
-            default_value='true',
+            default_value='false',
             choices=['true', 'false'],
             description=(
                 'Enable the master RViz view with court, sweep path, '
