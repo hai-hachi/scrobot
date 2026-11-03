@@ -17,7 +17,6 @@ scrobot_navigation
 scrobot_mission
 scrobot_interfaces
 scrobot_evaluation
-scrobot_diagnostics
 scrobot_debug
 ```
 
@@ -92,13 +91,6 @@ Physical hardware messages:
 ### scrobot_evaluation
 
 Repeatable local-odometry logging/analysis and full collection-session metrics.
-
-### scrobot_diagnostics
-
-Read-only health classification using steady-clock freshness checks, explicit
-mission failure reasons, structured incident events, standard /diagnostics,
-optional Foxglove bridge and bounded MCAP incident snapshots. It observes
-production topics but never sends motion commands or changes lifecycle state.
 
 ### scrobot_debug
 

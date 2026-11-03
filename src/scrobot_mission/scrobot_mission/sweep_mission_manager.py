@@ -171,9 +171,6 @@ class SweepMissionManager(Node):
         )
         reliable_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
         self.state_pub = self.create_publisher(String, '/mission/state', state_qos)
-        self.failure_pub = self.create_publisher(
-            String, '/mission/failure_reason', state_qos
-        )
         self.path_pub = self.create_publisher(Path, '/mission/sweep_path', state_qos)
         self.stops_pub = self.create_publisher(PoseArray, '/mission/relocalization_stops', state_qos)
         self.goal_pub = self.create_publisher(PoseStamped, '/mission/current_goal', state_qos)
@@ -203,7 +200,6 @@ class SweepMissionManager(Node):
         self.start_timer = self.create_timer(0.10, self._start_once)
         self.tick_timer = self.create_timer(self.action_retry_period, self._tick)
         self._publish_state()
-        self._publish_failure_reason('')
         self._publish_idle_pose()
 
     # ------------------------------------------------------------------
@@ -213,8 +209,6 @@ class SweepMissionManager(Node):
     def _set_state(self, state):
         if self.state != state:
             self.get_logger().info(f'{self.state.name} -> {state.name}')
-            if self.state == MissionState.ERROR and state != MissionState.ERROR:
-                self._publish_failure_reason('')
         self.state = state
         self._publish_state()
 
@@ -222,13 +216,6 @@ class SweepMissionManager(Node):
         msg = String()
         msg.data = self.state.name
         self.state_pub.publish(msg)
-
-    def _publish_failure_reason(self, reason):
-        # Expose the original human-readable failure on a durable topic.
-        # Diagnostic readers started later receive it without scraping logs.
-        msg = String()
-        msg.data = str(reason)
-        self.failure_pub.publish(msg)
 
     def _robot_pose(self):
         try:
@@ -798,7 +785,6 @@ class SweepMissionManager(Node):
             self._maybe_reschedule_for_relocalization()
 
     def _fail(self, message):
-        self._publish_failure_reason(message)
         self.get_logger().error(message)
         self._set_state(MissionState.ERROR)
 

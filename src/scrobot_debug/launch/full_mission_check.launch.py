@@ -28,9 +28,6 @@ def generate_launch_description():
     model_path = LaunchConfiguration('model_path')
     device = LaunchConfiguration('device')
     publish_debug_image = LaunchConfiguration('publish_debug_image')
-    yolo_max_detection_rate = LaunchConfiguration('yolo_max_detection_rate')
-    gz_headless = LaunchConfiguration('gz_headless')
-    gz_verbosity = LaunchConfiguration('gz_verbosity')
 
     shuttle_mode = LaunchConfiguration('shuttle_mode')
     shuttle_count = LaunchConfiguration('shuttle_count')
@@ -42,11 +39,6 @@ def generate_launch_description():
     robot_yaw = LaunchConfiguration('robot_yaw')
 
     launch_rviz = LaunchConfiguration('launch_rviz')
-    launch_telemetry = LaunchConfiguration('launch_telemetry')
-    launch_monitoring = LaunchConfiguration('launch_monitoring')
-    monitor_foxglove = LaunchConfiguration('monitor_foxglove')
-    monitor_recording = LaunchConfiguration('monitor_recording')
-    monitor_auto_snapshot = LaunchConfiguration('monitor_auto_snapshot')
     return_to_idle = LaunchConfiguration('return_to_idle')
     run_evaluation = LaunchConfiguration('run_evaluation')
     evaluation_run_name = LaunchConfiguration('evaluation_run_name')
@@ -67,8 +59,6 @@ def generate_launch_description():
             'z': robot_z,
             'yaw': robot_yaw,
             'enable_magnetometer': 'false',
-            'gz_headless': gz_headless,
-            'gz_verbosity': gz_verbosity,
         },
     )
 
@@ -96,7 +86,6 @@ def generate_launch_description():
             'model_path': model_path,
             'device': device,
             'publish_debug_image': publish_debug_image,
-            'max_detection_rate': yolo_max_detection_rate,
         },
     )
 
@@ -127,23 +116,6 @@ def generate_launch_description():
         'scrobot_debug',
         'telemetry.launch.py',
         {'use_sim_time': use_sim_time},
-        condition=IfCondition(launch_telemetry),
-    )
-
-    monitoring = include(
-        'scrobot_diagnostics',
-        'monitor.launch.py',
-        {
-            'use_sim_time': use_sim_time,
-            'expect_mission': 'true',
-            'expect_perception': 'true',
-            'expect_localization': 'true',
-            'expect_scan': 'true',
-            'enable_foxglove': monitor_foxglove,
-            'record_incidents': monitor_recording,
-            'auto_snapshot': monitor_auto_snapshot,
-        },
-        condition=IfCondition(launch_monitoring),
     )
 
     evaluation = include(
@@ -183,27 +155,8 @@ def generate_launch_description():
             description='Ultralytics inference device.',
         ),
         DeclareLaunchArgument(
-            'gz_headless',
-            default_value='true',
-            choices=['true', 'false'],
-            description=(
-                'Run Gazebo server-only (-s); RGB/depth sensors still render. '
-                'Set false to show the Gazebo GUI.'
-            ),
-        ),
-        DeclareLaunchArgument(
-            'gz_verbosity',
-            default_value='2',
-            description='Warnings/errors without high-volume Gazebo info logs.',
-        ),
-        DeclareLaunchArgument(
-            'yolo_max_detection_rate',
-            default_value='15.0',
-            description='YOLO limit [Hz]. Use 15 for the validated benchmark.',
-        ),
-        DeclareLaunchArgument(
             'publish_debug_image',
-            default_value='false',
+            default_value='true',
             choices=['true', 'false'],
             description=(
                 'Publish annotated YOLO RGB to '
@@ -236,33 +189,8 @@ def generate_launch_description():
         DeclareLaunchArgument('robot_yaw', default_value='3.14159'),
 
         DeclareLaunchArgument(
-            'launch_telemetry',
-            default_value='false',
-            description='Keep legacy one-line terminal telemetry (can disable when using UI).',
-        ),
-        DeclareLaunchArgument(
-            'launch_monitoring',
-            default_value='true',
-            description='Start the read-only SCROBOT health monitor.',
-        ),
-        DeclareLaunchArgument(
-            'monitor_foxglove',
-            default_value='false',
-            description='Start the optional Foxglove WebSocket bridge at port 8765.',
-        ),
-        DeclareLaunchArgument(
-            'monitor_recording',
-            default_value='false',
-            description='Enable optional memory-bounded rosbag2 MCAP incident recorder.',
-        ),
-        DeclareLaunchArgument(
-            'monitor_auto_snapshot',
-            default_value='false',
-            description='Ask incident recorder to save snapshots on persistent critical faults.',
-        ),
-        DeclareLaunchArgument(
             'launch_rviz',
-            default_value='false',
+            default_value='true',
             choices=['true', 'false'],
             description=(
                 'Enable the master RViz view with court, sweep path, '
@@ -310,7 +238,6 @@ def generate_launch_description():
                 local_localization,
                 perception,
                 telemetry,
-                monitoring,
             ],
         ),
         TimerAction(period=shuttle_delay, actions=[shuttles]),

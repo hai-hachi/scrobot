@@ -30,7 +30,6 @@ scrobot_navigation    Nav2 configuration
 scrobot_mission       sweep, shuttle diversion, local collection, resume
 scrobot_interfaces    project actions and hardware messages
 scrobot_evaluation    repeatable odometry and mission metrics
-scrobot_diagnostics   health reasons, fault events, Foxglove and MCAP snapshots
 scrobot_debug         isolated regression tests and master RViz
 ```
 
@@ -88,50 +87,8 @@ export SCROBOT_YOLO_MODEL=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_
 ros2 launch scrobot_debug full_mission_check.launch.py
 ```
 
-The pre-freeze repeatable run collected 50/50 shuttles and reached
-`COMPLETE`. The integrated launch now defaults to **server-only Gazebo**
-(with camera sensors running), no RViz, no annotated YOLO frames, and no
-repeating terminal telemetry. These are display/overhead reductions; the
-nominal sensor resolution, 15 Hz YOLO limit, physics timestep, control and
-collection parameters are unchanged.
-
-To view the Gazebo GUI and master RViz when debugging:
-
-```bash
-ros2 launch scrobot_debug full_mission_check.launch.py \
-  gz_headless:=false \
-  launch_rviz:=true \
-  publish_debug_image:=true \
-  launch_telemetry:=true \
-  gz_verbosity:=3
-```
-
-If the machine struggles during a full run, use the lightweight defaults first,
-and enable the optional Foxglove bridge and MCAP incident recorder **one at a
-time** after measuring performance.
-
-For CPU/GPU-constrained experiments you can also set
-`yolo_max_detection_rate:=10.0`, but this changes inference timing and
-therefore requires a new collection-rate regression before acceptance.
-
-### Live diagnostics and incident recording
-
-To use the read-only health monitor, Foxglove dashboard bridge and incident
-snapshots during a full mission:
-
-```bash
-ros2 launch scrobot_debug full_mission_check.launch.py \
-  launch_telemetry:=false \
-  monitor_foxglove:=true \
-  monitor_recording:=true \
-  monitor_auto_snapshot:=true
-```
-
-Open Foxglove at `ws://localhost:8765`. The monitor exposes
-`/diagnostics`, `/debug/health_summary`, `/debug/incident_events` and
-`/mission/failure_reason`. See
-[scrobot_diagnostics](src/scrobot_diagnostics/README.md) for install and
-dashboard panels. Monitoring does not control the robot.
+The validated repeatable run collected 50/50 shuttles and reached
+`COMPLETE`. Master RViz is enabled by default.
 
 ### Frozen simulation camera calibration
 

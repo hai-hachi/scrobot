@@ -11,7 +11,6 @@ from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
 )
-from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
@@ -38,7 +37,6 @@ def generate_launch_description():
 
     world = LaunchConfiguration('world')
     gz_verbosity = LaunchConfiguration('gz_verbosity')
-    gz_headless = LaunchConfiguration('gz_headless')
 
     description_share_parent = os.path.dirname(
         description_pkg
@@ -112,8 +110,6 @@ def generate_launch_description():
         parameters=[
             {
                 'qos': 'sensor_data',
-                # Bridge full-resolution images only while ROS has consumers.
-                'lazy': True,
             }
         ],
         remappings=[
@@ -128,28 +124,23 @@ def generate_launch_description():
         ],
     )
 
-    gazebo_launch = PythonLaunchDescriptionSource(
-        os.path.join(ros_gz_sim_pkg, 'launch', 'gz_sim.launch.py')
-    )
-
-    # -s starts only the Gazebo server; Ogre2 still renders RGB/depth
-    # sensors. It skips the expensive Gazebo 3D GUI entirely.
-    # Preserve the interactive Gazebo GUI for camera/physics debugging.
-    gazebo_headless = IncludeLaunchDescription(
-        gazebo_launch,
+    gazebo = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                ros_gz_sim_pkg,
+                'launch',
+                'gz_sim.launch.py',
+            )
+        ),
         launch_arguments={
-            'gz_args': ['-r -s -v ', gz_verbosity, ' ', world],
+            'gz_args': [
+                '-r -v ',
+                gz_verbosity,
+                ' ',
+                world,
+            ],
             'on_exit_shutdown': 'true',
         }.items(),
-        condition=IfCondition(gz_headless),
-    )
-    gazebo_gui = IncludeLaunchDescription(
-        gazebo_launch,
-        launch_arguments={
-            'gz_args': ['-r -v ', gz_verbosity, ' ', world],
-            'on_exit_shutdown': 'true',
-        }.items(),
-        condition=UnlessCondition(gz_headless),
     )
 
     return LaunchDescription([
@@ -168,19 +159,12 @@ def generate_launch_description():
             default_value='3',
             description='Gazebo verbosity level.',
         ),
-        DeclareLaunchArgument(
-            'gz_headless',
-            default_value='false',
-            choices=['true', 'false'],
-            description='Run Gazebo server-only (-s) with camera/depth sensors; no Gazebo GUI.',
-        ),
 
         add_description_resources,
         add_simulation_models,
         add_simulation_plugins,
 
-        gazebo_headless,
-        gazebo_gui,
+        gazebo,
         bridge,
         image_bridge,
     ])

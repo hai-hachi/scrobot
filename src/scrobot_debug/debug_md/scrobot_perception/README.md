@@ -19,7 +19,7 @@ ros2 launch scrobot_debug camera_check.launch.py
 Validated simulated D435i:
 
 ```text
-RGB    1280x720 @ 15 Hz, HFOV ~64.0 deg (fx=fy=1024.2141 px)
+RGB    1280x720 @ 15 Hz, HFOV ~70.42 deg
 Depth  848x480  @ 15 Hz, HFOV ~90.50 deg
 mount  15 deg downward
 nearest floor-level RGB shuttle center ~0.46 m from base_link
@@ -35,7 +35,7 @@ ros2 launch scrobot_debug yolo_perception_check.launch.py \
   shuttle_x:=1.50 shuttle_y:=0.30
 ```
 
-Historical pre-freeze simulation results (re-run after RGB calibration change):
+Representative accepted simulation results:
 
 ```text
 bearing +11.35 deg: planar RMSE 0.0270 m, lateral 0.0151 m

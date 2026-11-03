@@ -81,25 +81,11 @@ Mission status:
 
 ```text
 /mission/state
-/mission/failure_reason        transient-local std_msgs/msg/String
 /mission/local_collect_phase
 /mission/sweep_path
 /mission/relocalization_stops
 /mission/current_goal
 ```
-
-## Read-only health and incident monitoring
-
-| Interface | Type / role |
-| --- | --- |
-| `/diagnostics` | `diagnostic_msgs/msg/DiagnosticArray`; per-subsystem status plus overall blocker |
-| `/debug/health_summary` | Transient-local `std_msgs/msg/String` containing JSON reason and next action |
-| `/debug/incident_events` | Transient-local `diagnostic_msgs/msg/DiagnosticStatus` event timeline |
-| `/mission/failure_reason` | Transient-local `std_msgs/msg/String`; exact mission failure text |
-| `/rosbag2_recorder/snapshot` | Optional `rosbag2_interfaces/srv/Snapshot` recording trigger |
-
-Health and incident topics are observations only; they must never be used to
-bypass motion safety. See `scrobot_diagnostics/README.md`.
 
 ## Camera
 
