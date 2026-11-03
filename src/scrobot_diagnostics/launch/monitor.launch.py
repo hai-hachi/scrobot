@@ -72,6 +72,7 @@ def generate_launch_description():
             params,
             {
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
+                "expect_clock": LaunchConfiguration("expect_clock"),
                 "expect_mission": LaunchConfiguration("expect_mission"),
                 "expect_perception": LaunchConfiguration("expect_perception"),
                 "expect_localization": LaunchConfiguration("expect_localization"),
@@ -99,6 +100,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument("use_sim_time", default_value="true"),
+        DeclareLaunchArgument("expect_clock", default_value="true"),
         DeclareLaunchArgument("expect_mission", default_value="true"),
         DeclareLaunchArgument("expect_perception", default_value="true"),
         DeclareLaunchArgument("expect_localization", default_value="true"),
