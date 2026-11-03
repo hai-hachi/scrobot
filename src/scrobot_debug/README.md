@@ -18,8 +18,16 @@ telemetry, collection-session evaluation, and the complete sweep mission in a
 controlled startup order. The read-only `scrobot_diagnostics` monitor
 is enabled by default (Foxglove and MCAP recording remain opt-in).
 
-Use `launch_telemetry:=false` to disable the legacy high-volume terminal
-telemetry, and `monitor_foxglove:=true` to enable the WebSocket dashboard.
+The full-mission launch defaults to a **headless Gazebo server**, no RViz,
+no YOLO annotated image, and no repeating terminal telemetry, to avoid
+competing GPU renderers and unnecessary data copies. The robot still has
+1280x720 RGB, 848x480 depth, 15 Hz YOLO inference ceiling, 1 ms physics,
+and the validated mission/control settings.
+
+Set `gz_headless:=false launch_rviz:=true` for spatial debugging.
+Set `publish_debug_image:=true` for an annotated RGB view.
+Use `launch_telemetry:=true` for one-line terminal progress, or
+`monitor_foxglove:=true` for the WebSocket dashboard.
 Add `monitor_recording:=true monitor_auto_snapshot:=true` to keep a bounded
 in-memory incident cache and write it on critical faults. See
 `../scrobot_diagnostics/README.md`.
