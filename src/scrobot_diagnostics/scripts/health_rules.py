@@ -110,10 +110,15 @@ def evaluate(obs):
 
     findings = []
 
-    clock = _stream(obs, "Clock", "clock_age", 2.0, "CLOCK_STALLED")
-    if clock.level == WARN:
-        clock = Finding(clock.component, ERROR, clock.code, clock.message)
-    findings.append(clock)
+    if obs.get("expect_clock", True):
+        clock = _stream(obs, "Clock", "clock_age", 2.0, "CLOCK_STALLED")
+        if clock.level == WARN:
+            clock = Finding(clock.component, ERROR, clock.code, clock.message)
+        findings.append(clock)
+    else:
+        findings.append(Finding(
+            "Clock", OK, "NOT_REQUIRED", "Hardware mode does not require /clock."
+        ))
 
     if not ready:
         findings.append(Finding("Robot description", OK, "STARTING", "Startup grace period."))
