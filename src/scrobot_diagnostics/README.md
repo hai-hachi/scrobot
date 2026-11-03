@@ -6,6 +6,9 @@ manage lifecycles, cancel actions, or override Nav2 safety.
 
 ## What is implemented
 
+- Lightweight CameraInfo heartbeat checks (not full-resolution image copies).
+  For actual RGB processing, also inspect YOLO freshness and the Foxglove Image
+  panel.
 - **/diagnostics**: `diagnostic_msgs/msg/DiagnosticArray` at 1 Hz, with
   `SCROBOT/Overall` and per-subsystem status.
 - **/debug/health_summary**: a transient-local JSON string containing the
@@ -120,7 +123,7 @@ Optional controller work can still use PlotJuggler.
 | `CLOCK_STALLED` | No recent Gazebo clock | Paused sim, Gazebo bridge, network/DDS |
 | `ROBOT_DESCRIPTION_MISSING` | No durable description received | Xacro/robot_state_publisher |
 | `GLOBAL_TF_MISSING` | Map transform absent during active mission | AprilTag relocalization |
-| `RGB_STALE` or `DEPTH_STALE` | Image stream stopped | Gazebo sensor/bridge |
+| `RGB_STALE` or `DEPTH_STALE` | CameraInfo stream missing | Gazebo sensor/bridge; separately inspect pixel topics |
 | `DEPTH_SCAN_STALE` | Nav2 safety scan stopped | Pointcloud-to-scan/filter |
 | `COLLISION_STOP` | Safety polygon active | Collision state and scan |
 | `FINAL_COMMAND_SUPPRESSED` | Smoothed velocity nonzero, drive velocity zero | Collision monitor/output |
