@@ -74,6 +74,9 @@ ros2 launch scrobot_diagnostics monitor.launch.py \
   auto_snapshot:=true
 ```
 
+For physical hardware with `use_sim_time:=false`, add `expect_clock:=false`
+to avoid requiring a Gazebo clock.
+
 For the minimal Gazebo-only `simulation.launch.py` (without Nav2, EKF,
 filtered scan or YOLO):
 
