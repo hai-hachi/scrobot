@@ -304,14 +304,16 @@ class YoloShuttleDetector(Node):
                 self.get_logger().warn("Waiting for valid color CameraInfo...")
             return
 
+        # RGB is required for every inference. Defer the full aligned-depth
+        # conversion until YOLO finds at least one shuttle. On the many empty
+        # frames of a court sweep this avoids a 1280x720 float-frame conversion.
         try:
             color = self.bridge.imgmsg_to_cv2(
                 color_msg,
                 desired_encoding="bgr8",
             )
-            depth_m = self._depth_to_meters(depth_msg)
         except Exception as exc:
-            self.get_logger().error(f"Image conversion failed: {exc}")
+            self.get_logger().error(f"RGB image conversion failed: {exc}")
             return
 
         t0 = time.perf_counter()
@@ -341,6 +343,12 @@ class YoloShuttleDetector(Node):
 
         boxes = results[0].boxes if results else None
         if boxes is not None:
+            if len(boxes) > 0:
+                try:
+                    depth_m = self._depth_to_meters(depth_msg)
+                except Exception as exc:
+                    self.get_logger().error(f"Depth image conversion failed: {exc}")
+                    return
             xyxy = boxes.xyxy.detach().cpu().numpy()
             confs = boxes.conf.detach().cpu().numpy()
 
