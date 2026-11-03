@@ -12,6 +12,7 @@ from health_rules import ERROR, OK, WARN, evaluate, primary_finding  # noqa: E40
 def good(**changes):
     obs = {
         "ready": True,
+        "expect_clock": True,
         "expect_mission": True,
         "expect_perception": True,
         "expect_localization": True,
@@ -140,6 +141,10 @@ class HealthRulesTest(unittest.TestCase):
             odom_age=None, scan_age=None,
             tf_local=False, tf_global=False,
         ))
+        self.assertEqual(primary_finding(findings).level, OK)
+
+    def test_hardware_mode_no_clock_required(self):
+        findings = evaluate(good(expect_clock=False, clock_age=None))
         self.assertEqual(primary_finding(findings).level, OK)
 
     def test_stale_yolo(self):
