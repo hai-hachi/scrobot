@@ -22,7 +22,7 @@ Use `launch_telemetry:=false` to disable the legacy high-volume terminal
 telemetry, and `monitor_foxglove:=true` to enable the WebSocket dashboard.
 Add `monitor_recording:=true monitor_auto_snapshot:=true` to keep a bounded
 in-memory incident cache and write it on critical faults. See
-`src/scrobot_diagnostics/README.md`.
+`../scrobot_diagnostics/README.md`.
 
 ## Main regression launches
 
