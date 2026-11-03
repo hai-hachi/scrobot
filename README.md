@@ -89,7 +89,30 @@ ros2 launch scrobot_debug full_mission_check.launch.py
 ```
 
 The pre-freeze repeatable run collected 50/50 shuttles and reached
-`COMPLETE`. Master RViz is enabled by default.
+`COMPLETE`. The integrated launch now defaults to **server-only Gazebo**
+(with camera sensors running), no RViz, no annotated YOLO frames, and no
+repeating terminal telemetry. These are display/overhead reductions; the
+nominal sensor resolution, 15 Hz YOLO limit, physics timestep, control and
+collection parameters are unchanged.
+
+To view the Gazebo GUI and master RViz when debugging:
+
+```bash
+ros2 launch scrobot_debug full_mission_check.launch.py \
+  gz_headless:=false \
+  launch_rviz:=true \
+  publish_debug_image:=true \
+  launch_telemetry:=true \
+  gz_verbosity:=3
+```
+
+If the machine struggles during a full run, use the lightweight defaults first,
+and enable the optional Foxglove bridge and MCAP incident recorder **one at a
+time** after measuring performance.
+
+For CPU/GPU-constrained experiments you can also set
+`yolo_max_detection_rate:=10.0`, but this changes inference timing and
+therefore requires a new collection-rate regression before acceptance.
 
 ### Live diagnostics and incident recording
 
