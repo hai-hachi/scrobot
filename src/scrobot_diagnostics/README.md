@@ -45,6 +45,18 @@ source install/setup.bash
 Foxglove is optional. To run the diagnostics node without the bridge, the
 normal ROS 2 dependencies are sufficient.
 
+## Run without overloading Gazebo
+
+The integrated full-mission launch now defaults to no Gazebo GUI, no RViz, no
+annotated YOLO video, and no one-line terminal telemetry. Monitoring itself
+remains enabled, but the Foxglove bridge and MCAP recorder default to off.
+
+When diagnosing a freeze, first keep Foxglove and MCAP disabled. After the
+simulation has a healthy real-time factor, turn on the Foxglove bridge, then
+recording, one at a time. The diagnostic clock watchdog detects a paused
+Gazebo simulation by checking that time advances, not merely that messages
+continue arriving.
+
 ## Launch alongside a full mission (recommended)
 
 ```bash
