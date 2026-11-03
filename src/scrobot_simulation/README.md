@@ -25,6 +25,18 @@ Debug-only worlds/monitors belong in `scrobot_debug`.
 ros2 launch scrobot_simulation simulation.launch.py
 ```
 
+This standalone launch remains **interactive** by default. To run only the
+Gazebo server (with RGB/depth sensors active), use:
+
+```bash
+ros2 launch scrobot_simulation simulation.launch.py gz_headless:=true
+```
+
+The full-mission debug launch defaults to server-only mode automatically.
+The `ros_gz_image` bridge uses lazy subscriptions to avoid transferring
+full-resolution images when no ROS node is consuming them. Gazebo camera
+frustum overlays are disabled; the camera itself still renders.
+
 The D435i simulation uses:
 
 ```text
