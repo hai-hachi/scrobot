@@ -26,7 +26,7 @@ from rclpy.qos import (
 from rclpy.time import Time
 from rosbag2_interfaces.srv import Snapshot
 from rosgraph_msgs.msg import Clock as ClockMessage
-from sensor_msgs.msg import Image, LaserScan
+from sensor_msgs.msg import CameraInfo, LaserScan
 from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 from vision_msgs.msg import Detection3DArray
@@ -145,12 +145,14 @@ class HealthMonitor(Node):
         self.create_subscription(
             String, "/robot_description", self._robot_description_cb, state_qos
         )
+        # CameraInfo is tiny compared with raw RGB (~2.8 MB/frame).
+        # Sample sensor metadata here; YOLO freshness checks the RGB pipeline.
         self.create_subscription(
-            Image, "/camera/camera/color/image_raw",
+            CameraInfo, "/camera/camera/color/camera_info",
             lambda _m: self._touch("rgb"), qos_profile_sensor_data,
         )
         self.create_subscription(
-            Image, "/camera/camera/depth/image_raw",
+            CameraInfo, "/camera/camera/depth/camera_info",
             lambda _m: self._touch("depth"), qos_profile_sensor_data,
         )
         self.create_subscription(
