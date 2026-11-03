@@ -127,11 +127,23 @@ def evaluate(obs):
 
     findings.append(_stream(obs, "RGB", "rgb_age", 3.0, "RGB_STALE"))
     findings.append(_stream(obs, "Depth", "depth_age", 3.0, "DEPTH_STALE"))
-    scan = _stream(obs, "Depth scan", "scan_age", 3.0, "DEPTH_SCAN_STALE")
-    findings.append(scan)
-    findings.append(_stream(obs, "Odometry", "odom_age", 2.0, "ODOMETRY_STALE"))
+    if obs.get("expect_scan", True):
+        findings.append(_stream(obs, "Depth scan", "scan_age", 3.0, "DEPTH_SCAN_STALE"))
+    else:
+        findings.append(Finding(
+            "Depth scan", OK, "NOT_REQUIRED", "Scan pipeline is optional in this launch."
+        ))
 
-    if not ready:
+    if obs.get("expect_localization", True):
+        findings.append(_stream(obs, "Odometry", "odom_age", 2.0, "ODOMETRY_STALE"))
+    else:
+        findings.append(Finding(
+            "Odometry", OK, "NOT_REQUIRED", "Localization is optional in this launch."
+        ))
+
+    if not obs.get("expect_localization", True):
+        findings.append(Finding("TF", OK, "NOT_REQUIRED", "EKF/TF is optional in this launch."))
+    elif not ready:
         findings.append(Finding("TF", OK, "STARTING", "Startup grace period."))
     elif obs.get("tf_local") is False:
         findings.append(Finding(
