@@ -28,7 +28,7 @@ ros2 launch scrobot_simulation simulation.launch.py
 The D435i simulation uses:
 
 ```text
-RGB    1280x720 @ 15 Hz, HFOV 70.418899 deg
+RGB    1280x720 @ 15 Hz, HFOV 64.0 deg (fx=fy=1024.2141 px)
 Depth  848x480  @ 15 Hz, HFOV 90.503557 deg
 Depth clip 0.20-10.0 m
 camera mount 15 deg downward

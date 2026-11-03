@@ -15,7 +15,14 @@ ros2 launch scrobot_debug full_mission_check.launch.py \
 Default final layout is 50 mixed shuttles with seed 20261003. The launch starts
 simulation, production control, local EKF, production YOLO perception,
 telemetry, collection-session evaluation, and the complete sweep mission in a
-controlled startup order.
+controlled startup order. The read-only `scrobot_diagnostics` monitor
+is enabled by default (Foxglove and MCAP recording remain opt-in).
+
+Use `launch_telemetry:=false` to disable the legacy high-volume terminal
+telemetry, and `monitor_foxglove:=true` to enable the WebSocket dashboard.
+Add `monitor_recording:=true monitor_auto_snapshot:=true` to keep a bounded
+in-memory incident cache and write it on critical faults. See
+`../scrobot_diagnostics/README.md`.
 
 ## Main regression launches
 

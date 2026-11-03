@@ -30,6 +30,7 @@ scrobot_navigation    Nav2 configuration
 scrobot_mission       sweep, shuttle diversion, local collection, resume
 scrobot_interfaces    project actions and hardware messages
 scrobot_evaluation    repeatable odometry and mission metrics
+scrobot_diagnostics   health reasons, fault events, Foxglove and MCAP snapshots
 scrobot_debug         isolated regression tests and master RViz
 ```
 
@@ -87,8 +88,27 @@ export SCROBOT_YOLO_MODEL=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_
 ros2 launch scrobot_debug full_mission_check.launch.py
 ```
 
-The validated repeatable run collected 50/50 shuttles and reached
+The pre-freeze repeatable run collected 50/50 shuttles and reached
 `COMPLETE`. Master RViz is enabled by default.
+
+### Live diagnostics and incident recording
+
+To use the read-only health monitor, Foxglove dashboard bridge and incident
+snapshots during a full mission:
+
+```bash
+ros2 launch scrobot_debug full_mission_check.launch.py \
+  launch_telemetry:=false \
+  monitor_foxglove:=true \
+  monitor_recording:=true \
+  monitor_auto_snapshot:=true
+```
+
+Open Foxglove at `ws://localhost:8765`. The monitor exposes
+`/diagnostics`, `/debug/health_summary`, `/debug/incident_events` and
+`/mission/failure_reason`. See
+[scrobot_diagnostics](src/scrobot_diagnostics/README.md) for install and
+dashboard panels. Monitoring does not control the robot.
 
 ### Frozen simulation camera calibration
 

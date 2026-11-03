@@ -1,0 +1,16 @@
+scrobot_health_monitor:
+  ros__parameters:
+    # Steady-clock liveness checks; these still run when /clock stalls.
+    report_rate: 1.0
+    startup_grace_sec: 25.0
+
+    # Full-mission defaults. Set false for a minimal Gazebo-only launch.
+    expect_clock: true
+    expect_mission: true
+    expect_perception: true
+    expect_localization: true
+    expect_scan: true
+
+    # Recorder is opt-in; no automatic bag writes unless explicitly enabled.
+    auto_snapshot: false
+    snapshot_cooldown_sec: 90.0
