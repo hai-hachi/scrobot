@@ -99,6 +99,7 @@ class HealthMonitor(Node):
         self.seen = {}
         self.commands = {}
         self.robot_description_seen = False
+        self.last_clock_stamp_ns = None
         self.mission_state = "UNKNOWN"
         self.phase = "UNKNOWN"
         self.control_mode = "UNKNOWN"
@@ -141,7 +142,7 @@ class HealthMonitor(Node):
         )
 
         self.create_subscription(
-            ClockMessage, "/clock", lambda _m: self._touch("clock"),
+            ClockMessage, "/clock", self._clock_cb,
             qos_profile_sensor_data,
         )
         self.create_subscription(
@@ -219,6 +220,14 @@ class HealthMonitor(Node):
     def _age(self, key, now):
         stamp = self.seen.get(key)
         return None if stamp is None else max(0.0, now - stamp)
+
+    def _clock_cb(self, msg):
+        # Gazebo can continue publishing /clock with the same timestamp when
+        # paused. Treat only *advancing* ROS time as a healthy simulation tick.
+        stamp_ns = int(msg.clock.sec) * 1_000_000_000 + int(msg.clock.nanosec)
+        if stamp_ns != self.last_clock_stamp_ns:
+            self.last_clock_stamp_ns = stamp_ns
+            self._touch("clock")
 
     def _robot_description_cb(self, msg):
         if msg.data.strip():
