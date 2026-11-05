@@ -1,0 +1,40 @@
+name: Simulation Local Transport Smoke Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/scrobot_simulation/launch/simulation.launch.py"
+      - "src/scrobot_debug/launch/full_mission_check.launch.py"
+      - ".github/workflows/simulation_network.yml"
+  workflow_dispatch:
+
+jobs:
+  launch-syntax:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check launch syntax and default transport settings
+        run: |
+          python3 -m py_compile \
+            src/scrobot_simulation/launch/simulation.launch.py \
+            src/scrobot_debug/launch/full_mission_check.launch.py
+          python3 - <<'PY'
+          from pathlib import Path
+
+          sim = Path("src/scrobot_simulation/launch/simulation.launch.py").read_text()
+          mission = Path("src/scrobot_debug/launch/full_mission_check.launch.py").read_text()
+          for name, code in (("simulation", sim), ("full mission", mission)):
+              assert "'local_only'" in code, name
+              assert "default_value='true'" in code, name
+              assert "SetEnvironmentVariable(" in code, name
+              assert "ROS_AUTOMATIC_DISCOVERY_RANGE" in code, name
+              assert "'LOCALHOST'" in code, name
+              assert "'GZ_IP'" in code, name
+              assert "'127.0.0.1'" in code, name
+              assert "condition=IfCondition(local_only)" in code, name
+          assert "'local_only': local_only" in mission
+          assert "scrobot_diagnostics" not in mission
+          assert "gz_headless" not in mission
+          print("Pre-Foxglove launch plus VPN-safe local defaults: OK")
+          PY
