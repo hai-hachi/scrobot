@@ -87,8 +87,14 @@ export SCROBOT_YOLO_MODEL=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_
 ros2 launch scrobot_debug full_mission_check.launch.py
 ```
 
-The validated repeatable run collected 50/50 shuttles and reached
-`COMPLETE`. Master RViz is enabled by default.
+The historical validated repeatable run collected 50/50 shuttles and reached
+`COMPLETE`. Master RViz is enabled by default. That run used the
+**magnetometer-disabled** configuration.
+
+The simulated 5883L magnetometer is now enabled by default for new full-mission
+runs (`/imu/mag` at 50 Hz, fused by Madgwick). Use
+`use_magnetometer:=false` to reproduce the historical benchmark. The physical
+Orin bringup still disables external magnetometer fusion.
 
 ## Physical Orin bringup
 
