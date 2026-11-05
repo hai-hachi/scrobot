@@ -104,7 +104,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'use_magnetometer',
-            default_value='false',
+            default_value='true',
             choices=['true', 'false'],
             description='Enable simulated /imu/mag and fuse it in Madgwick.',
         ),
