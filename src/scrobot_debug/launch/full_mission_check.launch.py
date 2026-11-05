@@ -2,7 +2,12 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    SetEnvironmentVariable,
+    TimerAction,
+)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration
@@ -24,6 +29,7 @@ def include(package, launch_file, arguments=None, condition=None):
 
 def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
+    local_only = LaunchConfiguration('local_only')
 
     model_path = LaunchConfiguration('model_path')
     device = LaunchConfiguration('device')
@@ -59,6 +65,7 @@ def generate_launch_description():
             'z': robot_z,
             'yaw': robot_yaw,
             'enable_magnetometer': 'false',
+            'local_only': local_only,
         },
     )
 
@@ -136,6 +143,15 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'local_only',
+            default_value='true',
+            choices=['true', 'false'],
+            description=(
+                'Keep all simulation ROS 2 and Gazebo communication local '
+                'when a VPN/WARP interface is active. Disable for multi-host runs.'
+            ),
+        ),
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='true',
@@ -230,6 +246,17 @@ def generate_launch_description():
             ),
         ),
 
+        # Apply to the entire autonomy stack, not only the Gazebo subprocesses.
+        SetEnvironmentVariable(
+            name='ROS_AUTOMATIC_DISCOVERY_RANGE',
+            value='LOCALHOST',
+            condition=IfCondition(local_only),
+        ),
+        SetEnvironmentVariable(
+            name='GZ_IP',
+            value='127.0.0.1',
+            condition=IfCondition(local_only),
+        ),
         simulation,
         TimerAction(
             period=stack_delay,
