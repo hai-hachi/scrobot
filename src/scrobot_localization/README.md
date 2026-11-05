@@ -45,8 +45,18 @@ the EKF.
                           +--> odom -> base_footprint
 ```
 
-The default system uses the D435i IMU without a magnetometer. The optional
-`/imu/mag` path remains available for controlled tests.
+For Gazebo full missions and `localization_check.launch.py`, the simulated
+external magnetometer now publishes `/imu/mag` (50 Hz) and Madgwick
+(`use_mag:=true`) fuses it with the D435i IMU before EKF yaw estimation.
+
+The standalone `localization.launch.py` still defaults to
+`use_magnetometer:=false`, because it is also used by physical Orin bringup,
+which currently lacks the restored external 5883L hardware driver. Full-mission
+and localization-test launches explicitly opt in. For isolated localization,
+pass `use_magnetometer:=true` only when `/imu/mag` is present.
+
+Historical 50/50 Gazebo results were recorded without magnetic fusion and
+must be revalidated before reporting new performance.
 
 ## AprilTag localization
 
