@@ -4,8 +4,20 @@
 
 ```bash
 ros2 launch scrobot_debug localization_check.launch.py \
-  use_magnetometer:=false
+  use_magnetometer:=true
 ```
+
+The magnetometer-enabled simulation now uses `/imu/mag` at 50 Hz.
+Confirm delivery and Madgwick's effective setting:
+
+```bash
+ros2 topic hz /imu/mag
+ros2 param get /imu_filter_madgwick use_mag
+ros2 topic hz /imu/data
+ros2 run tf2_ros tf2_echo base_link mag_link
+```
+
+Set `use_magnetometer:=false` to reproduce the October no-mag benchmark.
 
 Expected production TF owners:
 
