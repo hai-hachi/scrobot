@@ -24,6 +24,7 @@ def include(package, launch_file, arguments=None, condition=None):
 
 def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
+    use_magnetometer = LaunchConfiguration('use_magnetometer')
 
     model_path = LaunchConfiguration('model_path')
     device = LaunchConfiguration('device')
@@ -58,7 +59,7 @@ def generate_launch_description():
             'y': robot_y,
             'z': robot_z,
             'yaw': robot_yaw,
-            'enable_magnetometer': 'false',
+            'enable_magnetometer': use_magnetometer,
         },
     )
 
@@ -73,7 +74,7 @@ def generate_launch_description():
         'localization.launch.py',
         {
             'use_sim_time': use_sim_time,
-            'use_magnetometer': 'false',
+            'use_magnetometer': use_magnetometer,
         },
     )
 
@@ -140,6 +141,15 @@ def generate_launch_description():
             'use_sim_time',
             default_value='true',
             choices=['true', 'false'],
+        ),
+        DeclareLaunchArgument(
+            'use_magnetometer',
+            default_value='true',
+            choices=['true', 'false'],
+            description=(
+                'Enable simulated /imu/mag and Madgwick magnetic fusion. '
+                'Set false to reproduce the historical Oct 7 benchmark.'
+            ),
         ),
         DeclareLaunchArgument(
             'model_path',
