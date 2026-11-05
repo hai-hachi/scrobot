@@ -17,6 +17,11 @@ simulation, production control, local EKF, production YOLO perception,
 telemetry, collection-session evaluation, and the complete sweep mission in a
 controlled startup order.
 
+The full mission now defaults to `use_magnetometer:=true`, enabling the
+simulated 5883L and Madgwick fusion together. Use
+`use_magnetometer:=false` to reproduce the historical October 7
+magnetometer-disabled validation. This does not affect physical Orin bringup.
+
 ## Main regression launches
 
 ```text
