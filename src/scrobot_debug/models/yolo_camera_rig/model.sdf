@@ -19,8 +19,8 @@
           <triggered>true</triggered>
           <trigger_topic>/yolo/camera/color/trigger</trigger_topic>
 
-          <!-- Same calibrated SCROBOT RGB intrinsics as the production sim. -->
-          <horizontal_fov>1.117010720035761</horizontal_fov>
+          <!-- Same SCROBOT factory-calibration-derived RGB HFOV. -->
+          <horizontal_fov>1.229041640167034</horizontal_fov>
           <camera_info_topic>/yolo/camera/color/camera_info</camera_info_topic>
           <image>
             <width>1280</width>

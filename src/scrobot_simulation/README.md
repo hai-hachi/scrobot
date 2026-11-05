@@ -25,47 +25,6 @@ Debug-only worlds/monitors belong in `scrobot_debug`.
 ros2 launch scrobot_simulation simulation.launch.py
 ```
 
-### Local networking with Cloudflare WARP / VPN
-
-Single-PC simulation now defaults to `local_only:=true`. The launch configures
-**both** ROS 2 discovery and Gazebo Transport on the host loopback interface,
-avoiding accidental selection of a VPN tunnel network interface:
-
-```text
-ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
-GZ_IP=127.0.0.1
-```
-
-The launch sets these variables for its child processes automatically. It does
-not modify your system, Cloudflare configuration, `~/.bashrc`, or the physical
-robot bringup. All Gazebo/ROS processes must run in the same local network
-namespace for this mode.
-
-If using `gz service`, `gz topic`, `ros2 topic`, or separate launch commands
-in **another terminal**, use the same transport environment:
-
-```bash
-export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
-export GZ_IP=127.0.0.1
-ros2 daemon stop
-gz service -l | grep /world/badminton_court/create
-```
-
-If `/world/badminton_court/create` is absent, Gazebo has not advertised the
-world creation service. Check the `gz sim` server output, world loading, and
-the `gz-sim-user-commands-system` plugin before investigating the URDF.
-
-For a **multi-PC simulation**, start using `local_only:=false` and ensure
-the launching shell has not already set either loopback restriction:
-
-```bash
-unset GZ_IP ROS_AUTOMATIC_DISCOVERY_RANGE
-ros2 launch scrobot_simulation simulation.launch.py local_only:=false
-```
-
-This is intentionally **simulation-only**. The physical Orin/deployment stack
-must continue to discover whatever network interfaces it needs.
-
 The D435i simulation uses:
 
 ```text
