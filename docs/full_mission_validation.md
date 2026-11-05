@@ -12,7 +12,7 @@ robot start     x=2.0 m, y=3.05 m, yaw=3.14159 rad
 layout          mixed
 shuttle count   50
 layout seed     20261003
-magnetometer    disabled
+magnetometer    disabled (historical benchmark; see note below)
 YOLO            gazebo_simple_v2.pt
 evaluation      enabled
 master RViz     enabled
@@ -57,6 +57,25 @@ reported separately.
 Several successful targeted passes removed more than one nearby shuttle, so the
 number of verified target attempts is smaller than the number of physical
 shuttle removals.
+
+## Magnetometer-enabled simulation (new configuration)
+
+Since November 6, 2026, the simulation/full-mission launch defaults to the
+optional 5883L magnetometer and Madgwick magnetic fusion. The results above
+were obtained **without** magnetic fusion and must not be presented as a
+magnetometer-enabled validation.
+
+To reproduce the exact historical configuration:
+
+```bash
+ros2 launch scrobot_debug full_mission_check.launch.py \
+  use_magnetometer:=false
+```
+
+For the new configuration, use `use_magnetometer:=true` (the default),
+verify that `/imu/mag` publishes, check the Madgwick `use_mag` parameter,
+and repeat localization and 50-shuttle mission regression before accepting
+new benchmark results. The real Orin hardware configuration is unchanged.
 
 ## Validated prerequisites
 
