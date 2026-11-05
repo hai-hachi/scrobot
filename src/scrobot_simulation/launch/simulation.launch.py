@@ -156,9 +156,9 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'enable_magnetometer',
-            default_value='false',
+            default_value='true',
             choices=['true', 'false'],
-            description='Enable the optional legacy HMC5883L simulation sensor.',
+            description='Enable the simulated 5883L magnetometer on /imu/mag.',
         ),
         DeclareLaunchArgument(
             'drive_contact_mu',
