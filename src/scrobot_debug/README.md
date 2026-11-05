@@ -17,6 +17,14 @@ simulation, production control, local EKF, production YOLO perception,
 telemetry, collection-session evaluation, and the complete sweep mission in a
 controlled startup order.
 
+For Cloudflare WARP/VPN compatibility, this launch now defaults to
+`local_only:=true`, which configures both ROS 2 discovery and Gazebo
+Transport on loopback before launching the stack. It is also available from
+`scrobot_simulation simulation.launch.py`. When using commands from a second
+terminal, export `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` and
+`GZ_IP=127.0.0.1` there as well. Use `local_only:=false` for a distributed
+simulation. These settings are not injected into physical robot bringup.
+
 ## Main regression launches
 
 ```text
