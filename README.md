@@ -87,6 +87,14 @@ export SCROBOT_YOLO_MODEL=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_
 ros2 launch scrobot_debug full_mission_check.launch.py
 ```
 
+Simulation defaults to `local_only:=true`: the launch sets
+`ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` and `GZ_IP=127.0.0.1` to keep
+Gazebo and ROS 2 communication on the same computer even when Cloudflare WARP
+is enabled. Other terminal sessions running `gz` or `ros2` commands must
+export the same variables. Use `local_only:=false` only when simulating
+across computers (after unsetting any inherited loopback configuration).
+See [simulation networking](src/scrobot_simulation/README.md#local-networking-with-cloudflare-warp--vpn).
+
 The validated repeatable run collected 50/50 shuttles and reached
 `COMPLETE`. Master RViz is enabled by default.
 
