@@ -6,8 +6,10 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
+    SetEnvironmentVariable,
     TimerAction,
 )
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 
@@ -21,6 +23,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     world = LaunchConfiguration('world')
     gz_verbosity = LaunchConfiguration('gz_verbosity')
+    local_only = LaunchConfiguration('local_only')
     world_name = LaunchConfiguration('world_name')
     robot_name = LaunchConfiguration('robot_name')
 
@@ -99,6 +102,16 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'local_only',
+            default_value='true',
+            choices=['true', 'false'],
+            description=(
+                'Keep Gazebo Transport and ROS 2 DDS on loopback for a '
+                'single-PC simulation (helps when Cloudflare WARP/VPN is active). '
+                'Use false for multi-host simulation.'
+            ),
+        ),
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='true',
@@ -180,6 +193,20 @@ def generate_launch_description():
             description='ros2_control controller YAML loaded by Gazebo.',
         ),
 
+        # Configure the network before starting Gazebo, bridges, RSP, or spawn.
+        # ROS and Gazebo have independent discovery transports; both settings
+        # are needed to avoid a VPN interface becoming the advertised address.
+        # Applied only in simulation, not in physical robot bringup.
+        SetEnvironmentVariable(
+            name='ROS_AUTOMATIC_DISCOVERY_RANGE',
+            value='LOCALHOST',
+            condition=IfCondition(local_only),
+        ),
+        SetEnvironmentVariable(
+            name='GZ_IP',
+            value='127.0.0.1',
+            condition=IfCondition(local_only),
+        ),
         gazebo,
         delayed_spawn_robot,
         depth_to_color_registration,
