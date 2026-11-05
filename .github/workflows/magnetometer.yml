@@ -1,0 +1,98 @@
+name: Simulated Magnetometer Wiring
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/scrobot_simulation/launch/**"
+      - "src/scrobot_simulation/urdf/**"
+      - "src/scrobot_simulation/config/ros_gz_bridge.yaml"
+      - "src/scrobot_debug/launch/full_mission_check.launch.py"
+      - "src/scrobot_debug/launch/localization_check.launch.py"
+      - "src/scrobot_localization/launch/localization.launch.py"
+      - ".github/workflows/magnetometer.yml"
+  workflow_dispatch:
+
+jobs:
+  python3-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Python 3 syntax and simulated magnetic fusion wiring
+        run: |
+          python3 -m py_compile \
+            src/scrobot_simulation/launch/simulation.launch.py \
+            src/scrobot_simulation/launch/spawn_robot.launch.py \
+            src/scrobot_debug/launch/full_mission_check.launch.py \
+            src/scrobot_debug/launch/localization_check.launch.py \
+            src/scrobot_localization/launch/localization.launch.py
+          python3 - <<'PY'
+          import re
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          root = Path(".")
+          def read(path):
+              return (root / path).read_text()
+
+          def default(path, arg):
+              match = re.search(
+                  r"DeclareLaunchArgument\(\s*'" + re.escape(arg) +
+                  r"'\s*,\s*default_value='(true|false)'",
+                  read(path),
+              )
+              assert match is not None, (path, arg)
+              return match.group(1)
+
+          sim = "src/scrobot_simulation/launch/simulation.launch.py"
+          spawn = "src/scrobot_simulation/launch/spawn_robot.launch.py"
+          full = "src/scrobot_debug/launch/full_mission_check.launch.py"
+          check = "src/scrobot_debug/launch/localization_check.launch.py"
+          loc = "src/scrobot_localization/launch/localization.launch.py"
+
+          assert default(sim, "enable_magnetometer") == "true"
+          assert default(spawn, "enable_magnetometer") == "true"
+          assert default(full, "use_magnetometer") == "true"
+          assert default(check, "use_magnetometer") == "true"
+          assert default(loc, "use_magnetometer") == "false"
+          assert "'enable_magnetometer': use_magnetometer" in read(full)
+          assert "'use_magnetometer': use_magnetometer" in read(full)
+          assert "'use_mag': ParameterValue(" in read(loc)
+          assert "'use_magnetometer': 'false'" in read(
+              "src/scrobot_bringup/launch/robot.launch.py"
+          )
+
+          robot = ET.fromstring(
+              read("src/scrobot_simulation/urdf/scrobot_sim.urdf.xacro")
+          )
+          assert any(
+              link.get("name") == "mag_link" for link in robot.iter("link")
+          )
+          assert any(
+              joint.get("name") == "mag_mount_joint" and
+              joint.find("parent").get("link") == "base_link" and
+              joint.find("child").get("link") == "mag_link"
+              for joint in robot.iter("joint")
+          )
+          sensors = ET.fromstring(
+              read("src/scrobot_simulation/urdf/sensors_gazebo.xacro")
+          )
+          assert any(
+              elem.get("reference") == "base_link" and
+              any(s.get("type") == "magnetometer" for s in elem.iter("sensor"))
+              for elem in sensors.iter("gazebo")
+          )
+          assert any(
+              s.findtext("topic") == "/imu/mag"
+              and s.findtext("gz_frame_id") == "mag_link"
+              for s in sensors.iter("sensor")
+              if s.get("type") == "magnetometer"
+          )
+          bridge = read("src/scrobot_simulation/config/ros_gz_bridge.yaml")
+          assert 'ros_topic_name: "/imu/mag"' in bridge
+          assert 'gz_type_name: "gz.msgs.Magnetometer"' in bridge
+          world = read("src/scrobot_simulation/worlds/badminton_court.sdf")
+          assert 'gz-sim-magnetometer-system' in world
+          assert "<spherical_coordinates>" in world
+          print("Magnetometer, Gazebo bridge, Madgwick, TF and physical safety: OK")
+          PY
