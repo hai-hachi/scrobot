@@ -30,37 +30,37 @@ values in the same commit as structural changes.
 
 ## Entrypoints
 
-- Normal simulated autonomy: \`ros2 launch scrobot_bringup sim.launch.py\`
-- Physical robot: \`ros2 launch scrobot_bringup robot.launch.py\`
-- Full simulation regression: \`ros2 launch scrobot_scenarios full_mission_check.launch.py\`
-- Old full regression name: \`ros2 launch scrobot_debug full_mission_check.launch.py\`
-- Isolated regression: \`ros2 launch scrobot_scenarios localization_check.launch.py\`
+- Normal simulated autonomy: `ros2 launch scrobot_bringup sim.launch.py`
+- Physical robot: `ros2 launch scrobot_bringup robot.launch.py`
+- Full simulation regression: `ros2 launch scrobot_scenarios full_mission_check.launch.py`
+- Old full regression name: `ros2 launch scrobot_debug full_mission_check.launch.py`
+- Isolated regression: `ros2 launch scrobot_scenarios localization_check.launch.py`
 
 Normal sim **excludes** evaluator, telemetry monitor, and RViz. The full
 regression restores the original process set and launch delays.
 
 ## Compatibility
 
-- \`ros2 run scrobot_mission local_collect_controller\` and
-  \`shuttle_collection_filter\` are legacy forwarding wrappers.
-- \`ros2 run scrobot_localization tag_approach_controller.py\` is a legacy wrapper.
-- \`scrobot_localization/global_localization.launch.py\` still starts approach
+- `ros2 run scrobot_mission local_collect_controller` and
+  `shuttle_collection_filter` are legacy forwarding wrappers.
+- `ros2 run scrobot_localization tag_approach_controller.py` is a legacy wrapper.
+- `scrobot_localization/global_localization.launch.py` still starts approach
   as before, but from the navigation package.
-- The original \`scrobot_debug\` scenario launch files remain available.
-- \`scrobot_mission/config/local_collect.yaml\` is a compatibility copy;
-  \`scrobot_collection/config/local_collect.yaml\` is canonical and an offline
+- The original `scrobot_debug` scenario launch files remain available.
+- `scrobot_mission/config/local_collect.yaml` is a compatibility copy;
+  `scrobot_collection/config/local_collect.yaml` is canonical and an offline
   contract ensures that the copies do not silently diverge.
 
 ## Validation levels
 
-1. **Offline:** \`python3 tools/test_package_architecture.py -v\`;
-   \`python3 -m unittest discover -s src/scrobot_mission/test -v\`.
-2. **ROS build:** \`colcon build --symlink-install --packages-up-to scrobot_scenarios\`.
+1. **Offline:** `python3 tools/test_package_architecture.py -v`;
+   `python3 -m unittest discover -s src/scrobot_mission/test -v`.
+2. **ROS build:** `colcon build --symlink-install --packages-up-to scrobot_scenarios`.
 3. **Graph smoke:** Gazebo robot spawn, bridge, camera, EKF, collection action,
    AprilTag approach action and control services all present.
-4. **Complete mission:** use \`python3 tools/real_comparison/run_full_mission.py\`
+4. **Complete mission:** use `python3 tools/real_comparison/run_full_mission.py`
    on the ROS 2 Jazzy + Gazebo + YOLO workstation. The script checks
-   \`summary.csv\` for \`COMPLETE\`, all 50 shuttles and zero eligible remaining.
+   `summary.csv` for `COMPLETE`, all 50 shuttles and zero eligible remaining.
 
 Stages 2–4 require an environment with ROS 2 Jazzy; stage 4 additionally
-requires a Gazebo-capable GPU and the trained YOLO \`.pt\` artifact.
+requires a Gazebo-capable GPU and the trained YOLO `.pt` artifact.
