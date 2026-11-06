@@ -19,10 +19,10 @@ test result**. No unmeasured physics tuning.
 
 ## Profiles
 
-- \`october_baseline\`: full mission \`use_magnetometer:=false\`;
+- `october_baseline`: full mission `use_magnetometer:=false`;
   historical 50/50 evaluation result (not a fresh test).
-- \`magnetometer_enabled\`: \`use_magnetometer:=true\`; not yet validated
+- `magnetometer_enabled`: `use_magnetometer:=true`; not yet validated
   against the historical full-mission benchmark.
-- \`hardware_matched\`: future profile after paired measurements exist.
+- `hardware_matched`: future profile after paired measurements exist.
 
 Keep paired test runs with both code commit SHA and physical measurements.
