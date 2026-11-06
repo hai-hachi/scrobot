@@ -227,6 +227,13 @@ def build_world(source, settings):
         raise ValueError("Expected badminton_court Gazebo world")
     for original in list(world.findall("light")):
         world.remove(original)
+    # Calibration needs shuttles to remain visible at all robot poses;
+    # disable automatic simulated pickup in this derivative world only.
+    for plugin in world.findall("plugin"):
+        if plugin.get("filename") == "libshuttle_manager_system.so":
+            collection = plugin.find("enable_collection")
+            if collection is not None:
+                collection.text = "false"
     for name, x, y, z in centered_positions(lights):
         world.append(make_light(name, x, y, z, lights))
     configure_model(world, colors)
