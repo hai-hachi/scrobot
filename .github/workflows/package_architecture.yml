@@ -21,5 +21,11 @@ jobs:
         run: python3 tools/test_package_architecture.py -v
       - name: Pure sweep geometry tests
         run: python3 -m unittest discover -s src/scrobot_mission/test -v
+      - name: Dry-run full mission runner for both profiles
+        run: |
+          python3 tools/real_comparison/run_full_mission.py \
+            --model /missing/example.pt --profile october_baseline --dry-run
+          python3 tools/real_comparison/run_full_mission.py \
+            --model /missing/example.pt --profile magnetometer_enabled --dry-run
       - name: Compile Python source and launch files
         run: python3 -m compileall -q src tools
