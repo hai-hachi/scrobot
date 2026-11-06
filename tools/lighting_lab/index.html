@@ -112,7 +112,7 @@
         <img id="img-robot" alt="Live simulated D435i RGB camera">
         <div class="viewtag">REAL SENSOR FOV · 1280 × 720 / 15 Hz input</div>
       </div>
-      <div class="underfeed"><span>Robot can be repositioned using the court map below</span><strong id="v-robot-exp">—</strong></div>
+      <div class="underfeed"><span>Click the court map to reposition</span><button onclick="captureFrame('robot')">Save frame</button><strong id="v-robot-exp">—</strong></div>
     </article>
     <article class="card">
       <div class="cardhead"><div><div class="kicker">02 / COURT OVERVIEW</div><h2>Broadcast · Elevated End Court</h2></div><span class="pill" id="v-overhead">Waiting</span></div>
@@ -121,7 +121,7 @@
         <img id="img-overhead" alt="Live elevated broadcast view of the whole court">
         <div class="viewtag">FIXED VIEW · (10.5, 0, 9.5) m</div>
       </div>
-      <div class="underfeed"><span>Reference view for court coverage and shadows</span><strong id="v-overhead-exp">—</strong></div>
+      <div class="underfeed"><span>Reference view for shadow coverage</span><button onclick="captureFrame('overhead')">Save frame</button><strong id="v-overhead-exp">—</strong></div>
     </article>
     <article class="card">
       <div class="cardhead"><div><div class="kicker">03 / FREE FLY CAMERA</div><h2>Interactive · Movable Inspector</h2></div><span class="pill" id="v-free">Waiting</span></div>
@@ -130,7 +130,7 @@
         <img id="img-free" alt="Live freely positioned Gazebo inspection camera">
         <div class="viewtag">DRAG TO LOOK · WASD MOVE · Q/E ALTITUDE</div>
       </div>
-      <div class="underfeed"><span>Move with the controls below; changes use Gazebo set_pose</span><strong id="v-free-exp">—</strong></div>
+      <div class="underfeed"><span>Drag to look; WASD to move</span><button onclick="captureFrame('free')">Save frame</button><strong id="v-free-exp">—</strong></div>
     </article>
   </section>
 
@@ -245,6 +245,8 @@
         <span class="statuskey">Last Gazebo stats age</span><span class="statusvalue" id="detail-age">—</span>
       </div>
       <div class="divider"></div>
+      <label>Real-time factor history (last 60 samples)</label>
+      <canvas id="rtf-trend" width="640" height="90" style="width:100%;height:75px;background:#0b151e;border:1px solid var(--line);border-radius:7px;margin:7px 0"></canvas>
       <p class="helper" id="diagnosis">Waiting for camera histogram and simulation statistics…</p>
       <div class="fields" style="margin-top:12px">
         <label>Calibration preset name<input id="preset-name" type="text" maxlength="60" value="lighting_baseline"></label>
@@ -419,6 +421,32 @@ async function spawnShuttles(){
  await action("/api/shuttles",{count:n("shuttle-count"),seed:n("shuttle-seed"),density:$("shuttle-density").value},"spawn-btn");
 }
 function newSeed(){$("shuttle-seed").value=Math.floor(Math.random()*2147483647);}
+function captureFrame(key){
+ const img=$("img-"+key);
+ if(!img.complete||!img.naturalWidth){toast("No "+key+" camera frame available",true);return;}
+ const canvas=document.createElement("canvas");
+ canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
+ canvas.getContext("2d").drawImage(img,0,0);
+ const a=document.createElement("a");
+ a.download="scrobot_"+key+"_"+new Date().toISOString().replace(/[:.]/g,"-")+".png";
+ a.href=canvas.toDataURL("image/png");a.click();
+ toast("Saved "+key+" frame in browser downloads");
+}
+const rtfHistory=[];
+function drawRtfTrend(){
+ const c=$("rtf-trend"),ctx=c.getContext("2d"),w=c.width,h=c.height;
+ ctx.clearRect(0,0,w,h);
+ ctx.strokeStyle="#33475a";ctx.lineWidth=1;
+ for(const v of [.5,1.0]){
+  const y=h-v/1.5*h;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
+ }
+ if(!rtfHistory.length)return;
+ ctx.strokeStyle="#4ae0b0";ctx.lineWidth=3;ctx.beginPath();
+ rtfHistory.forEach((v,i)=>{const x=i/59*w,y=h-Math.max(0,Math.min(1.5,v))/1.5*h;
+  if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+ });
+ ctx.stroke();
+}
 async function savePreset(){await action("/api/preset",{name:$("preset-name").value},null);}
 let lastStatus=null;
 async function getStatus(){
@@ -427,6 +455,9 @@ async function getStatus(){
   if(!response.ok)throw Error("No backend");
   const s=await response.json();lastStatus=s;
   const rtf=s.sim.rtf,rtfGood=rtf!==undefined&&rtf>=.7;
+  if(rtf!==undefined){
+   rtfHistory.push(rtf);if(rtfHistory.length>60)rtfHistory.shift();drawRtfTrend();
+  }
   $("m-rtf").textContent=rtf===undefined?"—":rtf.toFixed(2)+"×";
   $("m-rtf").style.color=rtf===undefined?"":(rtfGood?"var(--primary)":"var(--yellow)");
   $("m-lights").textContent=s.lights;
