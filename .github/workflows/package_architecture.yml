@@ -1,0 +1,25 @@
+name: SCROBOT Package Architecture Contracts
+
+on:
+  push:
+    branches:
+      - main
+      - real-comparison
+    paths:
+      - "src/**"
+      - "tools/**"
+      - "docs/real_comparison/**"
+      - ".github/workflows/package_architecture.yml"
+  workflow_dispatch:
+
+jobs:
+  offline-contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python 3 architecture contracts
+        run: python3 tools/test_package_architecture.py -v
+      - name: Pure sweep geometry tests
+        run: python3 -m unittest discover -s src/scrobot_mission/test -v
+      - name: Compile Python source and launch files
+        run: python3 -m compileall -q src tools
