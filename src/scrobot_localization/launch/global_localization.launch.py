@@ -20,9 +20,10 @@ def generate_launch_description():
     # Exactly one node owns /relocalize and map -> odom.
     global_localizer = Node(package='scrobot_localization', executable='tag_global_localizer.py', name='tag_global_localizer', output='screen', parameters=[params, {'use_sim_time': use_sim_time}])
 
-    # Tag search / approach owns /approach_tag and /cmd_vel_relocalization.
+    # Tag search/approach implementation belongs to navigation. This legacy
+    # composed launch still starts both nodes to preserve existing callers.
     approach_controller = Node(
-        package='scrobot_localization',
+        package='scrobot_navigation',
         executable='tag_approach_controller.py',
         name='tag_approach_controller',
         output='screen',

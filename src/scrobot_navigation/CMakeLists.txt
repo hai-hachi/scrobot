@@ -6,6 +6,13 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+
+ament_python_install_package(${PROJECT_NAME})
+
+# AprilTag approach is navigation, not pose estimation.
+install(PROGRAMS scrobot_navigation/tag_approach_controller.py
+  DESTINATION lib/${PROJECT_NAME} RENAME tag_approach_controller.py)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
