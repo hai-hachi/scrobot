@@ -65,6 +65,10 @@ for (const [, tag, attrs] of html.matchAll(tags)) {
   elem.value = attrs.match(/\bvalue="([^"]*)"/)?.[1] || "";
   elem.checked = /\bchecked\b/.test(attrs);
 }
+// Browsers select the first <option> automatically when <select>
+// has no explicit value attribute. Reproduce that behavior in this stub.
+registry.get("light-kind").value = "spot";
+registry.get("shuttle-density").value = "uniform";
 const document = {
   getElementById(id) {return registry.get(id) || null;},
   createElement(tag) {const elem = new Element();elem.tagName=tag.toUpperCase();return elem;},
