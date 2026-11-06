@@ -82,6 +82,8 @@ class GazeboAdapter:
         self.Light, self.Pose, self.Visual, self.PILImage = Light, Pose, Visual, Image
         self.node = Node()
         self.lock = threading.RLock()
+        self._gpu_cached_at = 0.0
+        self._gpu_info = None
         self.settings = settings
         self.light_names = {
             name for name, *_ in centered_positions(checked_lights(settings["lights"]))
@@ -296,8 +298,34 @@ class GazeboAdapter:
         with self.lock:
             return self.frames.get(key)
 
+    def gpu_metrics(self):
+        # Diagnostic only. Not a per-process GPU load nor a lighting meter.
+        now = time.monotonic()
+        if now - self._gpu_cached_at < 5.0:
+            return self._gpu_info
+        self._gpu_cached_at = now
+        if shutil.which("nvidia-smi") is None:
+            return None
+        try:
+            proc = subprocess.run(
+                ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, check=False, timeout=1.5
+            )
+            if proc.returncode == 0:
+                fields = proc.stdout.splitlines()[0].split(",")
+                self._gpu_info = {
+                    "utilization_percent": float(fields[0].strip()),
+                    "memory_used_mib": float(fields[1].strip()),
+                    "memory_total_mib": float(fields[2].strip()),
+                }
+        except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+            pass
+        return self._gpu_info
+
     def status(self):
         now = time.monotonic()
+        gpu = self.gpu_metrics()
         with self.lock:
             stats = dict(self.sim_stats)
             stats["stats_age_s"] = (
@@ -317,6 +345,7 @@ class GazeboAdapter:
                 "lights": len(self.light_names), "settings": self.settings,
                 "load_1m": round(os.getloadavg()[0], 2),
                 "cpu_cores": os.cpu_count(),
+                "gpu": gpu,
                 "last_action": self.last_action,
                 "errors": list(self.errors)[-5:],
             }
