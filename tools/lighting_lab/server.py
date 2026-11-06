@@ -90,6 +90,7 @@ class GazeboAdapter:
         }
         self.frames = {}
         self.frame_times = {key: deque(maxlen=20) for key in CAMERAS}
+        self.sensor_times = {key: deque(maxlen=80) for key in CAMERAS}
         self.exposures = {}
         self.sim_stats = {}
         self.errors = deque(maxlen=12)
@@ -103,9 +104,12 @@ class GazeboAdapter:
 
     def on_image(self, key, message):
         # Avoid expensive conversion of the full 1280x720 robot image.
-        with self.lock:
-            last = self.frame_times[key][-1] if self.frame_times[key] else 0
         now = time.monotonic()
+        with self.lock:
+            self.sensor_times[key].append(now)
+            last = self.frame_times[key][-1] if self.frame_times[key] else 0
+        # Browser previews are deliberately throttled to ~5 FPS for CPU
+        # efficiency; sensor FPS below is measured before this decimation.
         if now - last < 0.18:
             return
         width, height = int(message.width), int(message.height)
@@ -333,10 +337,19 @@ class GazeboAdapter:
             )
             frame_info = {}
             for key, timestamps in self.frame_times.items():
-                fresh = [x for x in timestamps if now - x <= 3.0]
-                fps = (len(fresh) - 1) / (fresh[-1] - fresh[0]) if len(fresh) >= 2 and fresh[-1] > fresh[0] else 0.0
+                raw = [x for x in self.sensor_times[key] if now - x <= 3.0]
+                frames = [x for x in timestamps if now - x <= 3.0]
+                sensor_fps = (
+                    (len(raw) - 1) / (raw[-1] - raw[0])
+                    if len(raw) >= 2 and raw[-1] > raw[0] else 0.0
+                )
+                preview_fps = (
+                    (len(frames) - 1) / (frames[-1] - frames[0])
+                    if len(frames) >= 2 and frames[-1] > frames[0] else 0.0
+                )
                 frame_info[key] = {
-                    "fps": round(fps, 1),
+                    "fps": round(sensor_fps, 1),
+                    "preview_fps": round(preview_fps, 1),
                     "age_s": round(now - timestamps[-1], 1) if timestamps else None,
                     "exposure": self.exposures.get(key),
                 }
