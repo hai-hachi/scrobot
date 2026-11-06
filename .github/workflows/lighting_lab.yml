@@ -30,6 +30,8 @@ jobs:
           Path("/tmp/scrobot_lighting_lab_ui.js").write_text(script)
           PY
           node --check /tmp/scrobot_lighting_lab_ui.js
+      - name: Smoke-test dashboard control initialization and actions
+        run: node tools/lighting_lab/test_dashboard_boot.js
       - name: Generate example lighting world and check complete camera layout
         run: |
           python3 - <<'PY'
