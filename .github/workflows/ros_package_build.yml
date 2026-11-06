@@ -6,6 +6,7 @@ on:
       - real-comparison
     paths:
       - "src/**"
+      - "tools/**"
       - ".github/workflows/ros_package_build.yml"
   workflow_dispatch:
 
@@ -14,28 +15,59 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
+      - uses: actions/checkout@v4
       - name: Prepare ROS 2 Jazzy and colcon
         uses: ros-tooling/setup-ros@v0.7
         with:
           required-ros-distributions: jazzy
-      - name: Install dependencies and colcon-build SCROBOT packages
-        uses: ros-tooling/action-ros-ci@v0.4
-        with:
-          target-ros2-distro: jazzy
-          package-name: >-
-            scrobot_interfaces
-            scrobot_description
-            scrobot_control
-            scrobot_hardware
-            scrobot_simulation
-            scrobot_localization
-            scrobot_perception
-            scrobot_navigation
-            scrobot_collection
-            scrobot_mission
-            scrobot_bringup
-            scrobot_evaluation
-            scrobot_debug
-            scrobot_scenarios
-          skip-tests: "true"
-          coverage-result: "false"
+
+      # Minimal ROS setup does not necessarily install a concrete rosidl
+      # typesupport implementation. Without one, scrobot_interfaces fails
+      # to build even though rosidl_default_generators is installed.
+      - name: Install typesupport and Gazebo transport build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ros-jazzy-ros-base \
+            ros-jazzy-rosidl-typesupport-fastrtps-c \
+            ros-jazzy-rosidl-typesupport-fastrtps-cpp \
+            libgz-transport13-dev
+
+      - name: Install package dependencies
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          # These two upstream keys are not resolved by the Jazzy rosdep
+          # index on Noble. Their installed prerequisites are supplied by
+          # ROS setup and the explicit apt command above.
+          rosdep install --from-paths src --ignore-src -r -y \
+            --rosdistro jazzy --skip-keys "ament_python gz-transport13"
+
+      - name: Build all 14 SCROBOT packages
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          colcon list --base-paths src --names-only
+          colcon build --base-paths src --symlink-install \
+            --parallel-workers 2
+
+      - name: Assert installed packages, executables, and launch entrypoints
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          test "$(colcon list --base-paths src --names-only | grep -c '^scrobot_')" -eq 14
+          ros2 pkg prefix scrobot_collection
+          ros2 pkg prefix scrobot_navigation
+          ros2 pkg prefix scrobot_scenarios
+          ros2 pkg executables scrobot_collection | grep -q local_collect_controller
+          ros2 pkg executables scrobot_collection | grep -q shuttle_collection_filter
+          ros2 pkg executables scrobot_navigation | grep -q tag_approach_controller.py
+          ros2 pkg executables scrobot_mission | grep -q sweep_mission_manager
+          ros2 launch scrobot_bringup sim.launch.py --show-args
+          ros2 launch scrobot_scenarios full_mission_check.launch.py --show-args
+
+      - name: Python 3 architecture and regression acceptance tests
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          python3 tools/test_package_architecture.py -v
+          python3 -m unittest discover -s src/scrobot_mission/test -v
+          python3 -m unittest discover -s tools/real_comparison -p 'test_*.py' -v
