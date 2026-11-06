@@ -104,6 +104,24 @@ const colors = vm.runInContext("materialsPayload()", context);
 assert.deepEqual(Array.from(colors.court), [147, 84, 35]);
 assert.equal(colors.pole_diameter, 0.05);
 
+// Opening a saved preset must initialize the controls from the backend,
+// rather than misleadingly displaying the default light array and colors.
+vm.runInContext(
+  "syncControls({lights:{rows:4,cols:2,hsv:[25,70,80],kind:'point',shadows:false},"+
+  "colors:{court:[100,50,70],pole_diameter:0.09},"+
+  "robot:{x:1.5,y:0,yaw:90},"+
+  "free:{x:4,y:1,z:9,yaw:75,pitch:40},"+
+  "shuttles:{count:33,seed:12345,density:'net'}})",
+  context
+);
+assert.equal(registry.get("li-rows").value, "4");
+assert.equal(registry.get("li-cols").value, "2");
+assert.equal(registry.get("light-kind").value, "point");
+assert.equal(registry.get("light-shadows").checked, false);
+assert.equal(registry.get("pole-dia").value, "0.09");
+assert.equal(registry.get("shuttle-count").value, "33");
+assert.equal(registry.get("free-z").value, "9");
+
 // Exercise an event after setup and verify swatch appearance changes.
 const hue = registry.get("court-h");
 hue.value = "275";
