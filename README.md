@@ -110,10 +110,20 @@ The new opt-in scenario name invokes the same test:
 ros2 launch scrobot_scenarios full_mission_check.launch.py
 ```
 
-For automated acceptance on the Jazzy/Gazebo workstation, run
-`python3 tools/real_comparison/run_full_mission.py --model /path/to/model.pt
---profile october_baseline`. It checks the evaluator's actual `summary.csv`
-for `COMPLETE`, all 50 shuttle removals, and position RMSE.
+For automated acceptance on the Jazzy/Gazebo workstation, run from the
+repository root:
+
+```bash
+python3 tools/real_comparison/run_full_mission.py \
+  --model /path/to/gazebo_simple_v2.pt \
+  --profile october_baseline \
+  --no-rviz --no-debug-image
+```
+
+It checks the evaluator's actual `summary.csv` for `COMPLETE`, all 50
+shuttle removals, and position RMSE. This mission run still requires your
+ROS 2 Jazzy/Gazebo workstation and the real model artifact. See the
+[workstation regression procedure](docs/real_comparison/full_mission_regression.md).
 
 Architecture and test boundaries are documented in
 [real-comparison migration](docs/real_comparison/architecture_migration.md).
