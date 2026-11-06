@@ -26,6 +26,8 @@ Gazebo camera feeds in the same view**, plus interactive controls:
 6. **Shuttle layout:** replace previous lab batch with a fresh uniform,
    center-biased, or net-biased random layout. Number and seed selectable;
    existing scrobot_simulation's production shuttle model/spawner is reused.
+   Auto-collection is disabled **only** in the derivative lab world so shuttles
+   are not erased when the stationary robot is repositioned nearby.
 7. **Performance:** real-time factor (RTF), simulation time, robot, overhead
    and free image FPS, CPU system load, and camera pixel clipping/brightness
    heuristics. These are *not* measured lux values.
