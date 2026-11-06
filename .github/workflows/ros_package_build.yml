@@ -1,0 +1,41 @@
+name: SCROBOT ROS 2 Jazzy Package Build
+
+on:
+  push:
+    branches:
+      - real-comparison
+    paths:
+      - "src/**"
+      - ".github/workflows/ros_package_build.yml"
+  workflow_dispatch:
+
+jobs:
+  colcon-jazzy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Prepare ROS 2 Jazzy and colcon
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: jazzy
+      - name: Install dependencies and colcon-build SCROBOT packages
+        uses: ros-tooling/action-ros-ci@v0.4
+        with:
+          target-ros2-distro: jazzy
+          package-name: >-
+            scrobot_interfaces
+            scrobot_description
+            scrobot_control
+            scrobot_hardware
+            scrobot_simulation
+            scrobot_localization
+            scrobot_perception
+            scrobot_navigation
+            scrobot_collection
+            scrobot_mission
+            scrobot_bringup
+            scrobot_evaluation
+            scrobot_debug
+            scrobot_scenarios
+          skip-tests: "true"
+          coverage-result: "false"
