@@ -27,5 +27,7 @@ jobs:
             --model /missing/example.pt --profile october_baseline --dry-run
           python3 tools/real_comparison/run_full_mission.py \
             --model /missing/example.pt --profile magnetometer_enabled --dry-run
+      - name: Verify full mission acceptance criteria
+        run: python3 -m unittest discover -s tools/real_comparison -p 'test_*.py' -v
       - name: Compile Python source and launch files
         run: python3 -m compileall -q src tools
