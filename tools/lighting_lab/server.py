@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+import hashlib
 import io
 import json
 import math
@@ -440,10 +441,21 @@ class Lab:
             raise ValueError("Preset name: 1..60 letters, digits, hyphens, underscores")
         PRESSTS.mkdir(parents=True, exist_ok=True)
         output = PRESSTS / (name + ".json")
+        snapshot = self.adapter.status()
+        commit = subprocess.run(
+            ["git", "-C", str(self.source.parents[3]), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=False, timeout=3
+        )
         data = {
             "saved_utc": datetime.now(timezone.utc).isoformat(),
+            "branch_commit": commit.stdout.strip() if commit.returncode == 0 else "unknown",
+            "source_world_sha256": hashlib.sha256(self.source.read_bytes()).hexdigest(),
             "settings": self.settings,
-            "simulation": self.adapter.status()["sim"],
+            "performance": {
+                "sim": snapshot["sim"], "feeds": snapshot["feeds"],
+                "gpu": snapshot["gpu"], "load_1m": snapshot["load_1m"],
+                "cpu_cores": snapshot["cpu_cores"],
+            },
         }
         output.write_text(json.dumps(data, indent=2) + "\n")
         self.adapter.last_action = f"Saved {output}"
