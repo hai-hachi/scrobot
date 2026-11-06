@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SCROBOT · Lighting Lab</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0c1119;--panel:#141d29;--raised:#1b2735;--line:#29384a;--fg:#e6edf7;--mute:#93a4b8;--primary:#4ae0b0;--blue:#75abff;--yellow:#f7c36a;--red:#f1848b}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.48 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+    button,input,select{font:inherit}button{cursor:pointer}
+    header{padding:18px 25px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:20px;justify-content:space-between;background:#101824;position:sticky;top:0;z-index:4}
+    .brand{display:flex;align-items:center;gap:12px}.logo{width:36px;height:36px;display:grid;place-items:center;background:#123f38;color:var(--primary);font-size:23px;font-weight:800;border:1px solid #206e5e;border-radius:9px}
+    h1{font-size:19px;margin:0;letter-spacing:.01em}h2{font-size:14px;letter-spacing:.015em;margin:0}h3{font-size:12px;margin:0;text-transform:uppercase;letter-spacing:.13em;color:var(--mute)}
+    .sub{font-size:11px;letter-spacing:.13em;color:var(--mute);text-transform:uppercase}
+    #conn{font-weight:650;padding:7px 12px;border:1px solid var(--line);border-radius:20px;color:var(--yellow);background:#261f16}
+    main{max-width:1830px;margin:0 auto;padding:19px 23px 50px}
+    .metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:17px}
+    .metric{border:1px solid var(--line);background:var(--panel);border-radius:11px;padding:12px 16px}
+    .metric small{display:block;color:var(--mute);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+    .metric b{font-size:23px;font-weight:670;letter-spacing:-.03em;display:block;margin:1px 0}
+    .metric em{font-size:10px;color:var(--mute);font-style:normal}
+    .views{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+    .card{border:1px solid var(--line);background:var(--panel);border-radius:11px;overflow:hidden}
+    .cardhead{padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:9px;border-bottom:1px solid var(--line)}
+    .cardhead .kicker{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--primary)}
+    .cardhead h2{font-size:14px}
+    .feed{position:relative;aspect-ratio:16/9;background:#060a10;overflow:hidden}
+    .feed img{width:100%;height:100%;object-fit:contain;display:block}
+    .feed .placeholder{position:absolute;inset:0;display:grid;place-items:center;color:#627589;pointer-events:none;text-align:center;background:radial-gradient(circle at 50% 50%,#1d2a39,#080d14)}
+    .feed.has-frame .placeholder{display:none}
+    .feed .viewtag{position:absolute;bottom:8px;left:9px;border-radius:4px;padding:4px 7px;font-size:10px;color:#dce7f2;background:#080f19c9;pointer-events:none}
+    .feed.free{cursor:grab}.feed.free:active{cursor:grabbing}
+    .underfeed{min-height:42px;padding:9px 13px;color:var(--mute);display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:11px}
+    .underfeed strong{color:var(--fg)}
+    .pill{font-size:11px;color:var(--primary);border:1px solid #285c50;border-radius:5px;background:#152d2a;padding:3px 7px}
+    .panelgrid{display:grid;grid-template-columns:1.15fr 1fr .92fr;gap:13px;margin-top:16px;align-items:start}
+    .panel{border:1px solid var(--line);background:var(--panel);border-radius:11px;padding:17px 17px 15px;min-width:0}
+    .paneltitle{display:flex;justify-content:space-between;gap:10px;align-items:center;padding-bottom:14px;margin-bottom:9px;border-bottom:1px solid var(--line)}
+    .paneltitle small{color:var(--mute)}
+    .fields{display:grid;grid-template-columns:1fr 1fr;column-gap:15px;row-gap:10px}
+    label{display:block;color:#c8d5e3;font-size:11px;font-weight:500}
+    .f span,.hrow span{color:var(--mute);font-size:10px}
+    input[type=range]{width:100%;accent-color:var(--primary);height:5px;cursor:pointer;margin-top:7px}
+    input[type=number],input[type=text],select{width:100%;border:1px solid #3a4a60;background:#111a25;color:var(--fg);border-radius:6px;padding:7px 8px;outline:none}
+    input:focus,select:focus{border-color:#69c5b5}
+    .value{float:right;color:var(--primary);font-weight:650;font-variant-numeric:tabular-nums}
+    .toggle{display:flex;align-items:center;gap:9px;margin:8px 0}
+    .toggle input{accent-color:var(--primary)}
+    .buttonrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:15px}
+    button{border:1px solid var(--line);border-radius:6px;background:var(--raised);color:var(--fg);padding:8px 11px;font-weight:600}
+    button:hover{background:#293a4c;border-color:#456479}
+    button.primary{background:#15594d;border-color:#247966;color:#b8ffea}
+    button.primary:hover{background:#1d7565}
+    button:disabled{opacity:.5;cursor:wait}
+    .helper{font-size:11px;color:var(--mute);margin:8px 0 0}
+    .divider{border-top:1px solid var(--line);margin:14px 0}
+    .swatch{width:29px;height:29px;border-radius:6px;border:1px solid #ffffff38;flex-shrink:0}
+    .colorhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0 3px}
+    .colorhead strong{font-size:12px}
+    .colorhead em{font-style:normal;font-size:10px;color:var(--mute)}
+    .triple{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .triple .f label{font-size:10px;color:var(--mute)}
+    .triple input{margin-top:5px}
+    .map{width:100%;border-radius:7px;display:block;cursor:crosshair;background:#0c151b;border:1px solid #3c4d5d;margin:9px 0}
+    .coord{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .coord label{font-size:10px;color:var(--mute)}
+    .coord input{margin-top:3px}
+    .secondary-head{font-size:12px;font-weight:700;margin:12px 0 7px}
+    .wasd{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:10px}
+    .wasd button{padding:6px}
+    .status{margin-top:15px;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:12px 16px;display:flex;align-items:center;gap:14px;justify-content:space-between}
+    #toast{font-size:12px;color:var(--mute);max-width:80%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .warning{color:var(--yellow)!important}
+    .error{color:var(--red)!important}
+    .note{color:var(--mute);font-size:11px;margin-top:12px;line-height:1.7}
+    .scope{font-size:10px;border:1px solid #42506b;border-radius:5px;padding:4px 8px;color:var(--mute)}
+    .grid-head{margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:7px}
+    .statuskey{color:var(--mute);font-size:11px}
+    .statusvalue{justify-self:end;font-variant-numeric:tabular-nums;font-size:11px}
+    @media(max-width:1350px){.panelgrid{grid-template-columns:1fr 1fr}.panelgrid>.panel:last-child{grid-column:1/-1}.views{gap:7px}}
+    @media(max-width:850px){main{padding:12px}.views,.panelgrid{grid-template-columns:1fr}.panelgrid>.panel:last-child{grid-column:auto}.metrics{grid-template-columns:repeat(2,1fr)}header{padding:12px}.sub{display:none}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">S</div>
+    <div><h1>SCROBOT <span style="color:var(--primary)">Lighting Lab</span></h1>
+      <div class="sub">REAL-COMPARISON / GAZEBO HARMONIC · SENSOR CALIBRATION</div></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span class="scope">LOCAL · 127.0.0.1</span>
+    <span id="conn">Starting Gazebo…</span>
+  </div>
+</header>
+<main>
+  <section class="metrics">
+    <div class="metric"><small>Real-time factor</small><b id="m-rtf">—</b><em>Target 1.0× / lower means slower</em></div>
+    <div class="metric"><small>Robot RGB rate</small><b id="m-robot-fps">—</b><em>Frames per second received</em></div>
+    <div class="metric"><small>Robot exposure proxy</small><b id="m-bright">—</b><em>Mean image brightness, not lux</em></div>
+    <div class="metric"><small>Active lights</small><b id="m-lights">6</b><em>Up to 32 / shadows add cost</em></div>
+    <div class="metric"><small>CPU load · 1 min</small><b id="m-cpu">—</b><em id="m-cores">Host system average</em></div>
+  </section>
+
+  <section class="views">
+    <article class="card">
+      <div class="cardhead"><div><div class="kicker">01 / SENSOR POV</div><h2>SCROBOT · D435i RGB</h2></div><span class="pill" id="v-robot">Waiting</span></div>
+      <div class="feed" id="feed-robot">
+        <div class="placeholder">Waiting for Gazebo robot RGB<br>/camera/color</div>
+        <img id="img-robot" alt="Live simulated D435i RGB camera">
+        <div class="viewtag">REAL SENSOR FOV · 1280 × 720 / 15 Hz input</div>
+      </div>
+      <div class="underfeed"><span>Robot can be repositioned using the court map below</span><strong id="v-robot-exp">—</strong></div>
+    </article>
+    <article class="card">
+      <div class="cardhead"><div><div class="kicker">02 / COURT OVERVIEW</div><h2>Broadcast · Elevated End Court</h2></div><span class="pill" id="v-overhead">Waiting</span></div>
+      <div class="feed" id="feed-overhead">
+        <div class="placeholder">Waiting for Gazebo broadcast camera<br>/lighting_lab/overhead</div>
+        <img id="img-overhead" alt="Live elevated broadcast view of the whole court">
+        <div class="viewtag">FIXED VIEW · (10.5, 0, 9.5) m</div>
+      </div>
+      <div class="underfeed"><span>Reference view for court coverage and shadows</span><strong id="v-overhead-exp">—</strong></div>
+    </article>
+    <article class="card">
+      <div class="cardhead"><div><div class="kicker">03 / FREE FLY CAMERA</div><h2>Interactive · Movable Inspector</h2></div><span class="pill" id="v-free">Waiting</span></div>
+      <div class="feed free" id="feed-free" title="Drag to look around, WASD to move">
+        <div class="placeholder">Waiting for Gazebo free camera<br>/lighting_lab/free</div>
+        <img id="img-free" alt="Live freely positioned Gazebo inspection camera">
+        <div class="viewtag">DRAG TO LOOK · WASD MOVE · Q/E ALTITUDE</div>
+      </div>
+      <div class="underfeed"><span>Move with the controls below; changes use Gazebo set_pose</span><strong id="v-free-exp">—</strong></div>
+    </article>
+  </section>
+
+  <section class="panelgrid">
+    <article class="panel">
+      <div class="paneltitle"><h2>Light array</h2><small>Center aligned to court</small></div>
+      <div class="fields" id="lightfields"></div>
+      <div class="divider"></div>
+      <label class="toggle"><input type="checkbox" id="light-shadows" checked> Cast shadows (performance intensive)</label>
+      <label style="margin-top:8px">Light type
+        <select id="light-kind"><option value="spot">Spot (focused)</option><option value="point">Point (omnidirectional)</option></select>
+      </label>
+      <div class="colorhead"><strong>Light color · HSV</strong><span class="swatch" id="sw-light"></span></div>
+      <div class="triple" id="hsv-light"></div>
+      <p class="helper">Rows × columns distribute uniformly across the selected X/Y span. The center remains at (0, 0). Increasing lights or enabling shadows may lower RTF.</p>
+      <div class="buttonrow">
+        <button class="primary" id="apply-lights" onclick="applyLights()">Apply lighting to Gazebo</button>
+        <label class="toggle" style="margin:0"><input id="auto-light" type="checkbox"> Auto on release</label>
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="paneltitle"><h2>Materials and geometry</h2><small>HSV / geometry updates</small></div>
+      <div id="materials"></div>
+      <div class="divider"></div>
+      <div class="f"><label for="pole-dia">Pole diameter <span class="value" id="pole-dia-val"></span></label>
+        <input id="pole-dia" type="range" min="0.015" max="0.15" step="0.005" value="0.05"></div>
+      <p class="helper">Floor, wall, and court colors update existing Gazebo visuals. Pole diameter recreates the static net model so collision and visual radii agree.</p>
+      <div class="buttonrow">
+        <button class="primary" id="apply-material" onclick="applyMaterials()">Apply scene changes</button>
+        <label class="toggle" style="margin:0"><input id="auto-material" type="checkbox"> Auto on release</label>
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="paneltitle"><h2>Camera positioning</h2><small>Gazebo set_pose</small></div>
+      <h3>Robot camera position</h3>
+      <svg id="courtmap" class="map" viewBox="0 0 360 170" role="img" aria-label="Clickable badminton court: pick robot location">
+        <rect width="360" height="170" fill="#0e1921"/>
+        <rect x="25" y="16" width="310" height="138" rx="1" fill="#1a5446" stroke="#d9e6e4" stroke-width="2"/>
+        <rect x="46" y="25" width="268" height="120" fill="none" stroke="#cedfda" stroke-width="1"/>
+        <path d="M180 16V154M114 16V154M246 16V154M25 85H335" stroke="#dae6e3" stroke-width="1.2" fill="none"/>
+        <path d="M180 16V154" stroke="#d8d0aa" stroke-width="2.5"/>
+        <circle cx="226" cy="16" r="3" fill="#f8bf6a"/>
+        <circle cx="226" cy="154" r="3" fill="#f8bf6a"/>
+        <circle id="robotdot" cx="226" cy="16" r="7" fill="#4ae0b0" stroke="#101820" stroke-width="2"/>
+        <path id="robothdg" d="M226 16l14 0" stroke="#4ae0b0" stroke-width="3"/>
+        <text x="12" y="12" fill="#859aab" font-size="10">−6.7m</text>
+        <text x="292" y="12" fill="#859aab" font-size="10">+6.7m</text>
+        <text x="136" y="165" fill="#9daeb8" font-size="9">CLICK TO POSITION</text>
+      </svg>
+      <div class="coord">
+        <label>X (m)<input type="number" id="robot-x" min="-7" max="7" step=".1" value="2"></label>
+        <label>Y (m)<input type="number" id="robot-y" min="-3.5" max="3.5" step=".1" value="3.05"></label>
+        <label>Yaw (°)<input type="number" id="robot-yaw" min="-360" max="360" step="5" value="180"></label>
+      </div>
+      <div class="buttonrow"><button class="primary" id="move-robot" onclick="applyRobot()">Move robot</button></div>
+      <div class="divider"></div>
+      <h3>Free camera · position and rotation</h3>
+      <div class="coord" style="margin-top:10px">
+        <label>X<input id="free-x" type="number" min="-18" max="18" step=".5" value="8"></label>
+        <label>Y<input id="free-y" type="number" min="-14" max="14" step=".5" value="-8"></label>
+        <label>Z<input id="free-z" type="number" min="1" max="16" step=".5" value="6"></label>
+        <label>Yaw °<input id="free-yaw" type="number" min="-360" max="360" step="5" value="135"></label>
+        <label>Pitch °<input id="free-pitch" type="number" min="-60" max="88" step="5" value="24"></label>
+        <label>Step m<input id="free-step" type="number" min=".1" max="5" step=".1" value=".5"></label>
+      </div>
+      <div class="wasd">
+        <button onclick="freeNudge('left')" title="A">◀</button>
+        <button onclick="freeNudge('back')" title="S">▼</button>
+        <button onclick="freeNudge('front')" title="W">▲</button>
+        <button onclick="freeNudge('right')" title="D">▶</button>
+        <button onclick="freeNudge('up')" title="E">Z+</button>
+        <button onclick="freeNudge('down')" title="Q">Z−</button>
+        <button onclick="freeNudge('yawleft')">↶</button>
+        <button onclick="freeNudge('pitchup')">Look↑</button>
+        <button onclick="freeNudge('pitchdown')">Look↓</button>
+        <button onclick="freeNudge('yawright')">↷</button>
+      </div>
+      <div class="buttonrow"><button class="primary" id="move-free" onclick="applyFree()">Apply free-camera pose</button></div>
+    </article>
+  </section>
+
+  <section class="panelgrid" style="grid-template-columns:1fr 1fr">
+    <article class="panel">
+      <div class="paneltitle"><h2>Shuttle distribution</h2><small>Canonical production shuttle geometry</small></div>
+      <div class="fields">
+        <label>Shuttle count<input id="shuttle-count" type="number" min="1" max="100" value="20"></label>
+        <label>Random seed<input id="shuttle-seed" type="number" min="0" max="2147483647" value="20261003"></label>
+      </div>
+      <label style="margin-top:10px">Distribution
+        <select id="shuttle-density">
+          <option value="uniform">Uniform across court</option>
+          <option value="center">Center-biased</option>
+          <option value="net">Near the net</option>
+        </select>
+      </label>
+      <div class="buttonrow">
+        <button class="primary" id="spawn-btn" onclick="spawnShuttles()">Replace shuttle layout</button>
+        <button onclick="newSeed()">New random seed</button>
+      </div>
+      <p class="helper">Spawns shuttles using the existing scrobot_simulation command. Each replacement removes the previous lab batch. Fixed seeds reproduce the same distribution.</p>
+    </article>
+    <article class="panel">
+      <div class="paneltitle"><h2>Performance and presets</h2><small>Live simulation measurements</small></div>
+      <div class="grid-head">
+        <span class="statuskey">Sim time</span><span class="statusvalue" id="detail-time">—</span>
+        <span class="statuskey">Paused</span><span class="statusvalue" id="detail-paused">—</span>
+        <span class="statuskey">Overhead / free FPS</span><span class="statusvalue" id="detail-fps">—</span>
+        <span class="statuskey">Robot overexposure (pixels ≥ 248)</span><span class="statusvalue" id="detail-high">—</span>
+        <span class="statuskey">Robot underexposure (pixels ≤ 12)</span><span class="statusvalue" id="detail-low">—</span>
+        <span class="statuskey">Last Gazebo stats age</span><span class="statusvalue" id="detail-age">—</span>
+      </div>
+      <div class="divider"></div>
+      <p class="helper" id="diagnosis">Waiting for camera histogram and simulation statistics…</p>
+      <div class="fields" style="margin-top:12px">
+        <label>Calibration preset name<input id="preset-name" type="text" maxlength="60" value="lighting_baseline"></label>
+        <div class="buttonrow" style="align-items:end;margin:0"><button class="primary" onclick="savePreset()">Save JSON preset</button></div>
+      </div>
+      <p class="note">Brightness and clipping are image-based proxies, NOT calibrated lux. Compare the same robot pose, camera settings and shuttle layout before choosing an illumination profile. RTF and FPS indicate computational cost, not illumination quality.</p>
+    </article>
+  </section>
+  <div class="status"><span id="toast">Open Gazebo camera feeds and adjust calibration sliders. No mission is started.</span><span class="scope" id="worldlabel">WORLD: badminton_court</span></div>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const lightSpecs = [
+  ["rows","Rows",1,8,1,""],["cols","Columns",1,12,1,""],
+  ["span_x","Array length X",0,20,.5,"m"],["span_y","Array width Y",0,16,.5,"m"],
+  ["height","Height",2,13,.5,"m"],["intensity","Intensity",0,8,.1,""],
+  ["range","Range",2,40,1,"m"],["specular","Specular ratio",0,1,.05,""],
+  ["constant","Attenuation const",.01,2,.01,""],
+  ["linear","Attenuation linear",0,1,.005,""],
+  ["quadratic","Attenuation quadratic",0,.15,.001,""],
+  ["inner","Spot inner angle",.05,2.5,.05,"rad"],
+  ["outer","Spot outer angle",.10,3,.05,"rad"],
+  ["falloff","Spot falloff",0,2,.05,""]
+];
+const defaults={
+ lights:{rows:2,cols:3,span_x:9,span_y:9.2,height:7,kind:"spot",intensity:1,range:18,
+ constant:.45,linear:.015,quadratic:.001,inner:.7,outer:1.2,falloff:.8,shadows:true,
+ hsv:[55,3,95],specular:.2},
+ colors:{floor:[210,12,8],walls:[240,7,15],court:[147,84,35],poles:[0,0,15],pole_diameter:.05}
+};
+function slider(id,label,min,max,step,value,unit){
+  const box=document.createElement("div"); box.className="f";
+  const lbl=document.createElement("label");lbl.htmlFor=id;lbl.textContent=label+" ";
+  const valueDisplay=document.createElement("span");valueDisplay.className="value";valueDisplay.id=id+"-val";
+  lbl.appendChild(valueDisplay);
+  const input=document.createElement("input");input.type="range";input.id=id;input.min=min;
+  input.max=max;input.step=step;input.value=value;
+  input.addEventListener("input",()=>{valueDisplay.textContent=input.value+(unit?" "+unit:""); updateSwatches();});
+  input.dispatchEvent(new Event("input"));
+  box.appendChild(lbl);box.appendChild(input);return box;
+}
+function hsvGroup(name,target,value){
+ const root=$(target);
+ [["h","H",0,360,1,"°"],["s","S",0,100,1,"%"],["v","V",0,100,1,"%"]]
+ .forEach((a,i)=>{
+  const el=slider(name+"-"+a[0],a[1],a[2],a[3],a[4],value[i],a[5]);
+  root.appendChild(el);
+ });
+}
+for(const spec of lightSpecs){
+ $("lightfields").appendChild(slider("li-"+spec[0],...spec.slice(1,5),
+ defaults.lights[spec[0]],spec[5]));
+}
+hsvGroup("light","hsv-light",defaults.lights.hsv);
+for(const name of ["floor","walls","court","poles"]){
+ const head=document.createElement("div");head.className="colorhead";
+ const title=document.createElement("strong");title.textContent=({floor:"Venue floor",walls:"Boundary walls",court:"Badminton mat",poles:"Net poles"})[name];
+ const sw=document.createElement("div");sw.className="swatch";sw.id="sw-"+name;
+ head.appendChild(title);head.appendChild(sw);$("materials").appendChild(head);
+ const area=document.createElement("div");area.className="triple";area.id="hsv-"+name;
+ $("materials").appendChild(area);hsvGroup(name,"hsv-"+name,defaults.colors[name]);
+}
+$("pole-dia").addEventListener("input",()=>{$("pole-dia-val").textContent=(Number($("pole-dia").value)*1000).toFixed(0)+" mm";});
+$("pole-dia").dispatchEvent(new Event("input"));
+const n=id=>Number($(id).value);
+const hsv=name=>["h","s","v"].map(k=>n(name+"-"+k));
+function hsvCss(rgb){
+ const h=rgb[0],s=rgb[1],v=rgb[2];
+ return "hsl("+h+", "+s+"%, "+(v*(1-s/200)/2)+"%)";
+}
+function updateSwatches(){
+ for(const key of ["light","floor","walls","court","poles"]){
+  const v=hsv(key);$("sw-"+key).style.background="hsl("+v[0]+" "+v[1]+"% "+Math.min(100,v[2]/2)+"%)";
+ }
+}
+updateSwatches();
+function lightPayload(){
+ const o={};for(const item of lightSpecs)o[item[0]]=n("li-"+item[0]);
+ o.kind=$("light-kind").value;o.shadows=$("light-shadows").checked;o.hsv=hsv("light");return o;
+}
+function materialsPayload(){
+ return {floor:hsv("floor"),walls:hsv("walls"),court:hsv("court"),poles:hsv("poles"),pole_diameter:n("pole-dia")};
+}
+function toast(message,bad){
+ $("toast").textContent=message;$("toast").className=bad?"error":"";
+}
+async function action(path,data,button){
+ const b=button?$(button):null;
+ if(b)b.disabled=true;
+ toast("Applying to Gazebo…");
+ try{
+  const response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+  const json=await response.json();
+  if(!response.ok || !json.ok)throw new Error(json.error || "Gazebo rejected command");
+  toast(json.message||"Applied");return true;
+ }catch(e){toast(e.message,true);return false;}
+ finally{if(b)b.disabled=false;}
+}
+async function applyLights(){await action("/api/lights",lightPayload(),"apply-lights");}
+async function applyMaterials(){await action("/api/materials",materialsPayload(),"apply-material");}
+function autoApply(section,actionFn){
+ let timer=null;
+ const parent=section;
+ parent.addEventListener("change",e=>{
+  const enabled=section.id==="lightfields"?$("auto-light").checked:$("auto-material").checked;
+  if(!enabled)return;
+  clearTimeout(timer);timer=setTimeout(actionFn,650);
+ });
+}
+autoApply($("lightfields"),applyLights);
+autoApply($("materials"),applyMaterials);
+$("hsv-light").addEventListener("change",()=>{if($("auto-light").checked)setTimeout(applyLights,450);});
+$("light-kind").addEventListener("change",()=>{if($("auto-light").checked)applyLights();});
+$("light-shadows").addEventListener("change",()=>{if($("auto-light").checked)applyLights();});
+$("pole-dia").addEventListener("change",()=>{if($("auto-material").checked)applyMaterials();});
+const robotData=()=>({x:n("robot-x"),y:n("robot-y"),yaw:n("robot-yaw")});
+const freeData=()=>({x:n("free-x"),y:n("free-y"),z:n("free-z"),yaw:n("free-yaw"),pitch:n("free-pitch")});
+async function applyRobot(){await action("/api/robot",robotData(),"move-robot");updateRobotDot();}
+async function applyFree(){await action("/api/free",freeData(),"move-free");}
+function updateRobotDot(){
+ const x=n("robot-x"),y=n("robot-y"),yaw=n("robot-yaw")*Math.PI/180;
+ const cx=180 + x*(310/13.4),cy=85-y*(138/6.1);
+ $("robotdot").setAttribute("cx",cx);$("robotdot").setAttribute("cy",cy);
+ $("robothdg").setAttribute("d","M"+cx+" "+cy+" L"+(cx+15*Math.cos(yaw))+" "+(cy-15*Math.sin(yaw)));
+}
+$("courtmap").addEventListener("click",evt=>{
+ const rect=$("courtmap").getBoundingClientRect();
+ const sx=(evt.clientX-rect.left)/rect.width*360;
+ const sy=(evt.clientY-rect.top)/rect.height*170;
+ $("robot-x").value=Math.max(-6.7,Math.min(6.7,(sx-180)/(310/13.4))).toFixed(2);
+ $("robot-y").value=Math.max(-3.05,Math.min(3.05,(85-sy)/(138/6.1))).toFixed(2);
+ updateRobotDot();
+});
+for(const id of ["robot-x","robot-y","robot-yaw"])$(id).addEventListener("change",updateRobotDot);
+updateRobotDot();
+function freeNudge(direction){
+ let {x,y,z,yaw,pitch}=freeData(),step=Math.max(.1,Math.min(5,n("free-step")));
+ const a=yaw*Math.PI/180;
+ if(direction==="front"){x+=step*Math.cos(a);y+=step*Math.sin(a);}
+ if(direction==="back"){x-=step*Math.cos(a);y-=step*Math.sin(a);}
+ if(direction==="left"){x-=step*Math.sin(a);y+=step*Math.cos(a);}
+ if(direction==="right"){x+=step*Math.sin(a);y-=step*Math.cos(a);}
+ if(direction==="up")z+=step;if(direction==="down")z-=step;
+ if(direction==="yawleft")yaw-=10;if(direction==="yawright")yaw+=10;
+ if(direction==="pitchup")pitch+=8;if(direction==="pitchdown")pitch-=8;
+ const vals={x,y,z,yaw,pitch};
+ for(const k in vals){
+  const el=$("free-"+k);el.value=Math.min(Number(el.max),Math.max(Number(el.min),vals[k])).toFixed(2);
+ }
+ applyFree();
+}
+window.addEventListener("keydown",event=>{
+ if(["INPUT","SELECT","TEXTAREA"].includes(document.activeElement.tagName))return;
+ const dir={w:"front",s:"back",a:"left",d:"right",q:"down",e:"up"}[event.key.toLowerCase()];
+ if(dir){event.preventDefault();freeNudge(dir);}
+});
+let drag=null;
+$("feed-free").addEventListener("pointerdown",e=>{
+ drag={x:e.clientX,y:e.clientY,yaw:n("free-yaw"),pitch:n("free-pitch")};
+ e.currentTarget.setPointerCapture(e.pointerId);
+});
+$("feed-free").addEventListener("pointerup",e=>{
+ if(!drag)return;
+ $("free-yaw").value=(Math.max(-360,Math.min(360,drag.yaw+(e.clientX-drag.x)*.35))).toFixed(1);
+ $("free-pitch").value=(Math.max(-60,Math.min(88,drag.pitch-(e.clientY-drag.y)*.28))).toFixed(1);
+ drag=null;applyFree();
+});
+async function spawnShuttles(){
+ await action("/api/shuttles",{count:n("shuttle-count"),seed:n("shuttle-seed"),density:$("shuttle-density").value},"spawn-btn");
+}
+function newSeed(){$("shuttle-seed").value=Math.floor(Math.random()*2147483647);}
+async function savePreset(){await action("/api/preset",{name:$("preset-name").value},null);}
+let lastStatus=null;
+async function getStatus(){
+ try{
+  const response=await fetch("/api/status",{cache:"no-store"});
+  if(!response.ok)throw Error("No backend");
+  const s=await response.json();lastStatus=s;
+  const rtf=s.sim.rtf,rtfGood=rtf!==undefined&&rtf>=.7;
+  $("m-rtf").textContent=rtf===undefined?"—":rtf.toFixed(2)+"×";
+  $("m-rtf").style.color=rtf===undefined?"":(rtfGood?"var(--primary)":"var(--yellow)");
+  $("m-lights").textContent=s.lights;
+  $("m-robot-fps").textContent=(s.feeds.robot.fps||0).toFixed(1)+" Hz";
+  $("m-cpu").textContent=s.load_1m.toFixed(1);
+  $("m-cores").textContent="System load / "+s.cpu_cores+" CPU threads";
+  const exp=s.feeds.robot.exposure;
+  $("m-bright").textContent=exp?exp.mean+"%":"—";
+  $("detail-time").textContent=s.sim.sim_seconds===undefined?"—":s.sim.sim_seconds+" s";
+  $("detail-paused").textContent=s.sim.paused===undefined?"—":(s.sim.paused?"Yes":"No");
+  $("detail-fps").textContent=s.feeds.overhead.fps+" / "+s.feeds.free.fps+" Hz";
+  $("detail-age").textContent=s.sim.stats_age_s===null?"—":s.sim.stats_age_s+" s";
+  $("detail-high").textContent=exp?exp.clipped_bright+"%":"—";
+  $("detail-low").textContent=exp?exp.clipped_dark+"%":"—";
+  const active=s.gazebo_alive!==false && s.sim.stats_age_s!==null&&s.sim.stats_age_s<5;
+  $("conn").textContent=s.gazebo_alive===false?"Gazebo exited":(active?"● Gazebo live":"◌ Connecting…");
+  $("conn").style.color=active?"var(--primary)":"var(--yellow)";
+  $("diagnosis").textContent=!exp?"Awaiting robot camera image to estimate clipping.":
+    exp.clipped_bright>10?"High clipped-highlight fraction: reduce intensity or change light angle.":
+    exp.clipped_dark>30?"Many dark pixels: inspect shadow coverage and exposure settings.":
+    rtf!==undefined&&rtf<.7?"Illumination may be too expensive: reduce shadow-casting lights, count, or range.":
+    "Balanced image clipping proxy. Verify visual appearance and compare at a fixed robot pose.";
+  for(const key of ["robot","overhead","free"]){
+   const f=s.feeds[key];$("v-"+key).textContent=f.fps?f.fps+" Hz":"Waiting";
+   $("v-"+key+"-exp").textContent=f.exposure?("B "+f.exposure.mean+"% / dark "+f.exposure.clipped_dark+"%"):"—";
+  }
+  if(s.errors&&s.errors.length && s.errors.join("|")!==(window.lastErr||"")){
+   window.lastErr=s.errors.join("|");toast(s.errors[s.errors.length-1],true);
+  }
+ }catch(e){$("conn").textContent="Disconnected";}
+}
+const activeImages={};
+async function updateFeed(key){
+ try{
+  const response=await fetch("/frame/"+key+"?t="+Date.now(),{cache:"no-store"});
+  if(!response.ok)return;
+  const blob=await response.blob();
+  const url=URL.createObjectURL(blob);
+  const img=$("img-"+key);
+  const previous=activeImages[key];
+  img.onload=()=>{if(previous)URL.revokeObjectURL(previous);};
+  img.src=url;activeImages[key]=url;
+  $("feed-"+key).classList.add("has-frame");
+ }catch(e){}
+}
+setInterval(getStatus,1100);
+setInterval(()=>{for(const key of ["robot","overhead","free"])updateFeed(key);},380);
+getStatus();
+</script>
+</body>
+</html>
