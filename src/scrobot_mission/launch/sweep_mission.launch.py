@@ -14,7 +14,6 @@ def generate_launch_description():
     navigation_pkg = get_package_share_directory('scrobot_navigation')
 
     sweep_params = os.path.join(mission_pkg, 'config', 'sweep_params.yaml')
-    local_collect_params = os.path.join(mission_pkg, 'config', 'local_collect.yaml')
     use_sim_time = LaunchConfiguration('use_sim_time')
     return_to_idle = LaunchConfiguration('return_to_idle')
     idle_x = LaunchConfiguration('idle_x')
@@ -35,20 +34,16 @@ def generate_launch_description():
         launch_arguments={'use_sim_time': use_sim_time}.items(),
     )
 
-    collection_filter = Node(
-        package='scrobot_mission',
-        executable='shuttle_collection_filter',
-        name='shuttle_collection_filter',
-        output='screen',
-        parameters=[local_collect_params, {'use_sim_time': use_sim_time}],
-    )
-
-    local_collect = Node(
-        package='scrobot_mission',
-        executable='local_collect_controller',
-        name='local_collect_controller',
-        output='screen',
-        parameters=[local_collect_params, {'use_sim_time': use_sim_time}],
+    # The collection package owns the filtering and SMC/pickup ROS nodes.
+    # Public topic names, action names, and parameter values are unchanged.
+    collection = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('scrobot_collection'),
+                'launch', 'collection.launch.py'
+            )
+        ),
+        launch_arguments={'use_sim_time': use_sim_time}.items(),
     )
 
     sweep_manager = Node(
@@ -87,7 +82,6 @@ def generate_launch_description():
         ),
         global_localization,
         navigation,
-        collection_filter,
-        local_collect,
+        collection,
         sweep_manager,
     ])

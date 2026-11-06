@@ -1,0 +1,92 @@
+shuttle_collection_filter:
+  ros__parameters:
+    input_topic: /perception/shuttle_detections_3d
+    output_topic: /perception/collectable_shuttle_detections_3d
+    base_frame: base_link
+    map_frame: map
+    tf_timeout: 0.05
+
+    # Current validated YOLO/depth operating envelope for local collection.
+    # Range is evaluated after transforming the detected point to base_link,
+    # regardless of the original camera/detection frame.
+    min_target_range: 0.50
+    max_target_range: 1.80
+
+    # Ignore shuttles close to either badminton-net pole.
+    pole_x: 0.0
+    pole_y_positions: [3.05, -3.05]
+    pole_exclusion_radius: 0.60
+
+local_collect_controller:
+  ros__parameters:
+    # ------------------------------------------------------------
+    # Topics / frames
+    # ------------------------------------------------------------
+    raw_detection_topic: /perception/collectable_shuttle_detections_3d
+    action_name: /local_collect
+    cmd_vel_topic: /cmd_vel_approach
+    phase_topic: /mission/local_collect_phase
+    odom_frame: odom
+    base_frame: base_link
+    collector_frame: collector_link
+
+    # ------------------------------------------------------------
+    # Timing / perception
+    # ------------------------------------------------------------
+    control_rate: 30.0
+    tf_timeout: 0.05
+    detection_max_age: 0.30
+    target_timeout: 12.0
+
+    # ------------------------------------------------------------
+    # Target handling
+    # ------------------------------------------------------------
+    position_tolerance: 0.08
+    reacquire_exclusion_radius: 0.12
+
+    # First place base_link 1.10 m from the frozen shuttle in the ground
+    # plane, aligned toward it. Then start the straight collection pass.
+    base_standoff_distance: 1.10
+    precollect_position_tolerance: 0.03
+    precollect_yaw_tolerance_deg: 5.0
+
+    # Prevent an oscillating heading from triggering straight collection just
+    # because it crosses the yaw tolerance for one control sample.
+    precollect_stable_time: 0.25
+
+    # After the pose phase, collection is intentionally straight.
+    straight_collect_speed: 0.30
+
+    # Continue through the target so the shuttle fully enters the collector.
+    overrun_distance: 0.10
+    overrun_speed: 0.25
+
+    # ------------------------------------------------------------
+    # Sliding-mode pose controller
+    # ------------------------------------------------------------
+    # Sliding surface:
+    #   s = e_theta + lambda * e_y
+    #
+    # Angular control with c = 0:
+    #   omega = omega_R + lambda*v_R*sin(e_theta)
+    #           + k_s*s + eta*sat(s/phi)
+    #
+    # The pre-collection reference is straight, so omega_R = 0.
+    # Translation:
+    #   v = k_rho * rho * cos(alpha)
+    smc_reference_speed: 0.50
+    smc_lambda: 2.50
+    smc_ks: 1.20
+    smc_eta: 0.40
+    smc_phi: 0.30
+    smc_krho: 0.80
+    smc_max_angular_speed: 1.00
+    smc_max_linear_speed: 0.50
+
+    # Rotate first for large position-heading error, matching the previous
+    # local-collect behavior.
+    heading_stop_deg: 70.0
+
+    # Kinematic command slew limits retained from the robot design.
+    max_linear_accel: 1.00
+    max_angular_accel: 2.00
