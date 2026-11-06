@@ -95,6 +95,25 @@ telemetry, or annotated YOLO video. For the historical non-magnetic localization
 profile add `use_magnetometer:=false`. Other runtime parameters and the
 mission sequence are unchanged.
 
+## Gazebo lighting and materials calibration (3-view GUI)
+
+The opt-in lighting lab creates a **temporary derivative** badminton court,
+then streams real Gazebo D435i, overhead and movable free-camera views into
+one local browser dashboard. Configure light rows/columns/span/height,
+intensity, shadow casting, attenuation, cone angles, HSV colors, pole
+diameter, random shuttle batches and performance; no mission is started.
+
+```bash
+sudo apt install python3-gz-transport13 python3-gz-msgs10 python3-pil
+cd ~/scrobot_ws/src
+python3 tools/lighting_lab/server.py
+```
+
+Open http://127.0.0.1:8765. See
+[lighting-lab calibration workflow](docs/real_comparison/lighting_lab.md).
+This is a development experiment, **not** a change to the validated
+competition world or physical robot.
+
 ## Full simulation regression
 
 The historical regression command remains supported:
