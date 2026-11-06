@@ -24,4 +24,9 @@ Move scenario implementations and their assets in a later test-verified step.
 - 50-shuttle benchmark, measurements and repeatable tests live here.
 - Hardware-vs-simulation evidence belongs in `docs/real_comparison/`.
 
+A separate optional **three-camera lighting calibration GUI** is available
+at `tools/lighting_lab/server.py`. It runs the standard simulator without
+autonomous mission nodes. See
+[`docs/real_comparison/lighting_lab.md`](../../../docs/real_comparison/lighting_lab.md).
+
 See [`tools/real_comparison/run_full_mission.py`](../../../tools/real_comparison/run_full_mission.py) for the Python 3 regression runner and [`docs/real_comparison/full_mission_regression.md`](../../../docs/real_comparison/full_mission_regression.md) for workstation instructions.
