@@ -117,3 +117,13 @@ ros2 launch scrobot_localization global_localization.launch.py
 
 Regression procedures:
 `../scrobot_debug/debug_md/scrobot_localization/README.md`.
+
+## Package boundary
+
+The AprilTag **motion** controller is now implemented in
+`scrobot_navigation/scrobot_navigation/tag_approach_controller.py`.
+This package still owns localization estimation, tag sample filtering and
+`map -> odom`. Its `global_localization.launch.py` continues launching the
+navigation approach node for historical scenario compatibility, and the
+previous `ros2 run scrobot_localization tag_approach_controller.py` executable
+remains a forwarding wrapper.

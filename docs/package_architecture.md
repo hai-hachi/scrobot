@@ -14,10 +14,12 @@ scrobot_control
 scrobot_localization
 scrobot_perception
 scrobot_navigation
+scrobot_collection
 scrobot_mission
 scrobot_interfaces
 scrobot_evaluation
 scrobot_debug
+scrobot_scenarios
 ```
 
 ## Ownership
@@ -42,10 +44,12 @@ collector motor command transport, and hardware status reporting.
 
 ### scrobot_bringup
 
-Physical Jetson composition: robot description, controller manager, D435i,
-control stack, local localization and production perception. Global
-localization, Nav2 and the mission are opt-in so hardware bringup does not move
-the robot unexpectedly.
+Normal runtime composition for **both** environments:
+`sim.launch.py` starts Gazebo, the complete robot stack, shuttle spawning and
+the mission without developer-only evaluators/monitors. `robot.launch.py`
+remains physical Jetson composition: robot description, STM32 controller manager,
+D435i, control stack, local localization and production perception. Global
+localization, Nav2 and the mission are opt-in for physical safety.
 
 ### scrobot_control
 
@@ -54,8 +58,8 @@ velocity smoothing, collision monitoring and manual teleoperation.
 
 ### scrobot_localization
 
-D435i IMU conversion/filtering, wheel+IMU EKF, tag approach, stationary
-AprilTag global correction and ownership of `map -> odom`. Physical D435i
+D435i IMU conversion/filtering, wheel+IMU EKF, stationary AprilTag global
+correction and ownership of `map -> odom`. Tag *motion* belongs to navigation. Physical D435i
 bringup uses the local SensorDataQoS-compatible IMU transformer; simulation can
 use the stock `imu_transformer`.
 
@@ -68,14 +72,21 @@ depth-image -> LaserScan node is retained for physical hardware fallback/tests.
 
 ### scrobot_navigation
 
-Nav2 planner/controller/behavior configuration. Regulated Pure Pursuit is the
-current path controller.
+Nav2 planner/controller/behavior configuration and AprilTag approach
+motion strategies (`/approach_tag`). Regulated Pure Pursuit is the current
+path controller. The historical localization executable is a forwarding wrapper.
+
+### scrobot_collection
+
+Shuttle eligibility filter, local-collect SMC and pickup sequence. Owns
+`/local_collect`, `/cmd_vel_approach`, and the canonical collection YAML.
+The old mission executables remain forwarding wrappers.
 
 ### scrobot_mission
 
-Four-pass sweep generation, shuttle diversion, local collection, fixed-station
-relocalization, checkpoint return/resume, AUTO/MANUAL mission pause/resume and
-tag-search recovery.
+Four-pass sweep generation, shuttle diversion, fixed-station relocalization,
+checkpoint return/resume, AUTO/MANUAL mission pause/resume and tag-search
+recovery. Uses the collection action; does not implement SMC.
 
 ### scrobot_interfaces
 
@@ -94,8 +105,15 @@ Repeatable local-odometry logging/analysis and full collection-session metrics.
 
 ### scrobot_debug
 
-Debug-only launch composition, telemetry, RViz, test worlds, dataset tooling and
-isolated regression fixtures. Production packages do not depend on it.
+Optional telemetry, RViz, visualization, test worlds, and existing scenario
+implementations. Production runtime does not depend on it.
+
+### scrobot_scenarios
+
+Opt-in integration/regression entrypoints including the full 50-shuttle mission.
+During compatibility migration these delegate to the existing `scrobot_debug`
+test launch files; eventually the fixture assets can move here too.
+No production package depends on scenarios.
 
 ## TF ownership
 

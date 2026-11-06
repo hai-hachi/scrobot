@@ -3,7 +3,13 @@
 Debug-only launch composition, monitors, isolated Gazebo fixtures, and RViz
 visualization for SC Robot.
 
-Production packages must not depend on this package.
+Production runtime must not depend on this package. Normal simulated
+autonomy runs with `ros2 launch scrobot_bringup sim.launch.py` and excludes
+telemetry, RViz, and evaluation processes.
+
+Test entrypoints are also available through `scrobot_scenarios`. During the
+compatibility phase this package retains the original test implementations,
+and scenarios are lightweight wrappers with matching command-line options.
 
 ## Final full-mission regression
 

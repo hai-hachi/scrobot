@@ -88,7 +88,8 @@ ros2 launch scrobot_evaluation collection_session_eval.launch.py
 ```
 
 The pole exclusion geometry is kept consistent with
-`scrobot_mission/config/local_collect.yaml`.
+`scrobot_collection/config/local_collect.yaml`
+(the old mission config remains a compatibility copy).
 
 ## Executables
 

@@ -1,6 +1,11 @@
 # scrobot_mission
 
-Autonomous court-clearing mission and local shuttle collection for SC Robot.
+Autonomous court-clearing mission orchestration for SC Robot.
+
+`scrobot_collection` now owns the local collection SMC and eligibility filter.
+This mission package invokes the same `/local_collect` action through its
+collection launch composition. Original mission-side executable names are
+retained as forwarding wrappers for compatibility.
 
 ## Mission flow
 
@@ -75,8 +80,8 @@ v max     0.50 m/s
 
 ## Launch
 
-`sweep_mission.launch.py` starts global localization, Nav2, the collection
-filter/controller, and the mission manager. It expects the robot/sensors,
+`sweep_mission.launch.py` starts global localization, Nav2, the
+`scrobot_collection` launch, and the mission manager. It expects the robot/sensors,
 production perception, control stack, and local EKF to already be running.
 
 ```bash

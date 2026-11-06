@@ -22,15 +22,17 @@ Ubuntu 24.04 Orin container. Simulation development uses Ubuntu 24.04 directly.
 scrobot_description   robot URDF/Xacro and fixed frames
 scrobot_simulation    Gazebo world, sensors, bridges, shuttle physics
 scrobot_hardware      STM32 protocol-v2 ros2_control SystemInterface
-scrobot_bringup       physical Orin + STM32 + D435i launch composition
+scrobot_bringup       normal sim + physical Orin/STM32/D435i entrypoints
 scrobot_control       safe AUTO/MANUAL velocity command pipeline
 scrobot_localization  wheel/D435i-IMU EKF and AprilTag global correction
 scrobot_perception    AprilTag, depth scan, YOLO + aligned-depth 3D detection
-scrobot_navigation    Nav2 configuration
-scrobot_mission       sweep, shuttle diversion, local collection, resume
+scrobot_navigation    Nav2 and AprilTag approach motion strategies
+scrobot_collection    shuttle eligibility, local SMC and pickup action
+scrobot_mission       sweep, diversion, recovery, checkpoint resume
 scrobot_interfaces    project actions and hardware messages
 scrobot_evaluation    repeatable odometry and mission metrics
-scrobot_debug         isolated regression tests and master RViz
+scrobot_debug         optional telemetry, RViz, and legacy test fixtures
+scrobot_scenarios     opt-in integration/regression scenario entrypoints
 ```
 
 ## Production flow
@@ -80,12 +82,42 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
+## Normal simulated autonomy (no developer-only processes)
+
+```bash
+export SCROBOT_YOLO_MODEL=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt
+ros2 launch scrobot_bringup sim.launch.py
+```
+
+This starts Gazebo, controller/safety, localization, perception, shuttle
+spawner, and the mission; it does **not** start the evaluator, RViz, terminal
+telemetry, or annotated YOLO video. For the historical non-magnetic localization
+profile add `use_magnetometer:=false`. Other runtime parameters and the
+mission sequence are unchanged.
+
 ## Full simulation regression
+
+The historical regression command remains supported:
 
 ```bash
 export SCROBOT_YOLO_MODEL=/home/sea/Desktop/yoloshuttle/artifacts/models/gazebo_simple_v2.pt
 ros2 launch scrobot_debug full_mission_check.launch.py
 ```
+
+The new opt-in scenario name invokes the same test:
+
+```bash
+ros2 launch scrobot_scenarios full_mission_check.launch.py
+```
+
+For automated acceptance on the Jazzy/Gazebo workstation, run
+`python3 tools/real_comparison/run_full_mission.py --model /path/to/model.pt
+--profile october_baseline`. It checks the evaluator's actual `summary.csv`
+for `COMPLETE`, all 50 shuttle removals, and position RMSE.
+
+Architecture and test boundaries are documented in
+[real-comparison migration](docs/real_comparison/architecture_migration.md).
+
 
 The historical validated repeatable run collected 50/50 shuttles and reached
 `COMPLETE`. Master RViz is enabled by default. That run used the
