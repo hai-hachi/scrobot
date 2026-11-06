@@ -459,6 +459,10 @@ async function getStatus(){
   const response=await fetch("/api/status",{cache:"no-store"});
   if(!response.ok)throw Error("No backend");
   const s=await response.json();lastStatus=s;
+  if(!controlsHydrated && s.settings){
+   syncControls(s.settings);
+   controlsHydrated=true;
+  }
   const rtf=s.sim.rtf,rtfGood=rtf!==undefined&&rtf>=.7;
   if(rtf!==undefined){
    rtfHistory.push(rtf);if(rtfHistory.length>60)rtfHistory.shift();drawRtfTrend();
@@ -495,6 +499,45 @@ async function getStatus(){
    window.lastErr=s.errors.join("|");toast(s.errors[s.errors.length-1],true);
   }
  }catch(e){$("conn").textContent="Disconnected";}
+}
+let controlsHydrated=false;
+function syncControls(settings){
+ if(!settings)return;
+ const setValue=(id,value)=>{
+  const element=$(id);
+  if(!element || value===undefined || value===null)return;
+  element.value=String(value);
+  element.dispatchEvent(new Event("input"));
+ };
+ if(settings.lights){
+  const lights=settings.lights;
+  for(const spec of lightSpecs)setValue("li-"+spec[0],lights[spec[0]]);
+  if(lights.hsv)for(let k=0;k<3;k++)setValue("light-"+["h","s","v"][k],lights.hsv[k]);
+  if(lights.kind)$("light-kind").value=lights.kind;
+  if(typeof lights.shadows==="boolean")$("light-shadows").checked=lights.shadows;
+ }
+ if(settings.colors){
+  const colors=settings.colors;
+  for(const name of ["floor","walls","court","poles"]){
+   if(colors[name]){
+    for(let k=0;k<3;k++)setValue(name+"-"+["h","s","v"][k],colors[name][k]);
+   }
+  }
+  setValue("pole-dia",colors.pole_diameter);
+ }
+ if(settings.robot){
+  for(const k of ["x","y","yaw"])setValue("robot-"+k,settings.robot[k]);
+  updateRobotDot();
+ }
+ if(settings.free){
+  for(const k of ["x","y","z","yaw","pitch"])setValue("free-"+k,settings.free[k]);
+ }
+ if(settings.shuttles){
+  setValue("shuttle-count",settings.shuttles.count);
+  setValue("shuttle-seed",settings.shuttles.seed);
+  if(settings.shuttles.density)$("shuttle-density").value=settings.shuttles.density;
+ }
+ updateSwatches();
 }
 const activeImages={};
 async function updateFeed(key){
