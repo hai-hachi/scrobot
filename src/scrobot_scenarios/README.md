@@ -24,5 +24,4 @@ Move scenario implementations and their assets in a later test-verified step.
 - 50-shuttle benchmark, measurements and repeatable tests live here.
 - Hardware-vs-simulation evidence belongs in `docs/real_comparison/`.
 
-See `tools/run_full_mission_regression.sh` for the physical-simulation
-workstation validation procedure.
+See [`tools/real_comparison/run_full_mission.py`](../../../tools/real_comparison/run_full_mission.py) for the Python 3 regression runner and [`docs/real_comparison/full_mission_regression.md`](../../../docs/real_comparison/full_mission_regression.md) for workstation instructions.
