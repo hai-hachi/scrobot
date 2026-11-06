@@ -1,0 +1,48 @@
+name: SCROBOT Gazebo Lighting Lab
+
+on:
+  push:
+    branches:
+      - real-comparison
+    paths:
+      - "tools/lighting_lab/**"
+      - "src/scrobot_simulation/worlds/badminton_court.sdf"
+      - ".github/workflows/lighting_lab.yml"
+  workflow_dispatch:
+
+jobs:
+  offline-world-and-gui:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Python 3 lighting lab
+        run: python3 -m compileall -q tools/lighting_lab
+      - name: Verify SDF generator, lights, HSV, geometry, and dashboard
+        run: python3 -m unittest discover -s tools/lighting_lab -p "test_*.py" -v
+      - name: Generate example lighting world and check complete camera layout
+        run: |
+          python3 - <<'PY'
+          import sys
+          import tempfile
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          sys.path.insert(0, "tools/lighting_lab")
+          from scene import build_world, default_settings
+          src = Path("src/scrobot_simulation/worlds/badminton_court.sdf")
+          settings = default_settings()
+          with tempfile.TemporaryDirectory() as temp:
+              target = Path(temp) / "lighting_lab_world.sdf"
+              target.write_text(build_world(src, settings))
+              world = ET.parse(target).getroot().find("world")
+              assert world.get("name") == "badminton_court"
+              assert len(world.findall("light")) == 6
+              camera_models = {
+                  m.get("name") for m in world.findall("model")
+                  if m.find("./link/sensor") is not None
+              }
+              assert camera_models == {
+                  "lab_overhead_camera", "lab_free_camera"
+              }
+              assert world.find("./plugin[@filename='gz-sim-user-commands-system']") is not None
+              print("Gazebo lighting lab derivative SDF: OK")
+          PY
