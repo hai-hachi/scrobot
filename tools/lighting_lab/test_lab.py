@@ -75,6 +75,9 @@ class SceneTests(unittest.TestCase):
         self.assertEqual(len(lights), 6)
         self.assertTrue(all(light.get("name").startswith("lab_light_") for light in lights))
         self.assertEqual(len(world.findall("plugin")), len(ET.parse(SOURCE).getroot().find("world").findall("plugin")))
+        manager = next(p for p in world.findall("plugin")
+                       if p.get("filename") == "libshuttle_manager_system.so")
+        self.assertEqual(manager.findtext("enable_collection"), "false")
 
     def test_all_three_camera_topics_exist(self):
         world = ET.fromstring(build_world(SOURCE, default_settings())).find("world")
