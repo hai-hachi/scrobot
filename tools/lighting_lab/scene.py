@@ -131,6 +131,9 @@ def checked_lights(raw):
 def checked_colors(raw):
     out = dict(DEFAULTS["colors"])
     out.update(raw)
+    # Preserve old HSV material presets, but remove the retired pole geometry
+    # setting rather than carrying it into newly saved calibration results.
+    out.pop("pole_diameter", None)
     for name in ("floor", "walls", "court", "poles"):
         hsv_rgb(out[name])
     return out
