@@ -222,12 +222,20 @@ class GazeboAdapter:
         if not isinstance(follow, bool) or not isinstance(copy_now, bool):
             raise ValueError("follow/copy_now must be booleans")
         with self.lock:
+            if not follow and not copy_now:
+                # Disabling follow must work even if Gazebo has since exited.
+                self.gui_follow = False
+                self.gui_last_sent = None
+                self.last_action = "Orbit sync disabled"
+                return self.last_action
             raw = self.Pose()
-            if self.gui_pose is None or time.monotonic() - self.gui_pose_at > 3.0:
+            if self.gui_pose is None:
                 raise RuntimeError(
-                    "No fresh /gui/camera/pose; enable Camera Tracking in Gazebo GUI"
+                    "No /gui/camera/pose; enable Camera Tracking in Gazebo GUI"
                 )
             raw.CopyFrom(self.gui_pose)
+        # CameraTracking may only publish on camera movement. The last
+        # observed pose is valid until a new event or scene restart.
         if copy_now:
             self.apply_gui_pose(raw)
         with self.lock:
@@ -444,7 +452,7 @@ class GazeboAdapter:
             }
 
     def _gui_status(self, now):
-        fresh = self.gui_pose is not None and now - self.gui_pose_at < 3.0
+        fresh = self.gui_pose is not None
         result = {
             "available": fresh,
             "topic_subscribed": bool(self.gui_pose_subscription_ok),
