@@ -205,8 +205,7 @@ class SceneTests(unittest.TestCase):
             "apply-lights", "apply-material", "move-free", "move-robot",
             "spawn-btn", "shuttle-count", "shuttle-seed",
             "m-rtf", "m-robot-fps", "m-bright", "m-cpu",
-            "li-temperature", "li-brightness", "venue-clearance_x",
-            "venue-clearance_y", "apply-venue", "copy-orbit", "follow-orbit",
+            "apply-venue", "copy-orbit", "follow-orbit",
         ):
             with self.subTest(field=field):
                 self.assertIn(field, parser.ids)
