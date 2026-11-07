@@ -277,7 +277,14 @@ def configure_venue(world, venue):
 def camera_entity(name, topic, pose, resolution=(800, 450), hz=8.0, hfov=1.6):
     model = ET.Element("model", name=name)
     ET.SubElement(model, "static").text = "true"
-    ET.SubElement(model, "pose").text = " ".join(f"{v:.6f}" for v in pose)
+    pose_element = ET.SubElement(model, "pose")
+    # Preserve an exact Gazebo GUI orbit quaternion when restoring a preset.
+    # Existing six-component Euler poses remain the default for manual views.
+    if len(pose) == 7:
+        pose_element.set("rotation_format", "quat_xyzw")
+    elif len(pose) != 6:
+        raise ValueError("Camera pose must be XYZ+RPY or XYZ+quaternion")
+    pose_element.text = " ".join(f"{v:.9f}" for v in pose)
     link = ET.SubElement(model, "link", name="camera_mount")
     sensor = ET.SubElement(link, "sensor", name="rgb", type="camera")
     ET.SubElement(sensor, "always_on").text = "true"
@@ -322,11 +329,28 @@ def build_world(source, settings):
                                (10.5, 0, 9.5, 0, .736, math.pi),
                                resolution=(960, 540), hz=8.0, hfov=1.56))
     free = settings.get("free", DEFAULTS["free"])
-    pose = (bounded(free["x"], -18, 18, "free.x"),
-            bounded(free["y"], -14, 14, "free.y"),
-            bounded(free["z"], 1, 16, "free.z"),
-            0, math.radians(bounded(free["pitch"], -60, 88, "free.pitch")),
-            math.radians(bounded(free["yaw"], -360, 360, "free.yaw")))
+    if "orientation" in free:
+        # GUI orbit poses can be farther away or rolled relative to the court.
+        # Persist the complete rotation instead of reducing it to yaw/pitch.
+        orientation = free["orientation"]
+        if not isinstance(orientation, (list, tuple)) or len(orientation) != 4:
+            raise ValueError("free.orientation must be [qx, qy, qz, qw]")
+        q = tuple(bounded(value, -1.01, 1.01, "free.orientation") for value in orientation)
+        norm = math.sqrt(sum(value * value for value in q))
+        if norm < 1e-6:
+            raise ValueError("free.orientation quaternion must be nonzero")
+        pose = (
+            bounded(free["x"], -100, 100, "free.x"),
+            bounded(free["y"], -100, 100, "free.y"),
+            bounded(free["z"], -100, 100, "free.z"),
+            *(value / norm for value in q),
+        )
+    else:
+        pose = (bounded(free["x"], -18, 18, "free.x"),
+                bounded(free["y"], -14, 14, "free.y"),
+                bounded(free["z"], 1, 16, "free.z"),
+                0, math.radians(bounded(free["pitch"], -60, 88, "free.pitch")),
+                math.radians(bounded(free["yaw"], -360, 360, "free.yaw")))
     world.append(camera_entity("lab_free_camera", "/lighting_lab/free", pose,
                                resolution=(800, 450), hz=8.0, hfov=1.3))
     return '<?xml version="1.0"?>\n' + ET.tostring(root, encoding="unicode")
