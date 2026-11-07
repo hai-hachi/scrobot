@@ -125,12 +125,12 @@
     </article>
     <article class="card">
       <div class="cardhead"><div><div class="kicker">03 / FREE FLY CAMERA</div><h2>Interactive · Movable Inspector</h2></div><span class="pill" id="v-free">Waiting</span></div>
-      <div class="feed free" id="feed-free" title="Drag to look around, WASD to move">
+      <div class="feed free" id="feed-free" title="Matches the Gazebo desktop orbit camera">
         <div class="placeholder">Waiting for Gazebo free camera<br>/lighting_lab/free</div>
         <img id="img-free" alt="Live freely positioned Gazebo inspection camera">
-        <div class="viewtag">DRAG TO LOOK · WASD MOVE · Q/E ALTITUDE</div>
+        <div class="viewtag">SYNC WITH GAZEBO GUI ORBIT</div>
       </div>
-      <div class="underfeed"><span>Drag to look; WASD to move</span><button onclick="captureFrame('free')">Save frame</button><strong id="v-free-exp">—</strong></div>
+      <div class="underfeed"><span>Copy or follow the Gazebo GUI orbit view</span><button onclick="captureFrame('free')">Save frame</button><strong id="v-free-exp">—</strong></div>
     </article>
   </section>
 
@@ -143,8 +143,9 @@
       <label style="margin-top:8px">Light type
         <select id="light-kind"><option value="spot">Spot (focused)</option><option value="point">Point (omnidirectional)</option></select>
       </label>
-      <div class="colorhead"><strong>Light color from Kelvin</strong><span class="swatch" id="sw-light"></span></div>
-      <p class="helper">X/Y reach is measured FROM court center to the outermost light (± reach on each axis), not the full array width. Temperature controls warm/cool color; brightness controls Gazebo intensity, not calibrated lux.</p>
+      <div class="colorhead"><strong>Light color · HSV</strong><span class="swatch" id="sw-light"></span></div>
+      <div class="triple" id="light-hsv"></div>
+      <p class="helper">X/Y reach is measured from court center to the outermost lights (± reach). HSV sets light color; intensity independently controls Gazebo light output (not calibrated lux).</p>
       <div class="buttonrow">
         <button class="primary" id="apply-lights" onclick="applyLights()">Apply lighting to Gazebo</button>
         <label class="toggle" style="margin:0"><input id="auto-light" type="checkbox"> Auto on release</label>
@@ -192,35 +193,12 @@
       </div>
       <div class="buttonrow"><button class="primary" id="move-robot" onclick="applyRobot()">Move robot</button></div>
       <div class="divider"></div>
-      <h3>Free camera · position and rotation</h3>
-      <div class="coord" style="margin-top:10px">
-        <label>X<input id="free-x" type="number" min="-18" max="18" step=".5" value="8"></label>
-        <label>Y<input id="free-y" type="number" min="-14" max="14" step=".5" value="-8"></label>
-        <label>Z<input id="free-z" type="number" min="1" max="16" step=".5" value="6"></label>
-        <label>Yaw °<input id="free-yaw" type="number" min="-360" max="360" step="5" value="135"></label>
-        <label>Pitch °<input id="free-pitch" type="number" min="-60" max="88" step="5" value="24"></label>
-        <label>Step m<input id="free-step" type="number" min=".1" max="5" step=".1" value=".5"></label>
-      </div>
-      <div class="wasd">
-        <button onclick="freeNudge('left')" title="A">◀</button>
-        <button onclick="freeNudge('back')" title="S">▼</button>
-        <button onclick="freeNudge('front')" title="W">▲</button>
-        <button onclick="freeNudge('right')" title="D">▶</button>
-        <button onclick="freeNudge('up')" title="E">Z+</button>
-        <button onclick="freeNudge('down')" title="Q">Z−</button>
-        <button onclick="freeNudge('yawleft')">↶</button>
-        <button onclick="freeNudge('pitchup')">Look↑</button>
-        <button onclick="freeNudge('pitchdown')">Look↓</button>
-        <button onclick="freeNudge('yawright')">↷</button>
-      </div>
-      <div class="buttonrow"><button class="primary" id="move-free" onclick="applyFree()">Apply free-camera pose</button></div>
-      <div class="divider"></div>
       <h3>Sync with Gazebo GUI orbit camera</h3>
       <div class="buttonrow">
         <button id="copy-orbit" onclick="copyOrbitView()">Copy current orbit view</button>
         <label class="toggle" style="margin:0"><input type="checkbox" id="follow-orbit" onchange="toggleOrbitFollow()"> Follow orbit live</label>
       </div>
-      <p class="helper" id="orbit-state">Listening to Gazebo /gui/camera/pose. Move or orbit the camera in the Gazebo window, then copy or follow it here.</p>
+      <p class="helper" id="orbit-state">Listening to Gazebo /gui/camera/pose. Orbit the desktop Gazebo camera, then copy or follow that view. Manual free-camera pose controls are intentionally hidden.</p>
     </article>
   </section>
 
@@ -262,6 +240,9 @@
         <label>Calibration preset name<input id="preset-name" type="text" maxlength="60" value="lighting_baseline"></label>
         <div class="buttonrow" style="align-items:end;margin:0"><button class="primary" onclick="savePreset()">Save JSON preset</button></div>
       </div>
+      <div class="divider"></div>
+      <div class="buttonrow"><button class="primary" id="update-lab-config" onclick="updateLabConfig()">Update lab config YAML</button></div>
+      <p class="helper">Write the current light, material and venue slider values to <code>src/scrobot_simulation/config/lighting_lab.yaml</code>. Restart Lighting Lab to load them by default. This does not change the production world or automatically apply pending sliders to running Gazebo.</p>
       <p class="note">Brightness and clipping are image-based proxies, NOT calibrated lux. Compare the same robot pose, camera settings and shuttle layout before choosing an illumination profile. RTF and FPS indicate computational cost, not illumination quality.</p>
     </article>
   </section>
@@ -274,8 +255,7 @@ const lightSpecs = [
   ["rows","Rows",1,8,1,""],["cols","Columns",1,12,1,""],
   ["reach_x","X reach from center",0,10,.25,"m"],["reach_y","Y reach from center",0,8,.25,"m"],
   ["height","Height",2,13,.5,"m"],
-  ["temperature","Temperature",1800,12000,100,"K"],
-  ["brightness","Brightness",0,400,5,"%"],
+  ["intensity","Intensity",0,4,.05,"×"],
   ["range","Range",2,40,1,"m"],["specular","Specular ratio",0,1,.05,""],
   ["constant","Attenuation const",.01,2,.01,""],
   ["linear","Attenuation linear",0,1,.005,""],
@@ -286,7 +266,7 @@ const lightSpecs = [
 ];
 const defaults={
  lights:{rows:2,cols:3,reach_x:4.5,reach_y:4.6,height:7,kind:"spot",
- temperature:5600,brightness:100,range:18,
+ hsv:[55,3,95],intensity:1,range:18,
  constant:.45,linear:.015,quadratic:.001,inner:.7,outer:1.2,falloff:.8,shadows:true,
  specular:.2},
  colors:{floor:[210,12,8],walls:[240,7,15],court:[147,84,35],poles:[0,0,15]},
@@ -320,6 +300,7 @@ for(const spec of lightSpecs){
  $("lightfields").appendChild(slider("li-"+spec[0],...spec.slice(1,5),
  defaults.lights[spec[0]],spec[5]));
 }
+hsvGroup("light","light-hsv",defaults.lights.hsv);
 for(const name of ["floor","walls","court","poles"]){
  const head=document.createElement("div");head.className="colorhead";
  const title=document.createElement("strong");title.textContent=({floor:"Venue floor",walls:"Boundary walls",court:"Badminton mat",poles:"Net poles"})[name];
@@ -347,17 +328,8 @@ function hsvCss(v){
  const sat=(light===0||light===1)?0:(val-light)/Math.min(light,1-light);
  return "hsl("+h+" "+(sat*100).toFixed(2)+"% "+(light*100).toFixed(2)+"%)";
 }
-function kelvinCss(kelvin){
- const t=Number(kelvin)/100;
- const clamp=n=>Math.max(0,Math.min(255,Math.round(n)));
- const red=t<=66?255:329.698727446*Math.pow(t-60,-.1332047592);
- const green=t<=66?99.4708025861*Math.log(t)-161.1195681661:
-   288.1221695283*Math.pow(t-60,-.0755148492);
- const blue=t<=19?0:t<=66?138.5177312231*Math.log(t-10)-305.0447927307:255;
- return "rgb("+[red,green,blue].map(clamp).join(",")+")";
-}
 function updateSwatches(){
- if($("li-temperature"))$("sw-light").style.background=kelvinCss(n("li-temperature"));
+ $("sw-light").style.background=hsvCss(hsv("light"));
  for(const key of ["floor","walls","court","poles"]){
   const v=hsv(key);$("sw-"+key).style.background=hsvCss(v);
  }
@@ -365,7 +337,7 @@ function updateSwatches(){
 updateSwatches();
 function lightPayload(){
  const o={};for(const item of lightSpecs)o[item[0]]=n("li-"+item[0]);
- o.kind=$("light-kind").value;o.shadows=$("light-shadows").checked;return o;
+ o.hsv=hsv("light");o.kind=$("light-kind").value;o.shadows=$("light-shadows").checked;return o;
 }
 function materialsPayload(){
  return {floor:hsv("floor"),walls:hsv("walls"),court:hsv("court"),poles:hsv("poles")};
@@ -400,41 +372,31 @@ function autoApply(section,actionFn){
  let timer=null;
  const parent=section;
  parent.addEventListener("change",e=>{
-  const enabled=section.id==="lightfields"?$("auto-light").checked:$("auto-material").checked;
+  const enabled=(section.id==="lightfields"||section.id==="light-hsv")?$("auto-light").checked:$("auto-material").checked;
   if(!enabled)return;
   clearTimeout(timer);timer=setTimeout(actionFn,650);
  });
 }
 autoApply($("lightfields"),applyLights);
+autoApply($("light-hsv"),applyLights);
 autoApply($("materials"),applyMaterials);
 $("light-kind").addEventListener("change",()=>{if($("auto-light").checked)applyLights();});
 $("light-shadows").addEventListener("change",()=>{if($("auto-light").checked)applyLights();});
 // Venue clearances are deliberately applied by explicit Gazebo restart only.
 const robotData=()=>({x:n("robot-x"),y:n("robot-y"),yaw:n("robot-yaw")});
-const freeData=()=>({x:n("free-x"),y:n("free-y"),z:n("free-z"),yaw:n("free-yaw"),pitch:n("free-pitch")});
 async function applyRobot(){await action("/api/robot",robotData(),"move-robot");updateRobotDot();}
-async function applyFree(){
- $("follow-orbit").checked=false;
- await action("/api/free",freeData(),"move-free");
-}
 async function copyOrbitView(){
- const ok=await action("/api/orbit",{follow:$("follow-orbit").checked,copy_now:true},"copy-orbit");
- if(ok){
-  try{
-   const response=await fetch("/api/status",{cache:"no-store"});
-   const data=await response.json();
-   if(data.settings&&data.settings.free){
-    for(const k of ["x","y","z","yaw","pitch"]){
-     $("free-"+k).value=String(data.settings.free[k]);
-    }
-   }
-  }catch(e){}
- }
+ await action("/api/orbit",{follow:$("follow-orbit").checked,copy_now:true},"copy-orbit");
 }
 async function toggleOrbitFollow(){
  const follow=$("follow-orbit").checked;
  const ok=await action("/api/orbit",{follow,copy_now:follow},null);
  if(!ok)$("follow-orbit").checked=false;
+}
+async function updateLabConfig(){
+ await action("/api/config",{
+  lights:lightPayload(),colors:materialsPayload(),venue:venuePayload()
+ },"update-lab-config");
 }
 function updateRobotDot(){
  const x=n("robot-x"),y=n("robot-y"),yaw=n("robot-yaw")*Math.PI/180;
@@ -452,38 +414,6 @@ $("courtmap").addEventListener("click",evt=>{
 });
 for(const id of ["robot-x","robot-y","robot-yaw"])$(id).addEventListener("change",updateRobotDot);
 updateRobotDot();
-function freeNudge(direction){
- let {x,y,z,yaw,pitch}=freeData(),step=Math.max(.1,Math.min(5,n("free-step")));
- const a=yaw*Math.PI/180;
- if(direction==="front"){x+=step*Math.cos(a);y+=step*Math.sin(a);}
- if(direction==="back"){x-=step*Math.cos(a);y-=step*Math.sin(a);}
- if(direction==="left"){x-=step*Math.sin(a);y+=step*Math.cos(a);}
- if(direction==="right"){x+=step*Math.sin(a);y-=step*Math.cos(a);}
- if(direction==="up")z+=step;if(direction==="down")z-=step;
- if(direction==="yawleft")yaw-=10;if(direction==="yawright")yaw+=10;
- if(direction==="pitchup")pitch+=8;if(direction==="pitchdown")pitch-=8;
- const vals={x,y,z,yaw,pitch};
- for(const k in vals){
-  const el=$("free-"+k);el.value=Math.min(Number(el.max),Math.max(Number(el.min),vals[k])).toFixed(2);
- }
- applyFree();
-}
-window.addEventListener("keydown",event=>{
- if(["INPUT","SELECT","TEXTAREA"].includes(document.activeElement.tagName))return;
- const dir={w:"front",s:"back",a:"left",d:"right",q:"down",e:"up"}[event.key.toLowerCase()];
- if(dir){event.preventDefault();freeNudge(dir);}
-});
-let drag=null;
-$("feed-free").addEventListener("pointerdown",e=>{
- drag={x:e.clientX,y:e.clientY,yaw:n("free-yaw"),pitch:n("free-pitch")};
- e.currentTarget.setPointerCapture(e.pointerId);
-});
-$("feed-free").addEventListener("pointerup",e=>{
- if(!drag)return;
- $("free-yaw").value=(Math.max(-360,Math.min(360,drag.yaw+(e.clientX-drag.x)*.35))).toFixed(1);
- $("free-pitch").value=(Math.max(-60,Math.min(88,drag.pitch-(e.clientY-drag.y)*.28))).toFixed(1);
- drag=null;applyFree();
-});
 async function spawnShuttles(){
  await action("/api/shuttles",{count:n("shuttle-count"),seed:n("shuttle-seed"),density:$("shuttle-density").value},"spawn-btn");
 }
@@ -552,14 +482,7 @@ async function getStatus(){
     (gui.following?" · following live":" · copy to align the free-camera view"):
     "No /gui/camera/pose yet. Ensure Gazebo GUI is open and Camera Tracking plugin is loaded.";
    $("follow-orbit").checked=gui.following;
-   if(gui.following&&s.settings&&s.settings.free){
-    const activeElement=document.activeElement;
-    if(!activeElement || activeElement.tagName!=="INPUT"){
-     for(const k of ["x","y","z","yaw","pitch"]){
-       $("free-"+k).value=String(s.settings.free[k]);
-     }
-    }
-   }
+
   }
   const active=s.gazebo_alive!==false && s.sim.stats_age_s!==null&&s.sim.stats_age_s<5;
   $("conn").textContent=s.gazebo_alive===false?"Gazebo exited":(active?"● Gazebo live":"◌ Connecting…");
@@ -590,6 +513,7 @@ function syncControls(settings){
  if(settings.lights){
   const lights=settings.lights;
   for(const spec of lightSpecs)setValue("li-"+spec[0],lights[spec[0]]);
+  if(lights.hsv)for(let k=0;k<3;k++)setValue("light-"+["h","s","v"][k],lights.hsv[k]);
    if(lights.kind)$("light-kind").value=lights.kind;
   if(typeof lights.shadows==="boolean")$("light-shadows").checked=lights.shadows;
  }
@@ -609,9 +533,6 @@ function syncControls(settings){
  if(settings.robot){
   for(const k of ["x","y","yaw"])setValue("robot-"+k,settings.robot[k]);
   updateRobotDot();
- }
- if(settings.free){
-  for(const k of ["x","y","z","yaw","pitch"])setValue("free-"+k,settings.free[k]);
  }
  if(settings.shuttles){
   setValue("shuttle-count",settings.shuttles.count);
