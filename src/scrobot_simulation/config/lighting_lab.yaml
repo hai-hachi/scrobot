@@ -1,0 +1,29 @@
+# SCROBOT lighting-lab calibration defaults (not production ROS params).
+# The dashboard can update this file; restart Lighting Lab to load changes.
+# Original src/scrobot_simulation/worlds/badminton_court.sdf is never rewritten.
+lights:
+  rows: 2
+  cols: 3
+  reach_x: 4.5
+  reach_y: 4.6
+  height: 7.0
+  kind: spot
+  hsv: [55, 3, 95]
+  intensity: 1.0
+  range: 18.0
+  constant: 0.45
+  linear: 0.015
+  quadratic: 0.001
+  inner: 0.7
+  outer: 1.2
+  falloff: 0.8
+  shadows: true
+  specular: 0.2
+colors:
+  floor: [210, 12, 8]
+  walls: [240, 7, 15]
+  court: [147, 84, 35]
+  poles: [0, 0, 15]
+venue:
+  clearance_x: 2.3
+  clearance_y: 2.4
