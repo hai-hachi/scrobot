@@ -106,10 +106,17 @@ diameter, random shuttle batches and performance; no mission is started.
 ```bash
 sudo apt install python3-gz-transport13 python3-gz-msgs10 python3-pil
 cd ~/scrobot_ws/src
+python3 scripts/setup_workspace_tools.py  # once; persistent across reboot
+cd ~/scrobot_ws
 python3 tools/lighting_lab/server.py
 ```
 
-Open http://127.0.0.1:8765. See
+Open http://127.0.0.1:8765. WARP-safe loopback transport is enforced
+automatically every launch. Lighting uses **center-based X/Y reach**,
+**temperature (K)** and **brightness (%)**, and materials retain HSV.
+The dashboard copies/follows the Gazebo GUI orbit camera. X/Y venue
+clearance sliders rebuild the calibration world with matching floor and
+wall collisions; net pole diameter stays fixed. See
 [lighting-lab calibration workflow](docs/real_comparison/lighting_lab.md).
 This is a development experiment, **not** a change to the validated
 competition world or physical robot.
