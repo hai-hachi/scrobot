@@ -419,7 +419,17 @@ async function applyFree(){
 }
 async function copyOrbitView(){
  const ok=await action("/api/orbit",{follow:$("follow-orbit").checked,copy_now:true},"copy-orbit");
- if(ok)await getStatus();
+ if(ok){
+  try{
+   const response=await fetch("/api/status",{cache:"no-store"});
+   const data=await response.json();
+   if(data.settings&&data.settings.free){
+    for(const k of ["x","y","z","yaw","pitch"]){
+     $("free-"+k).value=String(data.settings.free[k]);
+    }
+   }
+  }catch(e){}
+ }
 }
 async function toggleOrbitFollow(){
  const follow=$("follow-orbit").checked;
