@@ -12,8 +12,8 @@ historical 50-shuttle mission settings.
 | Light grid | Rows × columns (max 32 lights), spot/point type | 2 × 3 spot |
 | X/Y light reach | Distance from court center **to outermost lights**, each side | ±4.5 m X, ±4.6 m Y |
 | Light elevation | Z above venue floor | 7.0 m |
-| Light temperature | White appearance 1,800–12,000 K | 5,600 K |
-| Light brightness | Relative Gazebo intensity 0–400% (not calibrated lux) | 100% |
+| Light HSV color | Hue (0–360°), saturation (0–100%), value (0–100%) | H=55°, S=3%, V=95% |
+| Light intensity | Gazebo light intensity 0–4× (not calibrated lux) | 1× |
 | Light rendering | Shadow toggle, range, attenuation, spot inner/outer cone, falloff, specular | Original court approximations |
 | Surface colors | Independent HSV sliders for venue floor, court mat, safety walls, net poles | Original appearance approximations |
 | Venue X clearance | **Per side** beyond the 15.4 m-long mat | 2.3 m |
@@ -40,23 +40,22 @@ material settings are retained.
   plan or type X/Y/yaw to place the robot.
 - **Broadcast:** fixed elevated end-court Gazebo camera for observing
   lighting coverage and shadows.
-- **Free inspector camera:** independently rendered Gazebo camera, movable
-  by dashboard WASD/Q/E, drag and pose inputs. **Copy current orbit view**
-  transfers the Gazebo desktop GUI camera pose to this view. Check
-  **Follow orbit live** to keep the inspector view following Gazebo's
-  moving/orbiting camera, sampling roughly twice a second.
-  This reads the documented `/gui/camera/pose` Gazebo Transport topic
+- **Free inspector camera:** independently rendered Gazebo camera controlled
+  by the Gazebo desktop orbit view. **Copy current orbit view** transfers
+  the Gazebo GUI camera pose to this view. Check **Follow orbit live**
+  to keep the inspector following its moving/orbiting camera, sampling
+  roughly twice a second. The dashboard no longer shows manual XYZ,
+  yaw/pitch, drag, or WASD controls for the free inspector.
+  It reads the documented `/gui/camera/pose` Gazebo Transport topic
   from the Gazebo Camera Tracking plugin. Gazebo desktop must be open and
   advertise that topic for orbit sync to work. If unavailable, the dashboard
-  shows an actionable warning, and manual free-camera positioning works.
+  shows an actionable warning; the inspector retains its last/default pose.
 
 Orbit sync copies world pose and quaternion, not necessarily field of view:
 the inspection camera retains its own sensor FOV and output resolution.
-The full quaternion (including roll) is preserved in saved presets and
-the derivative SDF when the lab restarts after a venue-clearance change.
-Manually adjusting the free camera's XYZ/yaw/pitch resets that synchronized
-orientation to the manually selected yaw/pitch. This is a live camera view,
-not a screenshot of the desktop GUI.
+The full quaternion (including roll) is preserved in saved JSON presets
+and the derivative SDF when the lab restarts after a venue-clearance change.
+This is a live camera view, not a screenshot of the desktop GUI.
 
 ## One-time setup: workspace-root tools
 
@@ -88,7 +87,7 @@ Gazebo Transport bindings:
 
 ```bash
 sudo apt update
-sudo apt install python3-gz-transport13 python3-gz-msgs10 python3-pil
+sudo apt install python3-gz-transport13 python3-gz-msgs10 python3-pil python3-yaml
 cd ~/scrobot_ws
 source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install --packages-up-to scrobot_scenarios
@@ -113,6 +112,33 @@ python3 tools/lighting_lab/server.py
 Open <http://127.0.0.1:8765>. The Gazebo desktop GUI opens in its own window.
 The dashboard shows the three **live Gazebo images** side by side. Nav2,
 mission, YOLO, RViz, evaluator and the other developer monitors do not launch.
+
+### Update lab config YAML
+
+The **Update lab config YAML** button in **Performance and presets** saves
+the *current light, material, and venue slider values* to this tracked file:
+
+```text
+~/scrobot_ws/src/src/scrobot_simulation/config/lighting_lab.yaml
+```
+
+The first `src` is your Git checkout; the second `src` belongs to the ROS
+workspace layout inside the repository. When launched from
+`~/scrobot_ws/tools/lighting_lab/server.py`, the same path is used.
+
+The file is loaded automatically as the lab's defaults on each launch, so
+the settings survive restarts. CLI `--preset` JSON values override the
+YAML defaults for that session. **Updating YAML is not the same as applying
+slider changes to the running world**: use **Apply lighting to Gazebo**,
+**Apply material colors**, or **Apply venue · restart Gazebo** to change
+the live simulation. To use freshly saved YAML as a full scene, restart
+the Lighting Lab.
+
+Saving YAML intentionally modifies a Git-tracked *lab-only* config in the
+local working tree. Review or commit it with Git when you want to share
+the calibration. No production SDF, hardware settings, or mission config
+are overwritten. Camera orbit poses and shuttle layouts remain in JSON
+presets rather than this shared YAML.
 
 **WARP/VPN compatibility is automatic on every run, including after reboot.**
 The Python launcher sets `GZ_IP=127.0.0.1` and
@@ -149,13 +175,13 @@ python3 tools/lighting_lab/server.py --preset /path/to/saved_preset.json
 
 1. Fix the robot pose, camera settings, shuttle seed and venue clearance.
 2. Use **2 × 3** spotlights with **reach X=4.5 m**, **reach Y=4.6 m**,
-   **height=7 m**, **temperature=5600 K**, **brightness=100%**.
+   **height=7 m**, **H=55°, S=3%, V=95%**, **intensity=1×**.
 3. Spawn 20 random shuttles, seed 20261003. Save preset
    `baseline_6_lights`.
-4. Change only **brightness** while keeping camera pose and light count
+4. Change only **intensity** while keeping HSV, camera pose and light count
    constant. Compare image clipping and mean brightness with RTF.
-5. Change temperature (warm to cool) at fixed brightness. This represents
-   RGB appearance, **not actual lamp spectral response or measured lux**.
+5. Adjust **H/S/V** at fixed intensity to compare light color. HSV models
+   appearance, **not actual lamp spectral response or measured lux**.
 6. Toggle shadows without changing lights to evaluate rendering cost.
 7. Increase/decrease light rows, columns, center-based X/Y reach, height,
    attenuation and spotlight angle. Inspect the broadcast and robot POVs.
@@ -177,11 +203,11 @@ The lab generates a temporary derivative SDF, disables automatic shuttle
 pickup in that calibration-only world and never modifies the production
 `badminton_court.sdf`. The light/material endpoints update actual Gazebo
 world objects. Venue resizing restarts the simulated world as described
-above. Presets that were saved with the earlier HSV-light/total-span format
-are migrated to center reach and brightness, with a default 5600 K light
-temperature.
+above. Older Kelvin/brightness presets are converted to HSV/intensity;
+older HSV and full-span light presets remain supported and the latter are
+migrated to center-based reaches.
 
-Offline CI validates source generation, scene geometry, Kelvin conversion,
-browser startup and Python 3 syntax. **Gazebo Transport runtime service
+Offline CI validates source generation, YAML persistence, scene geometry,
+HSV/intensity conversion, browser startup and Python 3 syntax. **Gazebo Transport runtime service
 behavior, GUI orbit synchronization, rendering performance and WARP behavior
 still require a hands-on run on the SCROBOT workstation.**
