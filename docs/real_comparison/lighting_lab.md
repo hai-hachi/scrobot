@@ -52,7 +52,11 @@ material settings are retained.
 
 Orbit sync copies world pose and quaternion, not necessarily field of view:
 the inspection camera retains its own sensor FOV and output resolution.
-This is a live camera view, not a screenshot of the desktop GUI.
+The full quaternion (including roll) is preserved in saved presets and
+the derivative SDF when the lab restarts after a venue-clearance change.
+Manually adjusting the free camera's XYZ/yaw/pitch resets that synchronized
+orientation to the manually selected yaw/pitch. This is a live camera view,
+not a screenshot of the desktop GUI.
 
 ## One-time setup: workspace-root tools
 
