@@ -31,14 +31,16 @@ import webbrowser
 from scene import (
     WORLD, DEFAULTS, VISUAL_GROUPS, build_world, centered_positions,
     checked_colors, checked_lights, checked_venue, default_settings,
-    hsv_rgb, kelvin_rgb, light_direction, bounded, integer,
+    hsv_rgb, light_direction, bounded, integer,
 )
+from config import read_lab_config, write_lab_config
 
 
 SOURCE = Path(__file__).resolve().parents[2] / (
     "src/scrobot_simulation/worlds/badminton_court.sdf"
 )
 HTML = Path(__file__).with_name("index.html")
+LAB_CONFIG = SOURCE.parent.parent / "config/lighting_lab.yaml"
 PRESSTS = Path.home() / "scrobot_ws/evaluation_results/lighting_lab/presets"
 CAMERAS = {
     "robot": "/camera/color",
@@ -273,7 +275,7 @@ class GazeboAdapter:
         m = self.Light()
         m.name = name
         m.type = self.Light.SPOT if cfg["kind"] == "spot" else self.Light.POINT
-        m.intensity = cfg["brightness"] / 100.0
+        m.intensity = cfg["intensity"]
         m.range = cfg["range"]
         m.attenuation_constant = cfg["constant"]
         m.attenuation_linear = cfg["linear"]
@@ -285,7 +287,7 @@ class GazeboAdapter:
         m.pose.position.x, m.pose.position.y, m.pose.position.z = x, y, z
         m.pose.orientation.w = 1.0
         m.direction.x, m.direction.y, m.direction.z = light_direction(x, y, z)
-        rgb = kelvin_rgb(cfg["temperature"])
+        rgb = hsv_rgb(cfg["hsv"])
         for field, multiplier in (("diffuse", 1.0), ("specular", cfg["specular"])):
             color = getattr(m, field)
             color.r, color.g, color.b, color.a = (
@@ -618,6 +620,16 @@ class Lab:
         self.adapter.last_action = f"Spawned {count} random shuttles (seed {seed})"
         return self.adapter.last_action
 
+    def save_config(self, raw):
+        # Only an explicit button press modifies the lab-only YAML. Validate
+        # every control first; the writer performs one atomic file replacement.
+        path = write_lab_config(LAB_CONFIG, raw)
+        self.adapter.last_action = (
+            f"Updated {path}. Restart Lighting Lab to load these defaults; "
+            "running Gazebo is unchanged."
+        )
+        return self.adapter.last_action
+
     def save_preset(self, raw):
         name = str(raw.get("name", "lighting_calibration"))
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,60}", name):
@@ -692,7 +704,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path not in ("/api/lights", "/api/materials", "/api/robot",
                         "/api/free", "/api/shuttles", "/api/preset",
-                        "/api/venue", "/api/orbit"):
+                        "/api/venue", "/api/orbit", "/api/config"):
             self.reply(404, {"error": "Unknown action"})
             return
         size = int(self.headers.get("Content-Length", "0"))
@@ -719,6 +731,8 @@ class Handler(BaseHTTPRequestHandler):
                         payload.get("follow", False),
                         payload.get("copy_now", False)
                     )
+                elif path == "/api/config":
+                    text = self.lab.save_config(payload)
                 else:
                     text = self.lab.save_preset(payload)
             self.reply(200, {"ok": True, "message": text})
@@ -764,6 +778,12 @@ def main():
     if not 1024 <= args.port <= 65535:
         parser.error("port must be 1024..65535")
     settings = default_settings()
+    # Versioned calibration YAML is the default for every launch. JSON
+    # experiment presets (if provided) take precedence for that session.
+    try:
+        settings.update(read_lab_config(LAB_CONFIG))
+    except (ValueError, OSError, RuntimeError) as exc:
+        parser.error(str(exc))
     if args.preset:
         settings.update(json.loads(args.preset.read_text())["settings"])
     settings["lights"] = checked_lights(settings.get("lights", {}))
