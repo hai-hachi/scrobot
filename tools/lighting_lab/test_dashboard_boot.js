@@ -89,7 +89,8 @@ vm.runInContext(match[1], context, {timeout: 4000});
 // Initialization must render every control without referencing an absent id.
 for (const id of [
   "li-rows", "li-cols", "li-reach_x", "li-reach_y", "li-height",
-  "li-temperature", "li-brightness", "li-constant", "li-quadratic",
+  "light-h", "light-s", "light-v", "li-intensity",
+  "li-constant", "li-quadratic",
   "venue-clearance_x", "venue-clearance_y", "court-h", "poles-v",
 ]) {
   assert(registry.has(id), "Missing dynamically rendered slider " + id);
@@ -100,9 +101,10 @@ assert.equal(lights.cols, 3);
 assert.equal(lights.kind, "spot");
 assert.equal(lights.reach_x, 4.5);
 assert.equal(lights.reach_y, 4.6);
-assert.equal(lights.temperature, 5600);
-assert.equal(lights.brightness, 100);
-assert(!Object.hasOwn(lights, "hsv"));
+assert.deepEqual(Array.from(lights.hsv), [55, 3, 95]);
+assert.equal(lights.intensity, 1);
+assert(!Object.hasOwn(lights, "temperature"));
+assert(!Object.hasOwn(lights, "brightness"));
 
 const colors = vm.runInContext("materialsPayload()", context);
 assert.deepEqual(Array.from(colors.court), [147, 84, 35]);
@@ -114,11 +116,11 @@ assert.equal(venue.clearance_y, 2.4);
 // Opening a saved preset must initialize the controls from the backend,
 // rather than misleadingly displaying the default light array and colors.
 vm.runInContext(
-  "syncControls({lights:{rows:4,cols:2,reach_x:5,reach_y:6,temperature:3800,brightness:200,kind:'point',shadows:false},"+
+  "syncControls({lights:{rows:4,cols:2,reach_x:5,reach_y:6,hsv:[270,35,80],intensity:2.0,kind:'point',shadows:false},"+
   "colors:{court:[100,50,70]},"+
   "venue:{clearance_x:3.5,clearance_y:1.75},"+
   "robot:{x:1.5,y:0,yaw:90},"+
-  "free:{x:4,y:1,z:9,yaw:75,pitch:40},"+
+
   "shuttles:{count:33,seed:12345,density:'net'}})",
   context
 );
@@ -127,14 +129,18 @@ assert.equal(registry.get("li-cols").value, "2");
 assert.equal(registry.get("light-kind").value, "point");
 assert.equal(registry.get("light-shadows").checked, false);
 assert.equal(registry.get("li-reach_x").value, "5");
-assert.equal(registry.get("li-temperature").value, "3800");
-assert.equal(registry.get("li-brightness").value, "200");
+assert.equal(registry.get("light-h").value, "270");
+assert.equal(registry.get("light-s").value, "35");
+assert.equal(registry.get("light-v").value, "80");
+assert.equal(registry.get("li-intensity").value, "2");
 assert.equal(registry.get("venue-clearance_x").value, "3.5");
 assert.equal(registry.get("venue-clearance_y").value, "1.75");
 assert(!registry.has("pole-dia"));
-assert(!registry.has("light-h"));
+assert(registry.has("light-h"));
 assert.equal(registry.get("shuttle-count").value, "33");
-assert.equal(registry.get("free-z").value, "9");
+assert(!registry.has("free-z"));
+assert(!registry.has("free-yaw"));
+assert(!registry.has("move-free"));
 
 // Exercise an event after setup and verify swatch appearance changes.
 const hue = registry.get("court-h");
@@ -148,9 +154,11 @@ assert(registry.has("copy-orbit"));
 assert(registry.has("apply-venue"));
 assert.match(html, /\/api\/orbit/);
 assert.match(html, /\/api\/venue/);
+assert(registry.has("update-lab-config"));
+assert.match(html, /\/api\/config/);
 
 // The court click/robot camera pose selection must be wired.
 assert((registry.get("courtmap").listeners.click || []).length >= 1);
-assert((registry.get("feed-free").listeners.pointerup || []).length >= 1);
+assert.equal((registry.get("feed-free").listeners.pointerup || []).length, 0);
 
-console.log("Lighting lab browser initialization, HSV sliders, camera controls: OK");
+console.log("Lighting lab browser initialization, HSV lights, orbit sync, YAML action: OK");
