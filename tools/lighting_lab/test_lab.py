@@ -12,6 +12,7 @@ from scene import (
     checked_colors, checked_lights, checked_venue, default_settings,
     hsv_rgb, kelvin_rgb,
 )
+from config import read_lab_config, write_lab_config
 from server import configure_warp_safe_network
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -61,31 +62,41 @@ class SceneTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             checked_venue({"clearance_x": float("inf")})
         with self.assertRaises(ValueError):
-            checked_lights({"temperature": 1700})
+            checked_lights({"hsv": [361, 50, 50]})
         with self.assertRaises(ValueError):
-            checked_lights({"brightness": 900})
+            checked_lights({"intensity": 5.0})
 
     def test_rgb_conversions(self):
         self.assertEqual(hsv_rgb([0, 0, 0]), (0.0, 0.0, 0.0))
         self.assertEqual(hsv_rgb([0, 100, 100]), (1.0, 0.0, 0.0))
         self.assertEqual(hsv_rgb([120, 100, 100]), (0.0, 1.0, 0.0))
 
-    def test_temperature_white_balance_and_brightness(self):
-        warm = kelvin_rgb(2200)
-        cool = kelvin_rgb(10000)
-        self.assertGreater(warm[0], warm[2])
-        self.assertGreater(cool[2], warm[2])
-        cfg = checked_lights({"temperature": 4500, "brightness": 225})
-        self.assertEqual(cfg["brightness"], 225)
-        self.assertEqual(cfg["temperature"], 4500)
-        self.assertNotIn("hsv", cfg)
+    def test_light_hsv_and_independent_intensity(self):
+        cfg = checked_lights({"hsv": [0, 100, 70], "intensity": 2.25})
+        self.assertEqual(cfg["hsv"], [0.0, 100.0, 70.0])
+        self.assertEqual(cfg["intensity"], 2.25)
+        self.assertNotIn("temperature", cfg)
+        self.assertNotIn("brightness", cfg)
         settings = default_settings()
-        settings["lights"].update({"temperature": 2200, "brightness": 225})
+        settings["lights"].update({"hsv": [0, 100, 70], "intensity": 2.25})
         world = ET.fromstring(build_world(SOURCE, settings)).find("world")
         lamp = world.find("light")
         self.assertEqual(lamp.findtext("intensity"), "2.25")
         diffuse = [float(n) for n in lamp.findtext("diffuse").split()]
-        self.assertGreater(diffuse[0], diffuse[2])
+        self.assertAlmostEqual(diffuse[0], 0.7, places=4)
+        self.assertEqual(diffuse[1], 0)
+        self.assertEqual(diffuse[2], 0)
+
+    def test_kelvin_presets_migrate_to_hsv_and_intensity(self):
+        warm = kelvin_rgb(2200)
+        cool = kelvin_rgb(10000)
+        self.assertGreater(warm[0], warm[2])
+        self.assertGreater(cool[2], warm[2])
+        cfg = checked_lights({"temperature": 2200, "brightness": 225})
+        self.assertEqual(cfg["intensity"], 2.25)
+        self.assertGreater(cfg["hsv"][1], 0)
+        self.assertNotIn("temperature", cfg)
+        self.assertNotIn("brightness", cfg)
 
     def test_old_material_pole_diameter_is_discarded(self):
         colors = checked_colors({"pole_diameter": 0.1})
@@ -98,9 +109,40 @@ class SceneTests(unittest.TestCase):
         })
         self.assertEqual(cfg["reach_x"], 4.5)
         self.assertEqual(cfg["reach_y"], 4.6)
-        self.assertEqual(cfg["brightness"], 150.0)
+        self.assertEqual(cfg["intensity"], 1.5)
+        self.assertEqual(cfg["hsv"], [55.0, 3.0, 95.0])
         self.assertNotIn("span_x", cfg)
-        self.assertNotIn("intensity", cfg)
+        self.assertNotIn("brightness", cfg)
+
+    def test_lab_config_yaml_roundtrip_and_validation(self):
+        source_bytes = SOURCE.read_bytes()
+        config_file = ROOT / "src/scrobot_simulation/config/lighting_lab.yaml"
+        defaults = read_lab_config(config_file)
+        self.assertEqual(defaults["lights"]["hsv"], [55.0, 3.0, 95.0])
+        self.assertEqual(defaults["lights"]["intensity"], 1.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "lighting_lab.yaml"
+            updated = default_settings()
+            updated["lights"].update({"hsv": [205, 45, 75], "intensity": 1.4})
+            updated["colors"]["floor"] = [130, 20, 50]
+            updated["venue"]["clearance_x"] = 4.5
+            raw = {key: updated[key] for key in ("lights", "colors", "venue")}
+            self.assertEqual(write_lab_config(target, raw), target)
+            parsed = read_lab_config(target)
+            self.assertEqual(parsed["lights"]["hsv"], [205.0, 45.0, 75.0])
+            self.assertEqual(parsed["lights"]["intensity"], 1.4)
+            self.assertEqual(parsed["venue"]["clearance_x"], 4.5)
+            self.assertEqual(parsed["colors"]["floor"], [130, 20, 50])
+            unchanged = target.read_bytes()
+            with self.assertRaises(ValueError):
+                write_lab_config(target, {
+                    **raw, "lights": {**raw["lights"], "hsv": [400, 20, 30]}
+                })
+            self.assertEqual(target.read_bytes(), unchanged)
+            with self.assertRaises(ValueError):
+                write_lab_config(target, {**raw, "unexpected": {}})
+            self.assertEqual(target.read_bytes(), unchanged)
+        self.assertEqual(SOURCE.read_bytes(), source_bytes)
 
     def test_world_generation_does_not_modify_original(self):
         original = SOURCE.read_bytes()
@@ -230,6 +272,7 @@ class SceneTests(unittest.TestCase):
         self.assertIn('"/gui/camera/pose"', text)
         self.assertIn('"/api/venue"', text)
         self.assertIn('"/api/orbit"', text)
+        self.assertIn('"/api/config"', text)
 
     def test_dashboard_has_three_cameras_and_actions(self):
         text = HTML.read_text()
@@ -237,13 +280,17 @@ class SceneTests(unittest.TestCase):
         parser.feed(text)
         for field in (
             "img-robot", "img-overhead", "img-free",
-            "apply-lights", "apply-material", "move-free", "move-robot",
+            "apply-lights", "apply-material", "update-lab-config", "move-robot",
             "spawn-btn", "shuttle-count", "shuttle-seed",
             "m-rtf", "m-robot-fps", "m-bright", "m-cpu",
             "apply-venue", "copy-orbit", "follow-orbit",
         ):
             with self.subTest(field=field):
                 self.assertIn(field, parser.ids)
+        self.assertNotIn("free-x", parser.ids)
+        self.assertNotIn("free-pitch", parser.ids)
+        self.assertNotIn("move-free", parser.ids)
+        self.assertNotIn("Free camera · position and rotation", text)
 
 
 if __name__ == "__main__":
