@@ -469,31 +469,100 @@ class Lab:
         self.settings = settings
         self.adapter = GazeboAdapter(settings)
         self.lock = threading.RLock()
+        self.owns_simulation = launch
         self.proc = None
         self.workdir = workdir
         self.source = source
         self.spawned = []
         self.spawn_counter = 0
         self.log = workdir / "gazebo_launch.log"
+        self.loghandle = None
         if launch:
-            worldfile = workdir / "lighting_lab_world.sdf"
-            worldfile.write_text(build_world(source, settings))
-            robot = settings["robot"]
-            command = [
-                "ros2", "launch", "scrobot_simulation", "simulation.launch.py",
-                f"world:={worldfile}",
-                f"x:={robot['x']}", f"y:={robot['y']}",
-                f"z:={robot['z']}",
-                f"yaw:={math.radians(robot['yaw'])}",
-                "enable_magnetometer:=false",
-                "gz_verbosity:=2",
-            ]
-            self.loghandle = self.log.open("w")
-            self.proc = subprocess.Popen(
-                command, stdout=self.loghandle, stderr=subprocess.STDOUT,
-                start_new_session=True
-            )
-            print(f"Gazebo PID {self.proc.pid}; log {self.log}", flush=True)
+            self._launch_simulation()
+
+    def _launch_simulation(self):
+        worldfile = self.workdir / "lighting_lab_world.sdf"
+        worldfile.write_text(build_world(self.source, self.settings))
+        robot = self.settings["robot"]
+        command = [
+            "ros2", "launch", "scrobot_simulation", "simulation.launch.py",
+            f"world:={worldfile}",
+            f"x:={robot['x']}", f"y:={robot['y']}",
+            f"z:={robot['z']}",
+            f"yaw:={math.radians(robot['yaw'])}",
+            "enable_magnetometer:=false",
+            "gz_verbosity:=2",
+        ]
+        self.loghandle = self.log.open("a")
+        self.loghandle.write(
+            "\n=== Lighting Lab Gazebo start " +
+            datetime.now(timezone.utc).isoformat() + " ===\n"
+        )
+        self.loghandle.flush()
+        self.proc = subprocess.Popen(
+            command, stdout=self.loghandle, stderr=subprocess.STDOUT,
+            start_new_session=True, env=os.environ.copy()
+        )
+        print(f"Gazebo PID {self.proc.pid}; log {self.log}", flush=True)
+
+    def _stop_simulation(self):
+        if self.proc is not None and self.proc.poll() is None:
+            try:
+                os.killpg(self.proc.pid, signal.SIGINT)
+                self.proc.wait(timeout=15)
+            except (ProcessLookupError, subprocess.TimeoutExpired):
+                try:
+                    os.killpg(self.proc.pid, signal.SIGTERM)
+                    self.proc.wait(timeout=5)
+                except (ProcessLookupError, subprocess.TimeoutExpired):
+                    try:
+                        os.killpg(self.proc.pid, signal.SIGKILL)
+                        self.proc.wait(timeout=5)
+                    except (ProcessLookupError, subprocess.TimeoutExpired):
+                        pass
+        if self.loghandle is not None:
+            self.loghandle.close()
+            self.loghandle = None
+
+    def apply_venue(self, raw):
+        if not self.owns_simulation:
+            raise RuntimeError("Venue clearance cannot restart a --attach session")
+        venue = checked_venue(raw)
+        previous = self.settings["venue"]
+        self.settings["venue"] = venue
+        try:
+            # Validate fully before terminating a working simulation.
+            build_world(self.source, self.settings)
+        except Exception:
+            self.settings["venue"] = previous
+            raise
+        # Collision geometry cannot be resized in place safely while the
+        # robot is resting on it. Start a new, consistent derivative world.
+        self._stop_simulation()
+        self.spawned = []
+        with self.adapter.lock:
+            self.adapter.light_names = {
+                name for name, *_ in centered_positions(
+                    checked_lights(self.settings["lights"])
+                )
+            }
+            self.adapter.frames.clear()
+            self.adapter.exposures.clear()
+            self.adapter.sim_stats.clear()
+            self.adapter.gui_pose = None
+            self.adapter.gui_pose_at = 0.0
+            self.adapter.gui_last_sent = None
+            for timestamps in self.adapter.frame_times.values():
+                timestamps.clear()
+            for timestamps in self.adapter.sensor_times.values():
+                timestamps.clear()
+        self._launch_simulation()
+        self.adapter.last_action = (
+            f"Venue clearance X={venue['clearance_x']:.2f}m, "
+            f"Y={venue['clearance_y']:.2f}m; Gazebo restarted. "
+            "Re-spawn shuttles if needed."
+        )
+        return self.adapter.last_action
 
     def spawn_shuttles(self, raw):
         count = integer(raw.get("count", 20), 1, 100, "shuttle count")
@@ -561,17 +630,9 @@ class Lab:
         return str(output)
 
     def close(self):
-        if self.proc is not None and self.proc.poll() is None:
-            try:
-                os.killpg(self.proc.pid, signal.SIGINT)
-                self.proc.wait(timeout=10)
-            except (ProcessLookupError, subprocess.TimeoutExpired):
-                try:
-                    os.killpg(self.proc.pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
-        if hasattr(self, "loghandle"):
-            self.loghandle.close()
+        self.adapter.stop()
+        if self.owns_simulation:
+            self._stop_simulation()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -615,7 +676,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path
         if path not in ("/api/lights", "/api/materials", "/api/robot",
-                        "/api/free", "/api/shuttles", "/api/preset"):
+                        "/api/free", "/api/shuttles", "/api/preset",
+                        "/api/venue", "/api/orbit"):
             self.reply(404, {"error": "Unknown action"})
             return
         size = int(self.headers.get("Content-Length", "0"))
@@ -635,6 +697,13 @@ class Handler(BaseHTTPRequestHandler):
                     text = self.lab.adapter.move_camera(payload, path[5:])
                 elif path == "/api/shuttles":
                     text = self.lab.spawn_shuttles(payload)
+                elif path == "/api/venue":
+                    text = self.lab.apply_venue(payload)
+                elif path == "/api/orbit":
+                    text = self.lab.adapter.sync_gui_camera(
+                        payload.get("follow", False),
+                        payload.get("copy_now", False)
+                    )
                 else:
                     text = self.lab.save_preset(payload)
             self.reply(200, {"ok": True, "message": text})
@@ -652,6 +721,17 @@ class Handler(BaseHTTPRequestHandler):
             super().log_message(fmt, *args)
 
 
+def configure_warp_safe_network(environ=None):
+    """Enforce local ROS / Gazebo discovery at EVERY launch, including reboot."""
+    if environ is None:
+        environ = os.environ
+    environ["GZ_IP"] = "127.0.0.1"
+    environ["ROS_AUTOMATIC_DISCOVERY_RANGE"] = "LOCALHOST"
+    # Deprecated Iron-era flag can clash with current Jazzy RMW defaults.
+    environ.pop("ROS_LOCALHOST_ONLY", None)
+    return environ
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
@@ -660,11 +740,20 @@ def main():
                         help="Attach to an already running lighting-lab world")
     parser.add_argument("--preset", type=Path, default=None)
     args = parser.parse_args()
+    configure_warp_safe_network()
+    print(
+        "WARP-safe local transport: GZ_IP=127.0.0.1; "
+        "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST (applied every run)",
+        flush=True
+    )
     if not 1024 <= args.port <= 65535:
         parser.error("port must be 1024..65535")
     settings = default_settings()
     if args.preset:
         settings.update(json.loads(args.preset.read_text())["settings"])
+    settings["lights"] = checked_lights(settings.get("lights", {}))
+    settings["colors"] = checked_colors(settings.get("colors", {}))
+    settings["venue"] = checked_venue(settings.get("venue", {}))
     if not SOURCE.is_file():
         parser.error("Missing source world: " + str(SOURCE))
     if shutil.which("ros2") is None and not args.attach:
