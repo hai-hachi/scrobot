@@ -211,11 +211,14 @@ class GazeboAdapter:
         pitch = math.asin(pitch_sin)
         with self.lock:
             self.settings["free"] = {
-                "x": round(msg.position.x, 3),
-                "y": round(msg.position.y, 3),
-                "z": round(msg.position.z, 3),
+                "x": float(msg.position.x),
+                "y": float(msg.position.y),
+                "z": float(msg.position.z),
                 "yaw": round(math.degrees(yaw), 2),
                 "pitch": round(math.degrees(pitch), 2),
+                "orientation": [
+                    float(q.x), float(q.y), float(q.z), float(q.w)
+                ],
             }
 
     def sync_gui_camera(self, follow, copy_now):
@@ -364,6 +367,7 @@ class GazeboAdapter:
         if key == "free":
             with self.lock:
                 self.gui_follow = False  # Explicit manual move takes priority.
+                self.gui_last_sent = None
         if key == "robot":
             position = {
                 "x": bounded(raw["x"], -7, 7, "robot.x"),
@@ -381,6 +385,9 @@ class GazeboAdapter:
                 "pitch": bounded(raw["pitch"], -60, 88, "free.pitch"),
             }
             self.set_pose("lab_free_camera", position)
+        # A manual free-camera command replaces the GUI quaternion with
+        # the explicitly selected yaw and pitch. Never silently restore the
+        # older orbit orientation after the next venue restart.
         self.settings[key] = position
         self.last_action = f"Moved {key} camera"
         return self.last_action
