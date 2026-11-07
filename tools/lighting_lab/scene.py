@@ -18,18 +18,20 @@ MAX_LIGHTS = 32
 
 DEFAULTS = {
     "lights": {
-        "rows": 2, "cols": 3, "span_x": 9.0, "span_y": 9.2,
-        "height": 7.0, "kind": "spot", "intensity": 1.0,
+        "rows": 2, "cols": 3, "reach_x": 4.5, "reach_y": 4.6,
+        "height": 7.0, "kind": "spot",
+        "temperature": 5600, "brightness": 100,
         "range": 18.0, "constant": 0.45, "linear": 0.015,
         "quadratic": 0.001, "inner": 0.70, "outer": 1.20,
-        "falloff": 0.8, "shadows": True,
-        "hsv": [55, 3, 95], "specular": 0.20,
+        "falloff": 0.8, "shadows": True, "specular": 0.20,
     },
     "colors": {
         "floor": [210, 12, 8], "walls": [240, 7, 15],
         "court": [147, 84, 35], "poles": [0, 0, 15],
-        "pole_diameter": 0.05,
     },
+    # Clearances are distances from each EDGE of the 15.4x7.2 m court mat
+    # to the venue floor edge; the safety walls follow the venue floor.
+    "venue": {"clearance_x": 2.3, "clearance_y": 2.4},
     "robot": {"x": 2.0, "y": 3.05, "z": 0.003, "yaw": 180.0},
     "free": {"x": 8.0, "y": -8.0, "z": 6.0, "yaw": 135.0, "pitch": 24.0},
     "shuttles": {"count": 20, "seed": 20261003, "density": "uniform"},
@@ -49,6 +51,21 @@ def hsv_rgb(value):
     ):
         raise ValueError("HSV outside allowed range")
     return colorsys.hsv_to_rgb((h % 360) / 360, s / 100, v / 100)
+
+
+def kelvin_rgb(temperature):
+    """Approximate sRGB blackbody colour (for appearance, NOT photometric lux)."""
+    t = bounded(temperature, 1800, 12000, "temperature") / 100.0
+    red = 255.0 if t <= 66.0 else 329.698727446 * (t - 60.0) ** -0.1332047592
+    green = (
+        99.4708025861 * math.log(t) - 161.1195681661
+        if t <= 66.0 else
+        288.1221695283 * (t - 60.0) ** -0.0755148492
+    )
+    blue = (0.0 if t <= 19.0 else
+            138.5177312231 * math.log(t - 10.0) - 305.0447927307
+            if t <= 66.0 else 255.0)
+    return tuple(max(0.0, min(255.0, v)) / 255.0 for v in (red, green, blue))
 
 
 def rgb_text(rgb, alpha=True):
@@ -75,6 +92,17 @@ def integer(value, lo, hi, name):
 
 
 def checked_lights(raw):
+    # Migrate presets saved before center-based light reaches / Kelvin controls.
+    raw = dict(raw)
+    for old, new in (("span_x", "reach_x"), ("span_y", "reach_y")):
+        if old in raw and new not in raw:
+            raw[new] = float(raw[old]) / 2.0
+        raw.pop(old, None)
+    if "intensity" in raw:
+        if "brightness" not in raw:
+            raw["brightness"] = float(raw["intensity"]) * 100.0
+        raw.pop("intensity", None)
+    raw.pop("hsv", None)
     out = dict(DEFAULTS["lights"])
     out.update(raw)
     out["rows"] = integer(out["rows"], 1, 8, "rows")
@@ -82,8 +110,9 @@ def checked_lights(raw):
     if out["rows"] * out["cols"] > MAX_LIGHTS:
         raise ValueError(f"Maximum {MAX_LIGHTS} lights (protect Gazebo performance)")
     for key, lo, hi in (
-        ("span_x", 0, 20), ("span_y", 0, 16), ("height", 2, 13),
-        ("intensity", 0, 8), ("range", 2, 40), ("constant", 0.01, 2),
+        ("reach_x", 0, 10), ("reach_y", 0, 8), ("height", 2, 13),
+        ("temperature", 1800, 12000), ("brightness", 0, 400),
+        ("range", 2, 40), ("constant", 0.01, 2),
         ("linear", 0, 1), ("quadratic", 0, 0.15),
         ("inner", 0.05, 2.5), ("outer", 0.10, 3.0),
         ("falloff", 0, 2), ("specular", 0, 1),
@@ -95,7 +124,7 @@ def checked_lights(raw):
         raise ValueError("Light kind must be spot or point")
     if not isinstance(out["shadows"], bool):
         raise ValueError("shadows must be boolean")
-    hsv_rgb(out["hsv"])
+    kelvin_rgb(out["temperature"])
     return out
 
 
@@ -104,16 +133,15 @@ def checked_colors(raw):
     out.update(raw)
     for name in ("floor", "walls", "court", "poles"):
         hsv_rgb(out[name])
-    out["pole_diameter"] = bounded(out["pole_diameter"], 0.015, 0.15, "pole_diameter")
     return out
 
 
 def centered_positions(light):
     rows, cols = light["rows"], light["cols"]
     for r in range(rows):
-        y = (r / (rows - 1) - .5) * light["span_y"] if rows > 1 else 0.0
+        y = (2 * r / (rows - 1) - 1) * light["reach_y"] if rows > 1 else 0.0
         for c in range(cols):
-            x = (c / (cols - 1) - .5) * light["span_x"] if cols > 1 else 0.0
+            x = (2 * c / (cols - 1) - 1) * light["reach_x"] if cols > 1 else 0.0
             yield f"lab_light_{r:02d}_{c:02d}", x, y, light["height"]
 
 
@@ -127,12 +155,12 @@ def light_direction(x, y, z):
 def make_light(name, x, y, z, settings):
     root = ET.Element("light", type=settings["kind"], name=name)
     ET.SubElement(root, "pose").text = f"{x:.4f} {y:.4f} {z:.4f} 0 0 0"
-    rgb = hsv_rgb(settings["hsv"])
+    rgb = kelvin_rgb(settings["temperature"])
     ET.SubElement(root, "diffuse").text = rgb_text(rgb)
     ET.SubElement(root, "specular").text = rgb_text(
         tuple(min(1, v * settings["specular"]) for v in rgb)
     )
-    ET.SubElement(root, "intensity").text = str(settings["intensity"])
+    ET.SubElement(root, "intensity").text = str(settings["brightness"] / 100.0)
     ET.SubElement(root, "cast_shadows").text = str(settings["shadows"]).lower()
     ET.SubElement(root, "direction").text = rgb_text(light_direction(x, y, z), False)
     attenuation = ET.SubElement(root, "attenuation")
@@ -183,17 +211,64 @@ def configure_model(world, colors):
             if old is not None:
                 visual.remove(old)
             visual.append(material_for(rgb))
-    # Update visual AND collision dimensions for both poles.
-    for model in world.findall("model"):
-        if model.get("name") == "net_assembly":
-            for child in model.findall(".//visual") + model.findall(".//collision"):
-                if "post_" not in child.get("name", ""):
-                    continue
-                radius = child.find("./geometry/cylinder/radius")
-                if radius is not None:
-                    radius.text = f"{colors['pole_diameter'] / 2:.6f}"
-            return
-    raise ValueError("Missing net_assembly")
+
+
+MAT_LENGTH = 15.4
+MAT_WIDTH = 7.2
+WALL_THICKNESS = 0.10
+
+
+def checked_venue(raw):
+    out = dict(DEFAULTS["venue"])
+    out.update(raw)
+    out["clearance_x"] = bounded(out["clearance_x"], 0.25, 8.0, "clearance_x")
+    out["clearance_y"] = bounded(out["clearance_y"], 0.25, 8.0, "clearance_y")
+    return out
+
+
+def configure_venue(world, venue):
+    """Resize actual floor COLLISION and visuals and reposition boundary walls.
+
+    Clearances are per-side distances from the mat edge to the venue edge.
+    No changes are made to official court markings, tag mounts or net poles.
+    """
+    x_length = MAT_LENGTH + 2.0 * venue["clearance_x"]
+    y_width = MAT_WIDTH + 2.0 * venue["clearance_y"]
+    floor_model = next((m for m in world.findall("model")
+                        if m.get("name") == "court_floor"), None)
+    boundary = next((m for m in world.findall("model")
+                     if m.get("name") == "simulation_safety_boundary"), None)
+    if floor_model is None or boundary is None:
+        raise ValueError("Missing venue floor or safety boundary model")
+    for name, zsize in (("floor_collision", 0.02),
+                        ("venue_floor_visual", 0.018)):
+        elem = next((e for e in floor_model.iter()
+                     if e.get("name") == name), None)
+        if elem is None:
+            raise ValueError(f"Missing {name}")
+        size = elem.find("./geometry/box/size")
+        if size is None:
+            raise ValueError(f"Missing geometry of {name}")
+        size.text = f"{x_length:.4f} {y_width:.4f} {zsize:.4f}"
+    for axis in ("x", "y"):
+        for side in ("positive", "negative"):
+            sign = 1 if side == "positive" else -1
+            name_base = f"wall_{axis}_{side}"
+            if axis == "x":
+                pose = f"{sign * (x_length / 2.0 - WALL_THICKNESS / 2.0):.4f} 0 0.20 0 0 0"
+                dims = f"{WALL_THICKNESS:.4f} {y_width:.4f} 0.40"
+            else:
+                pose = f"0 {sign * (y_width / 2.0 - WALL_THICKNESS / 2.0):.4f} 0.20 0 0 0"
+                dims = f"{x_length - 2 * WALL_THICKNESS:.4f} {WALL_THICKNESS:.4f} 0.40"
+            for suffix in ("collision", "visual"):
+                element = next((e for e in boundary.iter()
+                                if e.get("name") == name_base + "_" + suffix), None)
+                if element is None:
+                    raise ValueError(f"Missing {name_base}_{suffix}")
+                element.find("pose").text = pose
+                element.find("./geometry/box/size").text = dims
+
+
 
 
 def camera_entity(name, topic, pose, resolution=(800, 450), hz=8.0, hfov=1.6):
@@ -221,6 +296,7 @@ def build_world(source, settings):
     """Return a complete derivative world; preserve the real world source file."""
     lights = checked_lights(settings.get("lights", {}))
     colors = checked_colors(settings.get("colors", {}))
+    venue = checked_venue(settings.get("venue", {}))
     root = ET.parse(source).getroot()
     world = root.find("world")
     if world is None or world.get("name") != WORLD:
@@ -237,6 +313,7 @@ def build_world(source, settings):
     for name, x, y, z in centered_positions(lights):
         world.append(make_light(name, x, y, z, lights))
     configure_model(world, colors)
+    configure_venue(world, venue)
     # Gazebo cameras look along local +X; positive pitch looks downward.
     world.append(camera_entity("lab_overhead_camera", "/lighting_lab/overhead",
                                (10.5, 0, 9.5, 0, .736, math.pi),
@@ -251,32 +328,3 @@ def build_world(source, settings):
                                resolution=(800, 450), hz=8.0, hfov=1.3))
     return '<?xml version="1.0"?>\n' + ET.tostring(root, encoding="unicode")
 
-
-def net_model_xml(source, diameter, pole_hsv):
-    root = ET.parse(source).getroot()
-    world = root.find("world")
-    if world is None:
-        raise ValueError("Missing world")
-    clean = ET.Element("sdf", version="1.10")
-    for model in world.findall("model"):
-        if model.get("name") == "net_assembly":
-            clean.append(copy.deepcopy(model))
-            break
-    if not list(clean):
-        raise ValueError("Missing net assembly")
-    tmpworld = ET.Element("world", name=WORLD)
-    tmpworld.append(list(clean)[0])
-    configure_net = {"poles": pole_hsv, "pole_diameter": diameter}
-    for child in tmpworld.findall(".//visual") + tmpworld.findall(".//collision"):
-        if "post_" in child.get("name", ""):
-            radius = child.find("./geometry/cylinder/radius")
-            if radius is not None:
-                radius.text = f"{diameter/2:.6f}"
-        if child.get("name") in ("left_post_visual", "right_post_visual"):
-            old = child.find("material")
-            if old is not None:
-                child.remove(old)
-            child.append(material_for(hsv_rgb(configure_net["poles"])))
-    clean.remove(list(clean)[0])
-    clean.append(tmpworld.find("model"))
-    return ET.tostring(clean, encoding="unicode")
