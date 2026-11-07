@@ -1,164 +1,183 @@
-# Gazebo lighting and materials calibration lab
+# SCROBOT Lighting Lab: Gazebo Harmonic calibration
 
-Branch: real-comparison. This is an **opt-in** simulator calibration workflow.
-It does not change the original badminton_court.sdf, the main mission, the
-physical Orin bringup, or the historical 50-shuttle benchmark.
+The **real-comparison** branch adds a local three-camera lighting and materials
+calibration dashboard. It is a separate, optional experiment. It never changes
+the checked-in competition world, the actual physical robot, Nav2, or the
+historical 50-shuttle mission settings.
 
-## What you get
+## What is adjustable
 
-A responsive browser dashboard at http://127.0.0.1:8765 with **three genuine
-Gazebo camera feeds in the same view**, plus interactive controls:
+| Area | Control | Defaults |
+| --- | --- | --- |
+| Light grid | Rows × columns (max 32 lights), spot/point type | 2 × 3 spot |
+| X/Y light reach | Distance from court center **to outermost lights**, each side | ±4.5 m X, ±4.6 m Y |
+| Light elevation | Z above venue floor | 7.0 m |
+| Light temperature | White appearance 1,800–12,000 K | 5,600 K |
+| Light brightness | Relative Gazebo intensity 0–400% (not calibrated lux) | 100% |
+| Light rendering | Shadow toggle, range, attenuation, spot inner/outer cone, falloff, specular | Original court approximations |
+| Surface colors | Independent HSV sliders for venue floor, court mat, safety walls, net poles | Original appearance approximations |
+| Venue X clearance | **Per side** beyond the 15.4 m-long mat | 2.3 m |
+| Venue Y clearance | **Per side** beyond the 7.2 m-wide mat | 2.4 m |
+| Net poles | Original fixed 50 mm diameter | Not adjustable |
+| Shuttle scene | Seeded random uniform / center / net distributions; selectable count | 20, seed 20261003 |
+| Performance | RTF chart, actual sensor FPS, image clipping, CPU load, GPU utilization/VRAM if available | Measured from Gazebo |
 
-1. **Robot POV:** the existing simulated D435i RGB, not a fake rendering.
-   Choose the robot pose with a clickable court map or X/Y/yaw inputs.
-2. **Elevated broadcast view:** independent fixed RGB camera at
-   (10.5, 0, 9.5) m, looking over the badminton court.
-3. **Free camera:** independent movable Gazebo RGB camera. Drag in its
-   image to rotate the view, use WASD / Q / E to move, or enter absolute
-   X/Y/Z/yaw/pitch coordinates. Each change uses the Gazebo set_pose service.
-4. **Light grid:** rows, columns, centered X/Y span, height, spot/point type,
-   HSV color, intensity, specular fraction, range, constant/linear/quadratic
-   attenuation, spot cone inner/outer angle, falloff and shadow toggle.
-   Up to 32 lights to prevent accidental expensive shadow configurations.
-5. **Surface and geometry:** HSV material controls for venue floor, court mat,
-   safety walls and net poles. Pole diameter (15 to 150 mm) rebuilds the
-   static net model with matching collision geometry.
-6. **Shuttle layout:** replace previous lab batch with a fresh uniform,
-   center-biased, or net-biased random layout. Number and seed selectable;
-   existing scrobot_simulation's production shuttle model/spawner is reused.
-   Auto-collection is disabled **only** in the derivative lab world so shuttles
-   are not erased when the stationary robot is repositioned nearby.
-7. **Performance:** real-time factor (RTF), simulation time, robot, overhead
-   and free image FPS, CPU system load, and camera pixel clipping/brightness
-   heuristics. These are *not* measured lux values.
-8. **Presets:** save experiment settings as JSON for repeatable comparisons.
+**Venue geometry:** venue floor X length = `15.4 + 2 × clearance_x`
+meters and Y width = `7.2 + 2 × clearance_y` meters. The collision floor,
+visible floor and four safety walls are generated consistently. The
+badminton markings, mat, pole geometry, court tag positions, robot geometry
+and pickup logic in the production world are unchanged.
 
-## Requirements
+**Rebuilding venue:** Click **Apply venue · restart Gazebo**. The dashboard
+stays open, but the lab simulation is restarted to avoid dynamically changing
+the robot's supporting collision floor. Existing random shuttle models are
+cleared; use **Replace shuttle layout** to spawn them again. Lighting and
+material settings are retained.
 
-Ubuntu 24.04, ROS 2 Jazzy, Gazebo Harmonic (gz-sim8), a functioning SCROBOT
-colcon build, and the local Python 3 Gazebo Transport bindings:
+## Three simultaneous camera views
 
-    sudo apt update
-    sudo apt install python3-gz-transport13 python3-gz-msgs10 python3-pil
+- **Robot POV:** the actual simulated D435i RGB camera. Click on the court
+  plan or type X/Y/yaw to place the robot.
+- **Broadcast:** fixed elevated end-court Gazebo camera for observing
+  lighting coverage and shadows.
+- **Free inspector camera:** independently rendered Gazebo camera, movable
+  by dashboard WASD/Q/E, drag and pose inputs. **Copy current orbit view**
+  transfers the Gazebo desktop GUI camera pose to this view. Check
+  **Follow orbit live** to keep the inspector view following Gazebo's
+  moving/orbiting camera, sampling roughly twice a second.
+  This reads the documented `/gui/camera/pose` Gazebo Transport topic
+  from the Gazebo Camera Tracking plugin. Gazebo desktop must be open and
+  advertise that topic for orbit sync to work. If unavailable, the dashboard
+  shows an actionable warning, and manual free-camera positioning works.
 
-Python 3 must be the system /usr/bin/python3 or another interpreter that
-can import gz.transport13, gz.msgs10 and PIL. The simulated robot's D435i
-sensor is published natively over Gazebo Transport; the web UI does not
-require a trained YOLO model or any Nav2 nodes.
+Orbit sync copies world pose and quaternion, not necessarily field of view:
+the inspection camera retains its own sensor FOV and output resolution.
+This is a live camera view, not a screenshot of the desktop GUI.
 
-## Start the first calibration session
+## One-time setup: workspace-root tools
 
-**Stop existing Gazebo instances** before launching this scenario.
+The Git repository itself is checked out at `~/scrobot_ws/src`. Git does
+not allow files tracked in that repository to appear physically outside its
+working tree. The one-time setup creates a **persistent symbolic link**
+`~/scrobot_ws/tools` pointing to the tracked tools. No code is duplicated.
+The link survives reboot, Git pulls and branch switches.
 
-    cd ~/scrobot_ws/src
-    git fetch origin
-    git switch real-comparison
-    git pull --ff-only
+```bash
+cd ~/scrobot_ws/src
+git fetch origin
+git switch real-comparison
+git pull --ff-only
+python3 scripts/setup_workspace_tools.py
 
-    cd ~/scrobot_ws
-    source /opt/ros/jazzy/setup.bash
-    colcon build --symlink-install --packages-up-to scrobot_scenarios
-    source install/setup.bash
+cd ~/scrobot_ws
+ls -l tools
+```
 
-    cd ~/scrobot_ws/src
-    python3 -m unittest discover -s tools/lighting_lab -v
-    python3 tools/lighting_lab/server.py
+If a real `~/scrobot_ws/tools/` directory already exists, the setup script
+leaves your files untouched and links only missing tool entries. It refuses
+to overwrite conflicts.
 
-Then visit http://127.0.0.1:8765 (the script also tries to open your
-default browser). **One command launches both the Gazebo simulation and the
-local web control server.** It starts the standard simulation launch (world,
-robot, bridges and cameras) and does **not** start Nav2, YOLO, the mission,
-evaluation, RViz, or telemetry monitoring.
+## ROS 2 / Gazebo dependencies
 
-The Gazebo GUI is still available in its own window; the lab browser contains
-its own three sensor views for side-by-side lighting comparison.
+Ubuntu 24.04; ROS 2 Jazzy; Gazebo Harmonic; SCROBOT workspace; and Python 3
+Gazebo Transport bindings:
 
-The dashboard may show "Waiting" for a few moments until Gazebo loads and
-the robot is spawned. A missing camera feed is reported explicitly, not
-replaced with a placeholder photograph.
+```bash
+sudo apt update
+sudo apt install python3-gz-transport13 python3-gz-msgs10 python3-pil
+cd ~/scrobot_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-up-to scrobot_scenarios
+source install/setup.bash
+```
 
-For Cloudflare WARP/VPN, optionally use local-only transport in the shell
-**before** starting the lab:
+Python 3 should be `/usr/bin/python3` or another interpreter able to import
+`gz.transport13`, `gz.msgs10` and `PIL`.
 
-    export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
-    export GZ_IP=127.0.0.1
-    ros2 daemon stop
-    python3 tools/lighting_lab/server.py
+## Start Lighting Lab
 
-Gazebo and the browser backend must run on the same PC/transport network.
-The HTTP dashboard is loopback-only (not exposed to the network).
+Stop other Gazebo simulation sessions first:
 
-Other options:
+```bash
+cd ~/scrobot_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+python3 -m unittest discover -s tools/lighting_lab -v
+python3 tools/lighting_lab/server.py
+```
 
-    python3 tools/lighting_lab/server.py --port 8766 --no-browser
-    python3 tools/lighting_lab/server.py --preset /path/to/saved_preset.json
+Open <http://127.0.0.1:8765>. The Gazebo desktop GUI opens in its own window.
+The dashboard shows the three **live Gazebo images** side by side. Nav2,
+mission, YOLO, RViz, evaluator and the other developer monitors do not launch.
 
-## Recommended lighting experiment
+**WARP/VPN compatibility is automatic on every run, including after reboot.**
+The Python launcher sets `GZ_IP=127.0.0.1` and
+`ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` **before** creating any Gazebo
+Transport node or ROS/Gazebo subprocess. It removes the deprecated
+`ROS_LOCALHOST_ONLY` setting in the lab's process if inherited. It binds the
+dashboard to `127.0.0.1`. There are no shell exports or startup-file edits
+to redo after reboot. This setup assumes Gazebo and the Lighting Lab run
+on the same computer, not in separate containers or remote machines.
 
-1. Keep the **same robot pose and shuttle seed** for the whole comparison.
-2. Record baseline using 2 rows by 3 columns, 9.0 by 9.2 m X/Y span,
-   7.0 m height, intensity 1.0, attenuation 0.45 / 0.015 / 0.001, shadows on.
-   This recreates the original six symmetric side-luminaire positions.
-3. Save a JSON preset named baseline_6_lights.
-4. Vary intensity while keeping camera pose, number of lights, and shadows
-   constant. Watch robot POV highlight clipping, dark pixels, and RTF.
-5. Compare shadows on/off at identical settings. Avoid declaring "more
-   accurate illumination" based solely on brightness, because brightness
-   is not calibrated illuminance.
-6. Try more/fewer lights, smaller/larger array span, other heights, spot
-   cone angles and attenuation. Save each promising preset.
-7. Compare shuttle contrast under realistic court/wall colors. Measure
-   real D435i frames in the actual venue before selecting a final profile.
+Loopback configuration avoids interface selection via WARP but cannot
+guarantee operation if OS firewall, routing, graphics drivers or Gazebo
+server initialization itself is faulty. The standalone real robot remains
+unaffected.
 
-A low RTF means the machine cannot keep up with real-time simulation, NOT
-that lighting is too dim. A high clipping fraction indicates a rendered
-image with near-black or near-white pixels, NOT a physical lux measurement.
-The best profile balances image realism, stable detection and render budget.
+**For separate Gazebo diagnostic terminal commands** while WARP is active,
+set the same scope in that terminal:
 
-## How the live changes work
+```bash
+export GZ_IP=127.0.0.1
+export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+gz topic -l | grep -E '/gui/camera/pose|/lighting_lab/'
+gz service -l | grep '/world/badminton_court'
+```
 
-- Light configuration: Gazebo /world/badminton_court/light_config service;
-  create/remove use the world's UserCommands services.
-- HSV colors: Gazebo /world/badminton_court/visual_config service, applying
-  real material values to existing visuals.
-- Pole diameter: removes/recreates net_assembly using a copy of the original
-  net SDF with modified visual **and collision** cylinder radii. This is
-  intentionally applied only when you click Apply (or turn on auto on release).
-- Cameras/robot position: /world/badminton_court/set_pose; avoid issuing
-  repeated commands at very high rates because it can overload SceneBroadcaster.
-- Shuttle spawning: calls the original ros2 run scrobot_simulation spawn_shuttles.
-- World creation: builds a fresh *temporary* copy of the base SDF with
-  additional camera entities, generated lights and calibration materials.
-  It does NOT edit installed or checked-in worlds.
+Other commands:
 
-A browser slider does not directly change the underlying physics model,
-nor should it. Each Apply sends actual Gazebo Transport messages; failures
-are shown as errors.
+```bash
+python3 tools/lighting_lab/server.py --port 8766 --no-browser
+python3 tools/lighting_lab/server.py --preset /path/to/saved_preset.json
+```
 
-## Logs and output
+## Recommended first real-comparison experiment
 
-- The Gazebo launch log is printed at startup (in a temporary directory).
-  It is removed when the lab exits, so copy it first if investigating failure.
-- Presets are written under
-  ~/scrobot_ws/evaluation_results/lighting_lab/presets/<name>.json.
-- The browser uses the same generated simulation session. Saving a preset
-  makes it possible to launch the *next* session with identical parameters.
-- Neither experimental values nor generated SDFs are committed into normal
-  simulation defaults until validated against the real D435i camera.
+1. Fix the robot pose, camera settings, shuttle seed and venue clearance.
+2. Use **2 × 3** spotlights with **reach X=4.5 m**, **reach Y=4.6 m**,
+   **height=7 m**, **temperature=5600 K**, **brightness=100%**.
+3. Spawn 20 random shuttles, seed 20261003. Save preset
+   `baseline_6_lights`.
+4. Change only **brightness** while keeping camera pose and light count
+   constant. Compare image clipping and mean brightness with RTF.
+5. Change temperature (warm to cool) at fixed brightness. This represents
+   RGB appearance, **not actual lamp spectral response or measured lux**.
+6. Toggle shadows without changing lights to evaluate rendering cost.
+7. Increase/decrease light rows, columns, center-based X/Y reach, height,
+   attenuation and spotlight angle. Inspect the broadcast and robot POVs.
+8. Adjust venue clearance only when you want to study the physical floor
+   boundary; this restarts the lab. Re-spawn the same shuttle seed after it.
 
-## Limitations and next tests
+For any candidate, save a JSON preset and camera snapshots. Presets include
+the Git SHA, source-world checksum, selected settings and a measurement
+snapshot. They live in
+`~/scrobot_ws/evaluation_results/lighting_lab/presets/`.
 
-- A live Gazebo/GPU smoke test on the SCROBOT PC is required. CI checks
-  generator logic and Python syntax, not rendering or camera pose services.
-- Gz rendering and sensor camera data may have different auto-exposure and
-  material responses than a physical D435i. Do not calibrate using visual
-  impressions alone; save paired real/sim camera frames.
-- Free-camera navigation is discrete: mouse drag changes orientation,
-  WASD/Q/E changes pose in the dashboard. It is not the native Gazebo
-  3D-view mouse controller.
-- Image transport is compressed to JPEG for display. Calibration metrics
-  use decoded Gazebo RGB before the dashboard's final JPEG compression.
-- No artificial illuminance/lux values are calculated.
-- The standalone lab is a calibration test, not the 50-shuttle regression.
-  Use the original full_mission_check scenario after accepting any model
-  changes into an explicitly named profile.
+Actual performance (RTF, sensor frame rate, GPU load) measures compute cost;
+image brightness and clipped-pixel statistics measure visual appearance,
+**not photometric lux or YOLO pickup accuracy**.
+
+## Safety and scope
+
+The lab generates a temporary derivative SDF, disables automatic shuttle
+pickup in that calibration-only world and never modifies the production
+`badminton_court.sdf`. The light/material endpoints update actual Gazebo
+world objects. Venue resizing restarts the simulated world as described
+above. Presets that were saved with the earlier HSV-light/total-span format
+are migrated to center reach and brightness, with a default 5600 K light
+temperature.
+
+Offline CI validates source generation, scene geometry, Kelvin conversion,
+browser startup and Python 3 syntax. **Gazebo Transport runtime service
+behavior, GUI orbit synchronization, rendering performance and WARP behavior
+still require a hands-on run on the SCROBOT workstation.**
