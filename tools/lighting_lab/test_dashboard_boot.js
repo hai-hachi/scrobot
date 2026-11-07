@@ -88,9 +88,9 @@ vm.runInContext(match[1], context, {timeout: 4000});
 
 // Initialization must render every control without referencing an absent id.
 for (const id of [
-  "li-rows", "li-cols", "li-span_x", "li-span_y", "li-height",
-  "li-intensity", "li-constant", "li-quadratic",
-  "light-h", "light-s", "light-v", "court-h", "poles-v",
+  "li-rows", "li-cols", "li-reach_x", "li-reach_y", "li-height",
+  "li-temperature", "li-brightness", "li-constant", "li-quadratic",
+  "venue-clearance_x", "venue-clearance_y", "court-h", "poles-v",
 ]) {
   assert(registry.has(id), "Missing dynamically rendered slider " + id);
 }
@@ -98,17 +98,25 @@ const lights = vm.runInContext("lightPayload()", context);
 assert.equal(lights.rows, 2);
 assert.equal(lights.cols, 3);
 assert.equal(lights.kind, "spot");
-assert.deepEqual(Array.from(lights.hsv), [55, 3, 95]);
+assert.equal(lights.reach_x, 4.5);
+assert.equal(lights.reach_y, 4.6);
+assert.equal(lights.temperature, 5600);
+assert.equal(lights.brightness, 100);
+assert(!Object.hasOwn(lights, "hsv"));
 
 const colors = vm.runInContext("materialsPayload()", context);
 assert.deepEqual(Array.from(colors.court), [147, 84, 35]);
-assert.equal(colors.pole_diameter, 0.05);
+assert(!Object.hasOwn(colors, "pole_diameter"));
+const venue = vm.runInContext("venuePayload()", context);
+assert.equal(venue.clearance_x, 2.3);
+assert.equal(venue.clearance_y, 2.4);
 
 // Opening a saved preset must initialize the controls from the backend,
 // rather than misleadingly displaying the default light array and colors.
 vm.runInContext(
-  "syncControls({lights:{rows:4,cols:2,hsv:[25,70,80],kind:'point',shadows:false},"+
-  "colors:{court:[100,50,70],pole_diameter:0.09},"+
+  "syncControls({lights:{rows:4,cols:2,reach_x:5,reach_y:6,temperature:3800,brightness:200,kind:'point',shadows:false},"+
+  "colors:{court:[100,50,70]},"+
+  "venue:{clearance_x:3.5,clearance_y:1.75},"+
   "robot:{x:1.5,y:0,yaw:90},"+
   "free:{x:4,y:1,z:9,yaw:75,pitch:40},"+
   "shuttles:{count:33,seed:12345,density:'net'}})",
@@ -118,7 +126,13 @@ assert.equal(registry.get("li-rows").value, "4");
 assert.equal(registry.get("li-cols").value, "2");
 assert.equal(registry.get("light-kind").value, "point");
 assert.equal(registry.get("light-shadows").checked, false);
-assert.equal(registry.get("pole-dia").value, "0.09");
+assert.equal(registry.get("li-reach_x").value, "5");
+assert.equal(registry.get("li-temperature").value, "3800");
+assert.equal(registry.get("li-brightness").value, "200");
+assert.equal(registry.get("venue-clearance_x").value, "3.5");
+assert.equal(registry.get("venue-clearance_y").value, "1.75");
+assert(!registry.has("pole-dia"));
+assert(!registry.has("light-h"));
 assert.equal(registry.get("shuttle-count").value, "33");
 assert.equal(registry.get("free-z").value, "9");
 
@@ -127,6 +141,13 @@ const hue = registry.get("court-h");
 hue.value = "275";
 hue.dispatchEvent({type: "input"});
 assert.match(registry.get("sw-court").style.background, /275/);
+
+// The Gazebo Orbit follow toggle and clearance apply must have live actions.
+assert(registry.has("follow-orbit"));
+assert(registry.has("copy-orbit"));
+assert(registry.has("apply-venue"));
+assert.match(html, /\/api\/orbit/);
+assert.match(html, /\/api\/venue/);
 
 // The court click/robot camera pose selection must be wired.
 assert((registry.get("courtmap").listeners.click || []).length >= 1);
