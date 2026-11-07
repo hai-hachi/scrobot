@@ -20,7 +20,7 @@ DEFAULTS = {
     "lights": {
         "rows": 2, "cols": 3, "reach_x": 4.5, "reach_y": 4.6,
         "height": 7.0, "kind": "spot",
-        "temperature": 5600, "brightness": 100,
+        "hsv": [55, 3, 95], "intensity": 1.0,
         "range": 18.0, "constant": 0.45, "linear": 0.015,
         "quadratic": 0.001, "inner": 0.70, "outer": 1.20,
         "falloff": 0.8, "shadows": True, "specular": 0.20,
@@ -68,6 +68,12 @@ def kelvin_rgb(temperature):
     return tuple(max(0.0, min(255.0, v)) / 255.0 for v in (red, green, blue))
 
 
+def rgb_to_hsv(rgb):
+    """Convert normalized RGB into 0..360/0..100/0..100 HSV sliders."""
+    h, s, v = colorsys.rgb_to_hsv(*rgb)
+    return [round(h * 360, 3), round(s * 100, 3), round(v * 100, 3)]
+
+
 def rgb_text(rgb, alpha=True):
     return " ".join(f"{x:.5f}" for x in (*rgb, 1.0) if alpha) if alpha else " ".join(
         f"{x:.5f}" for x in rgb
@@ -92,18 +98,20 @@ def integer(value, lo, hi, name):
 
 
 def checked_lights(raw):
-    # Migrate presets saved before center-based light reaches / Kelvin controls.
+    # Accept historic full-span and Kelvin/brightness calibration presets.
     raw = dict(raw)
     for old, new in (("span_x", "reach_x"), ("span_y", "reach_y")):
         if old in raw and new not in raw:
             raw[new] = float(raw[old]) / 2.0
         raw.pop(old, None)
-    if "intensity" in raw:
-        if "brightness" not in raw:
-            raw["brightness"] = float(raw["intensity"]) * 100.0
-        raw.pop("intensity", None)
-    raw.pop("hsv", None)
-    out = dict(DEFAULTS["lights"])
+    # HSV is authoritative whenever both old and new colour fields exist.
+    if "temperature" in raw and "hsv" not in raw:
+        raw["hsv"] = rgb_to_hsv(kelvin_rgb(raw["temperature"]))
+    raw.pop("temperature", None)
+    if "brightness" in raw and "intensity" not in raw:
+        raw["intensity"] = float(raw["brightness"]) / 100.0
+    raw.pop("brightness", None)
+    out = copy.deepcopy(DEFAULTS["lights"])
     out.update(raw)
     out["rows"] = integer(out["rows"], 1, 8, "rows")
     out["cols"] = integer(out["cols"], 1, 12, "cols")
@@ -111,7 +119,7 @@ def checked_lights(raw):
         raise ValueError(f"Maximum {MAX_LIGHTS} lights (protect Gazebo performance)")
     for key, lo, hi in (
         ("reach_x", 0, 10), ("reach_y", 0, 8), ("height", 2, 13),
-        ("temperature", 1800, 12000), ("brightness", 0, 400),
+        ("intensity", 0, 4),
         ("range", 2, 40), ("constant", 0.01, 2),
         ("linear", 0, 1), ("quadratic", 0, 0.15),
         ("inner", 0.05, 2.5), ("outer", 0.10, 3.0),
@@ -124,7 +132,8 @@ def checked_lights(raw):
         raise ValueError("Light kind must be spot or point")
     if not isinstance(out["shadows"], bool):
         raise ValueError("shadows must be boolean")
-    kelvin_rgb(out["temperature"])
+    hsv_rgb(out["hsv"])
+    out["hsv"] = [float(value) for value in out["hsv"]]
     return out
 
 
@@ -158,12 +167,12 @@ def light_direction(x, y, z):
 def make_light(name, x, y, z, settings):
     root = ET.Element("light", type=settings["kind"], name=name)
     ET.SubElement(root, "pose").text = f"{x:.4f} {y:.4f} {z:.4f} 0 0 0"
-    rgb = kelvin_rgb(settings["temperature"])
+    rgb = hsv_rgb(settings["hsv"])
     ET.SubElement(root, "diffuse").text = rgb_text(rgb)
     ET.SubElement(root, "specular").text = rgb_text(
         tuple(min(1, v * settings["specular"]) for v in rgb)
     )
-    ET.SubElement(root, "intensity").text = str(settings["brightness"] / 100.0)
+    ET.SubElement(root, "intensity").text = str(settings["intensity"])
     ET.SubElement(root, "cast_shadows").text = str(settings["shadows"]).lower()
     ET.SubElement(root, "direction").text = rgb_text(light_direction(x, y, z), False)
     attenuation = ET.SubElement(root, "attenuation")
