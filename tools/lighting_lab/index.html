@@ -143,9 +143,8 @@
       <label style="margin-top:8px">Light type
         <select id="light-kind"><option value="spot">Spot (focused)</option><option value="point">Point (omnidirectional)</option></select>
       </label>
-      <div class="colorhead"><strong>Light color · HSV</strong><span class="swatch" id="sw-light"></span></div>
-      <div class="triple" id="hsv-light"></div>
-      <p class="helper">Rows × columns distribute uniformly across the selected X/Y span. The center remains at (0, 0). Increasing lights or enabling shadows may lower RTF.</p>
+      <div class="colorhead"><strong>Light color from Kelvin</strong><span class="swatch" id="sw-light"></span></div>
+      <p class="helper">X/Y reach is measured FROM court center to the outermost light (± reach on each axis), not the full array width. Temperature controls warm/cool color; brightness controls Gazebo intensity, not calibrated lux.</p>
       <div class="buttonrow">
         <button class="primary" id="apply-lights" onclick="applyLights()">Apply lighting to Gazebo</button>
         <label class="toggle" style="margin:0"><input id="auto-light" type="checkbox"> Auto on release</label>
@@ -156,13 +155,17 @@
       <div class="paneltitle"><h2>Materials and geometry</h2><small>HSV / geometry updates</small></div>
       <div id="materials"></div>
       <div class="divider"></div>
-      <div class="f"><label for="pole-dia">Pole diameter <span class="value" id="pole-dia-val"></span></label>
-        <input id="pole-dia" type="range" min="0.015" max="0.15" step="0.005" value="0.05"></div>
-      <p class="helper">Floor, wall, and court colors update existing Gazebo visuals. Pole diameter recreates the static net model so collision and visual radii agree.</p>
+      <p class="helper">These HSV controls change only visual colors. Net pole diameter stays fixed at the original 50 mm.</p>
       <div class="buttonrow">
-        <button class="primary" id="apply-material" onclick="applyMaterials()">Apply scene changes</button>
+        <button class="primary" id="apply-material" onclick="applyMaterials()">Apply material colors</button>
         <label class="toggle" style="margin:0"><input id="auto-material" type="checkbox"> Auto on release</label>
       </div>
+      <div class="divider"></div>
+      <h3>Venue floor clearance · per side</h3>
+      <div class="fields" id="venuefields" style="margin-top:10px"></div>
+      <p class="helper" id="venue-size">Venue floor size: 20.0 × 12.0 m</p>
+      <p class="helper">Clearance is measured from the 15.4 × 7.2 m court mat edge to each floor edge. The collision floor and perimeter walls resize together. Applying these values restarts Gazebo safely; respawn shuttles afterward.</p>
+      <div class="buttonrow"><button class="primary" id="apply-venue" onclick="applyVenue()">Apply venue · restart Gazebo</button></div>
     </article>
 
     <article class="panel">
@@ -211,6 +214,13 @@
         <button onclick="freeNudge('yawright')">↷</button>
       </div>
       <div class="buttonrow"><button class="primary" id="move-free" onclick="applyFree()">Apply free-camera pose</button></div>
+      <div class="divider"></div>
+      <h3>Sync with Gazebo GUI orbit camera</h3>
+      <div class="buttonrow">
+        <button id="copy-orbit" onclick="copyOrbitView()">Copy current orbit view</button>
+        <label class="toggle" style="margin:0"><input type="checkbox" id="follow-orbit" onchange="toggleOrbitFollow()"> Follow orbit live</label>
+      </div>
+      <p class="helper" id="orbit-state">Listening to Gazebo /gui/camera/pose. Move or orbit the camera in the Gazebo window, then copy or follow it here.</p>
     </article>
   </section>
 
@@ -262,8 +272,10 @@
 const $ = id => document.getElementById(id);
 const lightSpecs = [
   ["rows","Rows",1,8,1,""],["cols","Columns",1,12,1,""],
-  ["span_x","Array length X",0,20,.5,"m"],["span_y","Array width Y",0,16,.5,"m"],
-  ["height","Height",2,13,.5,"m"],["intensity","Intensity",0,8,.1,""],
+  ["reach_x","X reach from center",0,10,.25,"m"],["reach_y","Y reach from center",0,8,.25,"m"],
+  ["height","Height",2,13,.5,"m"],
+  ["temperature","Temperature",1800,12000,100,"K"],
+  ["brightness","Brightness",0,400,5,"%"],
   ["range","Range",2,40,1,"m"],["specular","Specular ratio",0,1,.05,""],
   ["constant","Attenuation const",.01,2,.01,""],
   ["linear","Attenuation linear",0,1,.005,""],
@@ -273,10 +285,12 @@ const lightSpecs = [
   ["falloff","Spot falloff",0,2,.05,""]
 ];
 const defaults={
- lights:{rows:2,cols:3,span_x:9,span_y:9.2,height:7,kind:"spot",intensity:1,range:18,
+ lights:{rows:2,cols:3,reach_x:4.5,reach_y:4.6,height:7,kind:"spot",
+ temperature:5600,brightness:100,range:18,
  constant:.45,linear:.015,quadratic:.001,inner:.7,outer:1.2,falloff:.8,shadows:true,
- hsv:[55,3,95],specular:.2},
- colors:{floor:[210,12,8],walls:[240,7,15],court:[147,84,35],poles:[0,0,15],pole_diameter:.05}
+ specular:.2},
+ colors:{floor:[210,12,8],walls:[240,7,15],court:[147,84,35],poles:[0,0,15]},
+ venue:{clearance_x:2.3,clearance_y:2.4}
 };
 function slider(id,label,min,max,step,value,unit){
   const box=document.createElement("div"); box.className="f";
@@ -306,7 +320,6 @@ for(const spec of lightSpecs){
  $("lightfields").appendChild(slider("li-"+spec[0],...spec.slice(1,5),
  defaults.lights[spec[0]],spec[5]));
 }
-hsvGroup("light","hsv-light",defaults.lights.hsv);
 for(const name of ["floor","walls","court","poles"]){
  const head=document.createElement("div");head.className="colorhead";
  const title=document.createElement("strong");title.textContent=({floor:"Venue floor",walls:"Boundary walls",court:"Badminton mat",poles:"Net poles"})[name];
@@ -315,8 +328,17 @@ for(const name of ["floor","walls","court","poles"]){
  const area=document.createElement("div");area.className="triple";area.id="hsv-"+name;
  $("materials").appendChild(area);hsvGroup(name,"hsv-"+name,defaults.colors[name]);
 }
-$("pole-dia").addEventListener("input",()=>{$("pole-dia-val").textContent=(Number($("pole-dia").value)*1000).toFixed(0)+" mm";});
-$("pole-dia").dispatchEvent(new Event("input"));
+for(const [key,title] of [["clearance_x","X clearance"],["clearance_y","Y clearance"]]){
+ const control=slider("venue-"+key,title,.25,8,.05,defaults.venue[key],"m");
+ $("venuefields").appendChild(control);
+ control.addEventListener("input",updateVenueSize);
+}
+function updateVenueSize(){
+ const lx=(15.4+2*Number($("venue-clearance_x").value)).toFixed(2);
+ const ly=(7.2+2*Number($("venue-clearance_y").value)).toFixed(2);
+ $("venue-size").textContent="Venue floor: "+lx+" × "+ly+" m (incl. clearances)";
+}
+updateVenueSize();
 const n=id=>Number($(id).value);
 const hsv=name=>["h","s","v"].map(k=>n(name+"-"+k));
 function hsvCss(v){
@@ -325,18 +347,28 @@ function hsvCss(v){
  const sat=(light===0||light===1)?0:(val-light)/Math.min(light,1-light);
  return "hsl("+h+" "+(sat*100).toFixed(2)+"% "+(light*100).toFixed(2)+"%)";
 }
+function kelvinCss(kelvin){
+ const t=Number(kelvin)/100;
+ const clamp=n=>Math.max(0,Math.min(255,Math.round(n)));
+ const red=t<=66?255:329.698727446*Math.pow(t-60,-.1332047592);
+ const green=t<=66?99.4708025861*Math.log(t)-161.1195681661:
+   288.1221695283*Math.pow(t-60,-.0755148492);
+ const blue=t<=19?0:t<=66?138.5177312231*Math.log(t-10)-305.0447927307:255;
+ return "rgb("+[red,green,blue].map(clamp).join(",")+")";
+}
 function updateSwatches(){
- for(const key of ["light","floor","walls","court","poles"]){
+ if($("li-temperature"))$("sw-light").style.background=kelvinCss(n("li-temperature"));
+ for(const key of ["floor","walls","court","poles"]){
   const v=hsv(key);$("sw-"+key).style.background=hsvCss(v);
  }
 }
 updateSwatches();
 function lightPayload(){
  const o={};for(const item of lightSpecs)o[item[0]]=n("li-"+item[0]);
- o.kind=$("light-kind").value;o.shadows=$("light-shadows").checked;o.hsv=hsv("light");return o;
+ o.kind=$("light-kind").value;o.shadows=$("light-shadows").checked;return o;
 }
 function materialsPayload(){
- return {floor:hsv("floor"),walls:hsv("walls"),court:hsv("court"),poles:hsv("poles"),pole_diameter:n("pole-dia")};
+ return {floor:hsv("floor"),walls:hsv("walls"),court:hsv("court"),poles:hsv("poles")};
 }
 function toast(message,bad){
  $("toast").textContent=message;$("toast").className=bad?"error":"";
@@ -355,6 +387,15 @@ async function action(path,data,button){
 }
 async function applyLights(){await action("/api/lights",lightPayload(),"apply-lights");}
 async function applyMaterials(){await action("/api/materials",materialsPayload(),"apply-material");}
+const venuePayload=()=>({clearance_x:n("venue-clearance_x"),clearance_y:n("venue-clearance_y")});
+async function applyVenue(){
+ if(!confirm("Updating venue floor collision and walls restarts the calibration Gazebo world. Current shuttles will be cleared. Continue?"))return;
+ const ok=await action("/api/venue",venuePayload(),"apply-venue");
+ if(ok){
+  for(const key of ["robot","overhead","free"])$("feed-"+key).classList.remove("has-frame");
+  toast("Venue rebuilt. Gazebo is restarting; re-spawn shuttles once ready.");
+ }
+}
 function autoApply(section,actionFn){
  let timer=null;
  const parent=section;
@@ -366,14 +407,25 @@ function autoApply(section,actionFn){
 }
 autoApply($("lightfields"),applyLights);
 autoApply($("materials"),applyMaterials);
-$("hsv-light").addEventListener("change",()=>{if($("auto-light").checked)setTimeout(applyLights,450);});
 $("light-kind").addEventListener("change",()=>{if($("auto-light").checked)applyLights();});
 $("light-shadows").addEventListener("change",()=>{if($("auto-light").checked)applyLights();});
-$("pole-dia").addEventListener("change",()=>{if($("auto-material").checked)applyMaterials();});
+// Venue clearances are deliberately applied by explicit Gazebo restart only.
 const robotData=()=>({x:n("robot-x"),y:n("robot-y"),yaw:n("robot-yaw")});
 const freeData=()=>({x:n("free-x"),y:n("free-y"),z:n("free-z"),yaw:n("free-yaw"),pitch:n("free-pitch")});
 async function applyRobot(){await action("/api/robot",robotData(),"move-robot");updateRobotDot();}
-async function applyFree(){await action("/api/free",freeData(),"move-free");}
+async function applyFree(){
+ $("follow-orbit").checked=false;
+ await action("/api/free",freeData(),"move-free");
+}
+async function copyOrbitView(){
+ const ok=await action("/api/orbit",{follow:$("follow-orbit").checked,copy_now:true},"copy-orbit");
+ if(ok)await getStatus();
+}
+async function toggleOrbitFollow(){
+ const follow=$("follow-orbit").checked;
+ const ok=await action("/api/orbit",{follow,copy_now:follow},null);
+ if(!ok)$("follow-orbit").checked=false;
+}
 function updateRobotDot(){
  const x=n("robot-x"),y=n("robot-y"),yaw=n("robot-yaw")*Math.PI/180;
  const cx=180 + x*(310/13.4),cy=85-y*(138/6.1);
@@ -483,6 +535,22 @@ async function getStatus(){
   $("detail-age").textContent=s.sim.stats_age_s===null?"—":s.sim.stats_age_s+" s";
   $("detail-high").textContent=exp?exp.clipped_bright+"%":"—";
   $("detail-low").textContent=exp?exp.clipped_dark+"%":"—";
+  const gui=s.gui_camera;
+  if(gui){
+   $("orbit-state").textContent=gui.available?
+    "Gazebo orbit pose available · age "+gui.age_s+" s"+
+    (gui.following?" · following live":" · copy to align the free-camera view"):
+    "No /gui/camera/pose yet. Ensure Gazebo GUI is open and Camera Tracking plugin is loaded.";
+   $("follow-orbit").checked=gui.following;
+   if(gui.following&&s.settings&&s.settings.free){
+    const activeElement=document.activeElement;
+    if(!activeElement || activeElement.tagName!=="INPUT"){
+     for(const k of ["x","y","z","yaw","pitch"]){
+       $("free-"+k).value=String(s.settings.free[k]);
+     }
+    }
+   }
+  }
   const active=s.gazebo_alive!==false && s.sim.stats_age_s!==null&&s.sim.stats_age_s<5;
   $("conn").textContent=s.gazebo_alive===false?"Gazebo exited":(active?"● Gazebo live":"◌ Connecting…");
   $("conn").style.color=active?"var(--primary)":"var(--yellow)";
@@ -512,8 +580,7 @@ function syncControls(settings){
  if(settings.lights){
   const lights=settings.lights;
   for(const spec of lightSpecs)setValue("li-"+spec[0],lights[spec[0]]);
-  if(lights.hsv)for(let k=0;k<3;k++)setValue("light-"+["h","s","v"][k],lights.hsv[k]);
-  if(lights.kind)$("light-kind").value=lights.kind;
+   if(lights.kind)$("light-kind").value=lights.kind;
   if(typeof lights.shadows==="boolean")$("light-shadows").checked=lights.shadows;
  }
  if(settings.colors){
@@ -523,7 +590,11 @@ function syncControls(settings){
     for(let k=0;k<3;k++)setValue(name+"-"+["h","s","v"][k],colors[name][k]);
    }
   }
-  setValue("pole-dia",colors.pole_diameter);
+  }
+ if(settings.venue){
+  setValue("venue-clearance_x",settings.venue.clearance_x);
+  setValue("venue-clearance_y",settings.venue.clearance_y);
+  updateVenueSize();
  }
  if(settings.robot){
   for(const k of ["x","y","yaw"])setValue("robot-"+k,settings.robot[k]);
