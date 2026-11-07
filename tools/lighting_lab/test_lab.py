@@ -79,6 +79,17 @@ class SceneTests(unittest.TestCase):
         self.assertEqual(cfg["brightness"], 225)
         self.assertEqual(cfg["temperature"], 4500)
         self.assertNotIn("hsv", cfg)
+        settings = default_settings()
+        settings["lights"].update({"temperature": 2200, "brightness": 225})
+        world = ET.fromstring(build_world(SOURCE, settings)).find("world")
+        lamp = world.find("light")
+        self.assertEqual(lamp.findtext("intensity"), "2.25")
+        diffuse = [float(n) for n in lamp.findtext("diffuse").split()]
+        self.assertGreater(diffuse[0], diffuse[2])
+
+    def test_old_material_pole_diameter_is_discarded(self):
+        colors = checked_colors({"pole_diameter": 0.1})
+        self.assertNotIn("pole_diameter", colors)
 
     def test_legacy_span_and_intensity_preset_migration(self):
         cfg = checked_lights({
