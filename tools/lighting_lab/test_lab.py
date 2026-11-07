@@ -160,6 +160,30 @@ class SceneTests(unittest.TestCase):
         )]
         self.assertEqual(radii, [.025, .025, .025, .025])
 
+    def test_orbit_quaternion_is_preserved_in_generated_camera(self):
+        settings = default_settings()
+        settings["free"].update({
+            "x": 16.375, "y": -11.125, "z": 8.5,
+            "orientation": [0.125, -0.25, 0.375, 0.884],
+        })
+        world = ET.fromstring(build_world(SOURCE, settings)).find("world")
+        camera = next(model for model in world.findall("model")
+                      if model.get("name") == "lab_free_camera")
+        pose = camera.find("pose")
+        self.assertEqual(pose.get("rotation_format"), "quat_xyzw")
+        values = [float(value) for value in pose.text.split()]
+        self.assertEqual(len(values), 7)
+        self.assertEqual(values[:3], [16.375, -11.125, 8.5])
+        import math
+        norm = math.sqrt(sum(v * v for v in settings["free"]["orientation"]))
+        for actual, component in zip(values[3:], settings["free"]["orientation"]):
+            self.assertAlmostEqual(actual, component / norm, places=7)
+        for invalid in ([0, 0, 0, 0], [1, 0, 0], [1, 0, float("nan"), 0]):
+            with self.subTest(invalid=invalid):
+                settings["free"]["orientation"] = invalid
+                with self.assertRaises(ValueError):
+                    build_world(SOURCE, settings)
+
     def test_default_clearance_reproduces_original_venue_dimensions(self):
         world = ET.fromstring(build_world(SOURCE, default_settings())).find("world")
         floor = next(m for m in world.findall("model")
