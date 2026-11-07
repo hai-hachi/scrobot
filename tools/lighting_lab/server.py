@@ -30,8 +30,8 @@ import webbrowser
 
 from scene import (
     WORLD, DEFAULTS, VISUAL_GROUPS, build_world, centered_positions,
-    checked_colors, checked_lights, default_settings, hsv_rgb, light_direction,
-    net_model_xml, bounded, integer,
+    checked_colors, checked_lights, checked_venue, default_settings,
+    hsv_rgb, kelvin_rgb, light_direction, bounded, integer,
 )
 
 
@@ -96,6 +96,18 @@ class GazeboAdapter:
         self.sim_stats = {}
         self.errors = deque(maxlen=12)
         self.last_action = "Calibration world starting"
+        self.gui_pose = None
+        self.gui_pose_at = 0.0
+        self.gui_follow = False
+        self.gui_last_sent = None
+        self.gui_stop = threading.Event()
+        self.gui_pose_subscription_ok = self.node.subscribe(
+            Pose, "/gui/camera/pose", self.on_gui_pose
+        )
+        self.gui_thread = threading.Thread(
+            target=self._gui_follow_loop, name="GazeboOrbitSync", daemon=True
+        )
+        self.gui_thread.start()
         for key, topic in CAMERAS.items():
             ok = self.node.subscribe(GzImage, topic,
                                      lambda msg, key=key: self.on_image(key, msg))
@@ -150,6 +162,83 @@ class GazeboAdapter:
             with self.lock:
                 self.errors.append(f"{key} frame error: {exc}")
 
+    def on_gui_pose(self, message):
+        # CameraTracking publishes the true GUI orbit camera pose. Only store
+        # it in this callback; never make a blocking transport request from a
+        # Gazebo callback thread.
+        with self.lock:
+            self.gui_pose = self.Pose()
+            self.gui_pose.CopyFrom(message)
+            self.gui_pose_at = time.monotonic()
+
+    def _gui_follow_loop(self):
+        while not self.gui_stop.wait(0.45):
+            with self.lock:
+                if not self.gui_follow or self.gui_pose is None:
+                    continue
+                if time.monotonic() - self.gui_pose_at > 2.5:
+                    continue
+                raw = self.Pose()
+                raw.CopyFrom(self.gui_pose)
+                key = (
+                    round(raw.position.x, 3), round(raw.position.y, 3),
+                    round(raw.position.z, 3),
+                    round(raw.orientation.x, 4), round(raw.orientation.y, 4),
+                    round(raw.orientation.z, 4), round(raw.orientation.w, 4),
+                )
+                if key == self.gui_last_sent:
+                    continue
+            try:
+                self.apply_gui_pose(raw)
+                with self.lock:
+                    self.gui_last_sent = key
+            except (RuntimeError, OSError, ValueError) as exc:
+                with self.lock:
+                    self.errors.append(f"Orbit follow: {exc}")
+
+    def apply_gui_pose(self, raw):
+        msg = self.Pose()
+        msg.CopyFrom(raw)
+        msg.name = "lab_free_camera"
+        self.call("set_pose", msg, self.Pose, timeout=2500)
+        # Keep JSON preset free pose aligned to the GUI orbit-camera position.
+        q = msg.orientation
+        yaw = math.atan2(
+            2 * (q.w * q.z + q.x * q.y),
+            1 - 2 * (q.y * q.y + q.z * q.z),
+        )
+        pitch_sin = max(-1., min(1., 2 * (q.w * q.y - q.z * q.x)))
+        pitch = math.asin(pitch_sin)
+        with self.lock:
+            self.settings["free"] = {
+                "x": round(msg.position.x, 3),
+                "y": round(msg.position.y, 3),
+                "z": round(msg.position.z, 3),
+                "yaw": round(math.degrees(yaw), 2),
+                "pitch": round(math.degrees(pitch), 2),
+            }
+
+    def sync_gui_camera(self, follow, copy_now):
+        if not isinstance(follow, bool) or not isinstance(copy_now, bool):
+            raise ValueError("follow/copy_now must be booleans")
+        with self.lock:
+            raw = self.Pose()
+            if self.gui_pose is None or time.monotonic() - self.gui_pose_at > 3.0:
+                raise RuntimeError(
+                    "No fresh /gui/camera/pose; enable Camera Tracking in Gazebo GUI"
+                )
+            raw.CopyFrom(self.gui_pose)
+        if copy_now:
+            self.apply_gui_pose(raw)
+        with self.lock:
+            self.gui_follow = follow
+            self.gui_last_sent = None
+        self.last_action = (
+            "Following Gazebo orbit view" if follow
+            else "Copied Gazebo orbit view" if copy_now else "Orbit sync disabled"
+        )
+        return self.last_action
+
     def on_stats(self, message):
         with self.lock:
             self.sim_stats = {
@@ -173,7 +262,7 @@ class GazeboAdapter:
         m = self.Light()
         m.name = name
         m.type = self.Light.SPOT if cfg["kind"] == "spot" else self.Light.POINT
-        m.intensity = cfg["intensity"]
+        m.intensity = cfg["brightness"] / 100.0
         m.range = cfg["range"]
         m.attenuation_constant = cfg["constant"]
         m.attenuation_linear = cfg["linear"]
@@ -185,7 +274,7 @@ class GazeboAdapter:
         m.pose.position.x, m.pose.position.y, m.pose.position.z = x, y, z
         m.pose.orientation.w = 1.0
         m.direction.x, m.direction.y, m.direction.z = light_direction(x, y, z)
-        rgb = hsv_rgb(cfg["hsv"])
+        rgb = kelvin_rgb(cfg["temperature"])
         for field, multiplier in (("diffuse", 1.0), ("specular", cfg["specular"])):
             color = getattr(m, field)
             color.r, color.g, color.b, color.a = (
@@ -222,20 +311,6 @@ class GazeboAdapter:
 
     def apply_materials(self, raw):
         cfg = checked_colors(raw)
-        previous = self.settings["colors"]
-        diameter_change = abs(cfg["pole_diameter"] - previous["pole_diameter"]) > 1e-6
-        if diameter_change:
-            # Recreate the static net to update both visual AND collision
-            # radius. The original 5 cm pole model is never changed on disk.
-            req = self.Entity()
-            req.name = "net_assembly"
-            req.type = self.Entity.MODEL
-            self.call("remove", req, self.Entity)
-            create = self.EntityFactory()
-            create.sdf = net_model_xml(
-                SOURCE, cfg["pole_diameter"], cfg["poles"]
-            )
-            self.call("create", create, self.EntityFactory)
         for group, members in VISUAL_GROUPS.items():
             rgb = hsv_rgb(cfg[group])
             for model_name, visual_name in members:
@@ -278,6 +353,9 @@ class GazeboAdapter:
         self.call("set_pose", req, self.Pose)
 
     def move_camera(self, raw, key):
+        if key == "free":
+            with self.lock:
+                self.gui_follow = False  # Explicit manual move takes priority.
         if key == "robot":
             position = {
                 "x": bounded(raw["x"], -7, 7, "robot.x"),
@@ -362,7 +440,28 @@ class GazeboAdapter:
                 "gpu": gpu,
                 "last_action": self.last_action,
                 "errors": list(self.errors)[-5:],
+                "gui_camera": self._gui_status(now),
             }
+
+    def _gui_status(self, now):
+        fresh = self.gui_pose is not None and now - self.gui_pose_at < 3.0
+        result = {
+            "available": fresh,
+            "topic_subscribed": bool(self.gui_pose_subscription_ok),
+            "following": self.gui_follow,
+            "age_s": round(now - self.gui_pose_at, 1) if self.gui_pose is not None else None,
+        }
+        if fresh:
+            result["position"] = {
+                "x": round(self.gui_pose.position.x, 3),
+                "y": round(self.gui_pose.position.y, 3),
+                "z": round(self.gui_pose.position.z, 3),
+            }
+        return result
+
+    def stop(self):
+        self.gui_stop.set()
+        self.gui_thread.join(timeout=3.0)
 
 
 class Lab:
