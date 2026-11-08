@@ -241,8 +241,11 @@
         <div class="buttonrow" style="align-items:end;margin:0"><button class="primary" onclick="savePreset()">Save JSON preset</button></div>
       </div>
       <div class="divider"></div>
-      <div class="buttonrow"><button class="primary" id="update-lab-config" onclick="updateLabConfig()">Update lab config YAML</button></div>
-      <p class="helper">Write the current light, material and venue slider values to <code>src/scrobot_simulation/config/lighting_lab.yaml</code>. Restart Lighting Lab to load them by default. This does not change the production world or automatically apply pending sliders to running Gazebo.</p>
+      <div class="buttonrow">
+        <button class="primary" id="update-lab-config" onclick="updateLabConfig()">Update lab config YAML</button>
+        <button id="publish-simulation" onclick="publishSimulation()">Apply saved YAML to main simulation</button>
+      </div>
+      <p class="helper">First save the current light, material and venue sliders to <code>src/scrobot_simulation/config/lighting_lab.yaml</code>. Then apply the saved YAML to the normal <code>badminton_court.sdf</code>. The second action modifies the Git-tracked production SDF on disk; restart the normal Gazebo simulation to use it. Pending sliders not saved to YAML are not published.</p>
       <p class="note">Brightness and clipping are image-based proxies, NOT calibrated lux. Compare the same robot pose, camera settings and shuttle layout before choosing an illumination profile. RTF and FPS indicate computational cost, not illumination quality.</p>
     </article>
   </section>
@@ -397,6 +400,10 @@ async function updateLabConfig(){
  await action("/api/config",{
   lights:lightPayload(),colors:materialsPayload(),venue:venuePayload()
  },"update-lab-config");
+}
+async function publishSimulation(){
+ if(!confirm("Apply the SAVED lighting_lab.yaml calibration to the normal badminton_court.sdf? This edits the Git-tracked production world on disk; pending unsaved sliders are not included. Restart normal Gazebo afterwards. Continue?"))return;
+ await action("/api/publish",{},"publish-simulation");
 }
 function updateRobotDot(){
  const x=n("robot-x"),y=n("robot-y"),yaw=n("robot-yaw")*Math.PI/180;
