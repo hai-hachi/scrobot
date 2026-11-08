@@ -598,6 +598,9 @@
 
           <transparency>0.65</transparency>
 
+          <!-- Net rendering must not cast broad artificial shadows on the court. -->
+          <cast_shadows>false</cast_shadows>
+
         </visual>
 
 
@@ -617,6 +620,9 @@
             <ambient>1 1 1 1</ambient>
             <diffuse>1 1 1 1</diffuse>
           </material>
+
+          <!-- Net rendering must not cast broad artificial shadows on the court. -->
+          <cast_shadows>false</cast_shadows>
 
         </visual>
 
