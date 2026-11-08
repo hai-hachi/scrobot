@@ -1,9 +1,10 @@
 # SCROBOT Lighting Lab: Gazebo Harmonic calibration
 
 The **real-comparison** branch adds a local three-camera lighting and materials
-calibration dashboard. It is a separate, optional experiment. It never changes
-the checked-in competition world, the actual physical robot, Nav2, or the
-historical 50-shuttle mission settings.
+calibration dashboard. It is a separate, optional experiment. Its
+regular adjustments operate on a temporary derivative world. Only the
+explicit **Apply saved YAML to main simulation** action changes the Git-tracked
+production world SDF. The robot, Nav2 and mission code are not modified.
 
 ## What is adjustable
 
@@ -15,6 +16,7 @@ historical 50-shuttle mission settings.
 | Light HSV color | Hue (0–360°), saturation (0–100%), value (0–100%) | H=55°, S=3%, V=95% |
 | Light intensity | Gazebo light intensity 0–4× (not calibrated lux) | 1× |
 | Light rendering | Shadow toggle, range, attenuation, spot inner/outer cone, falloff, specular | Original court approximations |
+| Badminton net | Net mesh and white top tape do not cast shadows | Shadows disabled for these two visuals |
 | Surface colors | Independent HSV sliders for venue floor, court mat, safety walls, net poles | Original appearance approximations |
 | Venue X clearance | **Per side** beyond the 15.4 m-long mat | 2.3 m |
 | Venue Y clearance | **Per side** beyond the 7.2 m-wide mat | 2.4 m |
@@ -136,9 +138,53 @@ the Lighting Lab.
 
 Saving YAML intentionally modifies a Git-tracked *lab-only* config in the
 local working tree. Review or commit it with Git when you want to share
-the calibration. No production SDF, hardware settings, or mission config
-are overwritten. Camera orbit poses and shuttle layouts remain in JSON
+the calibration. Camera orbit poses and shuttle layouts remain in JSON
 presets rather than this shared YAML.
+
+### Apply a saved Lighting Lab result to the main simulation
+
+After obtaining a good result in the lab:
+
+1. Click **Update lab config YAML** to save the sliders.
+2. Click **Apply saved YAML to main simulation** and confirm.
+3. Rebuild/re-source the simulator if necessary and **restart the normal
+   Gazebo simulation**. The already-running lab or normal Gazebo instance
+   does not hot-reload its source SDF.
+
+The second button reads only the saved
+`src/scrobot_simulation/config/lighting_lab.yaml`, validates it, then
+**atomically updates** `src/scrobot_simulation/worlds/badminton_court.sdf`.
+It transfers the complete light array (count, center-based positions, HSV
+color, intensity, type, shadow settings and attenuation), venue and wall
+dimensions, and the four material groups. The net mesh and white top
+tape explicitly use `<cast_shadows>false</cast_shadows>` in both the
+calibration and main simulation worlds. The net posts retain their
+original shadow behavior.
+
+The publisher does **not** import the lab's free inspector/broadcast
+cameras, disable the production shuttle pickup plugin, change court
+lines or AprilTag geometry, or modify robot controllers/mission logic.
+Because floor/wall dimensions can affect motion near venue boundaries,
+run the normal navigation and full-mission regression before accepting
+a new published calibration.
+
+The production SDF is Git-tracked: review its diff before committing or
+merging the `real-comparison` branch into `main`. Publishing edits your
+current workspace file; it does not push a Git commit or merge branches.
+There is also a command-line equivalent:
+
+```bash
+cd ~/scrobot_ws
+python3 tools/lighting_lab/publish.py --check   # preview without writing
+python3 tools/lighting_lab/publish.py           # apply saved YAML to SDF
+colcon build --symlink-install --packages-select scrobot_simulation
+source install/setup.bash
+```
+
+The branch's initial tracked YAML contains a *baseline*, not measured
+post-experiment results. The normal simulation on this branch was
+initialized with those baseline light/material values and net shadows
+disabled. Saving and publishing a new experiment replaces that baseline.
 
 **WARP/VPN compatibility is automatic on every run, including after reboot.**
 The Python launcher sets `GZ_IP=127.0.0.1` and
@@ -199,15 +245,19 @@ image brightness and clipped-pixel statistics measure visual appearance,
 
 ## Safety and scope
 
-The lab generates a temporary derivative SDF, disables automatic shuttle
-pickup in that calibration-only world and never modifies the production
-`badminton_court.sdf`. The light/material endpoints update actual Gazebo
-world objects. Venue resizing restarts the simulated world as described
-above. Older Kelvin/brightness presets are converted to HSV/intensity;
-older HSV and full-span light presets remain supported and the latter are
+The lab generates a temporary derivative SDF and disables automatic shuttle
+pickup only in that calibration-only world. Its live light/material
+endpoints update Gazebo world objects, not source files. Only the explicit
+**Apply saved YAML to main simulation** action changes the production
+`badminton_court.sdf` on disk. The net geometry, net posts and collision
+model are unchanged when shadow casting is disabled on its mesh and tape.
+Venue resizing restarts the simulated lab world as described above.
+Older Kelvin/brightness presets are converted to HSV/intensity; older
+HSV and full-span light presets remain supported and the latter are
 migrated to center-based reaches.
 
 Offline CI validates source generation, YAML persistence, scene geometry,
+production SDF publishing, pickup/plugin preservation, net shadow settings,
 HSV/intensity conversion, browser startup and Python 3 syntax. **Gazebo Transport runtime service
 behavior, GUI orbit synchronization, rendering performance and WARP behavior
 still require a hands-on run on the SCROBOT workstation.**
