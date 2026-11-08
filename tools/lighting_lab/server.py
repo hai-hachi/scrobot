@@ -34,6 +34,7 @@ from scene import (
     hsv_rgb, light_direction, bounded, integer,
 )
 from config import read_lab_config, write_lab_config
+from publish import publish_saved_calibration
 
 
 SOURCE = Path(__file__).resolve().parents[2] / (
@@ -630,6 +631,18 @@ class Lab:
         )
         return self.adapter.last_action
 
+    def publish_main_simulation(self):
+        # Source of truth is the SAVED versioned lab YAML, never unsaved
+        # browser values. Source SDF is updated only by an explicit request.
+        changed = publish_saved_calibration(LAB_CONFIG, self.source)
+        self.adapter.last_action = (
+            f"Published saved Lighting Lab calibration to {self.source}. "
+            "Restart the normal simulation to use it."
+            if changed else
+            "Main simulation SDF already matches the saved Lighting Lab YAML."
+        )
+        return self.adapter.last_action
+
     def save_preset(self, raw):
         name = str(raw.get("name", "lighting_calibration"))
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,60}", name):
@@ -704,7 +717,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path not in ("/api/lights", "/api/materials", "/api/robot",
                         "/api/free", "/api/shuttles", "/api/preset",
-                        "/api/venue", "/api/orbit", "/api/config"):
+                        "/api/venue", "/api/orbit", "/api/config",
+                        "/api/publish"):
             self.reply(404, {"error": "Unknown action"})
             return
         size = int(self.headers.get("Content-Length", "0"))
@@ -733,6 +747,10 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 elif path == "/api/config":
                     text = self.lab.save_config(payload)
+                elif path == "/api/publish":
+                    if payload:
+                        raise ValueError("Publishing uses the saved lab YAML, not payload fields")
+                    text = self.lab.publish_main_simulation()
                 else:
                     text = self.lab.save_preset(payload)
             self.reply(200, {"ok": True, "message": text})
