@@ -28,7 +28,7 @@ PRODUCTION_WORLD = REPO / "src/scrobot_simulation/worlds/badminton_court.sdf"
 LAB_CONFIG = REPO / "src/scrobot_simulation/config/lighting_lab.yaml"
 
 # Only world-level light tags (four-space indentation) may be replaced.
-LIGHT_BLOCK = re.compile(r"(?ms)^    <light\\b[^>]*>.*?^    </light>\\n")
+LIGHT_BLOCK = re.compile(r"(?ms)^    <light\b[^>]*>.*?^    </light>\n")
 NET_NO_SHADOW = ("net_visual", "net_top_tape")
 
 
@@ -88,8 +88,8 @@ def _ensure_no_shadow(text, visual_name):
     else:
         closing = section.rfind("</visual>")
         section = (
-            section[:closing] + "  <cast_shadows>false</cast_shadows>\n"
-            + section[closing:]
+            section[:closing - 8] + "          <cast_shadows>false</cast_shadows>\n"
+            + section[closing - 8:]
         )
     return text[:matched.start()] + section + text[matched.end():]
 
