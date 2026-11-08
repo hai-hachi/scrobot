@@ -156,6 +156,8 @@ assert.match(html, /\/api\/orbit/);
 assert.match(html, /\/api\/venue/);
 assert(registry.has("update-lab-config"));
 assert.match(html, /\/api\/config/);
+assert(registry.has("publish-simulation"), "Missing main simulation publish button");
+assert.match(html, /\/api\/publish/);
 
 // The court click/robot camera pose selection must be wired.
 assert((registry.get("courtmap").listeners.click || []).length >= 1);
