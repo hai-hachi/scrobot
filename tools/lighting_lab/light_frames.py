@@ -73,11 +73,18 @@ def create_marker_batch(cfg, visible, marker_v_type, marker_type):
             marker.pose.orientation.w = 1.0
             marker.scale.x = marker.scale.y = marker.scale.z = 0.42
         else:
-            marker.type = marker_type.LINE_LIST
-            marker.scale.x = marker.scale.y = marker.scale.z = 0.025
-            for xyz in (instruction["start"], instruction["end"]):
-                pt = marker.point.add()
-                pt.x, pt.y, pt.z = xyz
+            # A thin no-collision cylinder from fixture to floor. Unlike a
+            # LINE_LIST, scaling this primitive cannot shrink its world
+            # coordinates or move it toward the origin.
+            marker.type = marker_type.CYLINDER
+            x, y, z = instruction["start"]
+            floor_z = instruction["end"][2]
+            marker.pose.position.x = x
+            marker.pose.position.y = y
+            marker.pose.position.z = (z + floor_z) / 2
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = marker.scale.y = 0.018
+            marker.scale.z = z - floor_z
             marker.material.diffuse.r = 1.0
             marker.material.diffuse.g = 0.85
             marker.material.diffuse.b = 0.12
