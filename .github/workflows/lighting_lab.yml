@@ -52,7 +52,8 @@ jobs:
               target.write_text(build_world(src, settings))
               world = ET.parse(target).getroot().find("world")
               assert world.get("name") == "badminton_court"
-              assert len(world.findall("light")) == 6
+              assert len(world.findall("light")) == 8
+              assert sum(light.findtext("cast_shadows") == "true" for light in world.findall("light")) == 2
               camera_models = {
                   m.get("name") for m in world.findall("model")
                   if m.find("./link/sensor") is not None
