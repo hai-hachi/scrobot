@@ -291,7 +291,7 @@
           <material>
             <ambient>0.05632 0.06016 0.06400 1</ambient>
             <diffuse>0.07040 0.07520 0.08000 1</diffuse>
-            <specular>0.02 0.02 0.02 1</specular>
+            <specular>0 0 0 1</specular>
           </material>
         </visual>
 
@@ -303,7 +303,7 @@
           <material>
             <ambient>0.04480 0.28000 0.15064 1</ambient>
             <diffuse>0.05600 0.35000 0.18830 1</diffuse>
-            <specular>0.02 0.02 0.02 1</specular>
+            <specular>0 0 0 1</specular>
           </material>
         </visual>
       </link>
@@ -330,7 +330,7 @@
           <material>
             <ambient>0.11160 0.11160 0.12000 1</ambient>
             <diffuse>0.13950 0.13950 0.15000 1</diffuse>
-            <specular>0.02 0.02 0.02 1</specular>
+            <specular>0 0 0 1</specular>
           </material>
         </visual>
 
@@ -344,7 +344,7 @@
           <material>
             <ambient>0.11160 0.11160 0.12000 1</ambient>
             <diffuse>0.13950 0.13950 0.15000 1</diffuse>
-            <specular>0.02 0.02 0.02 1</specular>
+            <specular>0 0 0 1</specular>
           </material>
         </visual>
 
@@ -358,7 +358,7 @@
           <material>
             <ambient>0.11160 0.11160 0.12000 1</ambient>
             <diffuse>0.13950 0.13950 0.15000 1</diffuse>
-            <specular>0.02 0.02 0.02 1</specular>
+            <specular>0 0 0 1</specular>
           </material>
         </visual>
 
@@ -372,7 +372,7 @@
           <material>
             <ambient>0.11160 0.11160 0.12000 1</ambient>
             <diffuse>0.13950 0.13950 0.15000 1</diffuse>
-            <specular>0.02 0.02 0.02 1</specular>
+            <specular>0 0 0 1</specular>
           </material>
         </visual>
 
