@@ -28,6 +28,7 @@
           izz="0.727"/>
       </inertial>
 
+      <xacro:if value="${scrobot_visual_mode == 'full'}">
       <visual name="base_visual">
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
@@ -37,6 +38,17 @@
         <material name="aluminum_grey"/>
         
       </visual>
+      </xacro:if>
+
+      <!-- Lab-only proxy: the real STL is far more expensive and not
+           visible to the D435i camera mounted above this low footprint. -->
+      <xacro:if value="${scrobot_visual_mode == 'simple'}">
+        <visual name="base_proxy_visual">
+          <origin xyz="-0.06 0 0.095" rpy="0 0 0"/>
+          <geometry><box size="0.50 0.36 0.16"/></geometry>
+          <material name="aluminum_grey"/>
+        </visual>
+      </xacro:if>
 
       <collision name="base_collision">
         <origin xyz="0 0 0" rpy="0 0 0"/>
