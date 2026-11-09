@@ -14,6 +14,7 @@
           izz="1.37e-4"/>
       </inertial>
 
+      <xacro:if value="${scrobot_visual_mode == 'full'}">
       <visual name="${name}_wheel_visual">
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
@@ -21,6 +22,7 @@
         </geometry>
         <material name="rubber_black"/>
       </visual>
+      </xacro:if>
 
       <collision name="${name}_wheel_collision">
         <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
