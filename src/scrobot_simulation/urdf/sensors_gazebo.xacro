@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="scrobot_gazebo_sensors" params="enable_magnetometer:=false">
+  <xacro:macro name="scrobot_gazebo_sensors" params="enable_magnetometer:=false enable_depth_camera:=true">
 
     <!-- ====================================================== -->
     <!-- D435i combined IMU                                     -->
@@ -92,6 +92,7 @@
     <!-- D435i RAW DEPTH CAMERA                                 -->
     <!-- ====================================================== -->
 
+    <xacro:if value="${enable_depth_camera}">
     <gazebo reference="camera_depth_frame">
       <sensor name="d435i_depth" type="depth_camera">
         <always_on>true</always_on>
@@ -126,6 +127,7 @@
         </camera>
       </sensor>
     </gazebo>
+    </xacro:if>
 
   </xacro:macro>
 
