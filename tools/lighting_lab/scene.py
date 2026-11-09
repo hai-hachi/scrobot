@@ -214,7 +214,10 @@ def make_light(name, x, y, z, settings):
         tuple(min(1, v * settings["specular"]) for v in rgb)
     )
     ET.SubElement(root, "intensity").text = str(settings["intensity"])
-    ET.SubElement(root, "cast_shadows").text = str(name in shadow_light_names(settings)).lower()
+    # Production publisher renames lab_light_XX_YY to court_light_XX_YY.
+    # Normalize before consulting the deterministic shadow fixture selection.
+    shadow_key = name.replace("court_light_", "lab_light_", 1)
+    ET.SubElement(root, "cast_shadows").text = str(shadow_key in shadow_light_names(settings)).lower()
     ET.SubElement(root, "direction").text = rgb_text(light_direction(x, y, z), False)
     attenuation = ET.SubElement(root, "attenuation")
     for key, tag in (("range", "range"), ("constant", "constant"),
