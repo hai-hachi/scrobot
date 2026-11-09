@@ -63,6 +63,7 @@ def create_marker_batch(cfg, visible, marker_v_type, marker_type):
         if instruction["action"] == "delete_all":
             continue
         marker.id = instruction["id"]
+        marker.visibility = marker_type.GUI  # Never drawn by robot cameras.
         marker.lifetime.sec = 0
         marker.lifetime.nsec = 0
         marker.material.lighting = False
