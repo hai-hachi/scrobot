@@ -192,7 +192,7 @@ def shadow_light_names(light):
                 ((p[2] - other[2]) / ry) ** 2
                 for other in selected
             )
-            return spacing - 0.35 * center(p)
+            return spacing - 2.0 * center(p)
         selected.append(max(remaining, key=lambda p: (score(p), -center(p), p[2], p[1])))
     return {p[0] for p in selected}
 
