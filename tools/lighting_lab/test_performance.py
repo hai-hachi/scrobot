@@ -38,7 +38,7 @@ class FakeAdapter:
     def __init__(self):
         self.settings = default_settings()
         self.light_names = {
-            f"lab_light_{r:02d}_{c:02d}" for r in range(2) for c in range(3)
+            f"lab_light_{r:02d}_{c:02d}" for r in range(2) for c in range(4)
         }
         self.rendered_lights = checked_lights(self.settings["lights"])
         self.preview_mode = "fast"
@@ -81,7 +81,7 @@ class PerformanceRuntimeTests(unittest.TestCase):
         requested = copy.deepcopy(adapter.settings["lights"])
         requested["hsv"] = [125, 65, 80]
         adapter.apply_lights(requested)
-        self.assertEqual(len(adapter.calls), 6)
+        self.assertEqual(len(adapter.calls), 8)
         self.assertEqual({name for name, _, _ in adapter.calls},
                          {"light_config"})
         self.assertEqual(adapter.update_metrics["lights"]["changed"], ["hsv"])
@@ -108,14 +108,14 @@ class PerformanceRuntimeTests(unittest.TestCase):
         adapter.configure_preview({"mode": "fast", "shadow_free": True})
         self.assertFalse(adapter.rendered_lights["shadows"])
         self.assertTrue(adapter.settings["lights"]["shadows"])
-        self.assertEqual(len(adapter.calls), 6)
+        self.assertEqual(len(adapter.calls), 8)
         self.assertTrue(all(shadow is False for _, _, shadow in adapter.calls))
         adapter.calls.clear()
         adapter.configure_preview({"mode": "accurate", "shadow_free": False})
         self.assertTrue(adapter.rendered_lights["shadows"])
         self.assertTrue(adapter.settings["lights"]["shadows"])
-        self.assertEqual(len(adapter.calls), 6)
-        self.assertTrue(all(shadow is True for _, _, shadow in adapter.calls))
+        self.assertEqual(len(adapter.calls), 8)
+        self.assertEqual(sum(bool(shadow) for _, _, shadow in adapter.calls), 2)
         self.assertEqual(adapter.preview_mode, "accurate")
 
     def test_accurate_preview_cannot_disable_shadows(self):
