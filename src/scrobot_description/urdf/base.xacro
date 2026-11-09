@@ -44,8 +44,10 @@
            visible to the D435i camera mounted above this low footprint. -->
       <xacro:if value="${scrobot_visual_mode == 'simple'}">
         <visual name="base_proxy_visual">
-          <origin xyz="-0.06 0 0.095" rpy="0 0 0"/>
-          <geometry><box size="0.50 0.36 0.16"/></geometry>
+          <origin xyz="-0.115 0 0.095" rpy="0 0 0"/>
+          <!-- Front of proxy is x=0.085 m, behind the D435i mount at
+               x=0.110 m, so the simplified mesh cannot enter forward RGB FOV. -->
+          <geometry><box size="0.40 0.36 0.16"/></geometry>
           <material name="aluminum_grey"/>
         </visual>
       </xacro:if>
