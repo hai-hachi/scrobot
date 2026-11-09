@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+import copy
 import hashlib
 import io
 import json
@@ -35,6 +36,7 @@ from scene import (
 )
 from config import read_lab_config, write_lab_config
 from publish import publish_saved_calibration
+from performance import PREVIEW_PROFILES, changed_fields, dirty_material_groups, preview_world_settings
 
 
 SOURCE = Path(__file__).resolve().parents[2] / (
@@ -89,6 +91,10 @@ class GazeboAdapter:
         self._gpu_cached_at = 0.0
         self._gpu_info = None
         self.settings = settings
+        self.preview_mode = "fast"
+        self.preview_shadow_free = False
+        self.rendered_lights = copy.deepcopy(checked_lights(settings["lights"]))
+        self.update_metrics = {"lights": None, "materials": None}
         self.light_names = {
             name for name, *_ in centered_positions(checked_lights(settings["lights"]))
         }
@@ -124,9 +130,10 @@ class GazeboAdapter:
         with self.lock:
             self.sensor_times[key].append(now)
             last = self.frame_times[key][-1] if self.frame_times[key] else 0
-        # Browser previews are deliberately throttled to ~5 FPS for CPU
-        # efficiency; sensor FPS below is measured before this decimation.
-        if now - last < 0.18:
+            profile = PREVIEW_PROFILES[self.preview_mode]
+        # Throttle expensive JPEG conversion independently of the Gazebo
+        # sensor rates; switchable preview does not alter sensor calibration.
+        if now - last < profile["min_period"]:
             return
         width, height = int(message.width), int(message.height)
         data = message.data
@@ -144,7 +151,7 @@ class GazeboAdapter:
             picture = self.PILImage.frombytes(mode, (width, height), data)
             if picture.mode != "RGB":
                 picture = picture.convert("RGB")
-            picture.thumbnail((860, 490))
+            picture.thumbnail(profile["max_size"])
             # Estimate camera clipping, not physical illuminance/lux.
             gray = picture.convert("L").resize((80, 45))
             samples = gray.tobytes()
@@ -152,7 +159,7 @@ class GazeboAdapter:
             clipped_dark = sum(v <= 12 for v in samples) / len(samples)
             avg_brightness = sum(samples) / len(samples) / 255
             stream = io.BytesIO()
-            picture.save(stream, format="JPEG", quality=72, optimize=False)
+            picture.save(stream, format="JPEG", quality=profile["jpeg_quality"], optimize=False)
             with self.lock:
                 self.frames[key] = stream.getvalue()
                 self.frame_times[key].append(now)
@@ -298,59 +305,147 @@ class GazeboAdapter:
             )
         return m
 
+    def _record_update(self, category, started, timings, changes, error=None):
+        elapsed = (time.perf_counter() - started) * 1000.0
+        with self.lock:
+            self.update_metrics[category] = {
+                "total_ms": round(elapsed, 1),
+                "calls": len(timings),
+                "mean_call_ms": round(sum(timings) / len(timings), 1) if timings else 0.0,
+                "max_call_ms": round(max(timings), 1) if timings else 0.0,
+                "changed": sorted(changes),
+                "skipped": len(timings) == 0 and error is None,
+                "error": error,
+            }
+
     def apply_lights(self, raw):
-        cfg = checked_lights(raw)
+        requested = checked_lights(raw)
+        cfg = copy.deepcopy(requested)
+        if self.preview_shadow_free:
+            cfg["shadows"] = False
+        started = time.perf_counter()
+        timings = []
+        changes = changed_fields(self.rendered_lights, cfg)
         positions = list(centered_positions(cfg))
         desired = {name for name, *_ in positions}
-        # Do not remove existing lights until the world has responded to an
-        # ordinary command. If the simulation is frozen, raise without mutation.
-        for name, x, y, z in positions:
-            msg = self.light_message(name, x, y, z, cfg)
-            if name in self.light_names:
-                self.call("light_config", msg, self.Light)
-            else:
-                req = self.EntityFactory()
-                req.light.CopyFrom(msg)
-                self.call("create", req, self.EntityFactory)
-                self.light_names.add(name)
-        for name in sorted(self.light_names - desired):
-            req = self.Entity()
-            req.name = name
-            req.type = self.Entity.LIGHT
-            self.call("remove", req, self.Entity)
-            self.light_names.remove(name)
-        self.settings["lights"] = cfg
-        self.last_action = f"Applied {len(desired)} {cfg['kind']} lights"
+        if not changes and desired == self.light_names:
+            self.settings["lights"] = requested
+            self._record_update("lights", started, timings, changes)
+            self.last_action = "Lighting already matches the requested values"
+            return self.last_action
+
+        def timed_call(suffix, request, response_class):
+            t0 = time.perf_counter()
+            try:
+                return self.call(suffix, request, response_class)
+            finally:
+                timings.append((time.perf_counter() - t0) * 1000)
+
+        try:
+            # Gazebo's documented light_config expects a complete Light.
+            # Pure HSV/intensity changes need one request per light, but do
+            # not require light creation/removal or a scene restart.
+            for name, x, y, z in positions:
+                msg = self.light_message(name, x, y, z, cfg)
+                if name in self.light_names:
+                    timed_call("light_config", msg, self.Light)
+                else:
+                    req = self.EntityFactory()
+                    req.light.CopyFrom(msg)
+                    timed_call("create", req, self.EntityFactory)
+                    self.light_names.add(name)
+            for name in sorted(self.light_names - desired):
+                req = self.Entity()
+                req.name = name
+                req.type = self.Entity.LIGHT
+                timed_call("remove", req, self.Entity)
+                self.light_names.remove(name)
+        except (RuntimeError, OSError, ValueError) as exc:
+            # Some commands may have succeeded. Force a complete retry
+            # rather than incorrectly claiming the array is up to date.
+            self.rendered_lights = None
+            self._record_update("lights", started, timings, changes, str(exc))
+            raise
+        self.rendered_lights = copy.deepcopy(cfg)
+        self.settings["lights"] = requested
+        self._record_update("lights", started, timings, changes)
+        ms = self.update_metrics["lights"]["total_ms"]
+        self.last_action = f"Applied {len(desired)} lights in {ms:.0f} ms ({len(timings)} commands)"
         return self.last_action
 
     def apply_materials(self, raw):
         cfg = checked_colors(raw)
-        for group, members in VISUAL_GROUPS.items():
-            rgb = hsv_rgb(cfg[group])
-            for model_name, visual_name in members:
-                parent = {
-                    "court_floor": "floor_link",
-                    "simulation_safety_boundary": "boundary_link",
-                    "net_assembly": "net_link",
-                }[model_name]
-                msg = self.Visual()
-                msg.name = visual_name
-                msg.parent_name = parent
-                for item, multiplier in (("ambient", .8), ("diffuse", 1.0)):
-                    c = getattr(msg.material, item)
-                    c.r, c.g, c.b, c.a = (
-                        rgb[0] * multiplier, rgb[1] * multiplier,
-                        rgb[2] * multiplier, 1.0
-                    )
-                # With partial material fields VisualCmd updates, specular
-                # can otherwise be reset to a default.
-                msg.material.specular.r = 0.02
-                msg.material.specular.g = 0.02
-                msg.material.specular.b = 0.02
-                msg.material.specular.a = 1.0
-                self.call("visual_config", msg, self.Visual)
+        started = time.perf_counter()
+        timings = []
+        groups = dirty_material_groups(self.settings["colors"], cfg)
+        if not groups:
+            self._record_update("materials", started, timings, groups)
+            self.last_action = "Material colors already match"
+            return self.last_action
+        try:
+            for group in groups:
+                members = VISUAL_GROUPS[group]
+                rgb = hsv_rgb(cfg[group])
+                for model_name, visual_name in members:
+                    parent = {
+                        "court_floor": "floor_link",
+                        "simulation_safety_boundary": "boundary_link",
+                        "net_assembly": "net_link",
+                    }[model_name]
+                    msg = self.Visual()
+                    msg.name = visual_name
+                    msg.parent_name = parent
+                    for item, multiplier in (("ambient", .8), ("diffuse", 1.0)):
+                        c = getattr(msg.material, item)
+                        c.r, c.g, c.b, c.a = (
+                            rgb[0] * multiplier, rgb[1] * multiplier,
+                            rgb[2] * multiplier, 1.0
+                        )
+                    msg.material.specular.r = 0.02
+                    msg.material.specular.g = 0.02
+                    msg.material.specular.b = 0.02
+                    msg.material.specular.a = 1.0
+                    t0 = time.perf_counter()
+                    try:
+                        self.call("visual_config", msg, self.Visual)
+                    finally:
+                        timings.append((time.perf_counter() - t0) * 1000.0)
+        except (RuntimeError, OSError, ValueError) as exc:
+            # A partial multi-visual update must be replayable on retry.
+            self._record_update("materials", started, timings, groups, str(exc))
+            raise
         self.settings["colors"] = cfg
-        self.last_action = "Applied court, venue, wall and pole materials"
+        self._record_update("materials", started, timings, groups)
+        ms = self.update_metrics["materials"]["total_ms"]
+        self.last_action = f"Applied {', '.join(groups)} materials in {ms:.0f} ms"
+        return self.last_action
+
+    def configure_preview(self, raw):
+        mode = raw.get("mode", self.preview_mode)
+        if mode not in PREVIEW_PROFILES:
+            raise ValueError("Preview mode must be fast or accurate")
+        shadow_free = raw.get("shadow_free", self.preview_shadow_free)
+        if not isinstance(shadow_free, bool):
+            raise ValueError("shadow_free must be a boolean")
+        if mode == "accurate" and shadow_free:
+            raise ValueError("Accurate preview must use the calibrated shadow setting")
+        previous_mode, previous_shadow_free = self.preview_mode, self.preview_shadow_free
+        self.preview_mode = mode
+        self.preview_shadow_free = shadow_free
+        if previous_shadow_free != shadow_free:
+            try:
+                # Live override only: never modify the YAML / preset shadow
+                # slider value. Accurate mode restores configured shadows.
+                self.apply_lights(self.settings["lights"])
+            except (RuntimeError, OSError, ValueError):
+                self.preview_mode = previous_mode
+                self.preview_shadow_free = previous_shadow_free
+                self.rendered_lights = None
+                raise
+        self.last_action = (
+            f"{mode.title()} dashboard preview; "
+            + ("temporary shadows disabled" if shadow_free else "calibrated shadows active")
+        )
         return self.last_action
 
     def set_pose(self, entity, values):
@@ -453,6 +548,13 @@ class GazeboAdapter:
             return {
                 "sim": stats, "feeds": frame_info,
                 "lights": len(self.light_names), "settings": self.settings,
+                "preview": {
+                    "mode": self.preview_mode,
+                    "shadow_free": self.preview_shadow_free,
+                    "jpeg_quality": PREVIEW_PROFILES[self.preview_mode]["jpeg_quality"],
+                    "note": "Dashboard JPEG mode; Gazebo camera sensors unchanged",
+                },
+                "updates": copy.deepcopy(self.update_metrics),
                 "load_1m": round(os.getloadavg()[0], 2),
                 "cpu_cores": os.cpu_count(),
                 "gpu": gpu,
@@ -487,6 +589,10 @@ class Lab:
         self.settings = settings
         self.adapter = GazeboAdapter(settings)
         self.lock = threading.RLock()
+        # Requests from other browser tabs must not queue stale work behind
+        # a long Gazebo light service transaction.
+        self.command_generation_lock = threading.Lock()
+        self.command_generations = {"/api/lights": 0, "/api/materials": 0, "/api/preview": 0}
         self.owns_simulation = launch
         self.proc = None
         self.workdir = workdir
@@ -500,7 +606,10 @@ class Lab:
 
     def _launch_simulation(self):
         worldfile = self.workdir / "lighting_lab_world.sdf"
-        worldfile.write_text(build_world(self.source, self.settings))
+        worldfile.write_text(build_world(
+            self.source,
+            preview_world_settings(self.settings, self.adapter.preview_shadow_free)
+        ))
         robot = self.settings["robot"]
         command = [
             "ros2", "launch", "scrobot_simulation", "simulation.launch.py",
@@ -550,7 +659,9 @@ class Lab:
         self.settings["venue"] = venue
         try:
             # Validate fully before terminating a working simulation.
-            build_world(self.source, self.settings)
+            build_world(self.source, preview_world_settings(
+                self.settings, self.adapter.preview_shadow_free
+            ))
         except Exception:
             self.settings["venue"] = previous
             raise
@@ -559,10 +670,12 @@ class Lab:
         self._stop_simulation()
         self.spawned = []
         with self.adapter.lock:
+            initial_lights = checked_lights(self.settings["lights"])
+            if self.adapter.preview_shadow_free:
+                initial_lights["shadows"] = False
+            self.adapter.rendered_lights = copy.deepcopy(initial_lights)
             self.adapter.light_names = {
-                name for name, *_ in centered_positions(
-                    checked_lights(self.settings["lights"])
-                )
+                name for name, *_ in centered_positions(initial_lights)
             }
             self.adapter.frames.clear()
             self.adapter.exposures.clear()
@@ -718,7 +831,7 @@ class Handler(BaseHTTPRequestHandler):
         if path not in ("/api/lights", "/api/materials", "/api/robot",
                         "/api/free", "/api/shuttles", "/api/preset",
                         "/api/venue", "/api/orbit", "/api/config",
-                        "/api/publish"):
+                        "/api/publish", "/api/preview"):
             self.reply(404, {"error": "Unknown action"})
             return
         size = int(self.headers.get("Content-Length", "0"))
@@ -729,7 +842,19 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(size))
             if not isinstance(payload, dict):
                 raise ValueError("Expected a JSON object")
+            generation = None
+            if path in self.lab.command_generations:
+                with self.lab.command_generation_lock:
+                    self.lab.command_generations[path] += 1
+                    generation = self.lab.command_generations[path]
             with self.lab.lock:
+                if generation is not None:
+                    with self.lab.command_generation_lock:
+                        stale = self.lab.command_generations[path] != generation
+                    if stale:
+                        self.reply(200, {"ok": True, "superseded": True,
+                                         "message": "Replaced by a newer request"})
+                        return
                 if path == "/api/lights":
                     text = self.lab.adapter.apply_lights(payload)
                 elif path == "/api/materials":
@@ -745,6 +870,8 @@ class Handler(BaseHTTPRequestHandler):
                         payload.get("follow", False),
                         payload.get("copy_now", False)
                     )
+                elif path == "/api/preview":
+                    text = self.lab.adapter.configure_preview(payload)
                 elif path == "/api/config":
                     text = self.lab.save_config(payload)
                 elif path == "/api/publish":
