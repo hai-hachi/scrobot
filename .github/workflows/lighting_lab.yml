@@ -6,6 +6,9 @@ on:
       - real-comparison
     paths:
       - "tools/lighting_lab/**"
+      - "src/scrobot_description/urdf/**"
+      - "src/scrobot_simulation/urdf/**"
+      - "src/scrobot_simulation/launch/**"
       - "src/scrobot_simulation/worlds/badminton_court.sdf"
       - "src/scrobot_simulation/config/lighting_lab.yaml"
       - "docs/real_comparison/lighting_lab.md"
