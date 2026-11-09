@@ -32,12 +32,14 @@ class FakeMarker:
     ADD_MODIFY = 0
     AXIS = 13
     LINE_LIST = 4
+    GUI = 0
 
     def __init__(self):
         self.ns = ""
         self.id = 0
         self.action = 0
         self.type = 0
+        self.visibility = None
         self.lifetime = NS(sec=0, nsec=0)
         self.pose = NS(position=vec(), orientation=NS(w=0.0))
         self.scale = vec()
@@ -91,6 +93,7 @@ class LightFramesTests(unittest.TestCase):
         self.assertEqual(len(axes), 4)
         self.assertEqual(len(stems), 4)
         self.assertTrue(all(m.material.lighting is False for m in axes + stems))
+        self.assertTrue(all(m.visibility == FakeMarker.GUI for m in axes + stems))
         self.assertEqual(sorted(set(a.pose.position.y for a in axes)), [-4.6, 4.6])
         self.assertTrue(all(len(s.point) == 2 for s in stems))
         hidden = create_marker_batch(cfg, False, FakeBatch, FakeMarker)
