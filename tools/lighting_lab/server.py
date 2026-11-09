@@ -32,7 +32,8 @@ import webbrowser
 from scene import (
     WORLD, DEFAULTS, VISUAL_GROUPS, build_world, centered_positions,
     checked_colors, checked_lights, checked_venue, default_settings,
-    hsv_rgb, light_direction, bounded, integer,
+    hsv_rgb, light_direction, bounded, integer, shadow_light_names,
+    INSPECTION_PROFILES,
 )
 from config import read_lab_config, write_lab_config
 from publish import publish_saved_calibration
@@ -111,6 +112,8 @@ class GazeboAdapter:
         self.frame_times = {key: deque(maxlen=20) for key in CAMERAS}
         self.sensor_times = {key: deque(maxlen=80) for key in CAMERAS}
         self.exposures = {}
+        self.image_costs = {key: deque(maxlen=25) for key in CAMERAS}
+        self.frame_sizes = {}
         self.sim_stats = {}
         self.errors = deque(maxlen=12)
         self.last_action = "Calibration world starting"
@@ -214,6 +217,7 @@ class GazeboAdapter:
         data = message.data
         if width < 1 or height < 1 or width > 4096 or height > 2160:
             return
+        started_at = time.perf_counter()
         try:
             if len(data) == width * height * 3:
                 mode = "RGB"
@@ -238,6 +242,8 @@ class GazeboAdapter:
             with self.lock:
                 self.frames[key] = stream.getvalue()
                 self.frame_times[key].append(now)
+                self.frame_sizes[key] = len(self.frames[key])
+                self.image_costs[key].append((time.perf_counter()-started_at) * 1000.0)
                 self.exposures[key] = {
                     "mean": round(avg_brightness * 100, 1),
                     "clipped_bright": round(clipped_bright * 100, 1),
@@ -367,7 +373,7 @@ class GazeboAdapter:
         m.attenuation_constant = cfg["constant"]
         m.attenuation_linear = cfg["linear"]
         m.attenuation_quadratic = cfg["quadratic"]
-        m.cast_shadows = cfg["shadows"]
+        m.cast_shadows = name in shadow_light_names(cfg)
         m.spot_inner_angle = cfg["inner"]
         m.spot_outer_angle = cfg["outer"]
         m.spot_falloff = cfg["falloff"]
@@ -486,9 +492,12 @@ class GazeboAdapter:
                             rgb[0] * multiplier, rgb[1] * multiplier,
                             rgb[2] * multiplier, 1.0
                         )
-                    msg.material.specular.r = 0.02
-                    msg.material.specular.g = 0.02
-                    msg.material.specular.b = 0.02
+                    # Large court, floor and walls stay matte, with no
+                    # expensive texture stacks. Posts retain subtle glints.
+                    spec = 0.02 if group == "poles" else 0.0
+                    msg.material.specular.r = spec
+                    msg.material.specular.g = spec
+                    msg.material.specular.b = spec
                     msg.material.specular.a = 1.0
                     t0 = time.perf_counter()
                     try:
@@ -629,10 +638,25 @@ class GazeboAdapter:
                     "preview_fps": round(preview_fps, 1),
                     "age_s": round(now - timestamps[-1], 1) if timestamps else None,
                     "exposure": self.exposures.get(key),
+                    "jpeg_encode_ms": round(
+                        sum(self.image_costs[key]) / len(self.image_costs[key]), 2
+                    ) if self.image_costs[key] else None,
+                    "jpeg_kib": round(self.frame_sizes.get(key, 0) / 1024, 1),
                 }
             return {
                 "sim": stats, "feeds": frame_info,
                 "lights": len(self.light_names), "settings": self.settings,
+                "shadow_lights": len(shadow_light_names(
+                    self.rendered_lights or self.settings["lights"]
+                )),
+                "render_budget": {
+                    "inspection_profile": self.settings.get("inspection_profile", "lean"),
+                    "inspection_sensors": INSPECTION_PROFILES[
+                        self.settings.get("inspection_profile", "lean")
+                    ],
+                    "robot_visual_mode": self.settings.get("robot_visual_mode", "simple"),
+                    "depth_camera": bool(self.settings.get("enable_depth_camera", False)),
+                },
                 "preview": {
                     "mode": self.preview_mode,
                     "shadow_free": self.preview_shadow_free,
@@ -651,6 +675,7 @@ class GazeboAdapter:
                 "cpu_cores": os.cpu_count(),
                 "gpu": gpu,
                 "last_action": self.last_action,
+                "status_utc": datetime.now(timezone.utc).isoformat(),
                 "errors": list(self.errors)[-5:],
                 "gui_camera": self._gui_status(now),
             }
@@ -713,6 +738,10 @@ class Lab:
             f"z:={robot['z']}",
             f"yaw:={math.radians(robot['yaw'])}",
             "enable_magnetometer:=false",
+            "enable_depth_camera:=" + (
+                "true" if self.settings.get("enable_depth_camera", False) else "false"
+            ),
+            "robot_visual_mode:=" + self.settings.get("robot_visual_mode", "simple"),
             "gz_verbosity:=2",
         ]
         self.loghandle = self.log.open("a")
@@ -776,6 +805,9 @@ class Lab:
             }
             self.adapter.frames.clear()
             self.adapter.exposures.clear()
+            self.adapter.frame_sizes.clear()
+            for costs in self.adapter.image_costs.values():
+                costs.clear()
             self.adapter.sim_stats.clear()
             self.adapter.gui_pose = None
             self.adapter.gui_pose_at = 0.0
@@ -789,6 +821,48 @@ class Lab:
             f"Venue clearance X={venue['clearance_x']:.2f}m, "
             f"Y={venue['clearance_y']:.2f}m; Gazebo restarted. "
             "Re-spawn shuttles if needed."
+        )
+        return self.adapter.last_action
+
+    def apply_render_budget(self, raw):
+        """Restart only the calibration world to adjust ACTUAL sensor work.
+
+        This deliberately does not change D435i RGB image resolution or rate.
+        """
+        if not self.owns_simulation:
+            raise RuntimeError("Render budget cannot restart a --attach session")
+        profile = raw.get("inspection_profile")
+        robot_mode = raw.get("robot_visual_mode")
+        depth = raw.get("depth_camera")
+        if profile not in INSPECTION_PROFILES:
+            raise ValueError("inspection_profile must be lean or full")
+        if robot_mode not in ("full", "simple", "none"):
+            raise ValueError("robot_visual_mode must be full, simple, or none")
+        if not isinstance(depth, bool):
+            raise ValueError("depth_camera must be boolean")
+        keys = ("inspection_profile", "robot_visual_mode", "enable_depth_camera")
+        old = {key: self.settings.get(key) for key in keys}
+        target = {
+            "inspection_profile": profile,
+            "robot_visual_mode": robot_mode,
+            "enable_depth_camera": depth,
+        }
+        if target == old:
+            return "Gazebo sensor/render budget already matches these settings"
+        self.settings.update(target)
+        try:
+            # Validate the derivative SDF before stopping a working world.
+            build_world(self.source, preview_world_settings(
+                self.settings, self.adapter.preview_shadow_free
+            ))
+            self.apply_venue(self.settings["venue"])
+        except Exception:
+            self.settings.update(old)
+            raise
+        self.adapter.last_action = (
+            f"Restarted Lighting Lab: {profile} inspection sensors, "
+            f"{robot_mode} robot visuals, depth {'enabled' if depth else 'disabled'}. "
+            "Reseed shuttle layout if needed."
         )
         return self.adapter.last_action
 
@@ -929,7 +1003,7 @@ class Handler(BaseHTTPRequestHandler):
                         "/api/free", "/api/shuttles", "/api/preset",
                         "/api/venue", "/api/orbit", "/api/config",
                         "/api/publish", "/api/preview",
-                        "/api/light_frames"):
+                        "/api/light_frames", "/api/render_budget"):
             self.reply(404, {"error": "Unknown action"})
             return
         size = int(self.headers.get("Content-Length", "0"))
@@ -972,6 +1046,8 @@ class Handler(BaseHTTPRequestHandler):
                     text = self.lab.adapter.configure_preview(payload)
                 elif path == "/api/light_frames":
                     text = self.lab.adapter.configure_frames(payload)
+                elif path == "/api/render_budget":
+                    text = self.lab.apply_render_budget(payload)
                 elif path == "/api/config":
                     text = self.lab.save_config(payload)
                 elif path == "/api/publish":
@@ -1013,6 +1089,12 @@ def main():
     parser.add_argument("--attach", action="store_true",
                         help="Attach to an already running lighting-lab world")
     parser.add_argument("--preset", type=Path, default=None)
+    parser.add_argument("--inspection-profile", choices=tuple(INSPECTION_PROFILES),
+                        default=None, help="Actual Gazebo inspector sensor quality")
+    parser.add_argument("--robot-visual-mode", choices=("full", "simple", "none"),
+                        default=None, help="Lab robot rendering only; physics unchanged")
+    parser.add_argument("--depth-camera", action="store_true",
+                        help="Also render the 848x480 D435i depth sensor (off by default)")
     args = parser.parse_args()
     configure_warp_safe_network()
     print(
@@ -1031,6 +1113,11 @@ def main():
         parser.error(str(exc))
     if args.preset:
         settings.update(json.loads(args.preset.read_text())["settings"])
+    if args.inspection_profile is not None:
+        settings["inspection_profile"] = args.inspection_profile
+    if args.robot_visual_mode is not None:
+        settings["robot_visual_mode"] = args.robot_visual_mode
+    settings["enable_depth_camera"] = bool(args.depth_camera)
     settings["lights"] = checked_lights(settings.get("lights", {}))
     settings["colors"] = checked_colors(settings.get("colors", {}))
     settings["venue"] = checked_venue(settings.get("venue", {}))
