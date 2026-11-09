@@ -15,15 +15,20 @@ from pathlib import Path
 
 WORLD = "badminton_court"
 MAX_LIGHTS = 32
+INSPECTION_PROFILES = {
+    "lean": {"overhead": ((640, 360), 4.0), "free": ((640, 360), 4.0)},
+    "full": {"overhead": ((960, 540), 8.0), "free": ((800, 450), 8.0)},
+}
 
 DEFAULTS = {
     "lights": {
-        "rows": 2, "cols": 3, "reach_x": 4.5, "reach_y": 4.6,
+        "rows": 2, "cols": 4, "reach_x": 4.5, "reach_y": 4.6,
         "height": 7.0, "kind": "spot",
         "hsv": [55, 3, 95], "intensity": 1.0,
         "range": 18.0, "constant": 0.45, "linear": 0.015,
         "quadratic": 0.001, "inner": 0.70, "outer": 1.20,
-        "falloff": 0.8, "shadows": True, "specular": 0.20,
+        "falloff": 0.8, "shadows": True, "shadow_count": 2,
+        "specular": 0.20,
     },
     "colors": {
         "floor": [210, 12, 8], "walls": [240, 7, 15],
@@ -35,6 +40,9 @@ DEFAULTS = {
     "robot": {"x": 2.0, "y": 3.05, "z": 0.003, "yaw": 180.0},
     "free": {"x": 8.0, "y": -8.0, "z": 6.0, "yaw": 135.0, "pitch": 24.0},
     "shuttles": {"count": 20, "seed": 20261003, "density": "uniform"},
+    # Lab-only rendering budget: these keys are never saved to lighting YAML.
+    "inspection_profile": "lean",
+    "robot_visual_mode": "simple",
 }
 
 
@@ -115,6 +123,9 @@ def checked_lights(raw):
     out.update(raw)
     out["rows"] = integer(out["rows"], 1, 8, "rows")
     out["cols"] = integer(out["cols"], 1, 12, "cols")
+    # shadow_count is an upper bound: shrinking the grid never invalidates
+    # a saved preset, and shadows=false still explicitly turns all off.
+    out["shadow_count"] = integer(out["shadow_count"], 0, MAX_LIGHTS, "shadow_count")
     if out["rows"] * out["cols"] > MAX_LIGHTS:
         raise ValueError(f"Maximum {MAX_LIGHTS} lights (protect Gazebo performance)")
     for key, lo, hi in (
@@ -157,6 +168,35 @@ def centered_positions(light):
             yield f"lab_light_{r:02d}_{c:02d}", x, y, light["height"]
 
 
+def shadow_light_names(light):
+    """Choose spatially separated, center-biased shadow lights deterministically.
+
+    In a 2x4 array with count=2, choose one near each court side, diagonally
+    separated. The other six still illuminate normally but render no shadows.
+    """
+    if not light["shadows"] or light["shadow_count"] <= 0:
+        return set()
+    spots = list(centered_positions(light))
+    count = min(light["shadow_count"], len(spots))
+    if count == len(spots):
+        return {name for name, *_ in spots}
+    rx = max(float(light["reach_x"]), 1.0)
+    ry = max(float(light["reach_y"]), 1.0)
+    center = lambda p: (p[1] / rx) ** 2 + (p[2] / ry) ** 2
+    selected = [min(spots, key=lambda p: (center(p), p[2], p[1]))]
+    while len(selected) < count:
+        remaining = [p for p in spots if p not in selected]
+        def score(p):
+            spacing = min(
+                ((p[1] - other[1]) / rx) ** 2 +
+                ((p[2] - other[2]) / ry) ** 2
+                for other in selected
+            )
+            return spacing - 0.35 * center(p)
+        selected.append(max(remaining, key=lambda p: (score(p), -center(p), p[2], p[1])))
+    return {p[0] for p in selected}
+
+
 def light_direction(x, y, z):
     # Ceiling grid lights point straight down. The previous inward Y aim
     # made the illuminated footprint bunch near court center even when
@@ -174,7 +214,7 @@ def make_light(name, x, y, z, settings):
         tuple(min(1, v * settings["specular"]) for v in rgb)
     )
     ET.SubElement(root, "intensity").text = str(settings["intensity"])
-    ET.SubElement(root, "cast_shadows").text = str(settings["shadows"]).lower()
+    ET.SubElement(root, "cast_shadows").text = str(name in shadow_light_names(settings)).lower()
     ET.SubElement(root, "direction").text = rgb_text(light_direction(x, y, z), False)
     attenuation = ET.SubElement(root, "attenuation")
     for key, tag in (("range", "range"), ("constant", "constant"),
@@ -188,11 +228,16 @@ def make_light(name, x, y, z, settings):
     return root
 
 
-def material_for(rgb):
+def material_for(rgb, group="court"):
+    # Court / walls / venue are matte, already plain-colored primitives.
+    # Avoid reflective effects and extra texture maps, keep poles' original
+    # minor highlight so there is no misleading change to their appearance.
     material = ET.Element("material")
     ET.SubElement(material, "ambient").text = rgb_text(tuple(0.8 * v for v in rgb))
     ET.SubElement(material, "diffuse").text = rgb_text(rgb)
-    ET.SubElement(material, "specular").text = "0.02 0.02 0.02 1"
+    ET.SubElement(material, "specular").text = (
+        "0.02 0.02 0.02 1" if group == "poles" else "0 0 0 1"
+    )
     return material
 
 
@@ -223,7 +268,7 @@ def configure_model(world, colors):
             old = visual.find("material")
             if old is not None:
                 visual.remove(old)
-            visual.append(material_for(rgb))
+            visual.append(material_for(rgb, group))
 
 
 MAT_LENGTH = 15.4
@@ -317,6 +362,10 @@ def build_world(source, settings):
     lights = checked_lights(settings.get("lights", {}))
     colors = checked_colors(settings.get("colors", {}))
     venue = checked_venue(settings.get("venue", {}))
+    profile = settings.get("inspection_profile", "lean")
+    if profile not in INSPECTION_PROFILES:
+        raise ValueError("Invalid inspection camera profile: " + str(profile))
+    inspection = INSPECTION_PROFILES[profile]
     root = ET.parse(source).getroot()
     world = root.find("world")
     if world is None or world.get("name") != WORLD:
@@ -337,7 +386,8 @@ def build_world(source, settings):
     # Gazebo cameras look along local +X; positive pitch looks downward.
     world.append(camera_entity("lab_overhead_camera", "/lighting_lab/overhead",
                                (10.5, 0, 9.5, 0, .736, math.pi),
-                               resolution=(960, 540), hz=8.0, hfov=1.56))
+                               resolution=inspection["overhead"][0],
+                               hz=inspection["overhead"][1], hfov=1.56))
     free = settings.get("free", DEFAULTS["free"])
     if "orientation" in free:
         # GUI orbit poses can be farther away or rolled relative to the court.
@@ -362,6 +412,7 @@ def build_world(source, settings):
                 0, math.radians(bounded(free["pitch"], -60, 88, "free.pitch")),
                 math.radians(bounded(free["yaw"], -360, 360, "free.yaw")))
     world.append(camera_entity("lab_free_camera", "/lighting_lab/free", pose,
-                               resolution=(800, 450), hz=8.0, hfov=1.3))
+                               resolution=inspection["free"][0],
+                               hz=inspection["free"][1], hfov=1.3))
     return '<?xml version="1.0"?>\n' + ET.tostring(root, encoding="unicode")
 
