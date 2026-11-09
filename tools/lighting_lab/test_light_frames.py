@@ -32,6 +32,7 @@ class FakeMarker:
     ADD_MODIFY = 0
     AXIS = 13
     LINE_LIST = 4
+    CYLINDER = 2
     GUI = 0
 
     def __init__(self):
@@ -89,13 +90,15 @@ class LightFramesTests(unittest.TestCase):
         self.assertEqual(len(batch.marker), 9)
         self.assertEqual(batch.marker[0].action, FakeMarker.DELETE_ALL)
         axes = [m for m in batch.marker if m.type == FakeMarker.AXIS]
-        stems = [m for m in batch.marker if m.type == FakeMarker.LINE_LIST]
+        stems = [m for m in batch.marker if m.type == FakeMarker.CYLINDER]
         self.assertEqual(len(axes), 4)
         self.assertEqual(len(stems), 4)
         self.assertTrue(all(m.material.lighting is False for m in axes + stems))
         self.assertTrue(all(m.visibility == FakeMarker.GUI for m in axes + stems))
         self.assertEqual(sorted(set(a.pose.position.y for a in axes)), [-4.6, 4.6])
-        self.assertTrue(all(len(s.point) == 2 for s in stems))
+        self.assertTrue(all(s.scale.z > 0 for s in stems))
+        self.assertEqual(sorted(set(s.pose.position.y for s in stems)), [-4.6, 4.6])
+        self.assertTrue(all(s.scale.x == 0.018 for s in stems))
         hidden = create_marker_batch(cfg, False, FakeBatch, FakeMarker)
         self.assertEqual(len(hidden.marker), 1)
         self.assertEqual(hidden.marker[0].action, FakeMarker.DELETE_ALL)
