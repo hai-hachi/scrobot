@@ -103,6 +103,24 @@ class PerformanceRuntimeTests(unittest.TestCase):
         adapter.apply_lights(updated)
         self.assertEqual(sorted(set(adapter.light_y_positions)), [0.0])
 
+    def test_shadow_caster_count_changes_without_disabling_fill_lights(self):
+        adapter = FakeAdapter()
+        requested = copy.deepcopy(adapter.settings["lights"])
+        requested["shadow_count"] = 0
+        adapter.apply_lights(requested)
+        self.assertEqual(len(adapter.calls), 8)
+        self.assertFalse(any(shadow for _, _, shadow in adapter.calls))
+        adapter.calls.clear()
+        requested["shadow_count"] = 4
+        adapter.apply_lights(requested)
+        self.assertEqual(len(adapter.calls), 8)
+        self.assertEqual(sum(bool(shadow) for _, _, shadow in adapter.calls), 4)
+        adapter.calls.clear()
+        requested["shadows"] = False
+        adapter.apply_lights(requested)
+        self.assertFalse(any(shadow for _, _, shadow in adapter.calls))
+        self.assertEqual(len(adapter.calls), 8)
+
     def test_shadow_free_temporary_and_restore(self):
         adapter = FakeAdapter()
         adapter.configure_preview({"mode": "fast", "shadow_free": True})
