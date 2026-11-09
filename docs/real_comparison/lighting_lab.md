@@ -11,8 +11,9 @@ production world SDF. The robot, Nav2 and mission code are not modified.
 | Area | Control | Defaults |
 | --- | --- | --- |
 | Light grid | Rows × columns (max 32 lights), spot/point type | 2 × 3 spot |
-| X/Y light reach | Distance from court center **to outermost lights**, each side | ±4.5 m X, ±4.6 m Y |
+| X/Y light reach | Distance from court center **to outermost fixtures**, each side; Y requires ≥2 rows | ±4.5 m X, ±4.6 m Y |
 | Light elevation | Z above venue floor | 7.0 m |
+| Light XYZ frames | GUI-only RGB axes at fixture locations with yellow floor-projection guides | Shown by default; togglable |
 | Light HSV color | Hue (0–360°), saturation (0–100%), value (0–100%) | H=55°, S=3%, V=95% |
 | Light intensity | Gazebo light intensity 0–4× (not calibrated lux) | 1× |
 | Light rendering | Shadow toggle, range, attenuation, spot inner/outer cone, falloff, specular | Original court approximations |
@@ -36,6 +37,49 @@ the robot's supporting collision floor. Existing random shuttle models are
 cleared; use **Replace shuttle layout** to spawn them again. Lighting and
 material settings are retained.
 
+## Light XYZ frames and Y-range calibration
+
+With **Show light XYZ frames in Gazebo GUI** enabled, the Gazebo GUI
+MarkerManager draws an XYZ axis at each light position, plus a yellow
+vertical guide down to the venue floor. Frames are markers, **not physical
+models**, so they do not affect collision, the lab camera sensors, shadows,
+saved YAML or the production SDF. They can be hidden in the dashboard.
+
+The **Applied frame positions** readout shows the last successfully
+applied light locations. For **2 rows** and Y reach **6 m**, Y positions
+must be **−6 m** and **+6 m**. For **1 row**, every light must be at
+**Y=0** regardless of the Y-reach slider; with **1 column**, X is likewise
+fixed at 0. This is necessary to keep a single row/column centered.
+
+Spotlights now aim **vertically down** along (0,0,−1), instead of aiming
+inward toward Y=0. This makes the illuminated pools align more naturally
+with the slider positions. Spot cone angle, attenuation and mounting height
+still determine the actual footprint on the floor; Y reach describes
+fixture positions, not the pool boundaries.
+
+The frame markers are shown only when Gazebo's GUI provides its
+`/marker_array` service. If frames are missing, consult the dashboard's
+**Frame overlay** status, ensure the Gazebo GUI is open with the Scene
+Manager, and verify it with `gz service -l | grep marker_array`. The
+frame marker worker is asynchronous and never blocks lighting commands.
+If the GUI is closed, the dashboard and normal simulation still work.
+
+**Why Gazebo's 3D UI may lag more than the dashboard:** Gazebo's desktop
+scene renders all shaded objects and shadow maps in its own client-side Ogre2
+scene, while the browser displays compressed and rate-limited camera JPEGs.
+A seemingly smooth dashboard does not prove the Gazebo 3D renderer is fast.
+In addition, GUI orbit-follow previously sent `set_pose` requests roughly
+2.2 times per second; those can generate large scene broadcasts. The
+follow loop now waits briefly for camera motion to settle and updates at
+most once per second to avoid feeding back changes while you drag.
+
+If the GUI still stutters, compare it with (1) orbit follow disabled,
+(2) temporarily disabled shadows in Fast Preview, (3) fewer active lights,
+and (4) light frames hidden. Watch GPU utilization and RTF; the GUI
+renderer has no separate FPS meter in this dashboard. The lab's Fast
+Preview option only reduces browser JPEG work, **not** the desktop GUI
+rendering resolution or Gazebo sensor load.
+
 ## Three simultaneous camera views
 
 - **Robot POV:** the actual simulated D435i RGB camera. Click on the court
@@ -46,7 +90,7 @@ material settings are retained.
   by the Gazebo desktop orbit view. **Copy current orbit view** transfers
   the Gazebo GUI camera pose to this view. Check **Follow orbit live**
   to keep the inspector following its moving/orbiting camera, sampling
-  roughly twice a second. The dashboard no longer shows manual XYZ,
+  at most once a second after movement settles. The dashboard no longer shows manual XYZ,
   yaw/pitch, drag, or WASD controls for the free inspector.
   It reads the documented `/gui/camera/pose` Gazebo Transport topic
   from the Gazebo Camera Tracking plugin. Gazebo desktop must be open and
