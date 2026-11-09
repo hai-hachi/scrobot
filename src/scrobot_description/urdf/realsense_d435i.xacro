@@ -51,6 +51,7 @@
         Keep the existing project mesh convention: the visual mesh
         is located at the tripod screw frame.
       -->
+      <xacro:if value="${scrobot_visual_mode == 'full'}">
       <visual name="${name}_d435i_visual">
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
@@ -58,6 +59,7 @@
         </geometry>
         <material name="sensor_blue"/>
       </visual>
+      </xacro:if>
     </link>
 
     <joint name="${name}_mount_joint" type="fixed">
