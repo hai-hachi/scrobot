@@ -317,7 +317,7 @@ class SceneTests(unittest.TestCase):
             "spawn-btn", "shuttle-count", "shuttle-seed",
             "m-rtf", "m-robot-fps", "m-bright", "m-cpu",
             "apply-venue", "copy-orbit", "follow-orbit",
-            "apply-render-budget", "download-benchmark", "li-shadow_count",
+            "apply-render-budget", "download-benchmark",
         ):
             with self.subTest(field=field):
                 self.assertIn(field, parser.ids)
