@@ -53,9 +53,11 @@ class PublishTests(unittest.TestCase):
                          [-3.0, -3.0, 3.0, 3.0])
         for light in world.findall("light"):
             self.assertEqual(float(light.findtext("intensity")), 2.5)
-            self.assertEqual(light.findtext("cast_shadows"), "true")
+            self.assertIn(light.findtext("cast_shadows"), ("true", "false"))
             self.assertEqual([float(v) for v in light.findtext("diffuse").split()],
                              [0.7, 0, 0, 1])
+        self.assertEqual(sum(l.findtext("cast_shadows") == "true" for l in world.findall("light")), 2)
+        self.assertTrue(all(l.findtext("direction") == "0.0 0.0 -1.0" for l in world.findall("light")))
         floor = model(world, "court_floor")
         self.assertEqual(
             floor.findtext(".//collision[@name='floor_collision']/geometry/box/size"),
