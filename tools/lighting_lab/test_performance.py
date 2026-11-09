@@ -49,11 +49,16 @@ class FakeAdapter:
         self.EntityFactory = FakeFactory
         self.Entity = FakeEntity
         self.calls = []
+        self.light_y_positions = []
+        self.frames_dirty = False
+        self.frames_wake = threading.Event()
         self.last_action = ""
 
     def call(self, suffix, msg, cls, timeout=4000):
         self.calls.append((suffix, getattr(msg, "name", None),
                            getattr(msg, "cast_shadows", None)))
+        if hasattr(msg, "pose") and hasattr(msg.pose.position, "y"):
+            self.light_y_positions.append(msg.pose.position.y)
         return True
 
     light_message = GazeboAdapter.light_message
@@ -84,6 +89,19 @@ class PerformanceRuntimeTests(unittest.TestCase):
         adapter.calls.clear()
         adapter.apply_lights(requested)
         self.assertEqual(adapter.calls, [])
+
+    def test_two_rows_reach_y_updates_real_gazebo_light_poses(self):
+        adapter = FakeAdapter()
+        updated = copy.deepcopy(adapter.settings["lights"])
+        updated["reach_y"] = 6.25
+        adapter.apply_lights(updated)
+        self.assertEqual(sorted(set(adapter.light_y_positions)), [-6.25, 6.25])
+        self.assertTrue(adapter.frames_dirty)
+        self.assertTrue(adapter.frames_wake.is_set())
+        adapter.light_y_positions.clear()
+        updated["rows"] = 1
+        adapter.apply_lights(updated)
+        self.assertEqual(sorted(set(adapter.light_y_positions)), [0.0])
 
     def test_shadow_free_temporary_and_restore(self):
         adapter = FakeAdapter()
