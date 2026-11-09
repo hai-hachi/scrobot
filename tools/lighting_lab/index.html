@@ -145,7 +145,10 @@
       </label>
       <div class="colorhead"><strong>Light color · HSV</strong><span class="swatch" id="sw-light"></span></div>
       <div class="triple" id="light-hsv"></div>
-      <p class="helper">X/Y reach is measured from court center to the outermost lights (± reach). HSV sets light color; intensity independently controls Gazebo light output (not calibrated lux).</p>
+      <p class="helper">X/Y reach is measured from court center to the outermost light positions (± reach). HSV sets light color; intensity independently controls Gazebo output (not calibrated lux). Spotlights aim straight down; the illuminated footprint additionally depends on the cone angle and attenuation.</p>
+      <label class="toggle"><input type="checkbox" id="show-light-frames" checked onchange="toggleLightFrames()"> Show light XYZ frames in Gazebo GUI</label>
+      <p class="helper" id="light-frame-status">Waiting for Gazebo GUI marker service…</p>
+      <p class="helper" id="light-y-layout">Applied light Y positions: waiting for Gazebo</p>
       <div class="buttonrow">
         <button class="primary" id="apply-lights" onclick="applyLights()">Apply lighting to Gazebo</button>
         <label class="toggle" style="margin:0"><input id="auto-light" type="checkbox"> Auto on release</label>
@@ -393,6 +396,13 @@ function queueApply(kind, payload){
 }
 function applyLights(){queueApply("lights",lightPayload());}
 function applyMaterials(){queueApply("materials",materialsPayload());}
+async function toggleLightFrames(){
+ const show=$("show-light-frames").checked;
+ const ok=await action("/api/light_frames",{show},null);
+ if(!ok && lastStatus?.light_frames){
+  $("show-light-frames").checked=lastStatus.light_frames.requested;
+ }
+}
 async function setPreviewMode(){
  const mode=$("preview-mode").value, shadow_free=$("shadow-preview").checked;
  if(mode==="accurate" && shadow_free){
@@ -541,6 +551,24 @@ async function getStatus(){
       kind+" update: "+m.total_ms+" ms · "+m.calls+" commands · "+
       "max call "+m.max_call_ms+" ms"+
       (m.skipped?" · no changes":"")+(m.error?" · ERROR: "+m.error:"");
+  }
+  if(s.light_extent){
+   const e=s.light_extent;
+   const x=(e.min_x.toFixed(2)+" … "+e.max_x.toFixed(2));
+   const y=(e.min_y.toFixed(2)+" … "+e.max_y.toFixed(2));
+   $("light-y-layout").textContent="Applied frame positions: X "+x+" m · Y "+y+
+    " m · Z "+e.height.toFixed(2)+" m · "+e.count+" lights"+
+    (!e.y_reach_active?" · Y reach inactive with 1 row (Y=0)":"")+
+    (!e.x_reach_active?" · X reach inactive with 1 column (X=0)":"");
+  }
+  if(s.light_frames){
+   const f=s.light_frames;
+   $("show-light-frames").checked=f.requested;
+   $("light-frame-status").textContent=f.error?"Frame overlay: "+f.error:
+    f.pending?"Frame overlay: updating Gazebo GUI…":
+    f.requested?(f.active?"XYZ frames and floor projection markers visible in Gazebo GUI":
+                 "Waiting for Gazebo GUI marker service"):
+    "XYZ frames hidden";
   }
   const gui=s.gui_camera;
   if(gui){
