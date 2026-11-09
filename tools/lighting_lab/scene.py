@@ -158,10 +158,11 @@ def centered_positions(light):
 
 
 def light_direction(x, y, z):
-    # Aim towards the nearest point on the middle service corridor.
-    dx, dy, dz = 0.0, -y, -z
-    magnitude = math.sqrt(dx * dx + dy * dy + dz * dz)
-    return dx / magnitude, dy / magnitude, dz / magnitude
+    # Ceiling grid lights point straight down. The previous inward Y aim
+    # made the illuminated footprint bunch near court center even when
+    # light fixtures were physically at +/-reach_y.
+    # In SDF, direction is in the light's local frame (pose RPY is zero).
+    return 0.0, 0.0, -1.0
 
 
 def make_light(name, x, y, z, settings):
