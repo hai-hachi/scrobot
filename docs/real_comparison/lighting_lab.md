@@ -217,6 +217,41 @@ python3 tools/lighting_lab/server.py --port 8766 --no-browser
 python3 tools/lighting_lab/server.py --preset /path/to/saved_preset.json
 ```
 
+## Interactive preview performance
+
+The Lighting Lab has two **dashboard preview-quality modes**, independent
+of the Gazebo sensor configuration:
+
+- **Fast** (default): previews are JPEG 60, resized to at most 640 × 360
+  and decoded at a reduced rate. Gazebo sensor frequencies, resolutions,
+  camera geometry, and physics remain unchanged.
+- **Accurate**: larger JPEG 82 at up to 860 × 490, with a faster display
+  refresh. This is a dashboard preview-quality setting, **not** a substitute
+  for saving the original camera stream for pixel-level comparison.
+
+**Temporarily disable light shadows** in Fast mode to check whether
+shadow rendering dominates your latency. This is applied to the running
+Gazebo lights, not to the saved calibration shadow toggle, YAML, or main SDF.
+Turn this option off before visually assessing shadow realism or capturing
+a reference screenshot. Switching to Accurate mode automatically restores
+the saved shadow setting. The final comparison must use calibrated shadows.
+
+The **Last lighting update** and **Last material update** timing labels
+show total server elapsed time, number of synchronous Gazebo service
+requests and slowest individual service request. A slow command time
+with normal real-time factor suggests service latency. A low real-time
+factor that recovers when shadows are off suggests rendering pressure.
+These metrics are diagnostic, not calibrated physical measurements.
+
+The dashboard now coalesces slider updates: it sends at most one HTTP
+request at a time per light/material category, replacing pending slider
+values with the newest state. The server also rejects superseded requests
+queued by other tabs and skips identical settings. Material changes send
+updates only for changed material groups. Gazebo light updates still send
+a complete message per light because partial light messages are not used
+without confirmed supported semantics. Camera preview requests no longer
+overlap for the same camera.
+
 ## Recommended first real-comparison experiment
 
 1. Fix the robot pose, camera settings, shuttle seed and venue clearance.
