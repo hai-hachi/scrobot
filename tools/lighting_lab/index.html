@@ -150,6 +150,18 @@
         <button class="primary" id="apply-lights" onclick="applyLights()">Apply lighting to Gazebo</button>
         <label class="toggle" style="margin:0"><input id="auto-light" type="checkbox"> Auto on release</label>
       </div>
+      <div class="divider"></div>
+      <h3>Preview performance</h3>
+      <label>Dashboard preview quality
+        <select id="preview-mode" onchange="setPreviewMode()">
+          <option value="fast" selected>Fast · smaller JPEG / lower update rate</option>
+          <option value="accurate">Accurate · larger JPEG / higher update rate</option>
+        </select>
+      </label>
+      <label class="toggle"><input type="checkbox" id="shadow-preview" onchange="setPreviewMode()"> Temporarily disable light shadows</label>
+      <p class="helper">Fast/accurate changes browser preview processing only, not Gazebo sensor resolution or render workload. Shadow-free preview changes the live Gazebo lights temporarily. Turn it off before saving screenshots or comparing realism; the calibration YAML and shadow slider remain unchanged.</p>
+      <p class="helper" id="light-update-timing">Last lighting update: waiting</p>
+      <p class="helper" id="material-update-timing">Last material update: waiting</p>
     </article>
 
     <article class="panel">
@@ -360,8 +372,40 @@ async function action(path,data,button){
  }catch(e){toast(e.message,true);return false;}
  finally{if(b)b.disabled=false;}
 }
-async function applyLights(){await action("/api/lights",lightPayload(),"apply-lights");}
-async function applyMaterials(){await action("/api/materials",materialsPayload(),"apply-material");}
+// Coalesce rapid slider events: a single active request, one latest pending
+// snapshot per action. Older queued values are replaced, never piled up.
+const channels={lights:{busy:false,pending:null},materials:{busy:false,pending:null}};
+function queueApply(kind, payload){
+ const channel=channels[kind];
+ channel.pending=JSON.parse(JSON.stringify(payload));
+ if(channel.busy)return;
+ channel.busy=true;
+ void (async()=>{
+  try{
+   while(channel.pending!==null){
+    const snapshot=channel.pending;
+    channel.pending=null;
+    await action(kind==="lights"?"/api/lights":"/api/materials",
+                 snapshot,kind==="lights"?"apply-lights":"apply-material");
+   }
+  }finally{channel.busy=false;}
+ })();
+}
+function applyLights(){queueApply("lights",lightPayload());}
+function applyMaterials(){queueApply("materials",materialsPayload());}
+async function setPreviewMode(){
+ const mode=$("preview-mode").value, shadow_free=$("shadow-preview").checked;
+ if(mode==="accurate" && shadow_free){
+  $("shadow-preview").checked=false;
+ }
+ const ok=await action("/api/preview",{
+  mode,shadow_free:$("shadow-preview").checked
+ },null);
+ if(!ok && lastStatus?.preview){
+  $("preview-mode").value=lastStatus.preview.mode;
+  $("shadow-preview").checked=lastStatus.preview.shadow_free;
+ }
+}
 const venuePayload=()=>({clearance_x:n("venue-clearance_x"),clearance_y:n("venue-clearance_y")});
 async function applyVenue(){
  if(!confirm("Updating venue floor collision and walls restarts the calibration Gazebo world. Current shuttles will be cleared. Continue?"))return;
@@ -371,13 +415,14 @@ async function applyVenue(){
   toast("Venue rebuilt. Gazebo is restarting; re-spawn shuttles once ready.");
  }
 }
+const applyTimers={lights:null,materials:null};
 function autoApply(section,actionFn){
- let timer=null;
- const parent=section;
- parent.addEventListener("change",e=>{
-  const enabled=(section.id==="lightfields"||section.id==="light-hsv")?$("auto-light").checked:$("auto-material").checked;
+ const kind=(section.id==="lightfields"||section.id==="light-hsv")?"lights":"materials";
+ section.addEventListener("change",()=>{
+  const enabled=kind==="lights"?$("auto-light").checked:$("auto-material").checked;
   if(!enabled)return;
-  clearTimeout(timer);timer=setTimeout(actionFn,650);
+  clearTimeout(applyTimers[kind]);
+  applyTimers[kind]=setTimeout(actionFn,350);
  });
 }
 autoApply($("lightfields"),applyLights);
@@ -453,7 +498,10 @@ function drawRtfTrend(){
 }
 async function savePreset(){await action("/api/preset",{name:$("preset-name").value},null);}
 let lastStatus=null;
+let statusBusy=false;
 async function getStatus(){
+ if(statusBusy)return;
+ statusBusy=true;
  try{
   const response=await fetch("/api/status",{cache:"no-store"});
   if(!response.ok)throw Error("No backend");
@@ -482,6 +530,18 @@ async function getStatus(){
   $("detail-age").textContent=s.sim.stats_age_s===null?"—":s.sim.stats_age_s+" s";
   $("detail-high").textContent=exp?exp.clipped_bright+"%":"—";
   $("detail-low").textContent=exp?exp.clipped_dark+"%":"—";
+  if(s.preview){
+   // Do not overwrite an actively changed selector while the request runs.
+   if(document.activeElement!==$("preview-mode"))$("preview-mode").value=s.preview.mode;
+   if(document.activeElement!==$("shadow-preview"))$("shadow-preview").checked=s.preview.shadow_free;
+  }
+  for(const [kind,id] of [["lights","light-update-timing"],["materials","material-update-timing"]]){
+   const m=s.updates?.[kind];
+   $(id).textContent=!m?"Last "+kind+" update: waiting":
+      kind+" update: "+m.total_ms+" ms · "+m.calls+" commands · "+
+      "max call "+m.max_call_ms+" ms"+
+      (m.skipped?" · no changes":"")+(m.error?" · ERROR: "+m.error:"");
+  }
   const gui=s.gui_camera;
   if(gui){
    $("orbit-state").textContent=gui.available?
@@ -507,6 +567,7 @@ async function getStatus(){
    window.lastErr=s.errors.join("|");toast(s.errors[s.errors.length-1],true);
   }
  }catch(e){$("conn").textContent="Disconnected";}
+ finally{statusBusy=false;}
 }
 let controlsHydrated=false;
 function syncControls(settings){
@@ -548,8 +609,10 @@ function syncControls(settings){
  }
  updateSwatches();
 }
-const activeImages={};
+const activeImages={},frameBusy={robot:false,overhead:false,free:false};
 async function updateFeed(key){
+ if(frameBusy[key])return;
+ frameBusy[key]=true;
  try{
   const response=await fetch("/frame/"+key+"?t="+Date.now(),{cache:"no-store"});
   if(!response.ok)return;
@@ -558,12 +621,21 @@ async function updateFeed(key){
   const img=$("img-"+key);
   const previous=activeImages[key];
   img.onload=()=>{if(previous)URL.revokeObjectURL(previous);};
-  img.src=url;activeImages[key]=url;
+  img.src=url;
+  activeImages[key]=url;
   $("feed-"+key).classList.add("has-frame");
  }catch(e){}
+ finally{frameBusy[key]=false;}
 }
 setInterval(getStatus,1100);
-setInterval(()=>{for(const key of ["robot","overhead","free"])updateFeed(key);},380);
+setInterval(()=>{
+ const minInterval=$("preview-mode").value==="fast"?600:380;
+ const now=Date.now();
+ if(!window.lastPreviewTick||now-window.lastPreviewTick>=minInterval){
+  window.lastPreviewTick=now;
+  for(const key of ["robot","overhead","free"])updateFeed(key);
+ }
+},190);
 getStatus();
 </script>
 </body>
