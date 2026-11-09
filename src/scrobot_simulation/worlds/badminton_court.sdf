@@ -106,7 +106,7 @@
       <shadows>true</shadows>
     </scene>
 
-    <light type="spot" name="court_light_r00_c00">
+    <light type="spot" name="court_light_00_00">
       <pose>-4.5000 -4.6000 7.0 0 0 0</pose>
       <diffuse>0.95000 0.94762 0.92150 1</diffuse>
       <specular>0.19000 0.18952 0.18430 1</specular>
@@ -126,7 +126,7 @@
       <cast_shadows>false</cast_shadows>
     </light>
 
-    <light type="spot" name="court_light_r00_c01">
+    <light type="spot" name="court_light_00_01">
       <pose>-1.5000 -4.6000 7.0 0 0 0</pose>
       <diffuse>0.95000 0.94762 0.92150 1</diffuse>
       <specular>0.19000 0.18952 0.18430 1</specular>
@@ -146,7 +146,7 @@
       <cast_shadows>true</cast_shadows>
     </light>
 
-    <light type="spot" name="court_light_r00_c02">
+    <light type="spot" name="court_light_00_02">
       <pose>1.5000 -4.6000 7.0 0 0 0</pose>
       <diffuse>0.95000 0.94762 0.92150 1</diffuse>
       <specular>0.19000 0.18952 0.18430 1</specular>
@@ -166,7 +166,7 @@
       <cast_shadows>false</cast_shadows>
     </light>
 
-    <light type="spot" name="court_light_r00_c03">
+    <light type="spot" name="court_light_00_03">
       <pose>4.5000 -4.6000 7.0 0 0 0</pose>
       <diffuse>0.95000 0.94762 0.92150 1</diffuse>
       <specular>0.19000 0.18952 0.18430 1</specular>
@@ -186,7 +186,7 @@
       <cast_shadows>false</cast_shadows>
     </light>
 
-    <light type="spot" name="court_light_r01_c00">
+    <light type="spot" name="court_light_01_00">
       <pose>-4.5000 4.6000 7.0 0 0 0</pose>
       <diffuse>0.95000 0.94762 0.92150 1</diffuse>
       <specular>0.19000 0.18952 0.18430 1</specular>
@@ -206,7 +206,7 @@
       <cast_shadows>false</cast_shadows>
     </light>
 
-    <light type="spot" name="court_light_r01_c01">
+    <light type="spot" name="court_light_01_01">
       <pose>-1.5000 4.6000 7.0 0 0 0</pose>
       <diffuse>0.95000 0.94762 0.92150 1</diffuse>
       <specular>0.19000 0.18952 0.18430 1</specular>
@@ -226,7 +226,7 @@
       <cast_shadows>false</cast_shadows>
     </light>
 
-    <light type="spot" name="court_light_r01_c02">
+    <light type="spot" name="court_light_01_02">
       <pose>1.5000 4.6000 7.0 0 0 0</pose>
       <diffuse>0.95000 0.94762 0.92150 1</diffuse>
       <specular>0.19000 0.18952 0.18430 1</specular>
@@ -246,7 +246,7 @@
       <cast_shadows>true</cast_shadows>
     </light>
 
-    <light type="spot" name="court_light_r01_c03">
+    <light type="spot" name="court_light_01_03">
       <pose>4.5000 4.6000 7.0 0 0 0</pose>
       <diffuse>0.95000 0.94762 0.92150 1</diffuse>
       <specular>0.19000 0.18952 0.18430 1</specular>
