@@ -37,6 +37,7 @@ from scene import (
 from config import read_lab_config, write_lab_config
 from publish import publish_saved_calibration
 from performance import PREVIEW_PROFILES, changed_fields, dirty_material_groups, preview_world_settings
+from light_frames import GEOMETRY_KEYS, create_marker_batch, extent
 
 
 SOURCE = Path(__file__).resolve().parents[2] / (
@@ -86,6 +87,14 @@ class GazeboAdapter:
         self.GzImage, self.WorldStatistics = GzImage, WorldStatistics
         self.Boolean, self.Entity, self.EntityFactory = Boolean, Entity, EntityFactory
         self.Light, self.Pose, self.Visual, self.PILImage = Light, Pose, Visual, Image
+        try:
+            from gz.msgs10.marker_pb2 import Marker
+            from gz.msgs10.marker_v_pb2 import Marker_V
+            self.Marker, self.Marker_V = Marker, Marker_V
+        except ImportError:
+            # The lab remains usable if optional GUI marker bindings are
+            # unavailable; the status panel explains why frames are absent.
+            self.Marker, self.Marker_V = None, None
         self.node = Node()
         self.lock = threading.RLock()
         self._gpu_cached_at = 0.0
@@ -105,6 +114,17 @@ class GazeboAdapter:
         self.sim_stats = {}
         self.errors = deque(maxlen=12)
         self.last_action = "Calibration world starting"
+        self.frames_visible = True
+        self.frames_dirty = True
+        self.frames_error = None
+        self.frames_last_ok = False
+        self.frames_updated_at = None
+        self.frames_stop = threading.Event()
+        self.frames_wake = threading.Event()
+        self.frames_thread = threading.Thread(
+            target=self._frame_loop, name="GazeboLightFrames", daemon=True
+        )
+        self.frames_thread.start()
         self.gui_pose = None
         self.gui_pose_at = 0.0
         self.gui_follow = False
@@ -123,6 +143,61 @@ class GazeboAdapter:
             if not ok:
                 self.errors.append(f"Could not subscribe to {topic}")
         self.node.subscribe(WorldStatistics, f"/world/{WORLD}/stats", self.on_stats)
+
+    def _frame_loop(self):
+        # MarkerManager lives in the Gazebo GUI/render scene. Separate from
+        # the simulation command lock so a slow/unavailable GUI cannot stall
+        # Gazebo lighting changes, camera data, or dashboard HTTP endpoints.
+        while not self.frames_stop.is_set():
+            self.frames_wake.wait(timeout=3.0)
+            self.frames_wake.clear()
+            if self.frames_stop.is_set():
+                break
+            with self.lock:
+                if not self.frames_dirty:
+                    continue
+                visible = self.frames_visible
+                current = copy.deepcopy(self.rendered_lights or self.settings["lights"])
+            if self.Marker is None or self.Marker_V is None:
+                with self.lock:
+                    self.frames_error = "Gazebo GUI marker bindings missing: gz.msgs10.marker_v_pb2"
+                continue
+            try:
+                batch = create_marker_batch(current, visible, self.Marker_V, self.Marker)
+                result, reply = self.node.request(
+                    "/marker_array", batch, self.Marker_V, self.Boolean, 900
+                )
+                if not result or not reply.data:
+                    raise RuntimeError(
+                        "No /marker_array response. Ensure Gazebo GUI is open "
+                        "with its Scene Manager / Marker Manager enabled."
+                    )
+                with self.lock:
+                    # If grid changed while sending, retry with the latest.
+                    if current == (self.rendered_lights or self.settings["lights"]) and visible == self.frames_visible:
+                        self.frames_dirty = False
+                    self.frames_error = None
+                    self.frames_last_ok = True
+                    self.frames_updated_at = time.monotonic()
+            except (RuntimeError, OSError, ValueError) as exc:
+                with self.lock:
+                    self.frames_error = str(exc)
+                    self.frames_last_ok = False
+
+    def configure_frames(self, raw):
+        show = raw.get("show")
+        if not isinstance(show, bool):
+            raise ValueError("show must be a boolean")
+        with self.lock:
+            self.frames_visible = show
+            self.frames_dirty = True
+            self.frames_wake.set()
+        # GUI-only marker requests are applied asynchronously.
+        self.last_action = (
+            "Light XYZ frames requested in Gazebo GUI"
+            if show else "Hiding light frames in Gazebo GUI"
+        )
+        return self.last_action
 
     def on_image(self, key, message):
         # Avoid expensive conversion of the full 1280x720 robot image.
@@ -367,6 +442,12 @@ class GazeboAdapter:
             self._record_update("lights", started, timings, changes, str(exc))
             raise
         self.rendered_lights = copy.deepcopy(cfg)
+        if bool(changes & GEOMETRY_KEYS) or desired != self.light_names:
+            # GUI-only frames use a single marker batch; never set_pose per
+            # light (frequent pose commands can flood SceneBroadcaster).
+            with self.lock:
+                self.frames_dirty = True
+                self.frames_wake.set()
         self.settings["lights"] = requested
         self._record_update("lights", started, timings, changes)
         ms = self.update_metrics["lights"]["total_ms"]
@@ -555,6 +636,13 @@ class GazeboAdapter:
                     "note": "Dashboard JPEG mode; Gazebo camera sensors unchanged",
                 },
                 "updates": copy.deepcopy(self.update_metrics),
+                "light_extent": extent(self.rendered_lights or self.settings["lights"]),
+                "light_frames": {
+                    "requested": self.frames_visible,
+                    "active": self.frames_last_ok,
+                    "pending": self.frames_dirty,
+                    "error": self.frames_error,
+                },
                 "load_1m": round(os.getloadavg()[0], 2),
                 "cpu_cores": os.cpu_count(),
                 "gpu": gpu,
@@ -582,6 +670,9 @@ class GazeboAdapter:
     def stop(self):
         self.gui_stop.set()
         self.gui_thread.join(timeout=3.0)
+        self.frames_stop.set()
+        self.frames_wake.set()
+        self.frames_thread.join(timeout=2.0)
 
 
 class Lab:
@@ -674,6 +765,8 @@ class Lab:
             if self.adapter.preview_shadow_free:
                 initial_lights["shadows"] = False
             self.adapter.rendered_lights = copy.deepcopy(initial_lights)
+            self.adapter.frames_dirty = True
+            self.adapter.frames_wake.set()
             self.adapter.light_names = {
                 name for name, *_ in centered_positions(initial_lights)
             }
@@ -831,7 +924,8 @@ class Handler(BaseHTTPRequestHandler):
         if path not in ("/api/lights", "/api/materials", "/api/robot",
                         "/api/free", "/api/shuttles", "/api/preset",
                         "/api/venue", "/api/orbit", "/api/config",
-                        "/api/publish", "/api/preview"):
+                        "/api/publish", "/api/preview",
+                        "/api/light_frames"):
             self.reply(404, {"error": "Unknown action"})
             return
         size = int(self.headers.get("Content-Length", "0"))
@@ -872,6 +966,8 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 elif path == "/api/preview":
                     text = self.lab.adapter.configure_preview(payload)
+                elif path == "/api/light_frames":
+                    text = self.lab.adapter.configure_frames(payload)
                 elif path == "/api/config":
                     text = self.lab.save_config(payload)
                 elif path == "/api/publish":
