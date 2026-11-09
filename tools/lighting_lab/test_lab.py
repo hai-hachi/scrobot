@@ -297,7 +297,9 @@ class SceneTests(unittest.TestCase):
 
     def test_harmonic_service_names_documented_in_backend(self):
         text = (ROOT / "tools/lighting_lab/server.py").read_text()
-        for name in ("light_config", "visual_config", "set_pose", "create", "remove"):
+        for name in ("light_config", "create", "remove"):
+            self.assertIn(f'timed_call("{name}"', text)
+        for name in ("visual_config", "set_pose"):
             self.assertIn(f'self.call("{name}"', text)
         self.assertIn('"/camera/color"', text)
         self.assertIn('"/gui/camera/pose"', text)
