@@ -13,6 +13,9 @@ from scene import (
     hsv_rgb, kelvin_rgb,
 )
 from config import read_lab_config, write_lab_config
+from performance import (
+    PREVIEW_PROFILES, changed_fields, dirty_material_groups, preview_world_settings,
+)
 from server import configure_warp_safe_network
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +35,34 @@ class IdParser(HTMLParser):
 
 
 class SceneTests(unittest.TestCase):
+    def test_preview_performance_profiles_do_not_modify_sensor_calibration(self):
+        self.assertLess(PREVIEW_PROFILES["fast"]["jpeg_quality"],
+                        PREVIEW_PROFILES["accurate"]["jpeg_quality"])
+        self.assertGreater(PREVIEW_PROFILES["fast"]["min_period"],
+                           PREVIEW_PROFILES["accurate"]["min_period"])
+        self.assertLess(PREVIEW_PROFILES["fast"]["max_size"][0],
+                        PREVIEW_PROFILES["accurate"]["max_size"][0])
+        original = default_settings()
+        shadowless = preview_world_settings(original, True)
+        self.assertFalse(shadowless["lights"]["shadows"])
+        self.assertTrue(original["lights"]["shadows"])
+        restored = preview_world_settings(original, False)
+        self.assertTrue(restored["lights"]["shadows"])
+        self.assertEqual(original["lights"]["hsv"], restored["lights"]["hsv"])
+
+    def test_changed_light_fields_and_material_groups(self):
+        old = checked_lights({})
+        new = dict(old)
+        new["hsv"] = [120, 40, 70]
+        self.assertEqual(changed_fields(old, new), {"hsv"})
+        self.assertEqual(changed_fields(old, dict(old)), set())
+        self.assertIn("intensity", changed_fields(None, old))
+        colors = checked_colors({})
+        changed = dict(colors)
+        changed["court"] = [90, 40, 40]
+        self.assertEqual(dirty_material_groups(colors, changed), ["court"])
+        self.assertEqual(dirty_material_groups(colors, dict(colors)), [])
+
     def test_source_exists(self):
         self.assertTrue(SOURCE.exists())
 
