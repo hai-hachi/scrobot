@@ -257,19 +257,23 @@ class GazeboAdapter:
             self.gui_pose_at = time.monotonic()
 
     def _gui_follow_loop(self):
-        while not self.gui_stop.wait(0.45):
+        # set_pose can trigger expensive full GUI scene updates. Follow at
+        # most ~1 Hz, and only once the user's orbit gesture has settled
+        # briefly, instead of feeding back updates during the drag itself.
+        while not self.gui_stop.wait(1.0):
             with self.lock:
                 if not self.gui_follow or self.gui_pose is None:
                     continue
-                if time.monotonic() - self.gui_pose_at > 2.5:
+                age = time.monotonic() - self.gui_pose_at
+                if age < 0.25 or age > 2.5:
                     continue
                 raw = self.Pose()
                 raw.CopyFrom(self.gui_pose)
                 key = (
-                    round(raw.position.x, 3), round(raw.position.y, 3),
-                    round(raw.position.z, 3),
-                    round(raw.orientation.x, 4), round(raw.orientation.y, 4),
-                    round(raw.orientation.z, 4), round(raw.orientation.w, 4),
+                    round(raw.position.x, 2), round(raw.position.y, 2),
+                    round(raw.position.z, 2),
+                    round(raw.orientation.x, 3), round(raw.orientation.y, 3),
+                    round(raw.orientation.z, 3), round(raw.orientation.w, 3),
                 )
                 if key == self.gui_last_sent:
                     continue
