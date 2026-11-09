@@ -156,6 +156,13 @@ assert.match(html, /\/api\/orbit/);
 assert.match(html, /\/api\/venue/);
 assert(registry.has("update-lab-config"));
 assert.match(html, /\/api\/config/);
+assert(registry.has("preview-mode"), "Missing preview quality selector");
+assert(registry.has("shadow-preview"), "Missing shadow-free preview toggle");
+assert(registry.has("light-update-timing"), "Missing lighting latency metric");
+assert(registry.has("material-update-timing"), "Missing material latency metric");
+assert.match(html, /\/api\/preview/);
+assert.match(html, /frameBusy\[key\]/);
+assert.match(html, /queueApply\("lights",lightPayload\(\)\)/);
 assert(registry.has("publish-simulation"), "Missing main simulation publish button");
 assert.match(html, /\/api\/publish/);
 
