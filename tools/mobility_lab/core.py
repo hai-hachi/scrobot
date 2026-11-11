@@ -23,6 +23,8 @@ DEFAULTS = {
     "drive_contact_mu": 5.0,
     "caster_contact_mu": 0.05,
     "wheel_joint_damping": 0.0,
+    "drive_slip1": 0.0,
+    "drive_slip2": 0.0,
     "wheel_collision_width": 0.001,
 }
 BOUNDS = {
@@ -37,6 +39,8 @@ BOUNDS = {
     "drive_contact_mu": (0.05, 10.0),
     "caster_contact_mu": (0.0, 2.0),
     "wheel_joint_damping": (0.0, 0.5),
+    "drive_slip1": (0.0, 0.02),
+    "drive_slip2": (0.0, 0.02),
     "wheel_collision_width": (0.001, 0.03),
 }
 PROFILES = ("left", "right", "forward", "reverse", "spin")
