@@ -1,10 +1,13 @@
 import os
+from pathlib import Path
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration
+from launch_ros.actions import Node
 
 
 def include(package, launch_file, arguments=None, condition=None):
@@ -22,6 +25,21 @@ def include(package, launch_file, arguments=None, condition=None):
 
 
 def generate_launch_description():
+    # Same installed simulation-only YAML read by simulation.launch.py.
+    # This controls whether Collision Monitor goes straight to diff_drive,
+    # or through the optional closed-loop wheel RPM response surrogate.
+    calibration_path = (
+        Path(get_package_share_directory('scrobot_simulation'))
+        / 'config/mobility_calibration.yaml'
+    )
+    with calibration_path.open('r', encoding='utf-8') as stream:
+        mobility = yaml.safe_load(stream)
+    if not isinstance(mobility, dict) or mobility.get('schema_version') != 1:
+        raise RuntimeError(f'Invalid Mobility Lab published config: {calibration_path}')
+    motor = mobility['motor']
+    if motor['model'] not in ('baseline', 'first_order'):
+        raise RuntimeError(f"Invalid simulation motor model: {motor['model']}")
+    motor_model_enabled = motor['model'] == 'first_order'
     use_sim_time = LaunchConfiguration('use_sim_time')
     use_magnetometer = LaunchConfiguration('use_magnetometer')
 
@@ -60,8 +78,32 @@ def generate_launch_description():
     control = include(
         'scrobot_control',
         'control_stack.launch.py',
-        {'use_sim_time': use_sim_time},
+        {
+            'use_sim_time': use_sim_time,
+            'collision_monitor_output': (
+                '/cmd_vel_motor_target' if motor_model_enabled
+                else '/diff_drive_controller/cmd_vel'
+            ),
+        },
     )
+
+    # This path is simulation-only. It never appears in robot.launch.py.
+    # The physical STM32 already includes its closed-loop motor PID and must
+    # not have a second response filter applied.
+    sim_motor_response = Node(
+        package='scrobot_simulation',
+        executable='sim_motor_response',
+        name='sim_motor_response',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'tau_left': float(motor['tau_left']),
+            'tau_right': float(motor['tau_right']),
+            'gain_left': float(motor['gain_left']),
+            'gain_right': float(motor['gain_right']),
+            'command_timeout': 0.4,
+        }],
+    ) if motor_model_enabled else None
 
     local_localization = include(
         'scrobot_localization',
@@ -190,6 +232,7 @@ def generate_launch_description():
         ),
 
         simulation,
+        *([sim_motor_response] if sim_motor_response is not None else []),
         TimerAction(
             period=stack_delay,
             actions=[
