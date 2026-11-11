@@ -39,6 +39,7 @@ CSV_FIELDS = (
     "actual_left_rpm", "actual_right_rpm",
     "encoder_v_m_s", "encoder_yaw_rad_s",
     "truth_v_m_s", "truth_yaw_rad_s",
+    "truth_x_m", "truth_y_m", "truth_yaw_rad",
 )
 
 
