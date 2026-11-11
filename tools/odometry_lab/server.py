@@ -184,6 +184,8 @@ class Lab:
             if self.proc.poll() is not None:
                 raise RuntimeError("Gazebo launch exited. Inspect "+str(OUT/"gazebo.log"))
             self.active_rates=rates_of(config)
+            with self.bridge.node.lock:
+                self.bridge.node.settings=dict(config)
             self.error=None
             return {"started":True}
         except Exception as exc:
