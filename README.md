@@ -159,7 +159,7 @@ Gazebo calibration sessions**, publish their simulation-only settings, then
 launch one normal sim without an autonomous mission for Odometry:
 
 ```bash
-ros2 launch scrobot_bringup sim.launch.py \\
+ros2 launch scrobot_bringup sim.launch.py \
   launch_mission:=false enable_yolo:=false spawn_shuttles:=false
 # separate sourced terminal:
 python3 tools/odometry_lab/web_server.py
