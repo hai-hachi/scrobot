@@ -1,0 +1,48 @@
+name: SCROBOT Perception Labs
+
+on:
+  push:
+    branches: [real-comparison]
+    paths:
+      - 'tools/perception_labs/**'
+      - 'src/scrobot_simulation/urdf/sensors_gazebo.xacro'
+      - 'src/scrobot_simulation/urdf/scrobot_sim.urdf.xacro'
+      - 'src/scrobot_simulation/launch/perception_lab.launch.py'
+      - 'src/scrobot_simulation/launch/simulation.launch.py'
+      - 'src/scrobot_simulation/launch/spawn_robot.launch.py'
+      - 'src/scrobot_simulation/config/perception_calibration.yaml'
+      - 'src/scrobot_debug/launch/yolo_dataset_capture.launch.py'
+      - '.github/workflows/perception_labs.yml'
+  workflow_dispatch:
+
+jobs:
+  headless-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PyYAML
+        run: sudo apt-get update -qq && sudo apt-get install -y python3-yaml
+      - name: Syntax-check ROS and lab Python
+        run: |
+          python3 -m compileall -q tools/perception_labs src/scrobot_simulation/launch/perception_lab.launch.py src/scrobot_simulation/launch/simulation.launch.py src/scrobot_simulation/launch/spawn_robot.launch.py src/scrobot_debug/launch/yolo_dataset_capture.launch.py
+      - name: Validate xacro and current production court SDF
+        run: |
+          python3 - <<'PY'
+          from xml.etree import ElementTree as ET
+          for path in ('src/scrobot_simulation/urdf/sensors_gazebo.xacro',
+                       'src/scrobot_simulation/urdf/scrobot_sim.urdf.xacro',
+                       'src/scrobot_simulation/worlds/badminton_court.sdf',
+                       'src/scrobot_debug/worlds/yolo_dataset.sdf'):
+              ET.parse(path)
+          PY
+      - name: Validate dashboard JavaScript
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          page=Path('tools/perception_labs/index.html').read_text()
+          assert page.count('<script>') == 1 and page.count('</script>') == 1
+          Path('/tmp/perception_labs.js').write_text(page.split('<script>',1)[1].split('</script>',1)[0])
+          PY
+          node --check /tmp/perception_labs.js
+      - name: Run Perception Labs headless tests
+        run: python3 -m unittest discover -s tools/perception_labs/tests -p 'test_*.py' -v
