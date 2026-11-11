@@ -91,9 +91,9 @@
     <!--
       Badminton venue lighting approximation; HSV and intensity calibrated
       from src/scrobot_simulation/config/lighting_lab.yaml default values.
-      Baseline: 2x4 spotlights, two central fixtures cast shadows, all
-      fixtures point straight down. Robot RGB lighting remains unchanged
-      by the lab-only optional sensor and robot visual optimizations.
+      Published lighting: 2x3 spotlights, intensity 2.5, with the two
+      central fixtures casting shadows; all fixtures point downward.
+      The normal camera/robot sensor stack is not changed by this setting.
       BWF guidance calls for even court lighting at a minimum 1000 lux for
       high-level sanctioned play and recommends side-positioned luminaires
       rather than fixtures directly above the playing area. Gazebo light power
@@ -106,15 +106,12 @@
       <shadows>true</shadows>
     </scene>
 
-    <light type="spot" name="court_light_left_1">
-      <pose>-4.5 4.6 7.0 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1</diffuse>
-      <specular>0.19000 0.18952 0.18430 1</specular>
-      <direction>0 -0.55 -0.84</direction>
-      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
-      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
-      <intensity>1</intensity>
-      <cast_shadows>true</cast_shadows>
+    <light type="spot" name="court_light_00_00">
+      <pose>-4.5000 -4.6000 7.0000 0 0 0</pose>
+      <diffuse>0.95000 0.94762 0.92150 1.00000</diffuse>
+      <specular>0.19000 0.18952 0.18430 1.00000</specular>
+      <intensity>2.5</intensity>
+      <cast_shadows>false</cast_shadows>
       <direction>0.00000 0.00000 -1.00000</direction>
       <attenuation>
         <range>20.0</range>
@@ -128,54 +125,12 @@
         <falloff>1.0</falloff>
       </spot>
     </light>
-    <light type="spot" name="court_light_left_2">
-      <pose>0 4.6 7.0 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1</diffuse>
-      <specular>0.19000 0.18952 0.18430 1</specular>
-      <direction>0 -0.55 -0.84</direction>
-      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
-      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
-      <intensity>1</intensity>
-      <cast_shadows>true</cast_shadows>
-    </light>
-    <light type="spot" name="court_light_left_3">
-      <pose>4.5 4.6 7.0 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1</diffuse>
-      <specular>0.19000 0.18952 0.18430 1</specular>
-      <direction>0 -0.55 -0.84</direction>
-      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
-      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
-      <intensity>1</intensity>
-      <cast_shadows>true</cast_shadows>
-    </light>
-    <light type="spot" name="court_light_right_1">
-      <pose>-4.5 -4.6 7.0 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1</diffuse>
-      <specular>0.19000 0.18952 0.18430 1</specular>
-      <direction>0 0.55 -0.84</direction>
-      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
-      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
-      <intensity>1</intensity>
-      <cast_shadows>true</cast_shadows>
-    </light>
-    <light type="spot" name="court_light_right_2">
-      <pose>0 -4.6 7.0 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1</diffuse>
-      <specular>0.19000 0.18952 0.18430 1</specular>
-      <direction>0 0.55 -0.84</direction>
-      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
-      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
-      <intensity>1</intensity>
-      <cast_shadows>true</cast_shadows>
-    </light>
-    <light type="spot" name="court_light_right_3">
-      <pose>4.5 -4.6 7.0 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1</diffuse>
-      <specular>0.19000 0.18952 0.18430 1</specular>
-      <direction>0 0.55 -0.84</direction>
-      <attenuation><range>18</range><constant>0.45</constant><linear>0.015</linear><quadratic>0.001</quadratic></attenuation>
-      <spot><inner_angle>0.70</inner_angle><outer_angle>1.20</outer_angle><falloff>0.80</falloff></spot>
-      <intensity>1</intensity>
+
+    <light type="spot" name="court_light_00_01">
+      <pose>0.0000 -4.6000 7.0000 0 0 0</pose>
+      <diffuse>0.95000 0.94762 0.92150 1.00000</diffuse>
+      <specular>0.19000 0.18952 0.18430 1.00000</specular>
+      <intensity>2.5</intensity>
       <cast_shadows>true</cast_shadows>
       <direction>0.00000 0.00000 -1.00000</direction>
       <attenuation>
@@ -191,24 +146,84 @@
       </spot>
     </light>
 
-    <light type="spot" name="court_light_01_03">
-      <pose>4.5000 4.6000 7.0 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1</diffuse>
-      <specular>0.19000 0.18952 0.18430 1</specular>
-      <direction>0 0 -1</direction>
+    <light type="spot" name="court_light_00_02">
+      <pose>4.5000 -4.6000 7.0000 0 0 0</pose>
+      <diffuse>0.95000 0.94762 0.92150 1.00000</diffuse>
+      <specular>0.19000 0.18952 0.18430 1.00000</specular>
+      <intensity>2.5</intensity>
+      <cast_shadows>false</cast_shadows>
+      <direction>0.00000 0.00000 -1.00000</direction>
       <attenuation>
-        <range>18</range>
-        <constant>0.45</constant>
-        <linear>0.015</linear>
+        <range>20.0</range>
+        <constant>0.3</constant>
+        <linear>0.25</linear>
         <quadratic>0.001</quadratic>
       </attenuation>
       <spot>
-        <inner_angle>0.70</inner_angle>
-        <outer_angle>1.20</outer_angle>
-        <falloff>0.80</falloff>
+        <inner_angle>0.05</inner_angle>
+        <outer_angle>2.0</outer_angle>
+        <falloff>1.0</falloff>
       </spot>
-      <intensity>1</intensity>
+    </light>
+
+    <light type="spot" name="court_light_01_00">
+      <pose>-4.5000 4.6000 7.0000 0 0 0</pose>
+      <diffuse>0.95000 0.94762 0.92150 1.00000</diffuse>
+      <specular>0.19000 0.18952 0.18430 1.00000</specular>
+      <intensity>2.5</intensity>
       <cast_shadows>false</cast_shadows>
+      <direction>0.00000 0.00000 -1.00000</direction>
+      <attenuation>
+        <range>20.0</range>
+        <constant>0.3</constant>
+        <linear>0.25</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <spot>
+        <inner_angle>0.05</inner_angle>
+        <outer_angle>2.0</outer_angle>
+        <falloff>1.0</falloff>
+      </spot>
+    </light>
+
+    <light type="spot" name="court_light_01_01">
+      <pose>0.0000 4.6000 7.0000 0 0 0</pose>
+      <diffuse>0.95000 0.94762 0.92150 1.00000</diffuse>
+      <specular>0.19000 0.18952 0.18430 1.00000</specular>
+      <intensity>2.5</intensity>
+      <cast_shadows>true</cast_shadows>
+      <direction>0.00000 0.00000 -1.00000</direction>
+      <attenuation>
+        <range>20.0</range>
+        <constant>0.3</constant>
+        <linear>0.25</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <spot>
+        <inner_angle>0.05</inner_angle>
+        <outer_angle>2.0</outer_angle>
+        <falloff>1.0</falloff>
+      </spot>
+    </light>
+
+    <light type="spot" name="court_light_01_02">
+      <pose>4.5000 4.6000 7.0000 0 0 0</pose>
+      <diffuse>0.95000 0.94762 0.92150 1.00000</diffuse>
+      <specular>0.19000 0.18952 0.18430 1.00000</specular>
+      <intensity>2.5</intensity>
+      <cast_shadows>false</cast_shadows>
+      <direction>0.00000 0.00000 -1.00000</direction>
+      <attenuation>
+        <range>20.0</range>
+        <constant>0.3</constant>
+        <linear>0.25</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <spot>
+        <inner_angle>0.05</inner_angle>
+        <outer_angle>2.0</outer_angle>
+        <falloff>1.0</falloff>
+      </spot>
     </light>
 
     <!--
