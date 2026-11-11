@@ -79,6 +79,16 @@ def test_web_http_and_local_apply(tmp_path):
             assert json.load(f)['scenario'] == 'straight'
         with urllib.request.urlopen(root+'/api/health') as f:
             assert json.load(f) == {'ok': True, 'service': 'scrobot_odometry_lab'}
+        # Regression for the dashboard "Server disconnected" crash:
+        # when a launcher log exists, /api/status must tail it without
+        # calling nonexistent .stat() on its buffered file object.
+        log_path = tmp_path / 'existing.launcher.log'
+        log_path.write_text('old text' + 'x' * 6000 + 'latest log line', encoding='utf-8')
+        service.run_log = log_path
+        with urllib.request.urlopen(root+'/api/status') as f:
+            status = json.load(f)
+        assert status['log_tail'].endswith('latest log line')
+        assert len(status['log_tail']) <= 2000
         content=json.dumps({'rates':{'publish_hz':100},'scenario':'none'}).encode()
         req=urllib.request.Request(root+'/api/apply',data=content,
                     headers={'Content-Type':'application/json','Origin':root},method='POST')
