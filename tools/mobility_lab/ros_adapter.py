@@ -11,6 +11,7 @@ from geometry_msgs.msg import TwistStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.parameter import Parameter
+from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import JointState
 
 from core import (
@@ -36,8 +37,11 @@ class MobilityDriver(Node):
         self.settings = validate_settings(settings or DEFAULTS)
         self.pub = self.create_publisher(TwistStamped, "/diff_drive_controller/cmd_vel", 10)
         self.create_subscription(JointState, "/joint_states", self.on_joints, 30)
+        # simulation_bridge publishes best-effort SENSOR_DATA; a reliable
+        # subscription here would silently receive no ground truth.
+        truth_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
         self.create_subscription(
-            Odometry, "/evaluation/scrobot/ground_truth_odom_gz", self.on_truth, 20
+            Odometry, "/evaluation/ground_truth_odom", self.on_truth, truth_qos
         )
         self.create_subscription(
             TwistStamped, "/diff_drive_controller/cmd_vel_out", self.on_limited, 20
