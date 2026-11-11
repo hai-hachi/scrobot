@@ -13,6 +13,11 @@ from collections import deque
 import cv2
 import numpy as np
 import rclpy
+import yaml
+from pathlib import Path
+from ament_index_python.packages import get_package_share_directory
+from rclpy.time import Time
+from tf2_ros import Buffer, TransformListener
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import QoSProfile, ReliabilityPolicy
@@ -26,6 +31,7 @@ except ImportError:
     AprilTagDetectionArray = None
 
 from core import StreamMeter, timing_summary
+from tag_geometry import known_tags, expected_camera_to_tag, translation_error
 
 
 def stamp_s(header):
@@ -77,7 +83,21 @@ class PerceptionDriver(Node):
         self.last_bboxes = []
         self.last_confidence = []
         self.last_truth = None
+        self.truth_pose = None
         self.last_shuttles = []
+        self.tag_errors = deque(maxlen=300)
+        self.last_tag_stamp_evaluated = 0
+        self.latest_tag_stamp = 0
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer,self,spin_thread=False)
+        try:
+            source=(Path(get_package_share_directory("scrobot_localization"))
+                    / "config/court_landmarks.yaml")
+            self.known_tags = known_tags(yaml.safe_load(source.read_text()))
+        except (OSError,ValueError,KeyError) as exc:
+            self.known_tags={}
+            self.error=f"Court landmark calibration unavailable: {exc}"
+        self.create_timer(.1,self.evaluate_tags)
         self.info = {}
         self.error = None
         sensor = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
@@ -183,10 +203,51 @@ class PerceptionDriver(Node):
                 if hasattr(det, "hamming"):
                     hamming.append(int(det.hamming))
             self.tag_ids=ids
+            self.latest_tag_stamp=t
             self.tag_margins=margins
             self.tag_hamming=hamming
             self.samples.append({"t":t,"source":"apriltag",
                                  "ids":ids,"margins":margins,"hamming":hamming})
+
+    def evaluate_tags(self):
+        # TF often arrives just after the detector message. Evaluate after
+        # a short delay and only when the robot is stationary to avoid
+        # mismatching a fresh TF with an old Gazebo base pose.
+        with self.guard:
+            if (not self.tag_ids or not self.truth_pose or
+                    self.latest_tag_stamp<=self.last_tag_stamp_evaluated):
+                return
+            if self.last_truth is None:
+                return
+            if (abs(self.last_truth.get("v",0))>.02 or
+                    abs(self.last_truth.get("omega",0))>.03):
+                return
+            try:
+                static=self.tf_buffer.lookup_transform(
+                    "base_footprint","camera_color_optical_frame",Time())
+                cb=static.transform
+                camera=((cb.translation.x,cb.translation.y,cb.translation.z),
+                        (cb.rotation.x,cb.rotation.y,cb.rotation.z,cb.rotation.w))
+                usable=0
+                for tid in self.tag_ids:
+                    if tid not in self.known_tags:continue
+                    detected=self.tf_buffer.lookup_transform(
+                        "camera_color_optical_frame",f"observed_tag_{tid}",Time())
+                    p=detected.transform.translation
+                    observed=(float(p.x),float(p.y),float(p.z))
+                    expected=expected_camera_to_tag(
+                        self.truth_pose,camera,self.known_tags[tid])
+                    err=translation_error(observed,expected)
+                    record={"id":tid,"t":self.latest_tag_stamp,**err}
+                    self.tag_errors.append(record)
+                    self.samples.append({"source":"apriltag_error",**record})
+                    usable+=1
+                if usable:
+                    self.last_tag_stamp_evaluated=self.latest_tag_stamp
+            except Exception:
+                # No TF yet is not a zero-error detection. Try later;
+                # dashboard explicitly reports insufficient pose samples.
+                pass
 
     def on_yolo2d(self, msg):
         with self.guard:
@@ -218,10 +279,16 @@ class PerceptionDriver(Node):
             q=msg.pose.pose.orientation
             yaw=math.atan2(2*(q.w*q.z+q.x*q.y),
                            1-2*(q.y*q.y+q.z*q.z))
+            self.truth_pose=(
+                (float(p.x),float(p.y),float(p.z)),
+                (float(q.x),float(q.y),float(q.z),float(q.w))
+            )
             self.last_truth={"x":round(float(p.x),4),
                              "y":round(float(p.y),4),
                              "z":round(float(p.z),4),
                              "yaw_deg":round(math.degrees(yaw),2),
+                             "v":round(float(msg.twist.twist.linear.x),3),
+                             "omega":round(float(msg.twist.twist.angular.z),3),
                              "t":stamp_s(msg.header)}
 
     def on_shuttle_truth(self,msg):
@@ -235,7 +302,23 @@ class PerceptionDriver(Node):
     def status(self,settings):
         with self.guard:
             summary=timing_summary(self.streams,settings)
+            errors=list(self.tag_errors)
+            per_tag={}
+            for tid in sorted({r["id"] for r in errors}):
+                vals=[r for r in errors if r["id"]==tid]
+                per_tag[str(tid)]={
+                    "n":len(vals),
+                    "translation_rmse_m":round(math.sqrt(
+                        sum(v["translation_error_m"]**2 for v in vals)/len(vals)),4),
+                    "range_rmse_m":round(math.sqrt(
+                        sum(v["range_error_m"]**2 for v in vals)/len(vals)),4),
+                    "average_range_m":round(
+                        sum(v["true_range_m"] for v in vals)/len(vals),3),
+                }
             summary.update({
+                "apriltag_pose":per_tag,
+                "apriltag_pose_samples":len(errors),
+                "apriltag_pose_note":"Only stationary camera-to-tag XYZ errors using known court model and Gazebo/TF. No unverified rotation comparison.",
                 "preview_kind":self.preview_kind,
                 "preview_stamp":round(self.last_overlay_stamp if settings["mode"]!="camera"
                                      else self.last_preview_stamp,4),
@@ -270,7 +353,10 @@ class PerceptionDriver(Node):
     def reset_observation(self):
         with self.guard:
             self.samples.clear()
+            self.tag_errors.clear()
             self.tag_ids=[];self.last_bboxes=[]
+            self.latest_tag_stamp=0.0
+            self.last_tag_stamp_evaluated=0.0
             self.last_overlay=None;self.last_overlay_wall=0.0
 
 
