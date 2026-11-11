@@ -1,0 +1,190 @@
+# SCROBOT Mobility Lab — floor-loaded motor and tire calibration
+
+A localhost browser dashboard, intentionally separate from Lighting Lab and
+the normal SCROBOT autonomy stack. The experiment uses the **real SCROBOT
+diff_drive_controller**, the **Gazebo floor-loaded wheel/caster contacts**, and
+the standard wheel-joint velocity feedback.
+
+**Current milestone: 90 RPM wheel step-response identification.** You can
+measure the default simulator first, then compare a switchable first-order
+closed-loop RPM surrogate (tau initially 0.05 s) against your real MATLAB data.
+Wheel-ground friction, caster friction, viscous **joint** damping, and collision
+width are adjustable at respawn. The actual Gazebo ground truth is recorded
+independently of encoder-derived body velocity.
+
+## Start
+
+Prerequisites: ROS 2 Jazzy, Gazebo Harmonic, `gz_ros2_control`,
+`ros_gz_bridge`, built SCROBOT workspace, and Python 3. No added pip
+dependencies (browser/web server use Python standard library).
+
+```bash
+cd ~/scrobot_ws/src
+git switch real-comparison
+git pull --ff-only
+cd ~/scrobot_ws
+colcon build --symlink-install --packages-up-to scrobot_simulation
+source /opt/ros/jazzy/setup.bash
+source ~/scrobot_ws/install/setup.bash
+python3 ~/scrobot_ws/tools/mobility_lab/server.py
+```
+
+Open **http://127.0.0.1:8766**. A separate Gazebo GUI starts automatically
+using the existing badminton court world and a lightweight visual robot. For
+laptops without a browser, use `--no-browser`.
+
+The tool defaults to **ROS_DOMAIN_ID=77** and a dedicated
+`GZ_PARTITION` to avoid commanding any robot or pre-existing Gazebo process
+in the default production domain. A deliberate `--ros-domain-id` override
+is available. The lab publishes **only** to the simulation
+`/diff_drive_controller/cmd_vel` inside its isolated domain.
+
+Do not launch the full mission in the same lab domain. The standalone
+`--attach` option is only for a separately managed **isolated Mobility Lab**
+Gazebo process; it never launches or stops that process.
+
+## First test (matches floor-loaded MATLAB identification)
+
+1. Set **Left wheel only**, **90 RPM**, **Baseline**.
+2. Keep default physical settings (drive mu 5.0, caster mu 0.05, joint damping
+   0.0 N m s/rad, collision width 0.001 m). These are **existing simulation
+   values**, **not measured material constants**.
+3. Wait for fresh joint states. Click **Run 90 RPM test**. The tool holds
+   zero for 0.30 s, applies +90 RPM to the left wheel for 1.50 s, then commands
+   zero and records another 0.65 s.
+4. Repeat on the right wheel, then forward, reverse and spin profiles. For
+   identical starting poses, click **Restart Gazebo with physics** before each
+   run. Wait for wheel states to become ready again.
+5. Save each recording; a complete CSV and metadata JSON are saved beneath
+   `~/scrobot_ws/evaluation_results/mobility_lab/recordings/`.
+
+The command generator uses `r=0.050 m` and wheel separation `L=0.420 m`:
+
+```text
+v   = pi*r*(left_rpm+right_rpm)/60
+yaw = 2*pi*r*(right_rpm-left_rpm)/(60*L)
+```
+
+At 90 RPM, each tire tangential speed is ~0.471 m/s, below the measured
+0.50 m/s maximum. Opposite-sign ±90 RPM gives ±2.244 rad/s body yaw
+command. These are **wheel kinematic targets**, not a claim that actual
+floor motion is identical.
+
+### Data streams and interpretation
+
+```text
+Requested wheel RPM   -> 1st-order optional command prefilter
+                       -> differential-drive ROS2 controller
+                       -> gz_ros2_control wheel velocity interface
+                       -> Gazebo wheel joints + floor contacts
+
+Actual wheel RPM          /joint_states [wheel joint velocity]
+Ground-truth chassis      /evaluation/ground_truth_odom
+Controller limited twist  /diff_drive_controller/cmd_vel_out
+```
+
+The sample clock is Gazebo/ROS simulation time, not browser poll time; web
+plots may be downsampled but saved CSV retains all recorded messages. Metrics
+for each active wheel include the 10–90% rise time, 63.2% crossing
+(approximate time constant), final RPM, overshoot and **2% settling time**.
+If the wheel never stays inside the 2% target band through the step hold,
+settling is **unavailable** rather than silently counted as success.
+
+A true `0.20 s` **2%-criterion** settling time for a unity-gain first-order
+system gives
+
+```text
+tau = 0.20 / -ln(0.02) = 0.0511 s.
+```
+
+The initial `tau_left=0.05`, `tau_right=0.05` are sensible starting values,
+not calibrated outcomes. If MATLAB reported a 5% criterion, the equivalent
+first-order tau is about 0.0668 s.
+
+### Import real MATLAB results
+
+Export a CSV whose time zero is aligned with the **start of the 90 RPM
+command**. A single motor column is enough for single-wheel tests:
+
+```csv
+time_s,left_actual_rpm,right_actual_rpm
+0.00,0.0,0.0
+0.01,8.3,0.0
+0.02,24.5,0.0
+```
+
+Alternatively include only `time_s,left_actual_rpm` or
+`time_s,right_actual_rpm`. The lab accepts alternative names `time`, `t`,
+`left_rpm`, `right_rpm`. The importer rejects duplicate/nonmonotonic times
+and non-finite samples. MATLAB data is saved unchanged beneath
+`evaluation_results/mobility_lab/real_reference/`.
+
+In MATLAB, for aligned vectors `t`, `leftRPM` and `rightRPM`:
+
+```matlab
+T = table(t(:), leftRPM(:), rightRPM(:), ...
+  'VariableNames', {'time_s','left_actual_rpm','right_actual_rpm'});
+writetable(T, 'scrobot_real_90rpm.csv');
+```
+
+The comparison displays **interpolated RPM RMSE**, based on available
+time overlap. It does not automatically identify gain or dead time from the
+real data.
+
+## Tuning physics correctly
+
+The experiment keeps the loaded robot and actual floor geometry active.
+Parameters in the web page:
+
+| Setting | Scope | Baseline | Applied |
+| --- | --- | ---: | --- |
+| Drive tire `mu1/mu2` | Wheel-ground traction | 5.0 | Respawn |
+| Caster `mu1/mu2` | Caster-ground drag/traction | 0.05 | Respawn |
+| Wheel joint damping | Bearing viscous torque | 0.0 | Respawn |
+| Wheel collision width | Tire contact geometry | 0.001 m | Respawn |
+| Motor tau / gain | Closed-loop RPM command surrogate | 0.05 s / 1.0 | Next test |
+
+Use **joint RPM response** to evaluate the motor model, and compare
+**encoder-predicted translation/yaw against Gazebo ground-truth body motion**
+to evaluate slip/contact effects. Real chassis position, IMU yaw-rate or
+external motion capture are needed before ground-friction parameters can be
+calibrated to reality; a 90 RPM encoder trace alone cannot identify tire
+friction, damping or wheel slip uniquely.
+
+**Physical-model limitation (important):** stock
+`gz_ros2_control/GazeboSimSystem` applies the requested wheel joint velocity
+directly. The optional first-order mode implemented here filters the wheel
+**command** before that interface. It creates the desired closed-loop RPM
+response for comparison, but does NOT model torque/current limits or make
+the RPM transient dynamically load dependent. Joint damping changes may be
+masked by velocity actuation. Future torque/effort-based simulation can
+investigate load-dependent dynamics if the measured data justifies it.
+
+The GUI marks all physical parameter edits as **restart required**.
+A restart respawns the robot using the supplied Xacro parameters. It never
+writes to the production badminton court, the main robot URDF defaults,
+Lighting Lab calibration, or the normal control pipeline. User settings
+persist in `evaluation_results/mobility_lab/settings.json`.
+
+## Troubleshooting
+
+- If `/joint_states` never becomes ready, check
+  `~/scrobot_ws/evaluation_results/mobility_lab/gazebo.log` for xacro,
+  ros2_control and controller spawner errors. Source the built workspace.
+- If ground-truth body speed reads "Missing", inspect ROS bridge
+  `/evaluation/ground_truth_odom`. It is published by the existing Gazebo
+  bridge with **best-effort sensor QoS**; the lab subscribes accordingly.
+- Never compare wheel RPM alone and claim floor friction was identified.
+- Don't increase wheel RPM beyond 95. The code clamps both target wheel
+  commands to the SCROBOT real-hardware-safe nominal 95 RPM.
+- Keep separate runs' physical settings in the saved JSON metadata.
+
+## Offline tests
+
+```bash
+python3 -m unittest discover -s ~/scrobot_ws/tools/mobility_lab/tests -p 'test_*.py' -v
+```
+
+The repository's `SCROBOT Mobility Lab` GitHub Action also checks Python
+syntax, Xacro XML parsing and the pure wheel-response mathematics. **These
+tests do not replace a real Gazebo runtime trial.**
