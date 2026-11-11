@@ -1,0 +1,46 @@
+name: SCROBOT Odometry Lab
+
+on:
+  push:
+    branches: [real-comparison]
+    paths:
+      - "tools/odometry_lab/**"
+      - "src/scrobot_simulation/config/odometry_calibration.yaml"
+      - "src/scrobot_simulation/urdf/sensors_gazebo.xacro"
+      - "src/scrobot_simulation/urdf/scrobot_sim.urdf.xacro"
+      - "src/scrobot_simulation/launch/simulation.launch.py"
+      - "src/scrobot_simulation/launch/spawn_robot.launch.py"
+      - "src/scrobot_simulation/launch/odometry_lab.launch.py"
+      - "src/scrobot_simulation/launch/odometry_rate_config.py"
+      - "src/scrobot_bringup/launch/sim.launch.py"
+      - "src/scrobot_localization/launch/localization.launch.py"
+      - ".github/workflows/odometry_lab.yml"
+  workflow_dispatch:
+
+jobs:
+  odometry-regressions:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install YAML support
+        run: sudo apt-get update -qq && sudo apt-get install -y python3-yaml
+      - name: Check Python and launch syntax
+        run: |
+          python3 -m compileall -q tools/odometry_lab src/scrobot_simulation/launch/odometry_rate_config.py src/scrobot_simulation/launch/odometry_lab.launch.py src/scrobot_simulation/launch/spawn_robot.launch.py src/scrobot_simulation/launch/simulation.launch.py src/scrobot_bringup/launch/sim.launch.py src/scrobot_localization/launch/localization.launch.py
+      - name: Check Xacro XML and browser JS
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree
+          for path in ('src/scrobot_simulation/urdf/sensors_gazebo.xacro',
+                       'src/scrobot_simulation/urdf/scrobot_sim.urdf.xacro'):
+              ElementTree.parse(path)
+          text=Path('tools/odometry_lab/index.html').read_text()
+          assert text.count('<script>')==1 and text.count('</script>')==1
+          Path('/tmp/odometry-lab.js').write_text(
+              text.split('<script>',1)[1].split('</script>',1)[0]
+          )
+          PY
+          node --check /tmp/odometry-lab.js
+      - name: Run rate and estimator contract tests
+        run: python3 -m unittest discover -s tools/odometry_lab/tests -p 'test_*.py' -v
