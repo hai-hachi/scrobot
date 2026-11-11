@@ -323,12 +323,23 @@ def main():
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--attach", action="store_true",
                         help="Connect to already-running isolated Mobility Lab Gazebo")
+    parser.add_argument("--ros-domain-id", type=int, default=77,
+                        help="Isolated ROS_DOMAIN_ID (default 77; avoid the real robot's domain)")
     args = parser.parse_args()
+    if not 0 <= args.ros_domain_id <= 232:
+        parser.error("--ros-domain-id must be in [0,232]")
+    # Both the browser's ROS2 node and its launched Gazebo/bridge processes
+    # must inherit these BEFORE rclpy.init(). Never default to production ROS
+    # domain 0 when the test directly commands drive wheel velocity.
+    os.environ["ROS_DOMAIN_ID"] = str(args.ros_domain_id)
+    os.environ.setdefault("GZ_PARTITION",
+                          f"scrobot_mobility_{os.getuid()}_{args.ros_domain_id}")
     lab = Lab(attach=args.attach)
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     httpd.lab = lab
     url = f"http://127.0.0.1:{args.port}"
     print(f"Mobility Lab: {url}")
+    print(f"ROS_DOMAIN_ID={os.environ['ROS_DOMAIN_ID']}  GZ_PARTITION={os.environ['GZ_PARTITION']}")
     print(f"Recording: {OUTPUT}")
     if not args.no_browser:
         webbrowser.open(url)
