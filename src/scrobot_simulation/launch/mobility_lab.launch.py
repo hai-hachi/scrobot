@@ -48,7 +48,7 @@ def generate_launch_description():
         name='mobility_lab_ground_truth_bridge', output='screen',
         arguments=[
             '/evaluation/scrobot/ground_truth_odom_gz'
-            '@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+            '@nav_msgs/msg/Odometry]gz.msgs.Odometry',
         ],
         parameters=[{'use_sim_time': True}],
     )
