@@ -35,8 +35,18 @@ SOURCE_WORLD=REPO/"src/scrobot_simulation/worlds/badminton_court.sdf"
 DATASET_TEMPLATE=REPO/"src/scrobot_debug/worlds/yolo_dataset.sdf"
 YOLO_REPO=Path(os.environ.get("SCROBOT_YOLO_REPO",
                               str(Path.home()/"Desktop/yoloshuttle"))).expanduser()
-DATASET=YOLO_REPO/"dataset/gazebo_scrobot_lighting_current"
+DATASET_BASE=YOLO_REPO/"dataset"
+DATASET_POINTER=OUTPUT/"latest_dataset.txt"
 WORLD=OUTPUT/"worlds/yolo_dataset_lighting_current.sdf"
+
+
+def latest_dataset():
+    # Each lighting condition gets its own immutable dataset folder.
+    if DATASET_POINTER.exists():
+        path=Path(DATASET_POINTER.read_text(encoding="utf-8").strip())
+        if path.is_absolute() and path.parent == DATASET_BASE:
+            return path
+    return DATASET_BASE/"gazebo_scrobot_lighting_current"
 
 
 def tag():
@@ -309,11 +319,16 @@ class Lab:
             stamp=tag()
             python=YOLO_REPO/".venv/bin/python"
             py=str(python) if python.is_file() else sys.executable
+            dataset=latest_dataset()
             if kind=="dataset":
+                dataset=DATASET_BASE/f"gazebo_scrobot_lighting_{stamp}"
                 provenance=sync_dataset_world(SOURCE_WORLD,DATASET_TEMPLATE,WORLD)
-                write_dataset_provenance(provenance,DATASET,self.settings)
+                write_dataset_provenance(provenance,dataset,self.settings)
+                # Store pointer before capture. A failed/incomplete capture
+                # will be rejected by subsequent dataset checks/training.
+                DATASET_POINTER.write_text(str(dataset)+"\n",encoding="utf-8")
                 cmd=["ros2","launch","scrobot_debug","yolo_dataset_capture.launch.py",
-                     f"world:={WORLD}",f"output_dir:={DATASET}",
+                     f"world:={WORLD}",f"output_dir:={dataset}",
                      f"session_name:=lighting_{stamp}",
                      f'target_images:={self.settings["dataset_images"]}',
                      f'shuttle_count:={self.settings["dataset_shuttles"]}',
@@ -321,12 +336,12 @@ class Lab:
                      f'random_seed:={self.settings["dataset_seed"]}']
                 env=self.env(80)
             else:
-                dataset_yaml=DATASET/"data.yaml"
+                dataset_yaml=dataset/"data.yaml"
                 if not dataset_yaml.is_file():
                     raise RuntimeError(f"Dataset missing: {dataset_yaml}. Generate it first.")
                 if kind=="check_dataset":
                     cmd=[py,str(YOLO_REPO/"scripts/validate_generated_dataset.py"),
-                         "--dataset",str(DATASET),"--samples","15"]
+                         "--dataset",str(dataset),"--samples","15"]
                 elif kind=="train":
                     source=self.model_path()
                     if not source.is_file():raise RuntimeError(f"Missing initial YOLO weights: {source}")
@@ -414,7 +429,7 @@ class Lab:
                 "yoloshuttle_path":str(YOLO_REPO),
                 "model_path":str(self.model_path()),
                 "model_found":self.model_path().is_file(),
-                "dataset_path":str(DATASET),
+                "dataset_path":str(latest_dataset()),
                 "system":self.system_status(),
             })
             return data
