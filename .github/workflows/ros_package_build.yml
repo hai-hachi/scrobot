@@ -24,6 +24,19 @@ jobs:
       # Minimal ROS setup does not necessarily install a concrete rosidl
       # typesupport implementation. Without one, scrobot_interfaces fails
       # to build even though rosidl_default_generators is installed.
+      # Noble runner + ROS setup do not include the OSRF Gazebo apt feed.
+      # Gazebo Harmonic's libgz-transport13-dev is hosted there; without this
+      # repository the workflow fails BEFORE colcon ever compiles a package.
+      # See https://gazebosim.org/docs/harmonic/install_ubuntu/
+      - name: Configure Gazebo Harmonic binary packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl gnupg ca-certificates lsb-release
+          curl -fsSL https://packages.osrfoundation.org/gazebo.gpg |
+            sudo tee /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg > /dev/null
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" |
+            sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
+
       - name: Install typesupport and Gazebo transport build dependencies
         run: |
           sudo apt-get update
