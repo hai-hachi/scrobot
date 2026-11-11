@@ -11,6 +11,10 @@ from core import (
     profile_targets, reference_csv, response_metrics, rpm_to_twist,
     twist_to_rpm, validate_settings,
 )
+from reference import (
+    bundled_validation, compare_validation, phase_aligned_reference,
+    active_real_wheel,
+)
 
 
 class MobilityCoreTests(unittest.TestCase):
@@ -65,6 +69,58 @@ class MobilityCoreTests(unittest.TestCase):
         bad = [{"t": x["t"], "actual_left_rpm": x["actual_left_rpm"]*.90}
                for x in samples]
         self.assertIsNone(response_metrics(bad, "left", 90, 1.5)["settling_s"])
+
+    def test_bundled_floor_loaded_motors_and_independent_provenance(self):
+        step, stop, manifest = bundled_validation()
+        self.assertEqual(len(step), 501)
+        self.assertEqual(len(stop), 101)
+        self.assertEqual(step[0]["t"], 0)
+        self.assertEqual(stop[0]["t"], 0)
+        self.assertAlmostEqual(step[50]["actual_left_rpm"], 90, delta=2)
+        self.assertAlmostEqual(step[50]["actual_right_rpm"], 90, delta=2)
+        self.assertIn("Separate left wheel and right wheel",
+                      manifest["original_test_type"])
+        for side in ("left", "right"):
+            self.assertEqual(manifest["sources"][side]["rows"], 903)
+            self.assertAlmostEqual(manifest["sources"][side]["step_hold_s"],
+                                   5.0095, delta=0.001)
+
+    def test_real_reference_step_and_stop_align_to_lab_hold_duration(self):
+        step, stop, _ = bundled_validation()
+        config = validate_settings({
+            "profile": "left", "target_rpm": 90.0,
+            "hold_s": 1.5, "post_s": 0.65,
+        })
+        aligned = phase_aligned_reference(config, step, stop)
+        self.assertTrue(aligned)
+        self.assertAlmostEqual(aligned[0]["t"], 0)
+        self.assertTrue(all("actual_left_rpm" in r for r in aligned))
+        self.assertFalse(any("actual_right_rpm" in r for r in aligned))
+        self.assertGreater(aligned[-1]["t"], 2)
+        self.assertLess(aligned[-1]["t"], 2.16)
+        at_stop = next(x for x in aligned if abs(x["t"]-1.5)<1e-6)
+        self.assertGreater(at_stop["actual_left_rpm"], 85)
+        self.assertLess(aligned[-1]["actual_left_rpm"], 2)
+
+        matched = [
+            {"t": r["t"], "actual_left_rpm": r["actual_left_rpm"]}
+            for r in aligned
+        ]
+        scores, _ = compare_validation(matched, config, step, stop)
+        self.assertEqual(scores["left"], 0.0)
+        self.assertIsNone(scores["right"])
+
+    def test_do_not_compare_independent_wheel_runs_to_combined_motion(self):
+        step, stop, _ = bundled_validation()
+        for profile in ("forward", "reverse", "spin"):
+            config = validate_settings({"profile": profile, "target_rpm": 90})
+            self.assertIsNone(active_real_wheel(config))
+            self.assertEqual(phase_aligned_reference(config, step, stop), [])
+            scores, _ = compare_validation([], config, step, stop)
+            self.assertIsNone(scores["left"])
+            self.assertIsNone(scores["right"])
+        config = validate_settings({"profile": "right", "target_rpm": 60})
+        self.assertEqual(phase_aligned_reference(config, step, stop), [])
 
     def test_csv_import_and_rmse(self):
         reference = reference_csv("time_s,left_actual_rpm,right_actual_rpm\n"
