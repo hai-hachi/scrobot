@@ -91,6 +91,40 @@ for(const [parent,controls] of Object.entries(descriptors))for(const [id,label,m
  $(id).oninput=()=>{$("out-"+id).textContent=Number($(id).value).toFixed(step<.1?2:0)+unit};
 }
 function fields(){const d={};for(const k of keys)d[k]=k==="profile"?$(k).value:k==="use_magnetometer"?$(k).checked:Number($(k).value);return d}
+const nominalWheelLimit=0.50;
+const wheelRadius=0.05;
+const wheelSeparation=0.42;
+function profilePeakSpeed(c){
+ const v=c.linear_m_s,w=c.angular_rad_s,kind=c.profile;
+ const turn=wheelSeparation*w/2;
+ if(kind==="stationary")return 0;
+ if(kind==="straight"||kind==="reverse")return v;
+ if(kind.startsWith("spin"))return turn;
+ if(kind==="square")return Math.max(v,turn);
+ if(kind==="figure8")return v*.6+turn;
+ return NaN;
+}
+function updateMotionReadout(){
+ if(!first)return;
+ const cfg=fields(),peak=profilePeakSpeed(cfg),rpm=peak*60/(2*Math.PI*wheelRadius),good=peak<=nominalWheelLimit+1e-9;
+ const scenario=cfg.profile==="stationary"?"Stationary (no wheel motion)":
+  ["straight","reverse"].includes(cfg.profile)?"Both wheels commanded at "+cfg.linear_m_s.toFixed(2)+" m/s":
+  cfg.profile.startsWith("spin")?"Opposite wheel directions":
+  cfg.profile==="square"?"Straight legs and turns executed separately":
+  "Combined wheel velocities on the arcs";
+ $("wheelSpeedStatus").textContent=scenario+
+  " · peak |wheel| = "+peak.toFixed(3)+" m/s ("+rpm.toFixed(1)+" RPM)."+
+  (good?" Within 0.50 m/s per wheel.":" EXCEEDS 0.50 m/s per wheel: reduce linear or yaw command.");
+ $("wheelSpeedStatus").className=good?"ok hint":"warn hint";
+ const latest=last?.latest?.joints;
+ if(latest?.left_rpm!=null&&latest?.right_rpm!=null){
+  const rim=r=>r*2*Math.PI*wheelRadius/60;
+  $("actualWheelSpeed").textContent="Measured joint RPM: L "+latest.left_rpm.toFixed(1)+
+   ", R "+latest.right_rpm.toFixed(1)+" · wheel rims: L "+rim(latest.left_rpm).toFixed(3)+
+   " m/s, R "+rim(latest.right_rpm).toFixed(3)+" m/s";
+ }
+}
+for(const id of ["profile","linear_m_s","angular_rad_s"])$(id).addEventListener("input",updateMotionReadout);
 function load(s){for(const k of keys){if(s[k]===undefined)continue;if(k==="use_magnetometer")$(k).checked=s[k];else $(k).value=s[k];if($("out-"+k))$(k).oninput()}first=true;updateMotionReadout()}
 function changed(s){const c=fields();return keys.some(k=>c[k]!==s[k])}
 function show(msg,err=false){$("error").textContent=msg;$("error").className=err?"warn":"ok"}
