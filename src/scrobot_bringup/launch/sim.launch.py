@@ -5,6 +5,7 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
@@ -61,6 +62,7 @@ def generate_launch_description():
     stack_delay = LaunchConfiguration('stack_delay')
     shuttle_delay = LaunchConfiguration('shuttle_delay')
     mission_delay = LaunchConfiguration('mission_delay')
+    launch_mission = LaunchConfiguration('launch_mission')
 
     simulation = include(
         'scrobot_simulation',
@@ -223,6 +225,10 @@ def generate_launch_description():
         DeclareLaunchArgument('stack_delay', default_value='4.0'),
         DeclareLaunchArgument('shuttle_delay', default_value='5.0'),
         DeclareLaunchArgument(
+            'launch_mission', default_value='true', choices=['true', 'false'],
+            description='Start the autonomous sweep. Set false for Odometry Lab experiments.',
+        ),
+        DeclareLaunchArgument(
             'mission_delay',
             default_value='15.0',
             description=(
@@ -242,5 +248,6 @@ def generate_launch_description():
             ],
         ),
         TimerAction(period=shuttle_delay, actions=[shuttles]),
-        TimerAction(period=mission_delay, actions=[mission]),
+        TimerAction(period=mission_delay, actions=[mission],
+                    condition=IfCondition(launch_mission)),
     ])
