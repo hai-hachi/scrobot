@@ -272,16 +272,19 @@ class Lab:
         seconds=float(seconds)
         if not 1<=seconds<=10:raise ValueError("Sample window must be 1–10 seconds")
         before=self.bridge.node.counts()
+        sim_start=self.bridge.node.get_clock().now().nanoseconds/1e9
         start=time.monotonic()
         time.sleep(seconds)
         after=self.bridge.node.counts()
+        sim_end=self.bridge.node.get_clock().now().nanoseconds/1e9
         records=[x for x in self.bridge.node.save_records()
-                 if x["t"]>=self.bridge.node.get_clock().now().nanoseconds/1e9-(seconds+1)]
+                 if sim_start<=x["t"]<=sim_end]
         tags=[x for x in records if x.get("source")=="apriltag"]
         positive=sum(bool(x.get("ids")) for x in tags)
         rgb=max(0,after["rgb"]-before["rgb"])
         summary={
             "duration_wall_s":round(time.monotonic()-start,2),
+            "duration_sim_s":round(sim_end-sim_start,3),
             "rgb_frames":rgb,
             "tag_messages":after["apriltag"]-before["apriltag"],
             "tag_positive_messages":positive,
