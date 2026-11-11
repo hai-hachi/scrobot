@@ -35,7 +35,7 @@ class CoreTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 validate(pair)
-        self.assertEqual(duration({"profile":"stationary",**DEFAULTS}),30.0)
+        self.assertEqual(duration({**DEFAULTS,"profile":"stationary"}),30.0)
         self.assertEqual(sequence_command(DEFAULTS,-1.0),(0.0,0.0,False))
 
     def test_trajectory_segments_are_within_wheel_limit(self):
@@ -55,14 +55,12 @@ class CoreTests(unittest.TestCase):
         for i in range(101):
             t=i*.01
             truth.append({"t":t,"x":3+t,"y":7.0,"yaw":1.1})
-            wheel.append({"t":t,"x":10+t,"y":2.0,"yaw":-2.1})
+            wheel.append({"t":t,"x":10+t,"y":2.0,"yaw":1.1})
         m=pose_metrics(wheel,truth)
         self.assertIsNotNone(m)
         self.assertEqual(m["samples"],101)
-        # Origin alignment cannot cancel heading-origin rotation if
-        # the initial angular frames differ; this test instead compares
-        # drift in the robots' respective local frames.
-        self.assertAlmostEqual(m["position_rmse_m"],0,delta=1.0)
+        # World translations differ but both relative robot paths coincide.
+        self.assertAlmostEqual(m["position_rmse_m"],0,delta=1e-6)
         self.assertAlmostEqual(m["yaw_rmse_deg"],0,delta=1e-6)
 
         fixed=[{"t":x["t"],"x":x["x"]+5,
