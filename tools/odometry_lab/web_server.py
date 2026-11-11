@@ -132,29 +132,63 @@ def safe_json(path):
 
 
 def simulated_topics_present(config):
-    """Fail closed for motion if Gazebo signals cannot be verified."""
-    try:
-        result = subprocess.run(['ros2', 'topic', 'list'], stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, text=True, timeout=8, check=False)
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise RuntimeError(f'ROS 2 topic discovery unavailable: {exc}') from exc
-    if result.returncode:
-        raise RuntimeError('Cannot inspect ROS 2 topics; source the workspace and start Gazebo.')
-    listed = set(result.stdout.splitlines())
-    truth = config['topics']['ground_truth']
-    for name in ('/clock', truth, config['topics']['joint_states']):
-        if name not in listed:
-            raise RuntimeError(f'Required simulation topic missing: {name}')
-    # Ensure the reference really has a publisher, not only a subscriber.
-    for name in ('/clock', truth):
+    """Require exactly one Gazebo clock/truth source and a live control stack.
+
+    Lighting Lab and Mobility Lab normally launch independent Gazebo worlds.
+    Never start a motion trial against either bare simulation, a real robot,
+    or a ROS graph with multiple simulation clock publishers.
+    """
+    def ros_cli(*arguments, timeout=8):
+        command = ['ros2', *arguments]
         try:
-            info = subprocess.run(['ros2', 'topic', 'info', name], capture_output=True,
-                                  text=True, timeout=6, check=False)
+            result = subprocess.run(command, capture_output=True, text=True,
+                                    timeout=timeout, check=False)
         except (OSError, subprocess.TimeoutExpired) as exc:
-            raise RuntimeError(f'Cannot inspect publisher for {name}: {exc}') from exc
-        match = re.search(r'Publisher count:\s*(\d+)', info.stdout)
-        if info.returncode or not match or int(match.group(1)) < 1:
-            raise RuntimeError(f'No active publisher confirmed on {name}')
+            raise RuntimeError(f'ROS 2 discovery unavailable for {arguments}: {exc}') from exc
+        if result.returncode:
+            raise RuntimeError(
+                f'ROS 2 discovery failed for {" ".join(arguments)}; '
+                'source Jazzy and run the normal SCROBOT simulation stack.'
+            )
+        return result.stdout
+
+    listed = set(ros_cli('topic', 'list').splitlines())
+    topics = config['topics']
+    truth = topics['ground_truth']
+    required = ('/clock', truth, topics['joint_states'],
+                topics['wheel_odom'], topics['ekf_odom'])
+    for name in required:
+        if name not in listed:
+            raise RuntimeError(
+                f'Required SCROBOT topic missing: {name}. Start the normal '
+                'simulation/control/localization stack, not the isolated '
+                'Lighting or Mobility Lab Gazebo.'
+            )
+
+    for name in required:
+        information = ros_cli('topic', 'info', name, timeout=6)
+        match = re.search(r'Publisher count:\\s*(\\d+)', information)
+        if not match:
+            raise RuntimeError(f'Cannot determine publisher count on {name}')
+        count = int(match.group(1))
+        if name in ('/clock', truth) and count != 1:
+            raise RuntimeError(
+                f'Expected exactly one publisher on {name}, found {count}. '
+                'Stop duplicate Gazebo simulations/bridges before motion.'
+            )
+        if count == 0:
+            raise RuntimeError(
+                f'No active publisher on {name}. Launch the normal SCROBOT '
+                'simulation, controllers and localization first.'
+            )
+
+    service_type = ros_cli('service', 'type', '/control/set_manual_mode',
+                           timeout=6).strip()
+    if service_type != 'std_srvs/srv/SetBool':
+        raise RuntimeError(
+            'Missing /control/set_manual_mode (std_srvs/srv/SetBool). '
+            'Odometry motion requires the production manual/safety pipeline.'
+        )
 
 
 class LabService:
