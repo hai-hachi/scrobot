@@ -24,6 +24,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import yaml
+from storage import validated_result_root
 
 HERE = Path(__file__).resolve().parent
 CONFIG = HERE / 'config' / 'lab.yaml'
@@ -207,6 +208,9 @@ class LabService:
     def apply(self, payload):
         with self.lock:
             cfg = validate_config(payload, self.config())
+            # A user-edited config must not redirect results into the
+            # Lighting/Mobility Lab trees or the source checkout.
+            validated_result_root(cfg['run_root'])
             tmp = self.config_path.with_suffix('.yaml.tmp')
             tmp.write_text(yaml.safe_dump(cfg, sort_keys=False))
             os.replace(tmp, self.config_path)
@@ -225,12 +229,21 @@ class LabService:
                 raise RuntimeError('Invalid configured scenario')
             if scenario != 'none':
                 simulated_topics_present(cfg)
-            root = Path(cfg['run_root']).expanduser()
+            root = validated_result_root(cfg['run_root'])
             root.mkdir(parents=True, exist_ok=True)
             name = 'web_' + datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:6]
-            self.run_dir = root / name
-            self.run_log = root / (name + '.launcher.log')
-            log = self.run_log.open('w')
+            run_dir = root / name
+            run_log = root / (name + '.launcher.log')
+            if run_dir.exists():
+                raise RuntimeError('Odometry run name already exists')
+            # Exclusive creation avoids overwriting another run's log if a
+            # browser or CLI happens to allocate the same name.
+            try:
+                log = run_log.open('x')
+            except FileExistsError as exc:
+                raise RuntimeError('Odometry launcher log already exists') from exc
+            self.run_dir = run_dir
+            self.run_log = run_log
             try:
                 self.process = subprocess.Popen([sys.executable, str(HERE / 'run_lab.py'),
                     '--config', str(self.config_path), '--scenario', scenario,
