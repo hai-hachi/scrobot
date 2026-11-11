@@ -77,6 +77,8 @@ def test_web_http_and_local_apply(tmp_path):
             assert b'function plotTrajectory' in f.read()
         with urllib.request.urlopen(root+'/api/config') as f:
             assert json.load(f)['scenario'] == 'straight'
+        with urllib.request.urlopen(root+'/api/health') as f:
+            assert json.load(f) == {'ok': True, 'service': 'scrobot_odometry_lab'}
         content=json.dumps({'rates':{'publish_hz':100},'scenario':'none'}).encode()
         req=urllib.request.Request(root+'/api/apply',data=content,
                     headers={'Content-Type':'application/json','Origin':root},method='POST')
@@ -144,3 +146,54 @@ def test_motion_preflight_rejects_missing_controller_and_duplicate_clock(monkeyp
     calls = check_case()
     web_server.simulated_topics_present(BASE)
     assert ['ros2', 'service', 'type', '/control/set_manual_mode'] in calls
+
+
+def test_slow_ros_preflight_does_not_block_web_status(tmp_path, monkeypatch):
+    """A slow Gazebo/ROS discovery must not make the web server look disconnected."""
+    import time
+    import web_server
+    cfg = deepcopy(BASE)
+    cfg['run_root'] = str(tmp_path / 'runs')
+    config_path = tmp_path / 'lab.yaml'
+    config_path.write_text(yaml.safe_dump(cfg))
+    service = LabService(config_path)
+    checking = threading.Event()
+    release = threading.Event()
+    errors = []
+
+    def slow_preflight(_):
+        checking.set()
+        assert release.wait(timeout=4), 'preflight test never released'
+        raise RuntimeError('Gazebo unavailable after preflight')
+
+    monkeypatch.setattr(web_server, 'simulated_topics_present', slow_preflight)
+    worker = threading.Thread(
+        target=lambda: _run_and_capture(service.start, errors),
+        daemon=True,
+    )
+    worker.start()
+    try:
+        assert checking.wait(timeout=2), 'ROS preflight did not begin'
+        t0 = time.monotonic()
+        status = service.status()
+        elapsed = time.monotonic() - t0
+        assert elapsed < 0.5, 'Slow ROS preflight blocked dashboard status'
+        assert status['preflight_in_progress'] is True
+        assert status['running'] is False
+        with pytest.raises(RuntimeError, match='already running or being checked'):
+            service.start()
+    finally:
+        release.set()
+        worker.join(timeout=3)
+    assert not worker.is_alive()
+    assert len(errors) == 1
+    assert 'Gazebo unavailable' in str(errors[0])
+    assert service.preflight_in_progress is False
+    assert service.process is None
+
+
+def _run_and_capture(call, errors):
+    try:
+        call()
+    except Exception as exc:
+        errors.append(exc)
