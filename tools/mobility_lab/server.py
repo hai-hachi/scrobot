@@ -24,8 +24,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 import webbrowser
 
-from core import (
-    DEFAULTS, compare_rmse, reference_csv, validate_settings,
+from core import DEFAULTS, reference_csv, validate_settings
+from reference import (
+    bundled_validation, compare_validation, phase_aligned_reference, status_label,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -82,7 +83,10 @@ class Lab:
         self.attach = bool(attach)
         self.proc = None
         self.log = None
-        self.reference = []
+        self.reference_step = []
+        self.reference_stop = []
+        self.reference_source = None
+        self.reference_manifest = {}
         self.applied_physics = None
         self.restarting = False
         self.error = None
@@ -93,12 +97,21 @@ class Lab:
             self.applied_physics = {k: self.settings[k] for k in PHYSICS}
 
     def load_reference(self):
+        # Bundled files are two separate 90 RPM floor-loaded validations.
+        # Uploading a custom CSV overrides the built-in reference, never
+        # modifies either original source log in the repository.
+        self.reference_step, self.reference_stop, self.reference_manifest = (
+            bundled_validation()
+        )
+        self.reference_source = "builtin"
         p = OUTPUT / "real_reference/matlab_reference.csv"
         if p.is_file():
             try:
-                self.reference = reference_csv(p.read_text())
-            except (ValueError, OSError):
-                self.reference = []
+                self.reference_step = reference_csv(p.read_text())
+                self.reference_stop = []
+                self.reference_source = "uploaded"
+            except (ValueError, OSError) as exc:
+                self.error = f"Ignoring malformed reference CSV: {exc}"
 
     def stop_sim(self):
         if self.proc is None:
@@ -181,24 +194,33 @@ class Lab:
     def status(self):
         with self.lock:
             data = self.bridge.node.status(rows=800)
+            result = self.bridge.node.result()
+            settings = result["settings"] if result else self.settings
+            if result:
+                rmse, reference = compare_validation(
+                    result["samples"], settings,
+                    self.reference_step, self.reference_stop
+                )
+            else:
+                rmse = None
+                reference = phase_aligned_reference(
+                    settings, self.reference_step, self.reference_stop
+                )
             data.update({
                 "physics_dirty": self.physics_dirty(),
                 "gazebo_alive": self.attach or (self.proc is not None and self.proc.poll() is None),
                 "gazebo_managed": not self.attach,
                 "restarting": self.restarting,
                 "settings": self.settings,
-                "reference": self.reference[::max(1, len(self.reference)//400)],
-                "reference_count": len(self.reference),
+                "result_settings": settings,
+                "reference": reference[::max(1, len(reference)//450)],
+                "reference_count": len(self.reference_step),
+                "reference_source": self.reference_source,
+                "reference_label": status_label(settings, self.reference_source),
+                "real_source_count": 903 if self.reference_source == "builtin" else None,
+                "reference_rmse": rmse,
                 "server_error": self.error,
             })
-            result = self.bridge.node.result()
-            if result and self.reference:
-                data["reference_rmse"] = {
-                    side: compare_rmse(result["samples"], self.reference, side)
-                    for side in ("left", "right")
-                }
-            else:
-                data["reference_rmse"] = None
             return data
 
     def upload_reference(self, csv_text):
@@ -207,8 +229,23 @@ class Lab:
             root = OUTPUT / "real_reference"
             root.mkdir(parents=True, exist_ok=True)
             (root / "matlab_reference.csv").write_text(csv_text)
-            self.reference = rows
+            self.reference_step = rows
+            self.reference_stop = []
+            self.reference_source = "uploaded"
         return {"rows": len(rows), "path": str(root / "matlab_reference.csv")}
+
+    def reset_reference(self):
+        with self.lock:
+            p = OUTPUT / "real_reference/matlab_reference.csv"
+            if p.exists():
+                p.unlink()
+            self.reference_step, self.reference_stop, self.reference_manifest = (
+                bundled_validation()
+            )
+            self.reference_source = "builtin"
+        return {"reference": "WL/WR floor-loaded September 22 90 RPM",
+                "step_samples": len(self.reference_step),
+                "stop_samples": len(self.reference_stop)}
 
     def save_result(self):
         result = self.bridge.node.result()
@@ -217,7 +254,6 @@ class Lab:
         folder = OUTPUT / "recordings" / (
             time_label() + "_" + result["settings"]["profile"]
         )
-        # Avoid overwriting if operator saves multiple times within one second.
         suffix = 1
         original = folder
         while folder.exists():
@@ -225,10 +261,13 @@ class Lab:
             suffix += 1
         folder.mkdir(parents=True)
         (folder / "samples.csv").write_text(make_csv(result["samples"]))
-        result["reference_rmse"] = {
-            side: compare_rmse(result["samples"], self.reference, side)
-            for side in ("left", "right")
-        } if self.reference else None
+        result["reference_rmse"], _ = compare_validation(
+            result["samples"], result["settings"],
+            self.reference_step, self.reference_stop
+        )
+        result["reference_source"] = self.reference_source
+        if self.reference_source == "builtin":
+            result["reference_manifest"] = self.reference_manifest
         (folder / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         return {"saved": str(folder), "sample_count": len(result["samples"])}
 
@@ -305,6 +344,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = {"started": True}
             elif route == "/api/reference":
                 result = self.lab.upload_reference(body.get("csv", ""))
+            elif route == "/api/reference/reset":
+                result = self.lab.reset_reference()
             elif route == "/api/save":
                 result = self.lab.save_result()
             else:
