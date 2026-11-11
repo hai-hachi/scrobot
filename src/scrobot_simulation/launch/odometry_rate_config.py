@@ -32,8 +32,9 @@ def validated_rates(raw):
         if isinstance(value, bool) or not isinstance(value, (float, int)):
             raise ValueError(f"{key} must be numeric")
         value = float(value)
-        if not math.isfinite(value) or not 10.0 <= value <= 200.0:
-            raise ValueError(f"{key} must be between 10 and 200 Hz")
+        upper = 100.0 if key == "wheel_odom_hz" else 200.0
+        if not math.isfinite(value) or not 10.0 <= value <= upper:
+            raise ValueError(f"{key} must be between 10 and {upper:g} Hz")
         rates[key] = value
     return rates
 
@@ -57,15 +58,10 @@ def prepare_configurations(rates, controller_base, ekf_base,
     ekf = yaml.safe_load(Path(ekf_base).read_text(encoding="utf-8"))
     if not isinstance(controller, dict) or not isinstance(ekf, dict):
         raise ValueError("Invalid baseline ROS controller or EKF YAML")
-    if int(controller["controller_manager"]["ros__parameters"]["update_rate"]) < max(
-        rates["wheel_odom_hz"], 100.0
-    ):
-        # A publisher cannot produce fresh encoder odometry faster than the
-        # controller update loop. Keep controller_manager 100 Hz by default;
-        # raising it is explicitly necessary for faster wheel publication.
-        controller["controller_manager"]["ros__parameters"]["update_rate"] = max(
-            100, int(math.ceil(rates["wheel_odom_hz"]))
-        )
+    if float(controller["controller_manager"]["ros__parameters"]["update_rate"]) < rates["wheel_odom_hz"]:
+        raise ValueError("Cannot publish fresh wheel odometry faster than controller_manager")
+    # The 100 Hz controller update rate remains unchanged: this tool changes
+    # only diff_drive_controller's odom publication and the EKF output rates.
     controller["diff_drive_controller"]["ros__parameters"]["publish_rate"] = rates["wheel_odom_hz"]
     ekf["ekf_filter_node"]["ros__parameters"]["frequency"] = rates["ekf_hz"]
     output = Path(directory) if directory is not None else (
