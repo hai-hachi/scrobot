@@ -55,6 +55,28 @@ collision monitor / diff_drive_controller. The test runner restores AUTO when
 it completes normally. On interruption, the launcher attempts a zero command
 and mode restoration (not a hardware E-stop). This is intended for simulation.
 
+## Running alongside the other calibration labs
+
+Use **Lighting (8765)**, **Mobility (8766)** and **Odometry (8767)** as
+separate web applications. Lighting owns a temporary Gazebo world, and
+Mobility owns an isolated Gazebo/ROS domain; do not treat either as the
+production-control simulation expected by Odometry Lab.
+
+After publishing the Lighting and Mobility calibrations, start one normal
+simulator **without mission/YOLO/shuttles** so the controller, EKF and Gazebo
+ground-truth stream can be measured without autonomous command competition:
+
+```bash
+ros2 launch scrobot_bringup sim.launch.py \
+  launch_mission:=false enable_yolo:=false spawn_shuttles:=false
+# in a second sourced terminal
+python3 tools/odometry_lab/web_server.py
+```
+
+For motion tests, the web-server preflight now requires a single sim clock and
+truth publisher, wheel/filtered odometry publishers, and the production manual
+mode service. Read [the three-lab coexistence guide](../../docs/real_comparison/lab_coexistence.md).
+
 ## Four test areas (plus Overview)
 
 1. **Timing**: independent encoder-sample, estimator and lab-publication Hz,
@@ -103,16 +125,23 @@ python3 tools/odometry_lab/analyze.py PATH_TO_RUN
 
 ## Real hardware comparison
 
-The two real 90-RPM PID validation files are not stored in this repository.
-Replay their actual time/RPM columns once available:
+On the `real-comparison` branch, the September 2026 WL and WR 90-RPM
+STM32 recordings already live under `tools/mobility_lab/data/raw/` (they
+are **independent single-wheel trials**, not simultaneous forward driving).
+The Odometry Lab shares those inputs instead of duplicating them:
 
 ```bash
 python3 tools/odometry_lab/replay.py \
-  --left WL_pid_validation_p90_0rpm_20260922_121710.csv \
-  --right WR_pid_validation_p90_0rpm_20260922_121700.csv \
-  --time-column TIME_COLUMN --rpm-column RPM_COLUMN \
-  --sim-wheel-speeds PATH_TO_RUN/wheel_speeds.csv
+  --left tools/mobility_lab/data/raw/WL_pid_validation_p90_0rpm_20260922_121710.csv \
+  --right tools/mobility_lab/data/raw/WR_pid_validation_p90_0rpm_20260922_121700.csv \
+  --time-column host_time_s --rpm-column measured_rpm
 ```
+
+For `--sim-wheel-speeds`, record a **matching single-wheel command profile**
+and verify that both traces share a common command-edge time reference.
+The current replay helper aligns file starts, not command rising edges, so
+an unmatched 90-RPM straight-line run would produce a misleading RPM RMSE.
+Use Mobility Lab's aligned WL/WR reference curves for detailed step comparisons.
 
 The script outputs real motor-speed sample rate, mean RPM, standard deviation,
 and RMSE versus a 90-RPM target. With simulated joint-speed CSV it also
