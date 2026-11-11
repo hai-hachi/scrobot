@@ -41,23 +41,14 @@ def generate_launch_description():
         )
         for name in ('joint_state_broadcaster', 'diff_drive_controller')
     ]
-    # The Gazebo odometry publisher is independent of encoder odometry. This
-    # bridge is essential to distinguish slipping tires from wheel RPM errors.
-    truth = Node(
-        package='ros_gz_bridge', executable='parameter_bridge',
-        name='mobility_lab_ground_truth_bridge', output='screen',
-        arguments=[
-            '/evaluation/scrobot/ground_truth_odom_gz'
-            '@nav_msgs/msg/Odometry]gz.msgs.Odometry',
-        ],
-        parameters=[{'use_sim_time': True}],
-    )
+    # Existing gazebo.launch.py bridge_config already maps Gazebo independent
+    # ground truth to ROS /evaluation/ground_truth_odom (SENSOR_DATA QoS).
     return LaunchDescription([
         DeclareLaunchArgument('drive_contact_mu', default_value='5.0'),
         DeclareLaunchArgument('caster_contact_mu', default_value='0.05'),
         DeclareLaunchArgument('wheel_joint_damping', default_value='0.0'),
         DeclareLaunchArgument('wheel_collision_width', default_value='0.001'),
         DeclareLaunchArgument('controller_delay', default_value='4.0'),
-        sim, truth,
+        sim,
         TimerAction(period=LaunchConfiguration('controller_delay'), actions=controllers),
     ])
