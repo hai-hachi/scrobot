@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 import yaml
 
@@ -36,6 +37,15 @@ def generate_launch_description():
         mobility = yaml.safe_load(stream)
     if not isinstance(mobility, dict) or mobility.get('schema_version') != 1:
         raise RuntimeError(f'Invalid Mobility Lab published config: {calibration_path}')
+    sys.path.insert(0, str(Path(get_package_share_directory('scrobot_simulation')) / 'launch'))
+    from odometry_rate_config import load_rates, prepare_configurations
+    sim_pkg = Path(get_package_share_directory('scrobot_simulation'))
+    rates = load_rates(sim_pkg / 'config/odometry_calibration.yaml')
+    generated_odometry = prepare_configurations(
+        rates,
+        Path(get_package_share_directory('scrobot_control')) / 'config/controllers.yaml',
+        Path(get_package_share_directory('scrobot_localization')) / 'config/ekf.yaml',
+    )
     motor = mobility['motor']
     if motor['model'] not in ('baseline', 'first_order'):
         raise RuntimeError(f"Invalid simulation motor model: {motor['model']}")
@@ -111,6 +121,7 @@ def generate_launch_description():
         {
             'use_sim_time': use_sim_time,
             'use_magnetometer': use_magnetometer,
+            'ekf_params': generated_odometry['ekf_params'],
         },
     )
 
