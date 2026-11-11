@@ -48,7 +48,7 @@
     <div class="metric"><small>Ground truth bridge</small><strong id="groundTruth">—</strong><small>Gazebo body odom</small></div>
   </div>
   <div class="split">
-    <div><div class="inline"><h2>Wheel command and encoder RPM</h2><span class="hint">Sim-clock timestamps</span></div><canvas class="chart" id="leftChart"></canvas><div class="legend"><span><i class="key" style="background:var(--amber)"></i>90 RPM step</span><span><i class="key" style="background:var(--violet)"></i>Filtered command</span><span><i class="key" style="background:var(--teal)"></i>Joint RPM</span><span><i class="key" style="background:white"></i>Real MATLAB CSV</span></div></div>
+    <div><div class="inline"><h2>Wheel command and encoder RPM</h2><span class="hint">Sim-clock timestamps</span></div><canvas class="chart" id="leftChart"></canvas><div class="legend"><span><i class="key" style="background:var(--amber)"></i>90 RPM step</span><span><i class="key" style="background:var(--violet)"></i>Filtered command</span><span><i class="key" style="background:var(--teal)"></i>Joint RPM</span><span><i class="key" style="background:white"></i>MATLAB CSV / ideal 0.2 s</span></div></div>
     <div><h2>Robot ground-truth path</h2><canvas class="chart" id="pathChart"></canvas><p class="hint" style="margin-top:10px">From <code>/evaluation/ground_truth_odom</code>. Unlike wheel odometry, this shows actual body motion on the floor.</p></div>
   </div>
   <h2 style="margin-top:20px">Right-wheel response</h2><canvas class="chart short" id="rightChart"></canvas>
@@ -134,7 +134,21 @@ function chart(id,data,side){
  const wanted="input_"+side+"_rpm",filtered="sent_"+side+"_rpm",actual="actual_"+side+"_rpm";
  const line=(records,key,color,width=2,dash=[])=>poly(g,records.filter(r=>r[key]!=null&&r.t>=xMin&&r.t<=xMax).map(r=>[X(r.t),Y(r[key])]),color,width,dash);
  line(rows,wanted,"#fac06e",2,[5,3]);line(rows,filtered,"#a8a0f3",2,[2,3]);line(rows,actual,"#3ed8c5",2.3);
- line(ref,actual,"#f2f2f2",1.7,[6,4]);
+ if(ref.length){line(ref,actual,"#f2f2f2",1.7,[6,4])}
+ else {
+  const profile=cfg.profile||"left";
+  const amplitude=side==="left"?
+   (profile==="left"||profile==="forward"?target:profile==="reverse"||profile==="spin"?-target:0):
+   (profile==="right"||profile==="forward"||profile==="spin"?target:profile==="reverse"?-target:0);
+  const tau=.2/-Math.log(.02),predicted=[];
+  for(let t=0;t<=xMax;t+=.01){
+   let rpm=t<Number(cfg.hold_s||1.5)?
+    amplitude*(1-Math.exp(-t/tau)):
+    amplitude*(1-Math.exp(-Number(cfg.hold_s||1.5)/tau))*Math.exp(-(t-Number(cfg.hold_s||1.5))/tau);
+   predicted.push([X(t),Y(rpm)]);
+  }
+  poly(g,predicted,"#f2f2f2",1.2,[3,6]);
+ }
  g.fillStyle="#9eafbf";g.fillText("t (s)",w-36,h-8);
 }
 function pathPlot(data){
