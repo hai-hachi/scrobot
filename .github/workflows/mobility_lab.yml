@@ -12,6 +12,13 @@ on:
       - 'src/scrobot_simulation/launch/mobility_lab.launch.py'
       - 'src/scrobot_simulation/launch/simulation.launch.py'
       - 'src/scrobot_simulation/launch/spawn_robot.launch.py'
+      - 'src/scrobot_simulation/config/mobility_calibration.yaml'
+      - 'src/scrobot_simulation/scripts/sim_motor_response.py'
+      - 'src/scrobot_simulation/CMakeLists.txt'
+      - 'src/scrobot_simulation/package.xml'
+      - 'src/scrobot_bringup/launch/sim.launch.py'
+      - 'src/scrobot_bringup/package.xml'
+      - 'src/scrobot_control/launch/control_stack.launch.py'
       - '.github/workflows/mobility_lab.yml'
   workflow_dispatch:
 
@@ -20,9 +27,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Install PyYAML for publication tests
+        run: sudo apt-get update -qq && sudo apt-get install -y python3-yaml
       - name: Syntax-check Python modules and ROS launch descriptions
         run: |
-          python3 -m compileall -q tools/mobility_lab src/scrobot_simulation/launch/mobility_lab.launch.py src/scrobot_simulation/launch/spawn_robot.launch.py src/scrobot_simulation/launch/simulation.launch.py
+          python3 -m compileall -q tools/mobility_lab src/scrobot_simulation/scripts/sim_motor_response.py src/scrobot_bringup/launch/sim.launch.py src/scrobot_control/launch/control_stack.launch.py src/scrobot_simulation/launch/mobility_lab.launch.py src/scrobot_simulation/launch/spawn_robot.launch.py src/scrobot_simulation/launch/simulation.launch.py
       - name: Validate wheel Xacro XML and lab controls
         run: |
           python3 - <<'PY'
@@ -37,7 +46,7 @@ jobs:
           for name in ('drive_contact_mu', 'caster_contact_mu', 'wheel_joint_damping',
                        'wheel_collision_width', 'drive_slip1', 'drive_slip2',
                        'tau_left', 'tau_right', 'leftChart',
-                       'rightChart', 'matlabFile'):
+                       'rightChart', 'matlabFile', 'publish', 'publishStatus'):
               assert name in ui, name
           PY
       - name: Syntax-check embedded browser JavaScript
