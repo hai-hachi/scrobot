@@ -101,7 +101,56 @@ The initial `tau_left=0.05`, `tau_right=0.05` are sensible starting values,
 not calibrated outcomes. If MATLAB reported a 5% criterion, the equivalent
 first-order tau is about 0.0668 s.
 
-### Import real MATLAB results
+### Bundled real floor-loaded 90 RPM PID validation (2026-09-22)
+
+Two original STM32 logs are committed under
+`tools/mobility_lab/data/raw/`:
+
+- `WL_pid_validation_p90_0rpm_20260922_121710.csv` — **903** left-wheel
+  samples; independent left-wheel-only test
+- `WR_pid_validation_p90_0rpm_20260922_121700.csv` — **903** right-wheel
+  samples; independent right-wheel-only test
+
+Each run records approximately **100 Hz** for **9.02 seconds**: roughly two
+seconds at 0 RPM, five seconds commanded +90 RPM, then two seconds commanded
+zero. The command's actual rising-edge timestamp is approximately 2.0106 s
+(left) and 2.0104 s (right), so aligning the file's first sample to
+`t=0` would be incorrect.
+
+The lab reformats these files into `data/floor_loaded_20260922/`:
+
+- `WL_90rpm_aligned.csv` / `WR_90rpm_aligned.csv`: all original samples,
+  exact test phases, command and measured RPM, control ticks and encoders;
+  `time_s=0` at that motor's rising command edge
+- `reference_step_90rpm.csv`: 501 paired side-by-side *individually aligned*
+  values for the 0–5.0 s step; uniform 10 ms grid via interpolation
+- `reference_stop_90rpm.csv`: 101 separately aligned values after the
+  falling command edge (0–1.0 s)
+- `manifest.json`: PID gains, original filenames, actual step/stop
+  timestamps, timing/provenance and non-simultaneity warning
+
+**Important: WL and WR were separate experiments, not a simultaneous
+two-wheel drive test.** We compare the real left reference ONLY to a
+`Left wheel only` 90 RPM lab test, and the right reference ONLY to a
+`Right wheel only` 90 RPM test. For simultaneous forward, reverse, or
+in-place spin experiments, the GUI shows the ideal first-order curve
+but intentionally suppresses real-vs-simulation RMSE rather than implying
+the datasets validate those chassis motions.
+
+The real file's 2%-band settling times from each command edge are
+approximately **0.210 s (WL)** and **0.220 s (WR)**. The recorded response
+is not a perfect delay-free single exponential: both have an initial
+~20–30 ms latency and a slower small residual approach to 90 RPM. The
+ideal `tau=0.05 s` model is a starting point, not a proven best fit.
+
+**These references load automatically** every time you launch the lab.
+There is nothing to import manually for this September dataset. The
+lab time-aligns each source's command rising edge for the acceleration
+phase and separately time-aligns the falling edge to the lab's selected
+`hold_s`, so a 1.5 s simulated hold is not compared to a real motor that
+continued at 90 RPM for five seconds.
+
+### Import or override real MATLAB results
 
 Export a CSV whose time zero is aligned with the **start of the 90 RPM
 command**. A single motor column is enough for single-wheel tests:
@@ -116,8 +165,12 @@ time_s,left_actual_rpm,right_actual_rpm
 Alternatively include only `time_s,left_actual_rpm` or
 `time_s,right_actual_rpm`. The lab accepts alternative names `time`, `t`,
 `left_rpm`, `right_rpm`. The importer rejects duplicate/nonmonotonic times
-and non-finite samples. MATLAB data is saved unchanged beneath
-`evaluation_results/mobility_lab/real_reference/`.
+and non-finite samples. A manually imported CSV **overrides** the
+automatically bundled reference in the running GUI and persists unchanged
+under `evaluation_results/mobility_lab/real_reference/`. The override
+is treated as a step-only reference unless a suitable independent stop
+file is added. Click **Restore bundled data** to return to the immutable
+September WL/WR recordings.
 
 In MATLAB, for aligned vectors `t`, `leftRPM` and `rightRPM`:
 
