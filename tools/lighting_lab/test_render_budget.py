@@ -83,6 +83,40 @@ class RenderBudgetTests(unittest.TestCase):
             self.assertEqual(light.findtext("cast_shadows") == "true",
                              light.get("name").replace("court_light_", "lab_light_") in shadows)
 
+    def test_published_floor_wall_and_court_match_saved_hsv_and_venue(self):
+        cfg = read_lab_config(ROOT / "src/scrobot_simulation/config/lighting_lab.yaml")
+        world = ET.parse(WORLD).getroot().find("world")
+        mapping = {
+            "venue_floor_visual": "floor",
+            "badminton_mat_visual": "court",
+            "left_post_visual": "poles",
+            "right_post_visual": "poles",
+            **{f"wall_{axis}_{side}_visual": "walls"
+               for axis in ("x", "y") for side in ("positive", "negative")},
+        }
+        from scene import hsv_rgb
+        for visual_name, group in mapping.items():
+            visuals = [v for v in world.findall(".//visual")
+                       if v.get("name") == visual_name]
+            self.assertEqual(len(visuals), 1, visual_name)
+            material = visuals[0].find("material")
+            self.assertIsNotNone(material)
+            expected = material_for(hsv_rgb(cfg["colors"][group]), group)
+            for tag in ("ambient", "diffuse", "specular"):
+                self.assertEqual(
+                    [float(v) for v in material.findtext(tag).split()],
+                    [float(v) for v in expected.findtext(tag).split()],
+                    f"{visual_name}.{tag}",
+                )
+        floor_size = world.find(
+            "./model[@name='court_floor']/link/collision[@name='floor_collision']"
+            "/geometry/box/size"
+        )
+        self.assertIsNotNone(floor_size)
+        actual = [float(v) for v in floor_size.text.split()]
+        self.assertAlmostEqual(actual[0], 15.4 + 2 * cfg["venue"]["clearance_x"])
+        self.assertAlmostEqual(actual[1], 7.2 + 2 * cfg["venue"]["clearance_y"])
+
     def test_visuals_are_gated_without_touching_physics_collisions_or_tf(self):
         for base in ("base", "wheels", "casters", "collector", "realsense_d435i"):
             root = ET.parse(ROOT / f"src/scrobot_description/urdf/{base}.xacro").getroot()
