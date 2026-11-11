@@ -74,14 +74,20 @@ local_collect_controller:
     # The pre-collection reference is straight, so omega_R = 0.
     # Translation:
     #   v = k_rho * rho * cos(alpha)
-    smc_reference_speed: 0.50
+    # Reference translation speed for the SMC heading law. Keep consistent
+    # with the conservative wheel-safe linear cap below.
+    smc_reference_speed: 0.35
     smc_lambda: 2.50
     smc_ks: 1.20
     smc_eta: 0.40
     smc_phi: 0.30
     smc_krho: 0.80
-    smc_max_angular_speed: 1.00
-    smc_max_linear_speed: 0.50
+    # For mixed SMC commands: v_max + (0.42/2)*omega_max
+    # = 0.35 + 0.21*0.70 = 0.497 m/s <= 0.50 m/s per wheel.
+    # This conservative rectangular bound is intentional until the unified
+    # router performs proportional wheel-space saturation.
+    smc_max_angular_speed: 0.70
+    smc_max_linear_speed: 0.35
 
     # Rotate first for large position-heading error, matching the previous
     # local-collect behavior.

@@ -32,6 +32,8 @@ def generate_launch_description():
     enable_magnetometer = LaunchConfiguration('enable_magnetometer')
     enable_depth_camera = LaunchConfiguration('enable_depth_camera')
     robot_visual_mode = LaunchConfiguration('robot_visual_mode')
+    wheel_joint_damping = LaunchConfiguration('wheel_joint_damping')
+    wheel_collision_width = LaunchConfiguration('wheel_collision_width')
     drive_contact_mu = LaunchConfiguration('drive_contact_mu')
     caster_contact_mu = LaunchConfiguration('caster_contact_mu')
     controller_params = LaunchConfiguration('controller_params')
@@ -79,6 +81,8 @@ def generate_launch_description():
             'enable_magnetometer': enable_magnetometer,
             'enable_depth_camera': enable_depth_camera,
             'robot_visual_mode': robot_visual_mode,
+            'wheel_joint_damping': wheel_joint_damping,
+            'wheel_collision_width': wheel_collision_width,
             'drive_contact_mu': drive_contact_mu,
             'caster_contact_mu': caster_contact_mu,
             'controller_params': controller_params,
@@ -175,6 +179,14 @@ def generate_launch_description():
             'robot_visual_mode',
             default_value='full', choices=['full', 'simple', 'none'],
             description='Render full meshes, a lightweight proxy, or no robot visual; physics unchanged.',
+        ),
+        DeclareLaunchArgument(
+            'wheel_joint_damping', default_value='0.0',
+            description='Wheel joint damping N*m*s/rad; default keeps existing physics.',
+        ),
+        DeclareLaunchArgument(
+            'wheel_collision_width', default_value='0.001',
+            description='Wheel collision width in meters; current simulation baseline 0.001 m.',
         ),
         DeclareLaunchArgument(
             'drive_contact_mu',

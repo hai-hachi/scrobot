@@ -50,27 +50,30 @@ controller_server:
       stateful: true
 
     # ----------------------------------------------------------
-    # RPP - 0.8 m/s sweep tune
+    # RPP - conservative baseline for 0.50 m/s per drive wheel
     # ----------------------------------------------------------
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
 
-      # Desired cruise speed
-      desired_linear_vel: 0.80
+      # With wheel separation 0.42 m, for a constant-radius arc R = 0.50 m
+      # outer-wheel speed = v*(1 + 0.42/(2*0.50)) = 1.42*v.
+      # v <= 0.50/1.42 = 0.352 m/s keeps those arcs within wheel speed.
+      # Conservative initial tune, NOT a substitute for coupled limiting
+      # when tighter curves or simultaneous high v/omega are commanded.
+      desired_linear_vel: 0.35
 
-      # Slightly longer adaptive lookahead than the previous 0.70 s tune.
-      # This damps the small left-right correction that appeared immediately
-      # after the U-turns at 0.8 m/s.
-      lookahead_dist: 0.64
+      # Retain the previous ~0.8 s adaptive lookahead in time, scaling
+      # physical lookahead down with speed from the old 0.8 m/s tune.
+      lookahead_dist: 0.32
       use_velocity_scaled_lookahead_dist: true
       lookahead_time: 0.80
-      min_lookahead_dist: 0.45
-      max_lookahead_dist: 0.64
+      min_lookahead_dist: 0.28
+      max_lookahead_dist: 0.45
 
       # Curvature regulation. R_min remains 0.50 m.
       use_regulated_linear_velocity_scaling: true
       regulated_linear_scaling_min_radius: 0.50
-      regulated_linear_scaling_min_speed: 0.32
+      regulated_linear_scaling_min_speed: 0.25
 
       use_cost_regulated_linear_velocity_scaling: false
 

@@ -1,0 +1,25 @@
+name: SCROBOT drive wheel velocity limits
+
+on:
+  push:
+    branches:
+      - real-comparison
+    paths:
+      - "src/scrobot_control/**"
+      - "src/scrobot_navigation/config/nav2_params.yaml"
+      - "src/scrobot_collection/config/local_collect.yaml"
+      - "src/scrobot_mission/config/local_collect.yaml"
+      - "src/scrobot_description/urdf/ros2_control_real.xacro"
+      - "src/scrobot_debug/config/controllers_control_stack_check.yaml"
+      - ".github/workflows/drive_limits.yml"
+  workflow_dispatch:
+
+jobs:
+  drive-kinematics-and-yaml:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install YAML validation support
+        run: sudo apt-get update && sudo apt-get install -y python3-yaml
+      - name: Verify body limits, Nav2 cruise, SMC and wheel conversion
+        run: python3 -m unittest discover -s src/scrobot_control/test -p "test_*.py" -v

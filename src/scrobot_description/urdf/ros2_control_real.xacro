@@ -26,7 +26,11 @@
         <param name="right_command_sign">1.0</param>
         <param name="left_command_sign">1.0</param>
 
-        <param name="max_wheel_rpm">100.0</param>
+        <!-- 0.50 m/s wheel-rim limit / (2*pi*0.050 m)*60 = 95.49 RPM.
+             Limit ROS->STM32 setpoints to 95 RPM to leave small margin;
+             firmware's 100 RPM hard cap remains an additional safeguard.
+             The hardware driver proportionally scales BOTH wheels. -->
+        <param name="max_wheel_rpm">95.0</param>
         <param name="max_brush_rpm">400.0</param>
         <param name="max_conveyor_rpm">80.0</param>
 
