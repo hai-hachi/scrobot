@@ -60,7 +60,9 @@ diff_drive_controller:
     # Publishing
     # ==========================================
 
-    publish_rate: 50.0
+    # Publish wheel encoder-based odometry at the 100 Hz controller / STM32
+    # feedback cadence. This does NOT change the firmware PID frequency.
+    publish_rate: 100.0
 
     velocity_rolling_window_size: 10
 
