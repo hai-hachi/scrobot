@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SCROBOT · Perception Labs</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1520;--panel:#172330;--surface:#213140;--line:#304657;--text:#eff6f8;--muted:#a4b7c5;--mint:#42d2c5;--amber:#f8c06d;--violet:#a49cff;--red:#f08f9f}
+*{box-sizing:border-box}body{background:linear-gradient(155deg,#0e2030,#0b1119 70%);margin:0;color:var(--text);font:14px system-ui,Inter,Arial,sans-serif}header{border-bottom:1px solid var(--line);background:#121f2bcc;padding:20px max(20px,calc((100% - 1600px)/2));display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+h1{font-size:24px;margin:3px 0}h2{font-size:16px;margin:0 0 13px}h3{font-size:13px;margin:0 0 11px}p,.hint{color:var(--muted);font-size:12px;line-height:1.55;margin:8px 0}code{font-size:11px;word-break:break-all}.eyebrow{color:var(--mint);font-size:10px;font-weight:750;letter-spacing:2.2px;text-transform:uppercase}.shell{max-width:1640px;padding:20px;margin:auto}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.tabs button{background:#142636;color:var(--muted);border-radius:30px}.tabs button.active{color:var(--text);border-color:var(--mint);background:#07534d}.layout{display:grid;grid-template-columns:minmax(300px,355px) minmax(0,1fr);gap:18px;align-items:start}.panel{border:1px solid var(--line);background:var(--panel);border-radius:13px;padding:18px;margin:0 0 16px;min-width:0}.surface{background:var(--surface);padding:12px;border-radius:9px}.field{margin:12px 0}.field label{color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:8px;margin-bottom:6px}.field output{font-variant-numeric:tabular-nums;color:var(--text);font-weight:bold}.field input[type=range]{accent-color:var(--mint);width:100%;cursor:pointer}.field select,.field input[type=text],.field input[type=number]{width:100%;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--text);padding:9px;font:inherit}.selectish{color:var(--text);background:var(--surface)}button{cursor:pointer;background:#2b4051;color:var(--text);font:inherit;font-weight:650;padding:10px 13px;border-radius:8px;border:1px solid var(--line)}button:hover:not(:disabled){filter:brightness(1.15)}button:disabled{opacity:.42;cursor:not-allowed}.primary{background:#087b75;border-color:#13aba4}.warning{background:#563c35;border-color:#94654c}.danger{background:#59343e;border-color:#86505d}.buttons{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.badge{font-size:11px;color:var(--muted);background:var(--surface);border:1px solid var(--line);padding:6px 9px;border-radius:20px}.ok{color:var(--mint)}.warn{color:var(--amber)}.bad{color:var(--red)}.notice{padding:12px;background:#40362064;border-left:3px solid var(--amber);border-radius:5px;color:#f0d9b2;font-size:12px;line-height:1.5;margin:10px 0}.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.tile{border-radius:9px;padding:12px;background:var(--surface);min-height:85px}.tile small{color:var(--muted);font-size:11px;display:block}.tile strong{font-size:21px;display:block;margin:7px 0 1px;letter-spacing:-.4px;font-variant-numeric:tabular-nums}.tile .unit{font-size:10px;color:var(--muted)}.stream-table{width:100%;border-collapse:collapse;font-size:12px}.stream-table th,.stream-table td{text-align:left;border-bottom:1px solid var(--line);padding:8px 6px;white-space:nowrap}.stream-table th{color:var(--muted);font-weight:500}.scroll{overflow:auto}.rightgrid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(270px,0.55fr);gap:15px}.video{border-radius:9px;border:1px solid var(--line);background:#0b141d;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;overflow:hidden}.video img{width:100%;height:100%;object-fit:contain;max-height:480px}.court{width:100%;border-radius:9px;background:#115345;aspect-ratio:2/1;cursor:crosshair;border:1px solid #426f63}.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin:10px 0}.legend i{display:inline-block;width:13px;height:3px;background:var(--color);vertical-align:middle;margin-right:4px}.chart{width:100%;height:175px;background:#101924;border:1px solid var(--line);border-radius:8px}.sticky{position:sticky;top:10px}pre.log{background:#0c151e;padding:12px;border:1px solid var(--line);border-radius:8px;font-size:11px;line-height:1.45;color:#acc4cc;white-space:pre-wrap;overflow:auto;max-height:280px}.row{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap}.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.switch{display:flex;align-items:center;justify-content:space-between;gap:9px;background:var(--surface);border-radius:8px;margin:10px 0;padding:9px 12px}.switch input{accent-color:var(--mint)}.hide{display:none!important}footer{margin:20px 0;color:var(--muted);font-size:11px;line-height:1.6}#message{min-height:20px;font-size:12px;margin:6px 0}.divider{border:0;border-top:1px solid var(--line);margin:15px 0}@media(max-width:1100px){.layout{grid-template-columns:1fr}.sticky{position:static}.rightgrid{grid-template-columns:1fr}.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.shell{padding:12px}.panel{padding:12px}.two{grid-template-columns:1fr}.tiles{gap:7px}.tile strong{font-size:17px}}
+</style></head>
+<body>
+<header><div><div class="eyebrow">SCROBOT · REAL-COMPARISON BENCHMARKS</div><h1>Perception Labs</h1><p>Camera performance · AprilTag quality · Shuttle YOLO · current Lighting Lab scene</p></div>
+<div class="row"><span class="badge" id="phase">Connecting</span><span class="badge" id="simStatus">Gazebo —</span><span class="badge" id="domain">ROS domain 79</span></div></header>
+<main class="shell">
+ <nav class="tabs" aria-label="Perception experiments">
+  <button data-tab="camera" class="active">01 · Camera Performance</button>
+  <button data-tab="apriltag">02 · AprilTag</button>
+  <button data-tab="yolo">03 · Shuttle YOLO</button>
+ </nav>
+ <div class="layout">
+  <aside>
+   <div class="panel sticky">
+    <h2 id="controlsTitle">Camera setup</h2>
+    <p class="hint">These settings change the Gazebo camera sensor itself, not just the preview resolution.</p>
+    <div class="field"><label for="color_mode">RGB resolution</label><select id="color_mode"><option>640x360</option><option>640x480</option><option>848x480</option><option selected>1280x720</option></select></div>
+    <div class="field"><label for="color_fps">Requested RGB FPS</label><select id="color_fps"><option>5</option><option selected>15</option><option>30</option><option>60</option></select></div>
+    <div class="switch"><label for="enable_depth">Enable depth camera</label><input type="checkbox" id="enable_depth" checked></div>
+    <div class="field"><label for="depth_mode">Depth resolution</label><select id="depth_mode"><option>424x240</option><option>640x480</option><option selected>848x480</option><option>1280x720</option></select></div>
+    <div class="field"><label for="depth_fps">Requested depth FPS</label><select id="depth_fps"><option>5</option><option selected>15</option><option>30</option><option>60</option></select></div>
+    <div class="switch"><label for="enable_registration">Run depth-to-color alignment</label><input type="checkbox" id="enable_registration"></div>
+    <p class="hint">YOLO automatically needs depth registration. Disable depth and registration for the fastest RGB-only baseline.</p>
+    <div class="buttons"><button id="saveSettings">Save Lab Settings</button><button id="restart" class="primary">Restart with this lab</button></div>
+    <p class="hint" id="restartHint">Camera changes require Gazebo restart.</p>
+    <hr class="divider">
+    <div class="panel-free" data-for="apriltag yolo">
+      <h2>Robot pose on court</h2><div id="poseControls"></div>
+      <div class="buttons"><button id="setPose">Place / rotate robot</button></div>
+    </div>
+    <div class="panel-free" data-for="yolo">
+      <h2>Shuttle placement</h2><div id="shuttleControls"></div>
+      <div class="buttons"><button id="setShuttle">Place / move one</button><button id="randomShuttles">Spawn random group</button><button id="clearShuttles" class="danger">Remove lab shuttles</button></div>
+    </div>
+    <div class="panel-free" data-for="yolo">
+      <h2>Inference</h2>
+      <div class="field"><label for="model_path">Model .pt path (blank = yoloshuttle latest/best)</label><input id="model_path" type="text" placeholder="artifacts/models/model.pt"></div>
+      <div class="field"><label for="device">Device</label><select id="device"><option>0</option><option>cpu</option></select></div>
+      <div id="detectorControls"></div>
+    </div>
+    <hr class="divider">
+    <h2>Publish camera configuration</h2>
+    <p class="hint">Writes only simulation RGB/depth profile YAML after confirmation; never rewrites real D435i settings or the court lighting.</p>
+    <button id="publish">Publish to Simulation</button>
+    <p id="publishHint" class="hint">Checking published camera config...</p>
+   </div>
+  </aside>
+  <section>
+   <div class="panel">
+    <div class="row"><h2>Live robot-camera view</h2><span id="previewType" class="badge">Raw RGB</span></div>
+    <div class="rightgrid">
+      <div>
+       <div class="video"><img id="cameraImage" alt="Live Gazebo robot camera preview" /><span id="cameraPlaceholder" class="hint">Waiting for RGB frames…</span></div>
+       <p class="hint">Preview is JPEG-compressed to ≤960 px and updated ~4 FPS. It is not used to measure sensor FPS. AprilTag/YOLO overlays come from the real detector nodes, not fabricated boxes.</p>
+      </div>
+      <div>
+       <h3>Overhead robot/shuttle placement</h3>
+       <canvas id="court" class="court" width="600" height="300" title="Click to position robot or shuttle"></canvas>
+       <div class="field"><label for="mapTarget">Court click places</label><select id="mapTarget"><option value="robot">Robot</option><option value="shuttle">Shuttle</option></select></div>
+       <p class="hint">Click on the court to choose X/Y, then use Place robot or Place shuttle. Yaw uses the slider. Existing robot physics remains in Gazebo.</p>
+       <div class="surface"><div class="row"><span class="hint">Ground truth robot</span><strong id="gtPose">—</strong></div><div class="row"><span class="hint">Shuttles visible to GT publisher</span><strong id="gtCount">—</strong></div></div>
+      </div>
+    </div>
+    <p id="message" role="status" aria-live="polite"></p>
+   </div>
+   <div class="panel">
+    <div class="row"><h2>Camera pipeline and bottleneck</h2><span class="badge" id="resourceStatus">CPU / GPU —</span></div>
+    <div class="tiles">
+      <div class="tile"><small>RGB delivery</small><strong id="rgbFPS">—</strong><span class="unit">wall FPS</span></div>
+      <div class="tile"><small>Depth delivery</small><strong id="depthFPS">—</strong><span class="unit">wall FPS</span></div>
+      <div class="tile"><small>Aligned depth</small><strong id="alignedFPS">—</strong><span class="unit">wall FPS</span></div>
+      <div class="tile"><small>Detection output</small><strong id="detectFPS">—</strong><span class="unit">wall FPS</span></div>
+    </div>
+    <canvas id="fpsPlot" class="chart" width="960" height="175"></canvas>
+    <div class="legend"><span style="--color:var(--mint)"><i></i>RGB</span><span style="--color:var(--violet)"><i></i>Depth</span><span style="--color:var(--amber)"><i></i>Aligned depth</span><span style="--color:var(--red)"><i></i>Detector</span></div>
+    <div class="scroll"><table class="stream-table"><thead><tr><th>Stage</th><th>Configured</th><th>Delivered wall</th><th>Sim-time rate</th><th>Jitter</th><th>Age</th><th>Bytes/frame</th></tr></thead><tbody id="streamRows"></tbody></table></div>
+    <div class="notice" id="bottleneck">Waiting for enough stream samples to identify a probable bottleneck.</div>
+    <div class="buttons"><button id="observe">Measure 3 s</button><button id="record">Save measurement report</button></div>
+    <p id="observeOutput" class="hint"></p>
+    <p class="hint">Actual wall FPS and simulation-time FPS are different. This comparison identifies the likely limiting stage; it cannot separately measure native Gazebo render and bridge costs without additional native instrumentation.</p>
+   </div>
+   <div class="panel" data-for="apriltag">
+    <h2>AprilTag · camera-to-tag detection quality</h2>
+    <div class="tiles">
+      <div class="tile"><small>Detected tag IDs</small><strong id="tagIds">—</strong></div>
+      <div class="tile"><small>Mean decision margin</small><strong id="margin">—</strong></div>
+      <div class="tile"><small>Hamming error</small><strong id="hamming">—</strong></div>
+      <div class="tile"><small>Frames with tags / RGB</small><strong id="tagRate">—</strong><span class="unit">observed ratio, not visibility-conditioned recall</span></div>
+    </div>
+    <p class="hint">Uses production AprilTag 16h5 (IDs 0–3, 0.100 m active edge) and the existing ROS detector. Rotate and reposition the robot, then press Measure 3 s. Each sample records IDs, detector margins and timestamp rates. Without verified tag-to-camera extrinsics, the panel does not claim a 6-DOF pose error.</p>
+   </div>
+   <div class="panel" data-for="yolo">
+    <h2>Shuttle YOLO · live predictions</h2>
+    <div class="tiles">
+      <div class="tile"><small>2D boxes in latest frame</small><strong id="bboxCount">—</strong></div>
+      <div class="tile"><small>Best confidence</small><strong id="confidence">—</strong></div>
+      <div class="tile"><small>2D output rate</small><strong id="yoloRate">—</strong><span class="unit">wall FPS</span></div>
+      <div class="tile"><small>3D detection output rate</small><strong id="yolo3dRate">—</strong><span class="unit">wall FPS</span></div>
+    </div>
+    <div class="scroll"><table class="stream-table"><thead><tr><th>Box X</th><th>Y</th><th>Width</th><th>Height</th><th>Confidence</th></tr></thead><tbody id="boxRows"></tbody></table></div>
+    <p class="hint">Bounding boxes and confidence come from the deployed `yolo_shuttle_detector`. Live image overlay is published by that same node. Gazebo shuttle ground truth is independent; frame-level 2D recall and 3D position RMSE require geometric association and are not inferred from counts alone.</p>
+   </div>
+   <div class="panel" data-for="yolo">
+    <h2>YOLO dataset → quality check → fine-tune → held-out test</h2>
+    <p class="hint">Reuses <strong>hai-hachi/yoloshuttle</strong> training/validation scripts and SCROBOT's CRC-checked headless capture. The dataset world is regenerated from the current published badminton-court lights, materials, walls and net; the original old-lit dataset is not overwritten.</p>
+    <div class="two">
+      <div><div id="datasetControls"></div></div>
+      <div><div id="trainControls"></div></div>
+    </div>
+    <div class="buttons"><button id="dataset" class="primary">1 · Generate current-light dataset</button><button id="checkDataset">2 · Check labels / previews</button><button id="train">3 · Fine-tune model</button><button id="validate">4 · Test held-out data</button><button id="stopJob" class="danger">Stop job</button></div>
+    <p id="datasetInfo" class="hint"></p>
+    <p id="jobStatus" class="hint">No offline job started.</p><pre class="log" id="jobLog">Job logs appear here.</pre>
+    <div class="notice">Headless capture/training stops the interactive Gazebo first to release GPU resources. Restart this lab afterward. The new dataset is stored in your local yoloshuttle checkout; no model weights or large images are committed to SCROBOT automatically. Use a real D435i holdout before publishing trained weights to your robot.</div>
+   </div>
+  </section>
+ </div>
+ <footer>Simulation-only experiment · Isolated ROS domain 79 (headless training dataset domain 80) · Camera calibration is published explicitly and separately from Lighting, Mobility and Odometry Labs.</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const tabButtons=[...document.querySelectorAll("[data-tab]")];
+const modes=["camera","apriltag","yolo"];
+const ranges={
+ poseControls:[["robot_x","Robot X (m)",-6.25,6.25,.05],["robot_y","Robot Y (m)",-2.75,2.75,.05],["robot_yaw_deg","Robot yaw (°)",-180,180,5]],
+ shuttleControls:[["shuttle_x","Shuttle X (m)",-6.25,6.25,.05],["shuttle_y","Shuttle Y (m)",-2.75,2.75,.05],["shuttle_count","Random shuttle count",1,50,1]],
+ detectorControls:[["max_detection_rate","Max inference rate (Hz)",1,60,1]],
+ datasetControls:[["dataset_images","Dataset images",100,10000,100],["dataset_shuttles","Dataset shuttle population",1,100,1],["dataset_positive_fraction","Positive-pose fraction",0,1,.05],["dataset_seed","Random seed",0,10000,1]],
+ trainControls:[["train_epochs","Training epochs",1,100,1],["train_batch","Training batch size",1,32,1],["train_imgsz","YOLO input size",320,1280,32],["train_lr","Learning rate",.00001,.005,.00001]]
+};
+for(const [parent,items] of Object.entries(ranges))for(const [key,label,min,max,step]of items){
+ const box=document.createElement("div");box.className="field";
+ box.innerHTML='<label for="'+key+'">'+label+'<output id="out-'+key+'"></output></label><input type="range" id="'+key+'" min="'+min+'" max="'+max+'" step="'+step+'">';
+ $(parent).appendChild(box);
+ $(key).oninput=()=>{$("out-"+key).textContent=Number($(key).value).toFixed(step<.001?5:step<.1?2:step<1?1:0)};
+}
+const keys=["mode","color_mode","depth_mode","color_fps","depth_fps","enable_depth","enable_registration","robot_x","robot_y","robot_yaw_deg","shuttle_x","shuttle_y","shuttle_count","model_path","device","max_detection_rate","dataset_images","dataset_shuttles","dataset_positive_fraction","dataset_seed","train_epochs","train_batch","train_imgsz","train_lr"];
+const numbers=new Set(["color_fps","depth_fps","robot_x","robot_y","robot_yaw_deg","shuttle_x","shuttle_y","shuttle_count","max_detection_rate","dataset_images","dataset_shuttles","dataset_positive_fraction","dataset_seed","train_epochs","train_batch","train_imgsz","train_lr"]);
+const bools=new Set(["enable_depth","enable_registration"]);
+let first=false,mode="camera",busy=false,last=null,history=[],lastFrame=0;
+function fields(){const d={};for(const k of keys)d[k]=k==="mode"?mode:bools.has(k)?$(k).checked:numbers.has(k)?Number($(k).value):$(k).value;return d}
+function load(data){
+ mode=data.mode;
+ for(const k of keys){if(k==="mode")continue;const el=$(k);if(!el)continue;
+  if(bools.has(k))el.checked=data[k];else el.value=data[k];
+  if(el.oninput)el.oninput();
+ }
+ first=true;changeTab(mode,false);
+}
+function show(msg,error=false){$("message").textContent=msg;$("message").className=error?"bad":"ok";}
+async function api(path,obj){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(obj)});const j=await r.json();if(!r.ok)throw Error(j.error||"Request failed");return j}
+async function action(fn){if(busy)return;busy=true;try{await fn()}catch(e){show(e.message,true)}finally{busy=false}}
+function changeTab(which,display=true){
+ if(!modes.includes(which))return;mode=which;
+ for(const b of tabButtons)b.classList.toggle("active",b.dataset.tab===mode);
+ for(const n of document.querySelectorAll("[data-for]"))n.classList.toggle("hide",!n.dataset.for.split(" ").includes(mode));
+ $("controlsTitle").textContent=mode==="camera"?"01 · Camera Performance":mode==="apriltag"?"02 · AprilTag Detection":"03 · Shuttle YOLO";
+ if(display)show("Selected "+mode+". Save settings and restart Gazebo to activate this processing mode.");
+}
+for(const btn of tabButtons)btn.onclick=()=>changeTab(btn.dataset.tab);
+$("saveSettings").onclick=()=>action(async()=>{await api("/api/settings",fields());show("Saved lab settings; restart Gazebo to apply camera configuration.")});
+$("restart").onclick=()=>action(async()=>{await api("/api/settings",fields());await api("/api/restart",{});show("Gazebo restarting with "+mode+" mode and selected RGB/depth configuration.")});
+$("publish").onclick=()=>action(async()=>{
+ if(!confirm("Publish SAVED RGB/depth camera settings to the MAIN SIMULATION? Prior YAML is backed up; real D435i configuration remains untouched."))return;
+ const r=await api("/api/settings",fields());const published=await api("/api/publish",{confirm:true});
+ show(published.changed?"Published camera profile; previous YAML backup at "+published.backup:
+      "The normal Gazebo simulation already matches these camera settings.");
+});
+$("setPose").onclick=()=>action(async()=>{const f=fields();await api("/api/pose",{x:f.robot_x,y:f.robot_y,yaw_deg:f.robot_yaw_deg});show("Robot moved to ("+f.robot_x+", "+f.robot_y+") yaw "+f.robot_yaw_deg+"°. Wait for fresh camera pixels before measuring.")});
+$("setShuttle").onclick=()=>action(async()=>{const f=fields();const r=await api("/api/shuttle",{x:f.shuttle_x,y:f.shuttle_y});show((r.moved?"Moved ":"Spawned ")+r.name+" at "+f.shuttle_x+", "+f.shuttle_y)});
+$("randomShuttles").onclick=()=>action(async()=>{await api("/api/settings",fields());const r=await api("/api/shuttles/random",{});show("Spawned "+r.count+" shuttles (batch "+r.batch+").")});
+$("clearShuttles").onclick=()=>action(async()=>{const r=await api("/api/shuttles/clear",{});show("Removed "+r.removed+" lab shuttles."+(r.errors?.length?" Errors: "+r.errors.join("; "):""))});
+$("observe").onclick=()=>action(async()=>{const r=await api("/api/observe",{seconds:3});$("observeOutput").textContent=JSON.stringify(r);show("Recorded 3 seconds of observation.")});
+$("record").onclick=()=>action(async()=>{const r=await api("/api/record",{});show("Saved "+r.records+" telemetry records: "+r.path)});
+for(const job of ["dataset","checkDataset","train","validate"])$(job).onclick=()=>action(async()=>{
+ await api("/api/settings",fields());
+ if(!confirm(job+" will stop interactive Gazebo and run locally using your yoloshuttle checkout. Continue?"))return;
+ const r=await api("/api/job/start",{kind:job});
+ show("Started "+job+": "+r.log+". Follow the live process log below.");
+});
+$("stopJob").onclick=()=>action(async()=>{await api("/api/job/stop",{});show("Offline dataset/training job stopped.")});
+function fmt(n,d=1){return n==null||!Number.isFinite(Number(n))?"—":Number(n).toFixed(d)}
+function updateCourt(data){
+ const el=$("court"),ctx=el.getContext("2d"),w=el.width,h=el.height;
+ ctx.clearRect(0,0,w,h);ctx.fillStyle="#145345";ctx.fillRect(0,0,w,h);
+ const X=x=>w/2+x*w/15.4,Y=y=>h/2-y*h/7.2;
+ ctx.strokeStyle="#e0f2e8";ctx.lineWidth=2;ctx.strokeRect(X(-6.7),Y(3.05),X(6.7)-X(-6.7),Y(-3.05)-Y(3.05));
+ ctx.beginPath();ctx.moveTo(X(0),Y(3.05));ctx.lineTo(X(0),Y(-3.05));ctx.stroke();
+ for(const x of [-5.94,-1.98,1.98,5.94]){ctx.beginPath();ctx.moveTo(X(x),Y(3.05));ctx.lineTo(X(x),Y(-3.05));ctx.stroke();}
+ ctx.strokeStyle="#e0f2e855";ctx.beginPath();ctx.moveTo(X(-6.7),Y(2.59));ctx.lineTo(X(6.7),Y(2.59));ctx.moveTo(X(-6.7),Y(-2.59));ctx.lineTo(X(6.7),Y(-2.59));ctx.stroke();
+ const p=data.ground_truth||{x:Number($("robot_x").value),y:Number($("robot_y").value),yaw_deg:Number($("robot_yaw_deg").value)};
+ ctx.fillStyle="#40d3c8";ctx.beginPath();ctx.arc(X(p.x),Y(p.y),7,0,2*Math.PI);ctx.fill();
+ const angle=Number(p.yaw_deg||0)*Math.PI/180;
+ ctx.beginPath();ctx.strokeStyle="#fcfcfc";ctx.lineWidth=3;ctx.moveTo(X(p.x),Y(p.y));ctx.lineTo(X(p.x)+18*Math.cos(angle),Y(p.y)-18*Math.sin(angle));ctx.stroke();
+ ctx.fillStyle="#ffbd6d";for(const pt of data.shuttles||[]){ctx.beginPath();ctx.arc(X(pt.x),Y(pt.y),4,0,Math.PI*2);ctx.fill()}
+}
+$("court").addEventListener("click",e=>{
+ const el=$("court"),r=el.getBoundingClientRect(),rx=(e.clientX-r.left)/r.width,ry=(e.clientY-r.top)/r.height;
+ const x=Math.max(-6.25,Math.min(6.25,(rx-.5)*15.4)),y=Math.max(-2.75,Math.min(2.75,(.5-ry)*7.2));
+ if($("mapTarget").value==="robot"){ $("robot_x").value=x.toFixed(2);$("robot_y").value=y.toFixed(2);$("robot_x").oninput();$("robot_y").oninput() }
+ else{ $("shuttle_x").value=x.toFixed(2);$("shuttle_y").value=y.toFixed(2);$("shuttle_x").oninput();$("shuttle_y").oninput() }
+ show("Selected court coordinates ("+x.toFixed(2)+", "+y.toFixed(2)+"). Click the corresponding Place button.");
+});
+function plotFPS(){
+ const cvs=$("fpsPlot"),rect=cvs.getBoundingClientRect(),dpr=devicePixelRatio||1;
+ cvs.width=Math.max(200,Math.round(rect.width*dpr));cvs.height=Math.round(175*dpr);
+ const g=cvs.getContext("2d");g.scale(dpr,dpr);const w=rect.width,h=175,pad=29;
+ g.font="10px system-ui";g.strokeStyle="#435c6a";g.fillStyle="#a4b7c5";
+ const vmax=Math.max(15,...history.flatMap(a=>a.filter(x=>x!=null)))*1.15;
+ for(let i=0;i<=4;i++){const y=10+i*(h-25)/4;g.beginPath();g.moveTo(pad,y);g.lineTo(w-6,y);g.stroke();g.fillText(fmt(vmax*(1-i/4),0),3,y+3)}
+ for(let key=0;key<4;key++){
+  const colors=["#42d2c5","#a49cff","#f8c06d","#f08f9f"];
+  const pts=history.map((a,i)=>({x:pad+i/Math.max(1,history.length-1)*(w-pad-9),y:10+(1-(a[key]??0)/vmax)*(h-25),v:a[key]})).filter(x=>x.v!=null);
+  if(pts.length<2)continue;
+  g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y));g.strokeStyle=colors[key];g.lineWidth=2;g.stroke();
+ }
+}
+const streamNames=[["rgb","RGB","color_fps"],["depth","Depth","depth_fps"],["aligned_depth","Registered depth","depth_fps"],["camera_info","RGB CameraInfo","color_fps"],["apriltag","AprilTag output","color_fps"],["yolo2d","YOLO 2D","max_detection_rate"],["yolo3d","YOLO 3D","max_detection_rate"]];
+function display(s){
+ last=s;if(!first&&s.settings)load(s.settings);
+ $("phase").textContent=mode.toUpperCase();
+ $("simStatus").textContent=s.sim_alive?"Gazebo running":"Gazebo stopped";
+ $("simStatus").className="badge "+(s.sim_alive?"ok":"warn");
+ const changed=JSON.stringify(fields())!==JSON.stringify(s.settings);
+ $("restartHint").textContent=s.restart_needed||changed?"Changes pending. Restart Gazebo to apply scene/vision pipeline.":"Active Gazebo mode matches saved configuration.";
+ const d=s.streams||{},rw=d.rgb||{},dw=d.depth||{},aw=d.aligned_depth||{},pd=d[mode==="yolo"?"yolo2d":"apriltag"]||{};
+ $("rgbFPS").textContent=fmt(rw.wall_fps);
+ $("depthFPS").textContent=fmt(dw.wall_fps);
+ $("alignedFPS").textContent=fmt(aw.wall_fps);
+ $("detectFPS").textContent=fmt(pd.wall_fps);
+ const cpu=s.system?.cpu_pct,gpu=s.system?.gpu_util_pct;
+ $("resourceStatus").textContent="CPU "+fmt(cpu,0)+"% · GPU "+fmt(gpu,0)+"% · VRAM "+fmt(s.system?.gpu_mem_mb,0)+" MB";
+ $("previewType").textContent=s.preview_kind||"Raw RGB";
+ $("gtPose").textContent=s.ground_truth?fmt(s.ground_truth.x,2)+", "+fmt(s.ground_truth.y,2)+" · "+fmt(s.ground_truth.yaw_deg,0)+"°":"—";
+ $("gtCount").textContent=(s.shuttles||[]).length;
+ $("bottleneck").textContent="Bottleneck hint: "+s.bottleneck_hint+". Correlate wall FPS, sim FPS, CPU/GPU and registration rates. Unmeasured streams are not zero FPS.";
+ const table=$("streamRows");table.innerHTML="";
+ for(const [key,label,target]of streamNames){
+  const m=d[key]||{},enabled=key==="apriltag"?mode==="apriltag":key.startsWith("yolo")?mode==="yolo":key==="aligned_depth"?(s.settings?.enable_registration||mode==="yolo"):key==="depth"?s.settings?.enable_depth:true;
+  const tr=document.createElement("tr"),values=[label,enabled?(s.settings?.[target]??"—")+" Hz":"Off",fmt(m.wall_fps)+" Hz",fmt(m.sim_fps)+" Hz",fmt(m.jitter_ms,1)+" ms",fmt(m.age_wall_s,1)+" s",m.bytes||"—"];
+  for(const v of values){const td=document.createElement("td");td.textContent=v;tr.append(td)}table.append(tr);
+ }
+ $("tagIds").textContent=(s.tag_ids||[]).join(", ")||"None";
+ $("margin").textContent=fmt((s.decision_margins||[]).reduce((a,b)=>a+b,0)/Math.max(1,(s.decision_margins||[]).length),1);
+ $("hamming").textContent=(s.hamming||[]).join(", ")||"—";
+ $("tagRate").textContent=fmt(s.last_sample?.tag_positive_fraction_of_rgb,2);
+ $("bboxCount").textContent=(s.bboxes||[]).length;
+ $("confidence").textContent=fmt(Math.max(0,...(s.bboxes||[]).map(b=>b.confidence||0)),2);
+ $("yoloRate").textContent=fmt(d.yolo2d?.wall_fps);
+ $("yolo3dRate").textContent=fmt(d.yolo3d?.wall_fps);
+ const bboxTable=$("boxRows");bboxTable.innerHTML="";
+ for(const b of s.bboxes||[]){const tr=document.createElement("tr");for(const v of [b.cx,b.cy,b.w,b.h,fmt(b.confidence,2)]){const td=document.createElement("td");td.textContent=v;tr.append(td)}bboxTable.append(tr)}
+ $("datasetInfo").textContent="yoloshuttle: "+s.yoloshuttle_path+(s.yoloshuttle_found?" (found)":" (not cloned)")+
+  " · model "+s.model_path+(s.model_found?" (found)":" (missing)")+" · dataset "+s.dataset_path;
+ const job=s.job||{};
+ $("jobStatus").textContent=job.kind?"Job "+job.kind+" · "+(job.running?"RUNNING":job.returncode===0?"COMPLETE":"EXIT "+job.returncode):"No offline job yet.";
+ $("jobLog").textContent=job.log_tail||"No job output yet.";
+ $("publishHint").textContent=s.publication?.error?"Publication error: "+s.publication.error:
+  s.publication?.matches?"Simulation camera profile matches current saved selection.":"Simulation camera profile differs from saved selection.";
+ $("publish").disabled=busy||!s.publication||!!s.publication.error;
+ $("setPose").disabled=busy||!s.sim_alive;
+ $("setShuttle").disabled=busy||!s.sim_alive;
+ $("randomShuttles").disabled=busy||!s.sim_alive;
+ $("clearShuttles").disabled=busy||!s.sim_alive;
+ $("stopJob").disabled=!job.running;
+ for(const id of ["dataset","train","checkDataset","validate"])$(id).disabled=busy||job.running;
+ if(s.server_error)show(s.server_error,true);
+ updateCourt(s);
+ const point=[rw.wall_fps??null,dw.wall_fps??null,aw.wall_fps??null,pd.wall_fps??null];
+ if(!history.length||JSON.stringify(history.at(-1))!==JSON.stringify(point)){history.push(point);if(history.length>80)history.shift()}
+ plotFPS();
+}
+async function poll(){try{const r=await fetch("/api/status",{cache:"no-store"});if(!r.ok)throw Error("Status unavailable");display(await r.json())}catch(e){$("simStatus").textContent=e.message}}
+async function frame(){if(busy||!last?.sim_alive)return;try{
+ const resp=await fetch("/api/frame",{cache:"no-store"});if(!resp.ok)return;const blob=await resp.blob();const url=URL.createObjectURL(blob);
+ const img=$("cameraImage"),previous=img.dataset.blob||"";
+ img.onload=()=>{if(previous)URL.revokeObjectURL(previous)};
+ img.src=url;img.dataset.blob=url;$("cameraPlaceholder").classList.add("hide");
+ }catch(_e){}}
+setInterval(poll,850);setInterval(frame,360);window.addEventListener("resize",()=>last&&plotFPS());poll();
+</script>
+</body></html>
