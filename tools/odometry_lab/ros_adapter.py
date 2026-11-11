@@ -44,7 +44,7 @@ def yaw_of(orientation):
 
 
 class OdometryDriver(Node):
-    def __init__(self, settings):
+    def __init__(self, settings, command_topic="/diff_drive_controller/cmd_vel"):
         super().__init__(
             "odometry_lab_driver",
             parameter_overrides=[Parameter("use_sim_time", value=True)],
@@ -52,6 +52,7 @@ class OdometryDriver(Node):
         )
         self.lock = threading.RLock()
         self.settings = validate(settings)
+        self.command_topic = command_topic
         self.streams = {key: StreamMeter() for key in TOPICS}
         self.history = defaultdict(list)
         self.run_data = defaultdict(list)
@@ -65,7 +66,7 @@ class OdometryDriver(Node):
         self.latest_pose = None
         self.last_joint_wall = None
         self.pub = self.create_publisher(
-            TwistStamped, "/diff_drive_controller/cmd_vel", 10
+            TwistStamped, command_topic, 10
         )
         sensor_qos = QoSProfile(depth=20,
                                 reliability=ReliabilityPolicy.BEST_EFFORT)
@@ -266,6 +267,7 @@ class OdometryDriver(Node):
                 },
                 "metrics":self.finished["metrics"] if self.finished else None,
                 "settings":dict(self.settings),
+                "command_topic":self.command_topic,
                 "error":self.problem,
                 "elapsed":None if self.start_at is None else round(self.now()-self.start_at,2),
             }
@@ -276,9 +278,9 @@ class OdometryDriver(Node):
 
 
 class RosBridge:
-    def __init__(self,settings):
+    def __init__(self,settings,command_topic="/diff_drive_controller/cmd_vel"):
         rclpy.init()
-        self.node=OdometryDriver(settings)
+        self.node=OdometryDriver(settings,command_topic)
         self.thread=threading.Thread(target=rclpy.spin,args=(self.node,),
                                      daemon=True,name="OdometryLabROS")
         self.thread.start()
