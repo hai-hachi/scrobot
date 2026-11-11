@@ -60,7 +60,7 @@ class PerceptionDriver(Node):
         )
         self.guard = threading.RLock()
         self.streams = {name: StreamMeter() for name in (
-            "rgb", "depth", "camera_info", "depth_info", "apriltag",
+            "rgb", "depth", "aligned_depth", "camera_info", "depth_info", "apriltag",
             "yolo2d", "yolo3d", "truth", "shuttle_truth",
         )}
         self.samples = deque(maxlen=3000)
@@ -85,6 +85,8 @@ class PerceptionDriver(Node):
             self.create_subscription(msgtype, topic, cb, sensor)
         sub(Image, "/camera/camera/color/image_raw", self.on_rgb)
         sub(Image, "/camera/camera/depth/image_raw", self.on_depth)
+        sub(Image, "/camera/camera/aligned_depth_to_color/image_raw",
+            self.on_aligned_depth)
         sub(CameraInfo, "/camera/camera/color/camera_info", self.on_color_info)
         sub(CameraInfo, "/camera/camera/depth/camera_info", self.on_depth_info)
         sub(Image, "/debug/apriltag_overlay/image", self.on_tag_overlay)
@@ -136,6 +138,10 @@ class PerceptionDriver(Node):
     def on_depth(self, msg):
         with self.guard:
             self._record("depth", msg, msg.width, msg.height)
+
+    def on_aligned_depth(self, msg):
+        with self.guard:
+            self._record("aligned_depth", msg, msg.width, msg.height)
 
     def on_color_info(self, msg):
         with self.guard:
