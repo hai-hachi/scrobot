@@ -303,7 +303,10 @@ class LabService:
             if path and path.exists():
                 try:
                     with path.open('rb') as f:
-                        f.seek(max(0, f.stat().st_size - 4500))
+                        # A buffered file has no .stat(). Seek from its own
+                        # end to safely tail even while the launcher writes.
+                        f.seek(0, os.SEEK_END)
+                        f.seek(max(0, f.tell() - 4500), os.SEEK_SET)
                         logs = f.read().decode('utf8', 'replace')[-2000:]
                 except OSError:
                     pass
