@@ -59,6 +59,14 @@ body{background:linear-gradient(135deg,#0a1721,#0b1119);font:14px system-ui,sans
     <div class="tile"><small>IMU yaw RMSE</small><strong id="imuYaw">—</strong><small>degrees</small></div>
     <div class="tile"><small>Magnetic field</small><strong id="fieldStrength">—</strong><small>µT (raw field magnitude)</small></div>
    </div>
+   <h3 style="margin-top:18px">Sensor accuracy vs independent Gazebo truth</h3>
+   <div class="compare">
+    <div class="tile"><small>Wheel forward-speed RMSE</small><strong id="wheelVelocity">—</strong><small>m/s</small></div>
+    <div class="tile"><small>Wheel yaw-rate RMSE</small><strong id="wheelYawRate">—</strong><small>rad/s</small></div>
+    <div class="tile"><small>IMU gyro-z rate RMSE</small><strong id="gyroYawRate">—</strong><small>rad/s</small></div>
+    <div class="tile"><small>Magnetic relative yaw RMSE</small><strong id="magneticYaw">—</strong><small>degrees</small></div>
+    <div class="tile"><small>IMU mean gyro-z</small><strong id="gyroMean">—</strong><small>rad/s; bias only when stationary</small></div>
+   </div>
    <div class="notice">Magnetic field-vector angle is not an absolute heading without axis/declination calibration. The simulation currently does not guarantee realistic sensor noise or long-term gyro bias. RPM-derived wheel heading is useful for comparison even though the EKF intentionally ignores wheel yaw.</div>
   </div>
   <p id="error"></p>
@@ -162,6 +170,11 @@ function display(s){
  $("wheelYaw").textContent=fmt(m.wheel?.yaw_rmse_deg,2);
  $("imuYaw").textContent=fmt(m.imu?.yaw_rmse_deg,2);
  $("fieldStrength").textContent=fmt(s.latest?.magnetometer?.field_strength_ut,1);
+ $("wheelVelocity").textContent=fmt(m.wheel_speed?.rmse,4);
+ $("wheelYawRate").textContent=fmt(m.wheel_yaw_rate?.rmse,4);
+ $("gyroYawRate").textContent=fmt(m.imu_yaw_rate?.rmse,4);
+ $("magneticYaw").textContent=fmt(m.magnetic_relative_heading?.yaw_rmse_deg,2);
+ $("gyroMean").textContent=fmt(m.stationary_gyro?.gyro_mean_rad_s,5);
  graph("trajectory",s.trajectory||{});
  graph("heading",s.trajectory||{});
  if(s.server_error)show(s.server_error,true)
