@@ -51,7 +51,9 @@ def validate(raw):
                   for key in RATE_NAMES},
               "pre_s": (0.2, 2.0),
               "linear_m_s": (0.05, 0.50),
-              "angular_rad_s": (0.1, 1.8)}
+              # Existing diff_drive_controller body angular cap is 2.30 rad/s.
+              # At this cap each spinning wheel rim is 0.483 m/s.
+              "angular_rad_s": (0.1, 2.3)}
     for key, (low, high) in bounds.items():
         value = obj[key]
         if isinstance(value, bool):
