@@ -87,6 +87,8 @@ class MobilityCoreTests(unittest.TestCase):
             {"tau_left": 0},
             {"unknown": 123},
             {"wheel_collision_width": 0.2},
+            {"drive_slip1": -0.01},
+            {"drive_slip2": 0.10},
         ):
             with self.assertRaises(ValueError):
                 validate_settings(bad)
