@@ -1,0 +1,12 @@
+# Simulation-only odometry sensor and fusion publication calibration.
+# Managed by tools/odometry_lab; hardware controller/PID frequencies are unchanged.
+# Configured 100 Hz is a request, not a guarantee of real-time delivery.
+schema_version: 1
+rates:
+  wheel_odom_hz: 100.0
+  imu_hz: 100.0
+  magnetometer_hz: 100.0
+  ground_truth_hz: 100.0
+  ekf_hz: 100.0
+# The IMU transformer and Madgwick emit on incoming sensor messages.
+# /joint_states follows controller_manager 100 Hz update rate.
