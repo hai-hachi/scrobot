@@ -13,6 +13,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -70,7 +71,8 @@ def generate_launch_description():
              "model_path": LaunchConfiguration("model_path"),
              "device": LaunchConfiguration("device"),
              "publish_debug_image": True,
-             "max_detection_rate": LaunchConfiguration("max_detection_rate")},
+             "max_detection_rate": ParameterValue(
+                 LaunchConfiguration("max_detection_rate"), value_type=float)},
         ],
     )
     return LaunchDescription([
