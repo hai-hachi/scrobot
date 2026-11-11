@@ -15,7 +15,8 @@ sys.path.insert(0,str(REPO/"src/scrobot_simulation/launch"))
 from core import (
     DEFAULTS, StreamMeter, analyse, duration, interpolate_pose,
     pose_metrics, quaternion_yaw, relative, segments, sequence_command,
-    validate, wrap,
+    validate, wrap, velocity_error_metrics, magnetic_relative_heading_metrics,
+    stationary_gyro_stats,
 )
 from odometry_rate_config import (
     DEFAULT_RATES, load_rates, prepare_configurations, validated_rates,
@@ -89,6 +90,22 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(stats["frame_id"],"base_link")
         meter.add(.99,"base_link")
         self.assertEqual(meter.status()["stamp_nonmonotonic"],1)
+
+    def test_independent_gyro_and_wheel_velocity_accuracy(self):
+        gt=[{"t":i*.01,"vx":0.2,"omega":0.5,"yaw":i*.005,
+             "x":0.0,"y":0.0} for i in range(101)]
+        wheel=[{"t":x["t"],"vx":0.2,"omega":0.5} for x in gt]
+        imu=[{"t":x["t"],"gyro_z":0.5} for x in gt]
+        self.assertEqual(velocity_error_metrics(wheel,gt,"vx")["rmse"],0)
+        self.assertEqual(velocity_error_metrics(wheel,gt,"omega")["rmse"],0)
+        self.assertEqual(
+            velocity_error_metrics(imu,gt,"gyro_z","omega")["rmse"],0)
+        self.assertAlmostEqual(stationary_gyro_stats(imu)["gyro_mean_rad_s"],0.5)
+        mag=[{"t":x["t"],"raw_field_xy_deg":-math.degrees(x["yaw"]),
+              "field_x_t":30e-6,"field_y_t":0} for x in gt]
+        metrics=magnetic_relative_heading_metrics(mag,gt)
+        self.assertAlmostEqual(metrics["yaw_rmse_deg"],0,delta=.01)
+        self.assertIsNone(magnetic_relative_heading_metrics([],gt))
 
     def test_generated_controller_and_ekf_rates_without_touching_source(self):
         controllers=REPO/"src/scrobot_control/config/controllers.yaml"
