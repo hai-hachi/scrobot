@@ -1,0 +1,40 @@
+name: SCROBOT Odometry Lab
+
+on:
+  push:
+    branches: [real-comparison]
+    paths:
+      - 'tools/odometry_lab/**'
+      - 'src/scrobot_control/config/controllers.yaml'
+      - 'src/scrobot_simulation/config/ros_gz_bridge.yaml'
+      - '.github/workflows/odometry_lab.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: odometry-lab-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-odometry:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install offline odometry analysis/test dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y python3-yaml python3-numpy python3-pytest
+      - name: Syntax-check Python modules
+        run: python3 -m compileall -q tools/odometry_lab
+      - name: Check Odometry Lab browser JavaScript
+        run: node --check tools/odometry_lab/web/app.js
+      - name: Run odometry, timestamp alignment and web-server tests
+        run: python3 -m pytest tools/odometry_lab/tests -q
+      - name: Verify instrumentation is isolated from production topics
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          monitor = Path('tools/odometry_lab/monitor.py').read_text()
+          config = Path('tools/odometry_lab/config/lab.yaml').read_text()
+          for s in ('/odometry_lab/encoder_odom', '/diff_drive_controller/odom', '/evaluation/ground_truth_odom'):
+              assert s in monitor + config
+          sim = Path('src/scrobot_simulation/config/ros_gz_bridge.yaml').read_text()
+          assert '/evaluation/ground_truth_odom' in sim
+          PY
