@@ -101,3 +101,46 @@ def test_motion_start_preflight_is_required(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError,match='Gazebo offline'):
         service.start()
     assert service.process is None
+
+def test_motion_preflight_rejects_missing_controller_and_duplicate_clock(monkeypatch):
+    """Lighting-only Gazebo, incomplete control stack and multiple clocks are unsafe."""
+    import subprocess
+    import web_server
+
+    topics = BASE['topics']
+    expected = ['/clock', topics['ground_truth'], topics['joint_states'],
+                topics['wheel_odom'], topics['ekf_odom']]
+
+    def check_case(*, missing=None, duplicate_clock=False, service=True):
+        calls = []
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            if cmd[1:3] == ['topic', 'list']:
+                listed = [t for t in expected if t != missing]
+                out = '\\n'.join(listed)
+            elif cmd[1:3] == ['topic', 'info']:
+                count = 2 if cmd[3] == '/clock' and duplicate_clock else 1
+                out = f'Publisher count: {count}\\nSubscription count: 1\\n'
+            elif cmd[1:3] == ['service', 'type']:
+                out = 'std_srvs/srv/SetBool\\n' if service else ''
+            else:
+                raise AssertionError(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout=out, stderr='')
+        monkeypatch.setattr(web_server.subprocess, 'run', fake_run)
+        return calls
+
+    check_case(missing=topics['wheel_odom'])
+    with pytest.raises(RuntimeError, match=topics['wheel_odom']):
+        web_server.simulated_topics_present(BASE)
+
+    check_case(duplicate_clock=True)
+    with pytest.raises(RuntimeError, match='exactly one publisher on /clock'):
+        web_server.simulated_topics_present(BASE)
+
+    check_case(service=False)
+    with pytest.raises(RuntimeError, match='set_manual_mode'):
+        web_server.simulated_topics_present(BASE)
+
+    calls = check_case()
+    web_server.simulated_topics_present(BASE)
+    assert ['ros2', 'service', 'type', '/control/set_manual_mode'] in calls
