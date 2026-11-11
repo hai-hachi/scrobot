@@ -15,7 +15,7 @@ sys.path.insert(0,str(LAB))
 from core import (DEFAULTS, COLOR_PROFILES, DEPTH_PROFILES, StreamMeter,
                   camera_args, pose_request, validate, timing_summary)
 from tag_geometry import (known_tags,rotate,multiply,conjugate,
-                          expected_camera_to_tag,translation_error)
+                          expected_camera_to_tag,translation_error,quaternion_delta_deg)
 from scene_sync import sync_dataset_world,write_dataset_provenance
 from publish import document,read_config,publish,status
 
@@ -91,6 +91,8 @@ class PerceptionCoreTests(unittest.TestCase):
         q=(0,0,math.sqrt(.5),math.sqrt(.5))
         p=expected_camera_to_tag(((0,0,0),q),((0,0,0),(0,0,0,1)),(0,1,0))
         self.assertAlmostEqual(p[0],1,places=5)
+        self.assertEqual(quaternion_delta_deg((0,0,0,1),(0,0,0,-1)),0)
+        self.assertAlmostEqual(quaternion_delta_deg((0,0,0,1),q),90,delta=.01)
         source=yaml.safe_load((ROOT/"src/scrobot_localization/config/court_landmarks.yaml").read_text())
         tags=known_tags(source)
         self.assertEqual(set(tags),{0,1,2,3})
