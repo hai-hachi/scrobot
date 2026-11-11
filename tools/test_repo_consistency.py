@@ -69,6 +69,42 @@ class RepositoryConsistencyTests(unittest.TestCase):
         self.assertNotIn("scrobot_system.cpp", mobility)
 
 
+    def test_lab_result_isolation_and_no_unintended_overwrites(self):
+        lighting = contents("tools/lighting_lab/server.py")
+        mobility = contents("tools/mobility_lab/server.py")
+        odometry = contents("tools/odometry_lab/storage.py")
+        web = contents("tools/odometry_lab/web_server.py")
+        replay = contents("tools/odometry_lab/replay.py")
+
+        # All three labs save under independent per-lab result trees.
+        self.assertIn("evaluation_results/lighting_lab/presets", lighting)
+        self.assertIn("evaluation_results/mobility_lab", mobility)
+        self.assertIn('"lighting_lab"', odometry)
+        self.assertIn('"mobility_lab"', odometry)
+        self.assertIn("reserve_run_dir", odometry)
+        self.assertIn("validated_result_root", web)
+        self.assertIn("validated_result_root", replay)
+
+        # Only Lighting/Mobility explicit publishing edits production.
+        self.assertNotIn("mobility_calibration.yaml", web)
+        self.assertNotIn("badminton_court.sdf", web)
+        self.assertIn('output.open("x"', lighting)
+        self.assertIn("run_log.open('x')", web)
+
+    def test_labs_use_separate_ros_gazebo_domains(self):
+        lighting = contents("tools/lighting_lab/server.py")
+        mobility = contents("tools/mobility_lab/server.py")
+        odometry = contents("tools/odometry_lab/web_server.py")
+        self.assertIn('default=76', lighting)
+        self.assertIn('default=77', mobility)
+        for source in (lighting, mobility):
+            self.assertIn('ROS_DOMAIN_ID', source)
+            self.assertIn('GZ_PARTITION', source)
+        # Odometry should attach to the normal ROS domain; it never
+        # launches a second gazebo or claims a private motor interface.
+        self.assertIn("simulated_topics_present", odometry)
+        self.assertNotIn('GZ_PARTITION', odometry)
+
     def test_odometry_motion_requires_single_sim_clock_and_control_stack(self):
         sim = contents("src/scrobot_bringup/launch/sim.launch.py")
         self.assertIn("condition=IfCondition(launch_mission)", sim)
