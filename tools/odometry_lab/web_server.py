@@ -339,7 +339,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--port', type=int, default=8765)
+    ap.add_argument('--port', type=int, default=8767)
     ap.add_argument('--no-browser', action='store_true')
     args = ap.parse_args(argv)
     if not 1024 <= args.port <= 65535:
