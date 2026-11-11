@@ -24,6 +24,7 @@ MODES = ("camera", "apriltag", "yolo")
 DEFAULTS = {
     "mode": "camera", "color_mode": "1280x720", "depth_mode": "848x480",
     "color_fps": 15, "depth_fps": 15, "enable_depth": True,
+    "enable_registration": False,
     "robot_x": 2.0, "robot_y": 0.0, "robot_yaw_deg": 0.0,
     "shuttle_x": 3.0, "shuttle_y": 0.0, "shuttle_count": 5,
     "model_path": "", "device": "0", "max_detection_rate": 15,
@@ -59,8 +60,13 @@ def validate(raw):
     for name in ("color_fps", "depth_fps"):
         if type(result[name]) is not int or result[name] not in FPS_OPTIONS:
             raise ValueError(f"{name} must be one of {FPS_OPTIONS}")
-    if type(result["enable_depth"]) is not bool:
-        raise ValueError("enable_depth must be boolean")
+    for key in ("enable_depth", "enable_registration"):
+        if type(result[key]) is not bool:
+            raise ValueError(key+" must be boolean")
+    if result["enable_registration"] and not result["enable_depth"]:
+        raise ValueError("Depth registration requires depth camera enabled")
+    if result["mode"] == "yolo" and not result["enable_depth"]:
+        raise ValueError("3D Shuttle YOLO needs the depth camera")
     for name, (low, high) in PHYSICAL_BOUNDS.items():
         if isinstance(result[name], bool):
             raise ValueError(name + " must be numeric")
