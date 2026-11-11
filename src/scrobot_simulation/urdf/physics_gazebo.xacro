@@ -3,7 +3,7 @@
 
   <xacro:macro
     name="scrobot_gazebo_physics"
-    params="drive_contact_mu:=5.0 caster_contact_mu:=0.05">
+    params="drive_contact_mu:=5.0 caster_contact_mu:=0.05 drive_slip1:=0.0 drive_slip2:=0.0">
 
     <!-- ============================================================ -->
     <!-- Narrow line-contact drive-wheel model tuned for stable traction -->
@@ -25,8 +25,8 @@
       <mu1>${drive_contact_mu}</mu1>
       <mu2>${drive_contact_mu}</mu2>
       <fdir1>1 0 0</fdir1>
-      <slip1>0.0</slip1>
-      <slip2>0.0</slip2>
+      <slip1>${drive_slip1}</slip1>
+      <slip2>${drive_slip2}</slip2>
       <maxContacts>10</maxContacts>
     </gazebo>
 
@@ -34,8 +34,8 @@
       <mu1>${drive_contact_mu}</mu1>
       <mu2>${drive_contact_mu}</mu2>
       <fdir1>1 0 0</fdir1>
-      <slip1>0.0</slip1>
-      <slip2>0.0</slip2>
+      <slip1>${drive_slip1}</slip1>
+      <slip2>${drive_slip2}</slip2>
       <maxContacts>10</maxContacts>
     </gazebo>
 
