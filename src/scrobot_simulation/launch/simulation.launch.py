@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -18,6 +20,15 @@ def generate_launch_description():
     simulation_pkg = get_package_share_directory(
         'scrobot_simulation'
     )
+    # The Mobility Lab publishes a single simulation-only YAML. Launch
+    # arguments still override these defaults for isolated experiment runs.
+    calibration_path = Path(simulation_pkg) / 'config/mobility_calibration.yaml'
+    with calibration_path.open('r', encoding='utf-8') as stream:
+        calibration = yaml.safe_load(stream)
+    if not isinstance(calibration, dict) or calibration.get('schema_version') != 1:
+        raise RuntimeError(f'Invalid mobility calibration: {calibration_path}')
+    physics = calibration['physics']
+
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     world = LaunchConfiguration('world')
@@ -185,26 +196,26 @@ def generate_launch_description():
             description='Render full meshes, a lightweight proxy, or no robot visual; physics unchanged.',
         ),
         DeclareLaunchArgument(
-            'wheel_joint_damping', default_value='0.0',
+            'wheel_joint_damping', default_value=str(physics['wheel_joint_damping']),
             description='Wheel joint damping N*m*s/rad; default keeps existing physics.',
         ),
         DeclareLaunchArgument(
-            'wheel_collision_width', default_value='0.001',
+            'wheel_collision_width', default_value=str(physics['wheel_collision_width']),
             description='Wheel collision width in meters; current simulation baseline 0.001 m.',
         ),
         DeclareLaunchArgument(
             'drive_contact_mu',
-            default_value='5.0',
+            default_value=str(physics['drive_contact_mu']),
             description='Gazebo drive-wheel contact friction coefficient.',
         ),
         DeclareLaunchArgument(
             'caster_contact_mu',
-            default_value='0.05',
+            default_value=str(physics['caster_contact_mu']),
             description='Gazebo passive-caster contact friction coefficient.',
         ),
-        DeclareLaunchArgument('drive_slip1', default_value='0.0',
+        DeclareLaunchArgument('drive_slip1', default_value=str(physics['drive_slip1']),
                               description='Rolling tire contact slip in Gazebo.'),
-        DeclareLaunchArgument('drive_slip2', default_value='0.0',
+        DeclareLaunchArgument('drive_slip2', default_value=str(physics['drive_slip2']),
                               description='Lateral tire contact slip in Gazebo.'),
         DeclareLaunchArgument(
             'controller_params',
