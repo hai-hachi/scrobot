@@ -361,13 +361,22 @@ class PerceptionDriver(Node):
 
     def reset_observation(self):
         with self.guard:
+            # A fresh Gazebo /clock begins near zero after restart. Retaining
+            # older header stamps would mark all new frames out-of-order and
+            # produce stale FPS/latency/AprilTag quality values.
+            self.streams={name:StreamMeter() for name in self.streams}
             self.samples.clear()
             self.tag_errors.clear()
             self.first_tag_orientation.clear()
             self.tag_ids=[];self.last_bboxes=[]
+            self.tag_margins=[];self.tag_hamming=[];self.last_confidence=[]
             self.latest_tag_stamp=0.0
             self.last_tag_stamp_evaluated=0.0
             self.last_overlay=None;self.last_overlay_wall=0.0
+            self.last_preview=None;self.last_preview_wall=0.0
+            self.last_truth=None;self.truth_pose=None;self.last_shuttles=[]
+            self.preview_kind="RGB"
+            self.info={}
 
 
 class RosBridge:
