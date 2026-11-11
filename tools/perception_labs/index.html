@@ -93,7 +93,10 @@ h1{font-size:24px;margin:3px 0}h2{font-size:16px;margin:0 0 13px}h3{font-size:13
       <div class="tile"><small>Hamming error</small><strong id="hamming">—</strong></div>
       <div class="tile"><small>Frames with tags / RGB</small><strong id="tagRate">—</strong><span class="unit">observed ratio, not visibility-conditioned recall</span></div>
     </div>
-    <p class="hint">Uses production AprilTag 16h5 (IDs 0–3, 0.100 m active edge) and the existing ROS detector. Rotate and reposition the robot, then press Measure 3 s. Each sample records IDs, detector margins and timestamp rates. Without verified tag-to-camera extrinsics, the panel does not claim a 6-DOF pose error.</p>
+    <h3>Independent camera-to-tag pose check (stationary robot)</h3>
+    <div class="scroll"><table class="stream-table"><thead><tr><th>Tag ID</th><th>Samples</th><th>Mean true range</th><th>Translation RMSE</th><th>Range RMSE</th></tr></thead><tbody id="tagPoseRows"></tbody></table></div>
+    <p class="hint">Uses the known 16h5 court model, Gazebo robot ground truth and base-to-optical TF to compare observed tag translations. Error is computed only while stationary, after both detector and TF are available. Rotation accuracy is not claimed until AprilTag axis conventions are verified.</p>
+    <p class="hint">Uses production AprilTag 16h5 (IDs 0–3, 0.100 m active edge). Rotate and reposition the robot, then press Measure 3 s. Frame success is not a visibility-conditioned recall metric.</p>
    </div>
    <div class="panel" data-for="yolo">
     <h2>Shuttle YOLO · live predictions</h2>
@@ -157,6 +160,7 @@ async function api(path,obj){const r=await fetch(path,{method:"POST",headers:{"C
 async function action(fn){if(busy)return;busy=true;try{await fn()}catch(e){show(e.message,true)}finally{busy=false}}
 function changeTab(which,display=true){
  if(!modes.includes(which))return;mode=which;
+ if(mode==="yolo"&&$("enable_depth"))$("enable_depth").checked=true;
  for(const b of tabButtons)b.classList.toggle("active",b.dataset.tab===mode);
  for(const n of document.querySelectorAll("[data-for]"))n.classList.toggle("hide",!n.dataset.for.split(" ").includes(mode));
  $("controlsTitle").textContent=mode==="camera"?"01 · Camera Performance":mode==="apriltag"?"02 · AprilTag Detection":"03 · Shuttle YOLO";
@@ -249,6 +253,18 @@ function display(s){
  $("margin").textContent=fmt((s.decision_margins||[]).reduce((a,b)=>a+b,0)/Math.max(1,(s.decision_margins||[]).length),1);
  $("hamming").textContent=(s.hamming||[]).join(", ")||"—";
  $("tagRate").textContent=fmt(s.last_sample?.tag_positive_fraction_of_rgb,2);
+ const tagTable=$("tagPoseRows");tagTable.innerHTML="";
+ for(const [id,r] of Object.entries(s.apriltag_pose||{})){
+  const tr=document.createElement("tr");
+  for(const v of [id,r.n,fmt(r.average_range_m,2)+" m",fmt(r.translation_rmse_m,3)+" m",fmt(r.range_rmse_m,3)+" m"]){
+   const td=document.createElement("td");td.textContent=v;tr.append(td)
+  }tagTable.append(tr)
+ }
+ if(!Object.keys(s.apriltag_pose||{}).length){
+  const tr=document.createElement("tr"),td=document.createElement("td");
+  td.colSpan=5;td.textContent="No stationary tag pose/TF reference matched yet.";
+  tr.append(td);tagTable.append(tr);
+ }
  $("bboxCount").textContent=(s.bboxes||[]).length;
  $("confidence").textContent=fmt(Math.max(0,...(s.bboxes||[]).map(b=>b.confidence||0)),2);
  $("yoloRate").textContent=fmt(d.yolo2d?.wall_fps);
