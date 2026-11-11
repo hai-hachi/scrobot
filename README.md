@@ -100,8 +100,8 @@ mission sequence are unchanged.
 The opt-in lighting lab creates a **temporary derivative** badminton court,
 then streams real Gazebo D435i, overhead and movable free-camera views into
 one local browser dashboard. Configure light rows/columns/span/height,
-intensity, shadow casting, attenuation, cone angles, HSV colors, pole
-diameter, random shuttle batches and performance; no mission is started.
+intensity, shadow casting, attenuation, cone angles, HSV colors,
+venue clearance, random shuttle batches and performance; no mission is started.
 
 ```bash
 sudo apt install python3-gz-transport13 python3-gz-msgs10 python3-pil
@@ -113,13 +113,46 @@ python3 tools/lighting_lab/server.py
 
 Open http://127.0.0.1:8765. WARP-safe loopback transport is enforced
 automatically every launch. Lighting uses **center-based X/Y reach**,
-**temperature (K)** and **brightness (%)**, and materials retain HSV.
-The dashboard copies/follows the Gazebo GUI orbit camera. X/Y venue
-clearance sliders rebuild the calibration world with matching floor and
-wall collisions; net pole diameter stays fixed. See
+**HSV color** and independent **intensity**, plus material HSV settings.
+The saved/published calibration currently contains **2×3 lights, intensity
+2.5**, with two shadow casters. The dashboard follows the Gazebo GUI orbit
+camera. X/Y venue clearance sliders rebuild the calibration floor and walls;
+net pole diameter remains fixed. See
 [lighting-lab calibration workflow](docs/real_comparison/lighting_lab.md).
-This is a development experiment, **not** a change to the validated
-competition world or physical robot.
+Lab preview alone does not change production; explicit **Publish** updates
+the Git-tracked production SDF. The physical robot is never changed.
+
+## Mobility Lab — floor-loaded motor and physics calibration
+
+`tools/mobility_lab/` runs independent **90 RPM** wheel step tests
+on the Gazebo floor with the real September 2026 STM32 PID recordings
+built in. Adjust first-order closed-loop wheel response, contact friction,
+slip, joint damping and contact geometry; compare RPM and Gazebo ground
+truth. **Save Lab Settings** affects only the lab;
+**Publish to Simulation** backs up and updates simulation-only
+`src/scrobot_simulation/config/mobility_calibration.yaml`. The first-order
+node is enabled only in normal *simulation* bringup, never real hardware.
+
+```bash
+python3 tools/mobility_lab/server.py
+# http://127.0.0.1:8766
+```
+
+## Odometry Lab — publishing and estimated-vs-true motion
+
+`tools/odometry_lab/` measures publishing frequency, timing, CPU cost,
+encoder quantization and odometry error against Gazebo ground truth. It
+requires a running SCROBOT simulation and observes production topics; its
+lab-specific encoder odometry topic does not replace production odometry.
+Motion tests are opt-in and use the existing manual/safety pipeline.
+
+```bash
+python3 tools/odometry_lab/web_server.py
+# http://127.0.0.1:8767
+```
+
+The three independent web labs occupy ports **8765 (Lighting)**,
+**8766 (Mobility)** and **8767 (Odometry)** by default.
 
 ## Full simulation regression
 
