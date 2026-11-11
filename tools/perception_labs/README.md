@@ -164,10 +164,13 @@ The YOLO panel runs four local tasks in order:
    `yoloshuttle/scripts/validate_model.py latest --split test`.
    Scores include precision, recall, mAP50, and mAP50–95.
 
-The new dataset is stored under
-`~/Desktop/yoloshuttle/dataset/gazebo_scrobot_lighting_current/` and its
-camera/lighting provenance under `lighting_provenance.json`; the original
-`gazebo_scrobot_simple` dataset is not touched. The event-triggered
+Each generated dataset is stored in its own versioned directory under
+`~/Desktop/yoloshuttle/dataset/gazebo_scrobot_lighting_YYYYMMDDThhmmssZ/`.
+The latest dataset is selected via
+`~/scrobot_ws/evaluation_results/perception_labs/latest_dataset.txt`.
+This prevents mixing old and new lighting distributions in one dataset.
+Each dataset has a `lighting_provenance.json` fingerprint of the actual
+published court scene. The original `gazebo_scrobot_simple` dataset is not touched. The event-triggered
 dataset camera currently uses 1280×720; the camera performance lab independently
 varies live D435i RGB/depth resolution. The headless generator uses the same
 production shuttle visual STL, not fabricated image compositing.
