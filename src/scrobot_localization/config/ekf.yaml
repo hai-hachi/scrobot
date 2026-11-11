@@ -5,7 +5,9 @@ ekf_filter_node:
     # Filter
     # ==========================================
 
-    frequency: 50.0
+    # EKF prediction/output matches the 100 Hz ROS controller update target.
+    # Incoming physical D435i and magnetometer samples retain native rates.
+    frequency: 100.0
 
     sensor_timeout: 0.1
 
