@@ -100,6 +100,8 @@ class ArchitectureContracts(unittest.TestCase):
         self.assertEqual(launch_default(path, "shuttle_seed"), "20261003")
         self.assertEqual(launch_default(path, "mission_delay"), "15.0")
         self.assertEqual(launch_default(path, "launch_mission"), "true")
+        self.assertEqual(launch_default(path, "enable_yolo"), "true")
+        self.assertEqual(launch_default(path, "spawn_shuttles"), "true")
 
     def test_original_regression_defaults_preserved(self):
         path = "src/scrobot_debug/launch/full_mission_check.launch.py"
