@@ -15,7 +15,7 @@ sys.path.insert(0,str(REPO/"src/scrobot_simulation/launch"))
 from core import (
     DEFAULTS, StreamMeter, analyse, duration, interpolate_pose,
     pose_metrics, quaternion_yaw, relative, segments, sequence_command,
-    validate, wrap, velocity_error_metrics, magnetic_relative_heading_metrics,
+    validate, wrap, profile_wheel_limit, velocity_error_metrics, magnetic_relative_heading_metrics,
     stationary_gyro_stats,
 )
 from odometry_rate_config import (
@@ -31,13 +31,16 @@ class CoreTests(unittest.TestCase):
             {"wheel_odom_hz":200},
             {"imu_hz":0},
             {"ekf_hz":float("nan")},
-            {"linear_m_s":0.40,"angular_rad_s":1.8},
+            {"profile":"figure8","linear_m_s":0.5,"angular_rad_s":2.3},
             {"profile":"sideways"},
         ):
             with self.assertRaises(ValueError):
                 validate(pair)
         self.assertEqual(duration({**DEFAULTS,"profile":"stationary"}),30.0)
         self.assertEqual(sequence_command(DEFAULTS,-1.0),(0.0,0.0,False))
+        self.assertEqual(s["linear_m_s"],0.50)
+        self.assertEqual(profile_wheel_limit(s),0.50)
+        self.assertAlmostEqual(0.5/(2*math.pi*0.05)*60,95.492965855,places=5)
 
     def test_trajectory_segments_are_within_wheel_limit(self):
         for name in ("stationary","straight","reverse","spin90","spin180",
@@ -47,6 +50,42 @@ class CoreTests(unittest.TestCase):
                 self.assertGreater(seconds,0)
                 self.assertLessEqual(abs(v)+.21*abs(yaw),.5+1e-10)
             self.assertTrue(sequence_command(cfg,duration(cfg)+.01)[2])
+
+    def test_profile_specific_speed_envelope(self):
+        # The old validator rejected straight .50 m/s merely because the
+        # UNUSED yaw slider was nonzero. Straight, reverse, and square legs
+        # should not add linear and yaw velocities from different segments.
+        for profile in ("straight","reverse","square","stationary"):
+            s=validate({"profile":profile,"linear_m_s":0.50,
+                        "angular_rad_s":2.30})
+            self.assertLessEqual(profile_wheel_limit(s),0.50+1e-12)
+            for _,v,yaw in segments(s):
+                left=v-0.42*yaw/2
+                right=v+0.42*yaw/2
+                self.assertLessEqual(max(abs(left),abs(right)),0.50+1e-12)
+        for profile in ("spin90","spin180","spin360"):
+            s=validate({"profile":profile,"angular_rad_s":2.30,
+                        "linear_m_s":0.50})
+            self.assertAlmostEqual(profile_wheel_limit(s),0.483)
+        self.assertEqual(
+            sequence_command({"profile":"straight","linear_m_s":0.5,
+                              "angular_rad_s":2.3},0.5)[:2],(0.5,0.0))
+        with self.assertRaisesRegex(ValueError,"figure8"):
+            validate({"profile":"figure8","linear_m_s":0.50,
+                      "angular_rad_s":2.30})
+        s=validate({"profile":"figure8","linear_m_s":0.50,
+                    "angular_rad_s":0.80})
+        self.assertAlmostEqual(profile_wheel_limit(s),0.468)
+
+    def test_odometry_lab_gui_all_profiles_available(self):
+        ui=(REPO/"tools/odometry_lab/index.html").read_text()
+        for profile in ("stationary","straight","reverse","spin90",
+                        "spin180","spin360","square","figure8"):
+            self.assertIn('value="'+profile+'"',ui)
+        self.assertIn('"Linear command / straight-wheel speed",0.05,0.50',ui)
+        self.assertIn('["pre","running"].includes(s.state)',ui)
+        self.assertIn('Run unavailable:',ui)
+        self.assertIn('updateMotionReadout()',ui)
 
     def test_yaw_math_and_normalized_pose_accuracy(self):
         self.assertAlmostEqual(wrap(math.radians(370)),math.radians(10))
