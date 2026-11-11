@@ -69,7 +69,7 @@ body{background:linear-gradient(135deg,#0a1721,#0b1119);font:14px system-ui,sans
 const $=id=>document.getElementById(id);
 const descriptors={
  "motion-controls":[["linear_m_s","Linear command",0.05,0.40,0.01," m/s"],["angular_rad_s","Yaw command",0.1,1.8,0.05," rad/s"],["pre_s","Rest before test",0.2,2.0,0.1," s"]],
- "rate-controls":[["wheel_odom_hz","Wheel odometry",10,200,5," Hz"],["imu_hz","D435i IMU",10,200,5," Hz"],["magnetometer_hz","Magnetometer",10,200,5," Hz"],["ekf_hz","EKF output",10,200,5," Hz"],["ground_truth_hz","Ground truth (reference)",10,200,5," Hz"]]
+ "rate-controls":[["wheel_odom_hz","Wheel odometry",10,100,5," Hz"],["imu_hz","D435i IMU",10,200,5," Hz"],["magnetometer_hz","Magnetometer",10,200,5," Hz"],["ekf_hz","EKF output",10,200,5," Hz"],["ground_truth_hz","Ground truth (reference)",10,200,5," Hz"]]
 };
 const keys=["profile","linear_m_s","angular_rad_s","pre_s","use_magnetometer","wheel_odom_hz","imu_hz","magnetometer_hz","ground_truth_hz","ekf_hz"];
 let first=false,busy=false,last=null;
