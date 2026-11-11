@@ -85,7 +85,9 @@ if __name__=='__main__':
                 result[side]['comparison']=compare_time_aligned(real[side],sim[side])
     if a.output:
         output = Path(a.output).expanduser()
-        validated_result_root(output.parent)
+        # Validate the exact file, not its parent: a sibling of the source
+        # checkout is safe even when they share a common disk directory.
+        validated_result_root(output)
     else:
         # Replay comparisons must not land in the repository root or reuse a
         # shared filename from another lab / previous experiment.
