@@ -94,8 +94,8 @@ h1{font-size:24px;margin:3px 0}h2{font-size:16px;margin:0 0 13px}h3{font-size:13
       <div class="tile"><small>Frames with tags / RGB</small><strong id="tagRate">—</strong><span class="unit">observed ratio, not visibility-conditioned recall</span></div>
     </div>
     <h3>Independent camera-to-tag pose check (stationary robot)</h3>
-    <div class="scroll"><table class="stream-table"><thead><tr><th>Tag ID</th><th>Samples</th><th>Mean true range</th><th>Translation RMSE</th><th>Range RMSE</th></tr></thead><tbody id="tagPoseRows"></tbody></table></div>
-    <p class="hint">Uses the known 16h5 court model, Gazebo robot ground truth and base-to-optical TF to compare observed tag translations. Error is computed only while stationary, after both detector and TF are available. Rotation accuracy is not claimed until AprilTag axis conventions are verified.</p>
+    <div class="scroll"><table class="stream-table"><thead><tr><th>Tag ID</th><th>Samples</th><th>Mean true range</th><th>Translation RMSE</th><th>Range RMSE</th><th>Orientation deviation RMS</th></tr></thead><tbody id="tagPoseRows"></tbody></table></div>
+    <p class="hint">Uses the known 16h5 court model, Gazebo robot ground truth and base-to-optical TF to compare observed tag translations. Error is computed only while stationary, after both detector and TF are available. Orientation deviation is relative to the first stationary tag observation, not verified absolute 3D orientation accuracy.</p>
     <p class="hint">Uses production AprilTag 16h5 (IDs 0–3, 0.100 m active edge). Rotate and reposition the robot, then press Measure 3 s. Frame success is not a visibility-conditioned recall metric.</p>
    </div>
    <div class="panel" data-for="yolo">
@@ -256,13 +256,13 @@ function display(s){
  const tagTable=$("tagPoseRows");tagTable.innerHTML="";
  for(const [id,r] of Object.entries(s.apriltag_pose||{})){
   const tr=document.createElement("tr");
-  for(const v of [id,r.n,fmt(r.average_range_m,2)+" m",fmt(r.translation_rmse_m,3)+" m",fmt(r.range_rmse_m,3)+" m"]){
+  for(const v of [id,r.n,fmt(r.average_range_m,2)+" m",fmt(r.translation_rmse_m,3)+" m",fmt(r.range_rmse_m,3)+" m",fmt(r.orientation_deviation_rms_deg,2)+"°"]){
    const td=document.createElement("td");td.textContent=v;tr.append(td)
   }tagTable.append(tr)
  }
  if(!Object.keys(s.apriltag_pose||{}).length){
   const tr=document.createElement("tr"),td=document.createElement("td");
-  td.colSpan=5;td.textContent="No stationary tag pose/TF reference matched yet.";
+  td.colSpan=6;td.textContent="No stationary tag pose/TF reference matched yet.";
   tr.append(td);tagTable.append(tr);
  }
  $("bboxCount").textContent=(s.bboxes||[]).length;
