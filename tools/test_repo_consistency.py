@@ -68,6 +68,25 @@ class RepositoryConsistencyTests(unittest.TestCase):
         self.assertNotIn("mobility_calibration.yaml", lighting)
         self.assertNotIn("scrobot_system.cpp", mobility)
 
+
+    def test_odometry_motion_requires_single_sim_clock_and_control_stack(self):
+        sim = contents("src/scrobot_bringup/launch/sim.launch.py")
+        self.assertIn("condition=IfCondition(launch_mission)", sim)
+        self.assertIn("'launch_mission', default_value='true'", sim)
+
+        preflight = contents("tools/odometry_lab/web_server.py")
+        for requirement in (
+            "topics['wheel_odom']", "topics['ekf_odom']", "topics['joint_states']",
+            "count != 1", "'/control/set_manual_mode'",
+        ):
+            self.assertIn(requirement, preflight)
+
+        mobility = contents("tools/mobility_lab/server.py")
+        self.assertIn('default=77', mobility)
+        self.assertIn('GZ_PARTITION', mobility)
+        lighting = contents("tools/lighting_lab/server.py")
+        self.assertIn('configure_warp_safe_network()', lighting)
+
     def test_production_scene_lights_have_no_duplicate_sdf_children(self):
         root = ET.fromstring(contents("src/scrobot_simulation/worlds/badminton_court.sdf"))
         world = root.find("world")
