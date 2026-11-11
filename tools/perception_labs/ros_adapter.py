@@ -31,7 +31,7 @@ except ImportError:
     AprilTagDetectionArray = None
 
 from core import StreamMeter, timing_summary
-from tag_geometry import known_tags, expected_camera_to_tag, translation_error
+from tag_geometry import known_tags, expected_camera_to_tag, translation_error, quaternion_delta_deg
 
 
 def stamp_s(header):
@@ -86,6 +86,7 @@ class PerceptionDriver(Node):
         self.truth_pose = None
         self.last_shuttles = []
         self.tag_errors = deque(maxlen=300)
+        self.first_tag_orientation = {}
         self.last_tag_stamp_evaluated = 0
         self.latest_tag_stamp = 0
         self.tf_buffer = Buffer()
@@ -238,6 +239,12 @@ class PerceptionDriver(Node):
                     expected=expected_camera_to_tag(
                         self.truth_pose,camera,self.known_tags[tid])
                     err=translation_error(observed,expected)
+                    q=detected.transform.rotation
+                    orientation=(q.x,q.y,q.z,q.w)
+                    if tid not in self.first_tag_orientation:
+                        self.first_tag_orientation[tid]=orientation
+                    err["orientation_change_deg"]=quaternion_delta_deg(
+                        orientation,self.first_tag_orientation[tid])
                     record={"id":tid,"t":self.latest_tag_stamp,**err}
                     self.tag_errors.append(record)
                     self.samples.append({"source":"apriltag_error",**record})
@@ -314,11 +321,13 @@ class PerceptionDriver(Node):
                         sum(v["range_error_m"]**2 for v in vals)/len(vals)),4),
                     "average_range_m":round(
                         sum(v["true_range_m"] for v in vals)/len(vals),3),
+                    "orientation_deviation_rms_deg":round(math.sqrt(
+                        sum(v["orientation_change_deg"]**2 for v in vals)/len(vals)),3),
                 }
             summary.update({
                 "apriltag_pose":per_tag,
                 "apriltag_pose_samples":len(errors),
-                "apriltag_pose_note":"Only stationary camera-to-tag XYZ errors using known court model and Gazebo/TF. No unverified rotation comparison.",
+                "apriltag_pose_note":"Stationary XYZ error vs known court tags; orientation deviation relative to first observation, not absolute 3D rotation error.",
                 "preview_kind":self.preview_kind,
                 "preview_stamp":round(self.last_overlay_stamp if settings["mode"]!="camera"
                                      else self.last_preview_stamp,4),
@@ -354,6 +363,7 @@ class PerceptionDriver(Node):
         with self.guard:
             self.samples.clear()
             self.tag_errors.clear()
+            self.first_tag_orientation.clear()
             self.tag_ids=[];self.last_bboxes=[]
             self.latest_tag_stamp=0.0
             self.last_tag_stamp_evaluated=0.0
