@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="scrobot_gazebo_sensors" params="enable_magnetometer:=false enable_depth_camera:=true">
+  <xacro:macro name="scrobot_gazebo_sensors" params="enable_magnetometer:=false enable_depth_camera:=true imu_rate_hz:=100.0 magnetometer_rate_hz:=50.0">
 
     <!-- ====================================================== -->
     <!-- D435i combined IMU                                     -->
@@ -10,7 +10,7 @@
     <gazebo reference="camera_imu_optical_frame">
       <sensor name="d435i_imu" type="imu">
         <always_on>true</always_on>
-        <update_rate>100.0</update_rate>
+        <update_rate>${imu_rate_hz}</update_rate>
         <visualize>false</visualize>
 
         <topic>/camera/imu</topic>
@@ -39,7 +39,7 @@
       <gazebo reference="base_link">
         <sensor name="magnetometer_5883l" type="magnetometer">
           <always_on>true</always_on>
-          <update_rate>50.0</update_rate>
+          <update_rate>${magnetometer_rate_hz}</update_rate>
           <visualize>false</visualize>
           <topic>/imu/mag</topic>
           <gz_frame_id>mag_link</gz_frame_id>
