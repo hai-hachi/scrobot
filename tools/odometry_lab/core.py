@@ -45,7 +45,8 @@ def validate(raw):
         raise ValueError("Unknown odometry test profile")
     if not isinstance(obj["use_magnetometer"], bool):
         raise ValueError("use_magnetometer must be boolean")
-    bounds = {**{key: (10.0, 200.0) for key in RATE_NAMES},
+    bounds = {**{key: (10.0, 100.0 if key == "wheel_odom_hz" else 200.0)
+                  for key in RATE_NAMES},
               "pre_s": (0.2, 2.0),
               "linear_m_s": (0.05, 0.40),
               "angular_rad_s": (0.1, 1.8)}
