@@ -236,15 +236,105 @@ def imu_heading_metrics(estimated, truth):
                          for x in truth])
 
 
-def analyse(snapshot):
-    truth=snapshot.get("ground_truth",[])
-    wheel=snapshot.get("wheel_odom",[])
-    fused=snapshot.get("ekf",[])
-    imu=snapshot.get("imu_orientation",[])
+def velocity_error_metrics(estimated, truth, estimate_key, truth_key=None):
+    """Time-aligned scalar velocity RMSE; no pose-origin transformation.
+
+    Uses the independent Gazebo body velocities to assess wheel and IMU
+    measurements. For yaw rate, a mounted sensor aligned to base_link
+    reports the same yaw angular rate in planar driving.
+    """
+    truth_key = truth_key or estimate_key
+    if len(estimated) < 5 or len(truth) < 5:
+        return None
+    source = [p for p in truth if p.get(truth_key) is not None]
+    if len(source) < 5:
+        return None
+    times = [p["t"] for p in source]
+    errors = []
+    for sample in estimated:
+        if estimate_key not in sample:
+            continue
+        t = sample["t"]
+        j = bisect.bisect_left(times, t)
+        if j == 0 and t != times[0] or j == len(times):
+            continue
+        if times[j] == t:
+            target = source[j][truth_key]
+        else:
+            p, q = source[j-1], source[j]
+            target = p[truth_key] + (
+                q[truth_key]-p[truth_key]
+            ) * (t-p["t"])/(q["t"]-p["t"])
+        errors.append((sample[estimate_key] - target)**2)
+    return {"samples": len(errors),
+            "rmse": round(math.sqrt(statistics.fmean(errors)), 5)
+            } if len(errors) >= 5 else None
+
+
+def magnetic_relative_heading_metrics(magnetometer, truth):
+    """Evaluate raw magnetic-vector rotation without claiming compass north.
+
+    The atan2(Y,X) magnetic angle must be expected to move with *opposite*
+    sign from the robot's ENU heading when field is approximately horizontal
+    and the sensor is co-aligned. Both signals are compared relative to their
+    respective first time-aligned measurements; this is NOT an absolute
+    north-heading or calibrated hard/soft-iron accuracy measurement.
+    """
+    if len(magnetometer) < 5 or len(truth) < 5:
+        return None
+    samples = [{"t": x["t"], "yaw": -math.radians(x["raw_field_xy_deg"])}
+               for x in magnetometer
+               if "raw_field_xy_deg" in x]
+    if len(samples) < 5:
+        return None
+    # Exclude very weak horizontal fields where angle is indeterminate.
+    samples = [p for p, m in zip(samples, [
+        x for x in magnetometer if "raw_field_xy_deg" in x
+    ]) if math.hypot(m["field_x_t"], m["field_y_t"]) > 1e-9]
+    if len(samples) < 5:
+        return None
+    result = imu_heading_metrics(samples, truth)
     return {
-        "wheel":pose_metrics(wheel, truth),
-        "ekf":pose_metrics(fused,truth),
-        "imu":imu_heading_metrics(imu,truth),
-        "ground_truth_samples":len(truth),
-        "magnetic_samples":len(snapshot.get("magnetometer",[])),
+        "yaw_rmse_deg": result["yaw_rmse_deg"],
+        "samples": result["samples"],
+        "reference": "relative magnetic-vector rotation; NOT absolute north",
+    } if result else None
+
+
+def stationary_gyro_stats(raw_imu):
+    if len(raw_imu) < 10:
+        return None
+    rates = [x["gyro_z"] for x in raw_imu if "gyro_z" in x]
+    if len(rates) < 10:
+        return None
+    return {
+        "samples": len(rates),
+        "gyro_mean_rad_s": round(statistics.fmean(rates), 6),
+        "gyro_stddev_rad_s": round(statistics.pstdev(rates), 6),
+        "gyro_mean_deg_s": round(math.degrees(statistics.fmean(rates)), 5),
+    }
+
+
+def analyse(snapshot):
+    truth = snapshot.get("ground_truth", [])
+    wheel = snapshot.get("wheel_odom", [])
+    fused = snapshot.get("ekf", [])
+    imu = snapshot.get("imu_orientation", [])
+    raw_imu = snapshot.get("imu_transformed", [])
+    mag = snapshot.get("magnetometer", [])
+    return {
+        "wheel": pose_metrics(wheel, truth),
+        "ekf": pose_metrics(fused, truth),
+        "imu": imu_heading_metrics(imu, truth),
+        "ground_truth_samples": len(truth),
+        "magnetic_samples": len(mag),
+        "wheel_speed": velocity_error_metrics(wheel, truth, "vx"),
+        "wheel_yaw_rate": velocity_error_metrics(wheel, truth, "omega"),
+        "imu_yaw_rate": velocity_error_metrics(
+            raw_imu, truth, "gyro_z", "omega"
+        ),
+        "magnetic_relative_heading": magnetic_relative_heading_metrics(
+            mag, truth
+        ),
+        "stationary_gyro": stationary_gyro_stats(raw_imu),
     }
