@@ -29,6 +29,13 @@ def generate_launch_description():
     if not isinstance(calibration, dict) or calibration.get('schema_version') != 1:
         raise RuntimeError(f'Invalid mobility calibration: {calibration_path}')
     physics = calibration['physics']
+    camera_config_path = Path(simulation_pkg) / 'config/perception_calibration.yaml'
+    with camera_config_path.open('r', encoding='utf-8') as stream:
+        camera_config = yaml.safe_load(stream)
+    if not isinstance(camera_config, dict) or camera_config.get('schema_version') != 1:
+        raise RuntimeError(f'Invalid published perception calibration: {camera_config_path}')
+    color_config = camera_config['color']
+    depth_config = camera_config['depth']
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from odometry_rate_config import load_rates, prepare_configurations
@@ -60,6 +67,12 @@ def generate_launch_description():
     imu_rate_hz = LaunchConfiguration('imu_rate_hz')
     magnetometer_rate_hz = LaunchConfiguration('magnetometer_rate_hz')
     ground_truth_rate_hz = LaunchConfiguration('ground_truth_rate_hz')
+    color_width = LaunchConfiguration('color_width')
+    color_height = LaunchConfiguration('color_height')
+    color_fps = LaunchConfiguration('color_fps')
+    depth_width = LaunchConfiguration('depth_width')
+    depth_height = LaunchConfiguration('depth_height')
+    depth_fps = LaunchConfiguration('depth_fps')
     enable_depth_camera = LaunchConfiguration('enable_depth_camera')
     robot_visual_mode = LaunchConfiguration('robot_visual_mode')
     wheel_joint_damping = LaunchConfiguration('wheel_joint_damping')
@@ -114,6 +127,12 @@ def generate_launch_description():
             'imu_rate_hz': imu_rate_hz,
             'magnetometer_rate_hz': magnetometer_rate_hz,
             'ground_truth_rate_hz': ground_truth_rate_hz,
+            'color_width': color_width,
+            'color_height': color_height,
+            'color_fps': color_fps,
+            'depth_width': depth_width,
+            'depth_height': depth_height,
+            'depth_fps': depth_fps,
             'enable_depth_camera': enable_depth_camera,
             'robot_visual_mode': robot_visual_mode,
             'wheel_joint_damping': wheel_joint_damping,
@@ -216,6 +235,18 @@ def generate_launch_description():
             choices=['true', 'false'],
             description='Enable the simulated 5883L magnetometer on /imu/mag.',
         ),
+        DeclareLaunchArgument('color_width', default_value=str(color_config['width']),
+                              description='Gazebo RGB camera image width'),
+        DeclareLaunchArgument('color_height', default_value=str(color_config['height']),
+                              description='Gazebo RGB camera image height'),
+        DeclareLaunchArgument('color_fps', default_value=str(color_config['fps']),
+                              description='Requested Gazebo RGB FPS'),
+        DeclareLaunchArgument('depth_width', default_value=str(depth_config['width']),
+                              description='Gazebo depth camera image width'),
+        DeclareLaunchArgument('depth_height', default_value=str(depth_config['height']),
+                              description='Gazebo depth camera image height'),
+        DeclareLaunchArgument('depth_fps', default_value=str(depth_config['fps']),
+                              description='Requested Gazebo depth FPS'),
         DeclareLaunchArgument(
             'enable_depth_camera',
             default_value='true', choices=['true', 'false'],
