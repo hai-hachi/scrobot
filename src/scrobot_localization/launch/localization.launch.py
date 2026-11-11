@@ -18,6 +18,7 @@ def generate_launch_description():
     ekf_config = os.path.join(
         localization_pkg, 'config', 'ekf.yaml'
     )
+    ekf_params = LaunchConfiguration('ekf_params')
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     use_magnetometer = LaunchConfiguration('use_magnetometer')
@@ -87,7 +88,7 @@ def generate_launch_description():
         name='ekf_filter_node',
         output='screen',
         parameters=[
-            ekf_config,
+            ekf_params,
             {'use_sim_time': use_sim_time},
         ],
         remappings=[
@@ -96,6 +97,10 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'ekf_params', default_value=ekf_config,
+            description='EKF YAML; sim may supply a generated rate-only copy.',
+        ),
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='true',
