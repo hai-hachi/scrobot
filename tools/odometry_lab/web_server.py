@@ -201,6 +201,7 @@ class LabService:
         self.run_log = None
         self.last_error = ''
         self.run_started_wall = None
+        self.preflight_in_progress = False
 
     def config(self):
         return yaml.safe_load(self.config_path.read_text())
@@ -220,42 +221,59 @@ class LabService:
         return self.process is not None and self.process.poll() is None
 
     def start(self):
+        # Do not hold self.lock during potentially slow ROS CLI discovery.
+        # Otherwise status polling blocks and the dashboard appears offline.
+        # Reserve the start operation first, so two tabs cannot start
+        # competing motion experiments while preflight runs.
         with self.lock:
-            if self.running():
-                raise RuntimeError('A test is already running')
+            if self.running() or self.preflight_in_progress:
+                raise RuntimeError('A test is already running or being checked')
             cfg = self.config()
             scenario = cfg.get('scenario', 'none')
             if scenario not in SCENARIOS:
                 raise RuntimeError('Invalid configured scenario')
+            root = validated_result_root(cfg['run_root'])
+            self.preflight_in_progress = True
+        try:
             if scenario != 'none':
                 simulated_topics_present(cfg)
-            root = validated_result_root(cfg['run_root'])
-            root.mkdir(parents=True, exist_ok=True)
-            name = 'web_' + datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:6]
-            run_dir = root / name
-            run_log = root / (name + '.launcher.log')
-            if run_dir.exists():
-                raise RuntimeError('Odometry run name already exists')
-            # Exclusive creation avoids overwriting another run's log if a
-            # browser or CLI happens to allocate the same name.
-            try:
-                log = run_log.open('x')
-            except FileExistsError as exc:
-                raise RuntimeError('Odometry launcher log already exists') from exc
-            self.run_dir = run_dir
-            self.run_log = run_log
-            try:
-                self.process = subprocess.Popen([sys.executable, str(HERE / 'run_lab.py'),
-                    '--config', str(self.config_path), '--scenario', scenario,
-                    '--run-name', name], cwd=str(HERE), stdout=log,
-                    stderr=subprocess.STDOUT, start_new_session=True)
-            except Exception:
-                log.close()
-                raise
-            log.close()
-            self.last_error = ''
-            self.run_started_wall = time.monotonic()
-            return self.status()
+            with self.lock:
+                if self.running():
+                    raise RuntimeError('A test is already running')
+                if self.config() != cfg:
+                    raise RuntimeError(
+                        'Lab settings changed during ROS preflight; restart the experiment'
+                    )
+                root.mkdir(parents=True, exist_ok=True)
+                name = 'web_' + datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + uuid.uuid4().hex[:6]
+                run_dir = root / name
+                run_log = root / (name + '.launcher.log')
+                if run_dir.exists():
+                    raise RuntimeError('Odometry run name already exists')
+                try:
+                    log = run_log.open('x')
+                except FileExistsError as exc:
+                    raise RuntimeError('Odometry launcher log already exists') from exc
+                try:
+                    process = subprocess.Popen(
+                        [sys.executable, str(HERE / 'run_lab.py'),
+                         '--config', str(self.config_path), '--scenario', scenario,
+                         '--run-name', name],
+                        cwd=str(HERE), stdout=log,
+                        stderr=subprocess.STDOUT, start_new_session=True,
+                    )
+                finally:
+                    log.close()
+                # Assign current state only after successful process startup.
+                self.process = process
+                self.run_dir = run_dir
+                self.run_log = run_log
+                self.last_error = ''
+                self.run_started_wall = time.monotonic()
+        finally:
+            with self.lock:
+                self.preflight_in_progress = False
+        return self.status()
 
     def stop(self):
         with self.lock:
@@ -289,7 +307,8 @@ class LabService:
                         logs = f.read().decode('utf8', 'replace')[-2000:]
                 except OSError:
                     pass
-            return {'running': alive, 'returncode': code,
+            return {'running': alive, 'preflight_in_progress': self.preflight_in_progress,
+                    'returncode': code,
                     'run_name': latest.name if latest else None,
                     'run_dir': str(latest) if latest else None,
                     'live': live, 'summary': report, 'log_tail': logs,
@@ -339,6 +358,9 @@ class Handler(BaseHTTPRequestHandler):
         query = urlsplit(self.path)
         route = query.path
         try:
+            if route == '/api/health':
+                # Fast HTTP-only connectivity check, independent of Gazebo/ROS.
+                return self.send({'ok': True, 'service': 'scrobot_odometry_lab'})
             if route == '/api/config':
                 return self.send(self.service.config())
             if route == '/api/status':
