@@ -31,6 +31,9 @@ def generate_launch_description():
     z = LaunchConfiguration('z')
     yaw = LaunchConfiguration('yaw')
     enable_magnetometer = LaunchConfiguration('enable_magnetometer')
+    imu_rate_hz = LaunchConfiguration('imu_rate_hz')
+    magnetometer_rate_hz = LaunchConfiguration('magnetometer_rate_hz')
+    ground_truth_rate_hz = LaunchConfiguration('ground_truth_rate_hz')
     enable_depth_camera = LaunchConfiguration('enable_depth_camera')
     robot_visual_mode = LaunchConfiguration('robot_visual_mode')
     wheel_joint_damping = LaunchConfiguration('wheel_joint_damping')
@@ -74,6 +77,9 @@ def generate_launch_description():
             wheel_joint_damping,
             ' enable_magnetometer:=',
             enable_magnetometer,
+            ' imu_rate_hz:=', imu_rate_hz,
+            ' magnetometer_rate_hz:=', magnetometer_rate_hz,
+            ' ground_truth_rate_hz:=', ground_truth_rate_hz,
             ' enable_depth_camera:=',
             enable_depth_camera,
             ' robot_visual_mode:=',
@@ -173,6 +179,12 @@ def generate_launch_description():
             description='Initial robot yaw [rad].',
         ),
 
+        DeclareLaunchArgument('imu_rate_hz', default_value='100.0',
+                              description='Simulated D435i IMU samples/second.'),
+        DeclareLaunchArgument('magnetometer_rate_hz', default_value='100.0',
+                              description='Simulated 5883L measurements/second.'),
+        DeclareLaunchArgument('ground_truth_rate_hz', default_value='100.0',
+                              description='Independent Gazebo odometry samples/second.'),
         DeclareLaunchArgument(
             'enable_magnetometer',
             default_value='true',
