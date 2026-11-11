@@ -33,6 +33,8 @@ def generate_launch_description():
     enable_magnetometer = LaunchConfiguration('enable_magnetometer')
     enable_depth_camera = LaunchConfiguration('enable_depth_camera')
     robot_visual_mode = LaunchConfiguration('robot_visual_mode')
+    wheel_joint_damping = LaunchConfiguration('wheel_joint_damping')
+    wheel_collision_width = LaunchConfiguration('wheel_collision_width')
     drive_contact_mu = LaunchConfiguration('drive_contact_mu')
     caster_contact_mu = LaunchConfiguration('caster_contact_mu')
     controller_params = LaunchConfiguration('controller_params')
@@ -64,7 +66,10 @@ def generate_launch_description():
             FindExecutable(name='xacro'),
             ' ',
             xacro_file,
-            ' wheel_collision_width:=0.001',
+            ' wheel_collision_width:=',
+            wheel_collision_width,
+            ' wheel_joint_damping:=',
+            wheel_joint_damping,
             ' enable_magnetometer:=',
             enable_magnetometer,
             ' enable_depth_camera:=',
@@ -175,6 +180,14 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'robot_visual_mode', default_value='full', choices=['full', 'simple', 'none'],
             description='Visual rendering only: full / simple / none; joints and collisions stay.',
+        ),
+        DeclareLaunchArgument(
+            'wheel_joint_damping', default_value='0.0',
+            description='Wheel bearing viscous damping N*m*s/rad (lab calibrates, zero baseline).',
+        ),
+        DeclareLaunchArgument(
+            'wheel_collision_width', default_value='0.001',
+            description='Simulated wheel collision width [m]; production narrow contact 0.001 m.',
         ),
         DeclareLaunchArgument(
             'drive_contact_mu',
