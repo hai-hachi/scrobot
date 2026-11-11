@@ -7,6 +7,8 @@ on:
       - 'tools/mobility_lab/**'
       - 'src/scrobot_description/urdf/scrobot.urdf.xacro'
       - 'src/scrobot_description/urdf/wheels.xacro'
+      - 'src/scrobot_simulation/urdf/scrobot_sim.urdf.xacro'
+      - 'src/scrobot_simulation/urdf/physics_gazebo.xacro'
       - 'src/scrobot_simulation/launch/mobility_lab.launch.py'
       - 'src/scrobot_simulation/launch/simulation.launch.py'
       - 'src/scrobot_simulation/launch/spawn_robot.launch.py'
@@ -27,11 +29,14 @@ jobs:
           from pathlib import Path
           from xml.etree import ElementTree as ET
           for path in ('src/scrobot_description/urdf/scrobot.urdf.xacro',
-                       'src/scrobot_description/urdf/wheels.xacro'):
+                       'src/scrobot_description/urdf/wheels.xacro',
+                       'src/scrobot_simulation/urdf/scrobot_sim.urdf.xacro',
+                       'src/scrobot_simulation/urdf/physics_gazebo.xacro'):
               ET.parse(path)
           ui = Path('tools/mobility_lab/index.html').read_text()
           for name in ('drive_contact_mu', 'caster_contact_mu', 'wheel_joint_damping',
-                       'wheel_collision_width', 'tau_left', 'tau_right', 'leftChart',
+                       'wheel_collision_width', 'drive_slip1', 'drive_slip2',
+                       'tau_left', 'tau_right', 'leftChart',
                        'rightChart', 'matlabFile'):
               assert name in ui, name
           PY
