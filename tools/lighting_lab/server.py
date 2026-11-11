@@ -949,7 +949,17 @@ class Lab:
                 "cpu_cores": snapshot["cpu_cores"],
             },
         }
-        output.write_text(json.dumps(data, indent=2) + "\n")
+        # A calibration preset is an experiment result, not a mutable
+        # configuration. Never silently overwrite a previous comparison.
+        try:
+            with output.open("x", encoding="utf-8") as stream:
+                json.dump(data, stream, indent=2)
+                stream.write("\n")
+        except FileExistsError as exc:
+            raise ValueError(
+                f"Preset {name!r} already exists. Choose a new name "
+                "to preserve the previous lighting experiment."
+            ) from exc
         self.adapter.last_action = f"Saved {output}"
         return str(output)
 
@@ -1085,6 +1095,10 @@ def configure_warp_safe_network(environ=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument(
+        "--ros-domain-id", type=int, default=76,
+        help="Isolated Lighting Lab ROS domain (default 76; Mobility Lab uses 77)",
+    )
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--attach", action="store_true",
                         help="Attach to an already running lighting-lab world")
@@ -1096,10 +1110,22 @@ def main():
     parser.add_argument("--depth-camera", action="store_true",
                         help="Also render the 848x480 D435i depth sensor (off by default)")
     args = parser.parse_args()
+    if not 0 <= args.ros_domain_id <= 232:
+        parser.error("--ros-domain-id must be in [0,232]")
+    # Set transport isolation BEFORE constructing the Gazebo adapter or
+    # launching a child process. Normal SCROBOT and Odometry Lab stay on
+    # the operator's existing ROS domain, not this lab's private domain.
+    os.environ["ROS_DOMAIN_ID"] = str(args.ros_domain_id)
+    os.environ.setdefault(
+        "GZ_PARTITION",
+        f"scrobot_lighting_{os.getuid()}_{args.ros_domain_id}",
+    )
     configure_warp_safe_network()
     print(
         "WARP-safe local transport: GZ_IP=127.0.0.1; "
-        "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST (applied every run)",
+        "ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST "
+        f"ROS_DOMAIN_ID={args.ros_domain_id} "
+        f"GZ_PARTITION={os.environ['GZ_PARTITION']} (applied every run)",
         flush=True
     )
     if not 1024 <= args.port <= 65535:
