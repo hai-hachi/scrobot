@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>SCROBOT | Odometry Lab</title>
+  <link rel="stylesheet" href="/style.css"/>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <header class="brand"><div class="mark">S<span>·</span></div><div><strong>SCROBOT</strong><small>ROBOTICS LABORATORY</small></div></header>
+    <div class="nav-section">WORKSPACE</div>
+    <nav id="tabs" aria-label="Lab sections">
+      <button class="nav active" data-tab="overview"><span class="nav-icon">◫</span> Overview</button>
+      <button class="nav" data-tab="publishing"><span class="nav-icon">≋</span> Publishing</button>
+      <button class="nav" data-tab="performance"><span class="nav-icon">◴</span> Performance</button>
+      <button class="nav" data-tab="hardware"><span class="nav-icon">⚙</span> Hardware model</button>
+      <button class="nav" data-tab="accuracy"><span class="nav-icon">⌖</span> Accuracy</button>
+    </nav>
+    <div class="side-spacer"></div>
+    <div class="status-panel">
+      <div class="status-top"><span id="run-dot" class="indicator"></span><span id="run-badge">Idle</span></div>
+      <div class="meta-label">CURRENT RUN</div><div id="run-name" class="mono small dim">No experiment selected</div>
+      <div class="meta-label spaced">SCENARIO</div><div id="run-scenario" class="small">—</div>
+      <p class="tiny muted">ROS 2 / Gazebo run locally. This page observes production topics; changes affect only the isolated lab stream.</p>
+    </div>
+    <div class="version">Odometry Lab <span>v1.1 · Web</span></div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div class="breadcrumbs">SCROBOT <span>/</span> TOOLS <span>/</span> <strong>ODOMETRY LAB</strong></div>
+      <div class="top-right"><div class="live-badge"><span class="pulse"></span> <span id="connection-label">Connecting</span></div><span id="local-clock" class="mono muted small"></span></div>
+    </div>
+    <div class="content">
+      <header class="hero">
+        <div><div class="eyebrow">TEST & VALIDATION ENVIRONMENT</div><h1>Odometry <em>Lab</em></h1><p>Publishing speed, runtime performance, hardware fidelity, and trajectory validation — all in one place.</p></div>
+        <div class="hero-label">DIFFERENTIAL DRIVE <span>·</span> ROS 2 JAZZY</div>
+      </header>
+
+      <div id="notice" role="status" aria-live="polite" class="notice hidden"></div>
+
+      <section class="metrics" aria-label="Live metrics">
+        <article class="metric"><div class="metric-label">Wheel odometry <span>RATE</span></div><div class="metric-value"><span id="metric-rate">—</span><small>Hz</small></div><div id="metric-stamp" class="metric-foot">Awaiting data</div></article>
+        <article class="metric"><div class="metric-label">Real-time factor <span>SIM</span></div><div class="metric-value"><span id="metric-rtf">—</span><small>×</small></div><div id="metric-rtf-note" class="metric-foot">Simulation clock / wall time</div></article>
+        <article class="metric"><div class="metric-label">95th percentile interval <span>JITTER*</span></div><div class="metric-value"><span id="metric-jitter">—</span><small>ms</small></div><div class="metric-foot">*P95 wall interarrival period</div></article>
+        <article class="metric"><div class="metric-label">Wheel position error <span>RMSE</span></div><div class="metric-value"><span id="metric-rmse">—</span><small>m</small></div><div class="metric-foot">Final report, time-aligned</div></article>
+      </section>
+
+      <section id="tab-overview" class="tab-panel">
+        <div class="grid-2">
+          <div class="panel plot-panel"><div class="panel-heading"><div><h2>Trajectory comparison</h2><p>Ground truth vs wheel odometry vs encoder model</p></div><span class="tag">LIVE</span></div><canvas id="trajectory-main" class="plot" height="310" aria-label="Live odometry trajectory"></canvas><div id="legend-main" class="legend"><span><b class="swatch green"></b>Ground truth</span><span><b class="swatch blue"></b>Wheel odometry</span><span><b class="swatch orange"></b>Encoder model</span></div></div>
+          <div class="panel plot-panel"><div class="panel-heading"><div><h2>Publishing consistency</h2><p>Measured wall receive frequency (Hz)</p></div><span class="tag subtle">LIVE</span></div><canvas id="rate-main" class="plot" height="310" aria-label="Received message rates"></canvas><div class="legend"><span><b class="swatch green"></b>Wheel</span><span><b class="swatch blue"></b>EKF</span><span><b class="swatch orange"></b>Lab encoder</span></div></div>
+        </div>
+        <div class="grid-2 bottom-spacing">
+          <div class="panel"><div class="panel-heading"><div><h2>Current stream diagnostics</h2><p>Independent timestamps and received data</p></div></div><div id="timing-overview" class="table-scroll"></div></div>
+          <div class="panel"><div class="panel-heading"><div><h2>Experiment outputs</h2><p>Read or export current run results</p></div></div><div id="report-summary" class="report-mini">Start a run to collect results.</div><div class="exports" id="exports-overview"></div></div>
+        </div>
+      </section>
+
+      <section id="tab-publishing" class="tab-panel hidden">
+        <div class="grid-2 split">
+          <div class="panel"><div class="panel-heading"><div><h2>Publishing & sampling</h2><p>These controls affect the isolated lab odometry stream</p></div></div><div id="fields-publishing" class="field-grid"></div></div>
+          <div class="panel"><div class="panel-heading"><div><h2>Topic timing</h2><p>Wall receive rate and simulation-timestamp rate differ when RTF is below 1</p></div></div><div id="timing-detailed" class="table-scroll"></div><p class="footnote">A repeated timestamp is not automatically a dropped DDS message. Queue depth and reliability below apply only to /odometry_lab/encoder_odom.</p></div>
+        </div>
+        <div class="panel"><div class="panel-heading"><div><h2>Live rate history</h2><p>Refreshes during an experiment</p></div></div><canvas id="rate-detailed" class="wide-plot" height="280"></canvas></div>
+      </section>
+
+      <section id="tab-performance" class="tab-panel hidden">
+        <div class="grid-2">
+          <div class="panel"><div class="panel-heading"><div><h2>System performance</h2><p>RTF, CPU, callback runtime, estimator queue</p></div></div><div id="perf-details" class="stat-rows"></div><div id="fields-performance" class="field-grid compact-fields"></div><p class="footnote">Synthetic CPU duty deliberately loads one core. Gazebo process CPU is a best-effort estimate.</p></div>
+          <div class="panel"><div class="panel-heading"><div><h2>RTF history</h2><p>Simulation time / wall time</p></div></div><canvas id="rtf-chart" class="plot" height="340"></canvas></div>
+        </div>
+      </section>
+
+      <section id="tab-hardware" class="tab-panel hidden">
+        <div class="grid-2 split">
+          <div class="panel"><div class="panel-heading"><div><h2>Hardware emulation</h2><p>Encoder resolution, wheel geometry and feedback delay</p></div></div><div id="fields-hardware" class="field-grid"></div></div>
+          <div class="panel"><div class="panel-heading"><div><h2>Measurement pipeline</h2><p>Lab-specific measurements only</p></div></div>
+            <div class="pipeline"><div>Gazebo wheel joint states<small>/joint_states</small></div><i>↓</i><div>Encoder sampling + quantization<small>Noise · ticks/rev · gear ratio</small></div><i>↓</i><div>Delayed measurement queue<small>Delay · jitter · dropped samples</small></div><i>↓</i><div>Wheel odometry integration<small>Estimator update rate</small></div><i>↓</i><div class="highlight">/odometry_lab/encoder_odom<small>Lab-only topic · no TF</small></div></div>
+            <p class="footnote">Hardware parameters are experimental assumptions until compared with measured encoder and real-motion data. Changing them does not change actual Gazebo wheel physics.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-accuracy" class="tab-panel hidden">
+        <div class="panel plot-panel"><div class="panel-heading"><div><h2>Odometry versus ground truth</h2><p>Real-time visual preview; offline results interpolate measurement timestamps and align each trajectory origin</p></div><span class="tag">LIVE / REPORT</span></div><canvas id="trajectory-accuracy" class="wide-plot" height="410"></canvas><div class="legend"><span><b class="swatch green"></b>Ground truth</span><span><b class="swatch blue"></b>Wheel odometry</span><span><b class="swatch violet"></b>EKF</span><span><b class="swatch orange"></b>Emulated encoder</span></div></div>
+        <div class="panel"><div class="panel-heading"><div><h2>Accuracy report</h2><p>Available after an experiment finishes</p></div></div><div id="accuracy-report" class="table-scroll"></div><div class="exports" id="exports-accuracy"></div></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="actionbar">
+  <div class="action-left"><label for="scenario">TEST SCENARIO</label><select id="scenario"><option value="none">Passive monitor · no motion</option><option value="static">Stationary</option><option value="straight">Straight line (90 RPM target)</option><option value="rotate">In-place rotation</option><option value="arc">Curved path</option><option value="suite">Full motion suite</option></select><span class="unsaved hidden" id="unsaved">● Unsaved changes</span></div>
+  <div class="actions"><button class="btn secondary" id="apply">Apply settings</button><button class="btn primary" id="start">▶ Start experiment</button><button class="btn danger" id="stop" disabled>■ Stop</button></div>
+</div>
+</body>
+</html>
