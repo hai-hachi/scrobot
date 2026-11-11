@@ -33,7 +33,7 @@
  <div class="panel">
   <h2>03 · Floor and drivetrain physics</h2>
   <div id="controls-physics"></div>
-  <p class="hint"><b>Contact friction</b> acts at tire/caster-floor contacts. <b>Joint damping</b> is bearing-like viscous resistance—not ground friction. Wheel width affects contact geometry. Gazebo's default velocity interface can largely mask damping in wheel RPM; measure the separate ground-truth robot motion to assess contact changes.</p>
+  <p class="hint"><b>Contact friction</b> acts at tire/caster-floor contacts. <b>Joint damping</b> is bearing-like viscous resistance—not ground friction. <b>Contact slip</b> adjusts force-dependent rolling/lateral slip (not a viscous damping coefficient). Wheel width affects contact geometry. Gazebo's default velocity interface can largely mask damping in wheel RPM; measure the separate ground-truth robot motion to assess contact changes.</p>
   <div class="buttons"><button id="apply">Apply & save settings</button><button id="restart">Restart Gazebo with physics</button></div>
   <p class="hint" style="margin-top:9px" id="physicsStatus">Physics changes require respawning the floor-loaded robot.</p>
  </div>
@@ -80,14 +80,14 @@ const $=id=>document.getElementById(id);
 const groups={
  "controls-experiment":[["target_rpm","Target RPM",5,95,5," RPM"],["pre_s","Rest before step",0.1,1,0.05," s"],["hold_s","Step hold",0.5,5,0.1," s"],["post_s","Record after stop",0.4,3,0.05," s"]],
  "controls-motor":[["tau_left","Left τ",0.005,0.25,0.005," s"],["tau_right","Right τ",0.005,0.25,0.005," s"],["gain_left","Left gain K",0.8,1.1,0.01,""],["gain_right","Right gain K",0.8,1.1,0.01,""]],
- "controls-physics":[["drive_contact_mu","Drive-wheel ground μ",0.05,10,0.05,""],["caster_contact_mu","Caster ground μ",0,2,0.01,""],["wheel_joint_damping","Wheel-joint damping",0,0.5,0.005," N·m·s/rad"],["wheel_collision_width","Tire collision width",0.001,0.03,0.001," m"]]
+ "controls-physics":[["drive_contact_mu","Drive-wheel ground μ",0.05,10,0.05,""],["caster_contact_mu","Caster ground μ",0,2,0.01,""],["wheel_joint_damping","Wheel-joint damping",0,0.5,0.005," N·m·s/rad"],["drive_slip1","Rolling contact slip",0,0.02,0.0005,""],["drive_slip2","Lateral contact slip",0,0.02,0.0005,""],["wheel_collision_width","Tire collision width",0.001,0.03,0.001," m"]]
 };
 let initial=false,last=null,config={},busy=false;
 for(const [parent,items] of Object.entries(groups))for(const [key,label,min,max,step,unit]of items){
  const block=document.createElement("div");block.className="control";block.innerHTML='<label for="'+key+'">'+label+'<output id="out-'+key+'"></output></label><input id="'+key+'" type="range" min="'+min+'" max="'+max+'" step="'+step+'">';
  $(parent).append(block);$(key).oninput=()=>{$("out-"+key).textContent=Number($(key).value).toFixed(step<0.01?3:step<0.1?2:1)+unit};
 }
-const names=["profile","target_rpm","pre_s","hold_s","post_s","model","tau_left","tau_right","gain_left","gain_right","drive_contact_mu","caster_contact_mu","wheel_joint_damping","wheel_collision_width"];
+const names=["profile","target_rpm","pre_s","hold_s","post_s","model","tau_left","tau_right","gain_left","gain_right","drive_contact_mu","caster_contact_mu","wheel_joint_damping","drive_slip1","drive_slip2","wheel_collision_width"];
 function loadConfig(cfg){for(const key of names)if(cfg[key]!==undefined){$(key).value=cfg[key];if($("out-"+key))$(key).oninput()}initial=true;}
 function currentConfig(){const out={};for(const key of names)out[key]=["profile","model"].includes(key)?$(key).value:Number($(key).value);return out}
 function notify(msg,isError=false){$("actionError").textContent=msg;$("actionError").className=isError?"error":"hint"}
