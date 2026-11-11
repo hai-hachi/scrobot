@@ -16,8 +16,11 @@ body{background:linear-gradient(135deg,#0a1721,#0b1119);font:14px system-ui,sans
     <option value="square">Square · four 0.5 m legs</option><option value="figure8">Figure-eight</option>
    </select></div>
    <div id="motion-controls"></div>
+   <p id="wheelSpeedStatus" class="hint" aria-live="polite">Wheel-speed preview will appear here.</p>
+   <p id="actualWheelSpeed" class="hint">Measured wheel speed: waiting for /joint_states</p>
    <div class="buttons"><button id="run" class="primary">▶ Run test</button><button id="stop" class="danger">■ Stop</button><button id="save">Save CSV + report</button></div>
-   <p id="motorInfo">No Nav2, no AprilTags, no smoother. Reuses published Mobility Lab actuation when enabled.</p><p>Wheel-speed combinations remain below 0.5 m/s per wheel.</p>
+   <p id="runStatus" class="hint" aria-live="polite">Checking whether the test can start.</p>
+   <p id="motorInfo">No Nav2, no AprilTags, no smoother. Reuses published Mobility Lab actuation when enabled.</p><p>Nominal wheel-rim limit: <b>0.50 m/s per wheel</b> (95.49 RPM at 0.05 m radius). A physical 95 RPM limiter or the optional simulation motor filter can cap actual speed near 0.497 m/s.</p>
   </div>
   <div class="panel"><h2>02 · Sensor and fusion frequency</h2>
    <p>Controller and STM32 PID run at 100 Hz. These are requested simulation publication/update rates; the table shows measured topic rates, jitter and ages.</p>
@@ -76,7 +79,7 @@ body{background:linear-gradient(135deg,#0a1721,#0b1119);font:14px system-ui,sans
 <script>
 const $=id=>document.getElementById(id);
 const descriptors={
- "motion-controls":[["linear_m_s","Linear command",0.05,0.40,0.01," m/s"],["angular_rad_s","Yaw command",0.1,1.8,0.05," rad/s"],["pre_s","Rest before test",0.2,2.0,0.1," s"]],
+ "motion-controls":[["linear_m_s","Linear command / straight-wheel speed",0.05,0.50,0.01," m/s"],["angular_rad_s","Yaw command",0.1,2.30,0.05," rad/s"],["pre_s","Rest before test",0.2,2.0,0.1," s"]],
  "rate-controls":[["wheel_odom_hz","Wheel odometry",10,100,5," Hz"],["imu_hz","D435i IMU",10,200,5," Hz"],["magnetometer_hz","Magnetometer",10,200,5," Hz"],["ekf_hz","EKF output",10,200,5," Hz"],["ground_truth_hz","Ground truth (reference)",10,200,5," Hz"]]
 };
 const keys=["profile","linear_m_s","angular_rad_s","pre_s","use_magnetometer","wheel_odom_hz","imu_hz","magnetometer_hz","ground_truth_hz","ekf_hz"];
@@ -88,7 +91,7 @@ for(const [parent,controls] of Object.entries(descriptors))for(const [id,label,m
  $(id).oninput=()=>{$("out-"+id).textContent=Number($(id).value).toFixed(step<.1?2:0)+unit};
 }
 function fields(){const d={};for(const k of keys)d[k]=k==="profile"?$(k).value:k==="use_magnetometer"?$(k).checked:Number($(k).value);return d}
-function load(s){for(const k of keys){if(s[k]===undefined)continue;if(k==="use_magnetometer")$(k).checked=s[k];else $(k).value=s[k];if($("out-"+k))$(k).oninput()}first=true}
+function load(s){for(const k of keys){if(s[k]===undefined)continue;if(k==="use_magnetometer")$(k).checked=s[k];else $(k).value=s[k];if($("out-"+k))$(k).oninput()}first=true;updateMotionReadout()}
 function changed(s){const c=fields();return keys.some(k=>c[k]!==s[k])}
 function show(msg,err=false){$("error").textContent=msg;$("error").className=err?"warn":"ok"}
 async function api(url,payload){const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw Error(d.error||r.status);return d}
