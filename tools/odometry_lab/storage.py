@@ -41,7 +41,7 @@ def reserve_run_dir(config, name=None):
     """Allocate a unique output folder atomically; never reuse an old trial."""
     root = validated_result_root(config["run_root"])
     root.mkdir(parents=True, exist_ok=True)
-    base = name or datetime.now().strftime("odom_%Y%m%d_%H%M%S")
+    base = datetime.now().strftime("odom_%Y%m%d_%H%M%S") if name is None else name
     if not RUN_NAME.fullmatch(base) or base in (".", ".."):
         raise ValueError("Run name must be one safe directory component")
     for number in range(10000):
