@@ -78,6 +78,13 @@ diff_drive_controller:
     # Velocity limits
     # ==========================================
 
+    # Body-axis backup limits only. The true two-wheel envelope is
+    # |v| + (0.420/2)*|yaw_rate| <= 0.50 m/s, and is NOT enforced by
+    # separate linear/angular limits. Match the Nav2 smoother caps here.
     linear.x.has_velocity_limits: true
-    linear.x.max_velocity: 1.0
-    linear.x.min_velocity: -1.0
+    linear.x.max_velocity: 0.50
+    linear.x.min_velocity: -0.50
+
+    angular.z.has_velocity_limits: true
+    angular.z.max_velocity: 2.30
+    angular.z.min_velocity: -2.30
