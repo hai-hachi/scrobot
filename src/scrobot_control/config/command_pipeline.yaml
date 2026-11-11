@@ -46,16 +46,28 @@ velocity_smoother:
   ros__parameters:
     use_sim_time: true
 
+    # Nav2 controller and tag controller run at 25 Hz (40 ms per update).
+    # ros2_control runs at 100 Hz; keep this timing fixed during the first
+    # motor/RPM calibration so frequency changes do not confound the results.
+    # Raise to 50 Hz later only if motor telemetry shows staircase artifacts.
     smoothing_frequency: 25.0
     scale_velocities: true
     feedback: "OPEN_LOOP"
     enable_stamped_cmd_vel: true
 
-    # 0.8 m/s sweep speed; angular headroom also covers the local SMC limit.
-    max_velocity: [1.0, 0.0, 2.0]
-    min_velocity: [-1.0, 0.0, -2.0]
+    # Each wheel is limited to 0.50 m/s (0.05 m radius ~= 95.5 RPM).
+    # Straight-only body limit: 0.50 m/s. Spin-only limit: 2*0.50/0.42
+    # = 2.38 rad/s; use 2.30 for modest headroom.
+    # CRITICAL: independent X and yaw caps do NOT constrain mixed commands:
+    # |linear.x| + 0.21 * |angular.z| <= 0.50 must be enforced together by
+    # the proposed source-ownership/wheel-envelope router. Existing hardware
+    # also rescales wheel RPM together if either exceeds max_wheel_rpm.
+    max_velocity: [0.50, 0.0, 2.30]
+    min_velocity: [-0.50, 0.0, -2.30]
 
-    # Match the kinematic limits chosen for the controller tune.
+    # Provisional until MATLAB closed-loop wheel responses are analyzed.
+    # A 0 -> 0.50 m/s ramp at 1 m/s^2 takes 0.50 s; a nominal
+    # 0.50 -> 0 ramp at 1.4 m/s^2 takes 0.36 s, excluding PID lag.
     max_accel: [1.00, 0.0, 1.00]
     max_decel: [-1.40, 0.0, -1.80]
 
