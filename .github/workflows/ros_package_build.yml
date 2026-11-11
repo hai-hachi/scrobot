@@ -49,6 +49,9 @@ jobs:
       - name: Install package dependencies
         run: |
           source /opt/ros/jazzy/setup.bash
+          # setup-ros initializes sources but does not always populate the
+          # per-runner rosdep cache; without update this job exits early.
+          rosdep update --rosdistro jazzy
           # These two upstream keys are not resolved by the Jazzy rosdep
           # index on Noble. Their installed prerequisites are supplied by
           # ROS setup and the explicit apt command above.
