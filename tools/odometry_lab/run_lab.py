@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 import yaml
+from storage import reserve_run_dir
 
 HERE=Path(__file__).resolve().parent
 DEFAULT_CONFIG=HERE/'config'/'lab.yaml'
@@ -23,15 +24,8 @@ def config_from(path):
 
 
 def unique_run_dir(config,name=None):
-    root=Path(config['run_root']).expanduser()
-    root.mkdir(parents=True,exist_ok=True)
-    base=name or datetime.now().strftime('odom_%Y%m%d_%H%M%S')
-    path=root/base
-    count=1
-    while path.exists():
-        path=root/f'{base}_{count:02d}';count+=1
-    path.mkdir()
-    return path
+    # Kept for callers using the existing launcher API.
+    return reserve_run_dir(config,name)
 
 
 def test_command(cfg,scenario):
@@ -86,7 +80,10 @@ def main(argv=None):
     args=ap.parse_args(argv)
     if args.analyze_only:
         from analyze import analyze
-        print(json.dumps(analyze(args.analyze_only),indent=2))
+        source = Path(args.analyze_only).expanduser().resolve()
+        if not (source / "metadata.json").is_file():
+            raise ValueError("Expected an existing Odometry Lab run with metadata.json")
+        print(json.dumps(analyze(source),indent=2))
         return 0
     cfg=config_from(args.config)
     for flag,key in [('publish_hz','publish_hz'),('sample_hz','encoder_sample_hz'),('estimator_hz','estimator_hz')]:
