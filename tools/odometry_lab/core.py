@@ -9,7 +9,9 @@ import time
 
 DEFAULTS = {
     "profile": "straight",
-    "linear_m_s": 0.25,
+    # Nominal straight-line wheel-rim speed; 0.50 m/s corresponds to
+    # 95.49 RPM for the nominal 0.05 m radius wheels.
+    "linear_m_s": 0.50,
     "angular_rad_s": 0.65,
     "pre_s": 0.6,
     "use_magnetometer": True,
@@ -48,7 +50,7 @@ def validate(raw):
     bounds = {**{key: (10.0, 100.0 if key == "wheel_odom_hz" else 200.0)
                   for key in RATE_NAMES},
               "pre_s": (0.2, 2.0),
-              "linear_m_s": (0.05, 0.40),
+              "linear_m_s": (0.05, 0.50),
               "angular_rad_s": (0.1, 1.8)}
     for key, (low, high) in bounds.items():
         value = obj[key]
@@ -61,10 +63,41 @@ def validate(raw):
         if not math.isfinite(value) or not low <= value <= high:
             raise ValueError(f"{key} must be between {low} and {high}")
         obj[key] = value
-    # All active wheel combinations must respect the physical rim limit.
-    if obj["linear_m_s"] + WHEEL_SEPARATION * obj["angular_rad_s"] / 2 > WHEEL_RIM_LIMIT:
-        raise ValueError("Linear + yaw velocity exceeds 0.50 m/s per wheel")
+    # Check ONLY the wheel-speed combinations used by the chosen profile.
+    # A straight 0.50 m/s test has zero yaw command; the selected (unused)
+    # angular speed must not prevent it from running.
+    limit = profile_wheel_limit(obj)
+    if limit > WHEEL_RIM_LIMIT + 1e-10:
+        raise ValueError(
+            f"Profile {obj['profile']} would command {limit:.3f} m/s at a "
+            "wheel, exceeding the 0.50 m/s per-wheel limit. "
+            "Reduce linear speed or yaw rate for this profile."
+        )
     return obj
+
+
+def profile_wheel_limit(config):
+    """Peak absolute wheel-rim speed for the exact selected test profile.
+
+    Differential-drive kinematics: v_left = v - (L/2)*yaw,
+    v_right = v + (L/2)*yaw. Pure translation, in-place turning,
+    and square legs/corners are never commanded simultaneously.
+    """
+    v, yaw = config["linear_m_s"], config["angular_rad_s"]
+    profile = config["profile"]
+    turn_rim = (WHEEL_SEPARATION / 2.0) * yaw
+    if profile == "stationary":
+        return 0.0
+    if profile in ("straight", "reverse"):
+        return v
+    if profile.startswith("spin"):
+        return turn_rim
+    if profile == "square":
+        return max(v, turn_rim)
+    if profile == "figure8":
+        return v * 0.6 + turn_rim
+    raise ValueError("Unknown odometry test profile")
+
 
 
 def segments(settings):
