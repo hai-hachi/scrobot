@@ -74,6 +74,7 @@ def generate_launch_description():
     depth_height = LaunchConfiguration('depth_height')
     depth_fps = LaunchConfiguration('depth_fps')
     enable_depth_camera = LaunchConfiguration('enable_depth_camera')
+    enable_depth_registration = LaunchConfiguration('enable_depth_registration')
     robot_visual_mode = LaunchConfiguration('robot_visual_mode')
     wheel_joint_damping = LaunchConfiguration('wheel_joint_damping')
     wheel_collision_width = LaunchConfiguration('wheel_collision_width')
@@ -161,7 +162,7 @@ def generate_launch_description():
         launch_arguments={
             'use_sim_time': use_sim_time,
         }.items(),
-        condition=IfCondition(enable_depth_camera),
+        condition=IfCondition(enable_depth_registration),
     )
 
     return LaunchDescription([
@@ -251,6 +252,11 @@ def generate_launch_description():
             'enable_depth_camera',
             default_value='true', choices=['true', 'false'],
             description='Keep the physical D435i depth sensor (false for lighting-only experiments).',
+        ),
+        DeclareLaunchArgument(
+            'enable_depth_registration',
+            default_value='true', choices=['true', 'false'],
+            description='Start RGB-depth registration (false for isolated raw camera benchmarks).',
         ),
         DeclareLaunchArgument(
             'robot_visual_mode',
