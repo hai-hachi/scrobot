@@ -114,7 +114,18 @@ class Lab:
         self.lock=threading.RLock()
         self.settings=saved_settings()
         OUT.mkdir(parents=True,exist_ok=True)
-        self.bridge=RosBridge(self.settings)
+        sim_share=Path(self.share("scrobot_simulation"))
+        mobility=yaml.safe_load(
+            (sim_share/"config/mobility_calibration.yaml").read_text(encoding="utf-8")
+        )
+        self.motor_model=mobility["motor"]["model"]
+        if self.motor_model not in ("baseline","first_order"):
+            raise RuntimeError("Invalid published Mobility Lab motor model")
+        self.command_topic=(
+            "/cmd_vel_motor_target" if self.motor_model=="first_order"
+            else "/diff_drive_controller/cmd_vel"
+        )
+        self.bridge=RosBridge(self.settings,self.command_topic)
         self.attach=attach
         self.proc=None
         self.log=None
@@ -227,6 +238,8 @@ class Lab:
                 "restarting":self.restarting,
                 "published_match":load_rates(PUBLISHED)==rates_of(self.settings),
                 "server_error":self.error,
+                "motor_model":self.motor_model,
+                "command_topic":self.command_topic,
             })
             return status
 
