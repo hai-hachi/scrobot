@@ -154,6 +154,20 @@ python3 tools/odometry_lab/web_server.py
 The three independent web labs occupy ports **8765 (Lighting)**,
 **8766 (Mobility)** and **8767 (Odometry)** by default.
 
+For a combined calibration workflow, run Lighting and Mobility as **separate
+Gazebo calibration sessions**, publish their simulation-only settings, then
+launch one normal sim without an autonomous mission for Odometry:
+
+```bash
+ros2 launch scrobot_bringup sim.launch.py \\
+  launch_mission:=false enable_yolo:=false spawn_shuttles:=false
+# separate sourced terminal:
+python3 tools/odometry_lab/web_server.py
+```
+
+See [three-lab coexistence and validation](docs/real_comparison/lab_coexistence.md)
+for ROS domain, Gazebo ownership, safety preflight and offline checks.
+
 ## Full simulation regression
 
 The historical regression command remains supported:
