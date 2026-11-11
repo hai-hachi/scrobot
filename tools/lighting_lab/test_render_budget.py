@@ -13,6 +13,7 @@ from scene import (
     DEFAULTS, INSPECTION_PROFILES, build_world, checked_lights,
     material_for, shadow_light_names,
 )
+from config import read_lab_config
 
 ROOT = Path(__file__).resolve().parents[2]
 WORLD = ROOT / "src/scrobot_simulation/worlds/badminton_court.sdf"
@@ -63,15 +64,24 @@ class RenderBudgetTests(unittest.TestCase):
         self.assertEqual(material_for(rgb, "poles").findtext("specular"),
                          "0.02 0.02 0.02 1")
 
-    def test_production_world_has_downward_lights_and_two_shadows(self):
+    def test_production_world_matches_saved_calibrated_lights(self):
+        cfg = read_lab_config(ROOT / "src/scrobot_simulation/config/lighting_lab.yaml")["lights"]
+        cfg = checked_lights(cfg)
         world = ET.parse(WORLD).getroot().find("world")
         lights = world.findall("light")
-        self.assertEqual(len(lights), 8)
+        self.assertEqual(len(lights), cfg["rows"] * cfg["cols"])
+        shadows = shadow_light_names(cfg)
         self.assertEqual(sum(light.findtext("cast_shadows") == "true"
-                             for light in lights), 2)
+                             for light in lights), len(shadows))
         for light in lights:
+            self.assertEqual(len(light.findall("direction")), 1)
+            self.assertEqual(len(light.findall("attenuation")), 1)
+            self.assertEqual(len(light.findall("spot")), 1)
             self.assertEqual([float(v) for v in light.findtext("direction").split()],
                              [0.0, 0.0, -1.0])
+            self.assertAlmostEqual(float(light.findtext("intensity")), cfg["intensity"])
+            self.assertEqual(light.findtext("cast_shadows") == "true",
+                             light.get("name").replace("court_light_", "lab_light_") in shadows)
 
     def test_visuals_are_gated_without_touching_physics_collisions_or_tf(self):
         for base in ("base", "wheels", "casters", "collector", "realsense_d435i"):
