@@ -32,7 +32,8 @@ HERE = Path(__file__).resolve().parent
 OUTPUT = Path.home() / "scrobot_ws/evaluation_results/mobility_lab"
 SETTINGS_PATH = OUTPUT / "settings.json"
 PHYSICS = ("drive_contact_mu", "caster_contact_mu",
-           "wheel_joint_damping", "wheel_collision_width")
+           "wheel_joint_damping", "wheel_collision_width",
+           "drive_slip1", "drive_slip2")
 CSV_FIELDS = (
     "t", "input_left_rpm", "input_right_rpm",
     "sent_left_rpm", "sent_right_rpm",
