@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SCROBOT · Odometry Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#0b121b;--panel:#15202b;--sub:#1f2d3c;--border:#344457;--text:#edf5fa;--muted:#a6b6c4;--mint:#42d0c2;--amber:#f7b964;--violet:#aaa2ec;--rose:#ed8ca8}*{box-sizing:border-box}
+body{background:linear-gradient(135deg,#0a1721,#0b1119);font:14px system-ui,sans-serif;color:var(--text);margin:0}header{background:#111d27;border-bottom:1px solid var(--border);padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.eyebrow{letter-spacing:2px;font-size:11px;color:var(--mint);font-weight:700}h1{font-size:25px;margin:5px 0}h2{font-size:16px;margin:0 0 14px}h3{font-size:14px;margin:0 0 12px}p,.hint{color:var(--muted);line-height:1.55;font-size:12px;margin:6px 0}.shell{max-width:1480px;margin:auto;padding:20px}.layout{display:grid;grid-template-columns:minmax(290px,360px) minmax(0,1fr);gap:18px}.panel{border:1px solid var(--border);background:var(--panel);border-radius:12px;padding:18px;margin-bottom:16px}.field{margin:12px 0}.field label{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px;margin-bottom:6px}.field output{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:var(--mint)}select{width:100%;font:inherit;background:var(--sub);color:var(--text);border:1px solid var(--border);padding:10px;border-radius:7px}button{background:#27394b;color:var(--text);padding:10px 13px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font:inherit;font-weight:600}button:hover:not(:disabled){filter:brightness(1.2)}button:disabled{opacity:.42;cursor:default}.primary{background:#0c7c75;border-color:#12b2a5}.danger{background:#573040}.buttons{display:flex;gap:9px;flex-wrap:wrap;margin:13px 0}.status{background:var(--sub);border-radius:16px;padding:6px 12px;font-size:12px;color:var(--muted)}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.tile{background:var(--sub);padding:12px;border-radius:9px;min-height:88px}.tile small{color:var(--muted);display:block;font-size:11px}.tile strong{display:block;font-size:20px;margin-top:8px;font-variant-numeric:tabular-nums}.plot{width:100%;height:260px;border:1px solid var(--border);border-radius:8px;background:#101925;display:block}.legend{display:flex;flex-wrap:wrap;gap:13px;font-size:11px;color:var(--muted);margin:8px 0 15px}.legend span:before{content:"";display:inline-block;width:15px;height:3px;margin-right:5px;vertical-align:middle;background:var(--key)}.row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.frequency{width:100%;border-collapse:collapse;font-size:12px}.frequency th,.frequency td{text-align:left;border-bottom:1px solid var(--border);padding:8px 5px}.frequency th{color:var(--muted);font-weight:500}.mono{font-variant-numeric:tabular-nums}.notice{border-left:3px solid var(--amber);padding:10px;background:#49391b4d;color:#edd9bb;font-size:12px;line-height:1.5;border-radius:4px;margin-top:10px}#error{color:var(--rose);min-height:18px;font-size:12px}.ok{color:var(--mint)}.warn{color:var(--amber)}code{font-size:11px}.compare{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.compare .tile{min-height:110px}.inline{display:flex;align-items:center;gap:7px}.switch{display:flex;justify-content:space-between;align-items:center;background:var(--sub);padding:10px 12px;border-radius:8px}.switch input{accent-color:var(--mint)}@media(max-width:950px){.layout{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}}@media(max-width:550px){.shell{padding:12px}.panel{padding:12px}.compare{grid-template-columns:1fr}}
+</style></head><body>
+<header><div><div class="eyebrow">SCROBOT · REAL COMPARISON</div><h1>Odometry Lab</h1><p>Wheel encoders · D435i IMU · magnetic heading · Madgwick · EKF · independent Gazebo truth</p></div><div class="row"><span id="stage" class="status">Connecting</span><span id="readiness" class="hint">Waiting for sensors</span></div></header>
+<main class="shell layout">
+ <aside>
+  <div class="panel"><h2>01 · Test trajectory</h2>
+   <div class="field"><label for="profile">Motion profile</label><select id="profile">
+    <option value="stationary">Stationary · 30 s</option><option value="straight">Straight · 4 s</option>
+    <option value="reverse">Reverse · 4 s</option><option value="spin90">Spin · 90°</option>
+    <option value="spin180">Spin · 180°</option><option value="spin360">Spin · 360°</option>
+    <option value="square">Square · four 0.5 m legs</option><option value="figure8">Figure-eight</option>
+   </select></div>
+   <div id="motion-controls"></div>
+   <div class="buttons"><button id="run" class="primary">▶ Run test</button><button id="stop" class="danger">■ Stop</button><button id="save">Save CSV + report</button></div>
+   <p>Commands go directly to <code>/diff_drive_controller/cmd_vel</code>. No Nav2, no AprilTag corrections, no velocity smoother. Wheel-speed combinations remain below 0.5 m/s per wheel.</p>
+  </div>
+  <div class="panel"><h2>02 · Sensor and fusion frequency</h2>
+   <p>Controller and STM32 PID run at 100 Hz. These are requested simulation publication/update rates; the table shows measured topic rates, jitter and ages.</p>
+   <div id="rate-controls"></div>
+   <div class="switch"><label for="use_magnetometer">Fuse magnetometer in Madgwick</label><input id="use_magnetometer" type="checkbox" checked></div>
+   <div class="buttons"><button id="apply">Save lab settings</button><button id="restart">Restart Gazebo with rates</button></div>
+   <p id="rateStatus" class="hint"></p>
+   <div class="notice">Changing Gazebo sensor update rates or EKF rate needs a restart. More Hz improves temporal resolution only if real sensors provide fresh data and CPU / simulator throughput can keep up.</div>
+  </div>
+  <div class="panel"><h2>03 · Publish after validation</h2>
+   <p>Publish saved frequencies to <code>src/scrobot_simulation/config/odometry_calibration.yaml</code>. The normal simulator then uses them; real hardware settings remain unchanged.</p>
+   <div class="buttons"><button id="publish" class="primary">Publish to Simulation</button></div>
+   <p id="publishStatus" class="hint">Checking configuration...</p>
+  </div>
+ </aside>
+ <section>
+  <div class="panel">
+   <div class="row"><h2>Live sensor publication health</h2><span id="clock" class="status">Sim time —</span></div>
+   <table class="frequency"><thead><tr><th>Stream</th><th>Target</th><th>Measured</th><th>Jitter</th><th>Age</th><th>Frame</th></tr></thead><tbody id="sensorRows"></tbody></table>
+   <p>Measured rate is calculated from message-header timestamps (simulation time), not from browser refreshes. Stale streams and repeated timestamps are flagged.</p>
+  </div>
+  <div class="panel">
+   <h2>Local trajectory vs ground truth</h2>
+   <canvas class="plot" id="trajectory" role="img" aria-label="Ground truth, wheel odometry and EKF trajectories"></canvas>
+   <div class="legend"><span style="--key:var(--amber)">Gazebo truth</span><span style="--key:var(--violet)">Wheel odom</span><span style="--key:var(--mint)">EKF fused</span></div>
+   <p>The three trajectories are aligned to their own initial poses before comparison. They share a common distance scale; a drifting estimator is not re-aligned at the end of the test.</p>
+   <div class="compare">
+    <div class="tile"><small>Wheel position RMSE</small><strong id="wheelPos">—</strong><small>meters</small></div>
+    <div class="tile"><small>EKF position RMSE</small><strong id="ekfPos">—</strong><small>meters</small></div>
+    <div class="tile"><small>EKF yaw RMSE</small><strong id="ekfYaw">—</strong><small>degrees</small></div>
+   </div>
+  </div>
+  <div class="panel">
+   <h2>Heading comparison</h2>
+   <canvas class="plot" id="heading" role="img" aria-label="Relative heading from Gazebo, wheel, IMU and EKF"></canvas>
+   <div class="legend"><span style="--key:var(--amber)">Truth</span><span style="--key:var(--violet)">Wheel yaw</span><span style="--key:var(--mint)">EKF yaw</span><span style="--key:var(--rose)">Madgwick IMU yaw</span></div>
+   <div class="compare">
+    <div class="tile"><small>Wheel yaw RMSE</small><strong id="wheelYaw">—</strong><small>degrees</small></div>
+    <div class="tile"><small>IMU yaw RMSE</small><strong id="imuYaw">—</strong><small>degrees</small></div>
+    <div class="tile"><small>Magnetic field</small><strong id="fieldStrength">—</strong><small>µT (raw field magnitude)</small></div>
+   </div>
+   <div class="notice">Magnetic field-vector angle is not an absolute heading without axis/declination calibration. The simulation currently does not guarantee realistic sensor noise or long-term gyro bias. RPM-derived wheel heading is useful for comparison even though the EKF intentionally ignores wheel yaw.</div>
+  </div>
+  <p id="error"></p>
+  <p>CSV logs include raw gyro, accelerometer, magnetic vector, wheel positions/velocities, EKF pose, simulation truth, rates, and relative-motion error report. Gazebo tests cannot establish real-world accuracy without equivalent real-sensor/ground-truth logs.</p>
+ </section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const descriptors={
+ "motion-controls":[["linear_m_s","Linear command",0.05,0.40,0.01," m/s"],["angular_rad_s","Yaw command",0.1,1.8,0.05," rad/s"],["pre_s","Rest before test",0.2,2.0,0.1," s"]],
+ "rate-controls":[["wheel_odom_hz","Wheel odometry",10,200,5," Hz"],["imu_hz","D435i IMU",10,200,5," Hz"],["magnetometer_hz","Magnetometer",10,200,5," Hz"],["ekf_hz","EKF output",10,200,5," Hz"],["ground_truth_hz","Ground truth (reference)",10,200,5," Hz"]]
+};
+const keys=["profile","linear_m_s","angular_rad_s","pre_s","use_magnetometer","wheel_odom_hz","imu_hz","magnetometer_hz","ground_truth_hz","ekf_hz"];
+let first=false,busy=false,last=null;
+for(const [parent,controls] of Object.entries(descriptors))for(const [id,label,min,max,step,unit]of controls){
+ const box=document.createElement("div");box.className="field";
+ box.innerHTML='<label for="'+id+'">'+label+'<output id="out-'+id+'"></output></label><input id="'+id+'" type="range" min="'+min+'" max="'+max+'" step="'+step+'">';
+ $(parent).append(box);
+ $(id).oninput=()=>{$("out-"+id).textContent=Number($(id).value).toFixed(step<.1?2:0)+unit};
+}
+function fields(){const d={};for(const k of keys)d[k]=k==="profile"?$(k).value:k==="use_magnetometer"?$(k).checked:Number($(k).value);return d}
+function load(s){for(const k of keys){if(s[k]===undefined)continue;if(k==="use_magnetometer")$(k).checked=s[k];else $(k).value=s[k];if($("out-"+k))$(k).oninput()}first=true}
+function changed(s){const c=fields();return keys.some(k=>c[k]!==s[k])}
+function show(msg,err=false){$("error").textContent=msg;$("error").className=err?"warn":"ok"}
+async function api(url,payload){const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw Error(d.error||r.status);return d}
+async function invoke(fn){if(busy)return;busy=true;try{await fn()}catch(e){show(e.message,true)}finally{busy=false}}
+$("apply").onclick=()=>invoke(async()=>{await api("/api/settings",fields());show("Lab settings saved. Restart Gazebo to apply frequency/magnetic changes.")});
+$("restart").onclick=()=>invoke(async()=>{await api("/api/settings",fields());await api("/api/restart",{});show("Gazebo restarting with the saved odometry rates. Wait for joint feedback.")});
+$("run").onclick=()=>invoke(async()=>{await api("/api/settings",fields());let r=await api("/api/run",{});show("Running "+r.profile+" for "+r.duration_s+" s of simulation time.")});
+$("stop").onclick=()=>invoke(async()=>{await api("/api/stop",{});show("Stop command sent.")});
+$("save").onclick=()=>invoke(async()=>{let r=await api("/api/save",{});show("Saved: "+r.saved)});
+$("publish").onclick=()=>invoke(async()=>{if(!confirm("Publish SAVED rates to the MAIN SIMULATION? A backup is created. Restart the normal simulator after rebuilding. This does not affect the STM32/hardware."))return;let r=await api("/api/publish",{confirm:true});show(r.changed?"Published to "+r.path+" (backup: "+r.backup+").":"Main sim already matches saved rates.")});
+const streams=[
+ ["joints","Wheel joints","100 Hz"],["wheel_odom","Wheel odometry","wheel_odom_hz"],["raw_imu","Raw D435i IMU","imu_hz"],["imu_transformed","Transformed IMU","imu_hz"],["magnetometer","Magnetometer","magnetometer_hz"],["imu_orientation","Madgwick","imu_hz"],["ekf","EKF fused","ekf_hz"],["ground_truth","Gazebo ground truth","ground_truth_hz"]
+];
+function fmt(x,dp=2){return x==null?"—":Number(x).toFixed(dp)}
+function drawCanvas(id,func){const c=$(id),r=c.getBoundingClientRect(),d=window.devicePixelRatio||1;c.width=Math.max(1,Math.round(r.width*d));c.height=Math.max(1,Math.round(r.height*d));const g=c.getContext("2d");g.scale(d,d);func(g,r.width,r.height)}
+function lines(g,points,color,width=2){if(points.length<2)return;g.beginPath();points.forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y));g.strokeStyle=color;g.lineWidth=width;g.stroke()}
+function graph(name,trajectory){
+ drawCanvas(name,(g,w,h)=>{
+  const pad=30,ws=w-2*pad,hs=h-2*pad;
+  g.font="11px system-ui";g.strokeStyle="#2b4052";g.fillStyle="#9fb3c4";
+  for(let i=0;i<5;i++){const y=pad+i*hs/4;g.beginPath();g.moveTo(pad,y);g.lineTo(w-pad,y);g.stroke()}
+  const data=[];
+  if(name==="trajectory")for(const [id,color]of [["ground_truth","#f7b964"],["wheel_odom","#aaa2ec"],["ekf","#42d0c2"]]){
+   let rows=trajectory[id]||[];if(rows.length<2)continue;
+   const x0=rows[0].x,y0=rows[0].y,yaw=rows[0].yaw;
+   const c=Math.cos(yaw),s=Math.sin(yaw);
+   data.push({id,color,coords:rows.map(r=>{let x=r.x-x0,y=r.y-y0;return [c*x+s*y,-s*x+c*y]})});
+  }
+  else for(const [id,color]of [["ground_truth","#f7b964"],["wheel_odom","#aaa2ec"],["ekf","#42d0c2"],["imu_orientation","#ed8ca8"]]){
+   const rows=(trajectory[id]||[]).filter(r=>r.yaw!=null);
+   if(rows.length<2)continue;
+   const t0=rows[0].t,yaw0=rows[0].yaw;
+   data.push({id,color,coords:rows.map(r=>[r.t-t0,((r.yaw-yaw0+Math.PI*5)%(Math.PI*2)-Math.PI)*180/Math.PI])});
+  }
+  if(!data.length){g.fillText("Run a trajectory to populate this plot",pad,h/2);return}
+  const all=data.flatMap(d=>d.coords);
+  let xmin=Math.min(0,...all.map(p=>p[0])),xmax=Math.max(.1,...all.map(p=>p[0]));
+  let ymin=Math.min(0,...all.map(p=>p[1])),ymax=Math.max(.1,...all.map(p=>p[1]));
+  if(name==="trajectory"){let centerX=(xmin+xmax)/2,centerY=(ymin+ymax)/2;let span=Math.max(xmax-xmin,ymax-ymin,.1)*1.2;xmin=centerX-span/2;xmax=centerX+span/2;ymin=centerY-span/2;ymax=centerY+span/2}
+  else{let padY=Math.max(10,(ymax-ymin)*.1);ymin-=padY;ymax+=padY}
+  const X=x=>pad+(x-xmin)/Math.max(.01,xmax-xmin)*ws;
+  const Y=y=>h-pad-(y-ymin)/Math.max(.01,ymax-ymin)*hs;
+  for(const d of data)lines(g,d.coords.map(p=>[X(p[0]),Y(p[1])]),d.color);
+  g.fillText(name==="trajectory"?"Meters (relative start)": "Seconds after first sample",pad,h-7);
+  g.fillText(name==="trajectory"?"Relative X/Y":"Relative heading (deg)",pad,18);
+ });
+}
+function display(s){
+ last=s;if(!first&&s.settings)load(s.settings);
+ $("stage").textContent=s.state.toUpperCase();$("clock").textContent="Simulation "+fmt(s.sim_time)+" s";
+ $("readiness").textContent=s.ready?"Wheel controller ready":"Waiting for controller";
+ const saved=changed(s.settings),inrun=["pre","running"].includes(s.state);
+ $("run").disabled=busy||!s.ready||!s.gazebo_alive||s.rates_changed||saved||inrun;
+ $("stop").disabled=!inrun;
+ $("save").disabled=!s.metrics;
+ $("publish").disabled=busy||saved||inrun;
+ $("rateStatus").textContent=s.rates_changed?"⚠ Restart Gazebo to apply saved rates/magnetic mode":"Gazebo using saved sensor/fusion settings";
+ $("rateStatus").className=s.rates_changed?"warn hint":"ok hint";
+ $("publishStatus").textContent=s.published_match&&!saved?"Normal simulation matches saved publication rates":saved?"Unsaved slider values; click Save Lab Settings first":"Normal simulation differs from saved rates. Publish to transfer.";
+ const body=$("sensorRows");body.innerHTML="";
+ for(const [id,title,target]of streams){
+  const m=s.streams?.[id]||{},row=document.createElement("tr");
+  const configured=target==="100 Hz"?"100":fmt(s.settings[target],0);
+  const stale=m.last_age_wall_s==null||m.last_age_wall_s>1.8;
+  row.innerHTML='<td>'+title+'</td><td class="mono">'+configured+'</td><td class="mono '+(stale?"warn":"ok")+'">'+fmt(m.hz,1)+' Hz</td><td class="mono">'+fmt(m.jitter_ms,2)+' ms</td><td class="mono">'+fmt(m.last_age_wall_s,2)+' s</td><td class="mono">'+(m.frame_id||"—")+'</td>';
+  body.append(row)
+ }
+ const m=s.metrics||{};
+ $("wheelPos").textContent=fmt(m.wheel?.position_rmse_m,4);
+ $("ekfPos").textContent=fmt(m.ekf?.position_rmse_m,4);
+ $("ekfYaw").textContent=fmt(m.ekf?.yaw_rmse_deg,2);
+ $("wheelYaw").textContent=fmt(m.wheel?.yaw_rmse_deg,2);
+ $("imuYaw").textContent=fmt(m.imu?.yaw_rmse_deg,2);
+ $("fieldStrength").textContent=fmt(s.latest?.magnetometer?.field_strength_ut,1);
+ graph("trajectory",s.trajectory||{});
+ graph("heading",s.trajectory||{});
+ if(s.server_error)show(s.server_error,true)
+}
+async function poll(){try{const r=await fetch("/api/status",{cache:"no-store"});if(!r.ok)throw Error("Cannot reach lab status");display(await r.json())}catch(e){$("readiness").textContent=e.message}}
+setInterval(poll,500);window.addEventListener("resize",()=>last&&display(last));poll();
+</script></body></html>
