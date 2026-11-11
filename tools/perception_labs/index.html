@@ -171,7 +171,7 @@ $("saveSettings").onclick=()=>action(async()=>{await api("/api/settings",fields(
 $("restart").onclick=()=>action(async()=>{await api("/api/settings",fields());await api("/api/restart",{});show("Gazebo restarting with "+mode+" mode and selected RGB/depth configuration.")});
 $("publish").onclick=()=>action(async()=>{
  if(!confirm("Publish SAVED RGB/depth camera settings to the MAIN SIMULATION? Prior YAML is backed up; real D435i configuration remains untouched."))return;
- const r=await api("/api/settings",fields());const published=await api("/api/publish",{confirm:true});
+ const published=await api("/api/publish",{confirm:true});
  show(published.changed?"Published camera profile; previous YAML backup at "+published.backup:
       "The normal Gazebo simulation already matches these camera settings.");
 });
@@ -230,7 +230,7 @@ function display(s){
  $("phase").textContent=mode.toUpperCase();
  $("simStatus").textContent=s.sim_alive?"Gazebo running":"Gazebo stopped";
  $("simStatus").className="badge "+(s.sim_alive?"ok":"warn");
- const changed=JSON.stringify(fields())!==JSON.stringify(s.settings);
+ const changed=keys.some(k=>fields()[k]!==s.settings?.[k]);
  $("restartHint").textContent=s.restart_needed||changed?"Changes pending. Restart Gazebo to apply scene/vision pipeline.":"Active Gazebo mode matches saved configuration.";
  const d=s.streams||{},rw=d.rgb||{},dw=d.depth||{},aw=d.aligned_depth||{},pd=d[mode==="yolo"?"yolo2d":"apriltag"]||{};
  $("rgbFPS").textContent=fmt(rw.wall_fps);
@@ -276,9 +276,11 @@ function display(s){
  const job=s.job||{};
  $("jobStatus").textContent=job.kind?"Job "+job.kind+" · "+(job.running?"RUNNING":job.returncode===0?"COMPLETE":"EXIT "+job.returncode):"No offline job yet.";
  $("jobLog").textContent=job.log_tail||"No job output yet.";
- $("publishHint").textContent=s.publication?.error?"Publication error: "+s.publication.error:
-  s.publication?.matches?"Simulation camera profile matches current saved selection.":"Simulation camera profile differs from saved selection.";
- $("publish").disabled=busy||!s.publication||!!s.publication.error;
+ $("publishHint").textContent=changed?"Unsaved browser changes: click Save Lab Settings first.":s.publication?.error?
+  "Publication error: "+s.publication.error:
+  s.publication?.matches?"Simulation camera profile matches the saved selection.":
+  "Simulation camera profile differs from saved selection; publish after validation.";
+ $("publish").disabled=busy||changed||!s.publication||!!s.publication.error;
  $("setPose").disabled=busy||!s.sim_alive;
  $("setShuttle").disabled=busy||!s.sim_alive;
  $("randomShuttles").disabled=busy||!s.sim_alive;
