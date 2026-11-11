@@ -36,6 +36,8 @@ def generate_launch_description():
     wheel_collision_width = LaunchConfiguration('wheel_collision_width')
     drive_contact_mu = LaunchConfiguration('drive_contact_mu')
     caster_contact_mu = LaunchConfiguration('caster_contact_mu')
+    drive_slip1 = LaunchConfiguration('drive_slip1')
+    drive_slip2 = LaunchConfiguration('drive_slip2')
     controller_params = LaunchConfiguration('controller_params')
 
     spawn_delay = LaunchConfiguration('spawn_delay')
@@ -85,6 +87,8 @@ def generate_launch_description():
             'wheel_collision_width': wheel_collision_width,
             'drive_contact_mu': drive_contact_mu,
             'caster_contact_mu': caster_contact_mu,
+            'drive_slip1': drive_slip1,
+            'drive_slip2': drive_slip2,
             'controller_params': controller_params,
         }.items(),
     )
@@ -198,6 +202,10 @@ def generate_launch_description():
             default_value='0.05',
             description='Gazebo passive-caster contact friction coefficient.',
         ),
+        DeclareLaunchArgument('drive_slip1', default_value='0.0',
+                              description='Rolling tire contact slip in Gazebo.'),
+        DeclareLaunchArgument('drive_slip2', default_value='0.0',
+                              description='Lateral tire contact slip in Gazebo.'),
         DeclareLaunchArgument(
             'controller_params',
             default_value=os.path.join(
