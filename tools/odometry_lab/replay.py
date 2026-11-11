@@ -8,6 +8,10 @@ import json
 import math
 import statistics
 from pathlib import Path
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from storage import validated_result_root
 
 
 def read_real(path,time_col,rpm_col):
@@ -67,7 +71,9 @@ if __name__=='__main__':
     p.add_argument('--left',required=True);p.add_argument('--right',required=True)
     p.add_argument('--time-column',required=True);p.add_argument('--rpm-column',required=True)
     p.add_argument('--sim-wheel-speeds',help='wheel_speeds.csv from an odometry lab run')
-    p.add_argument('--output',default='hardware_replay_summary.json')
+    p.add_argument('--output',default=None,
+                   help='Optional explicit output path (must not exist). '
+                        'By default, stores a unique Odometry Lab replay result.')
     a=p.parse_args()
     real={side:read_real(getattr(a,side),a.time_column,a.rpm_column) for side in ('left','right')}
     result={side:{'real':summarize(values)} for side,values in real.items()}
@@ -77,5 +83,20 @@ if __name__=='__main__':
             if len(sim[side])>1:
                 result[side]['sim']=summarize(sim[side])
                 result[side]['comparison']=compare_time_aligned(real[side],sim[side])
-    Path(a.output).write_text(json.dumps(result,indent=2))
+    if a.output:
+        output = Path(a.output).expanduser()
+        validated_result_root(output.parent)
+    else:
+        # Replay comparisons must not land in the repository root or reuse a
+        # shared filename from another lab / previous experiment.
+        root = validated_result_root(
+            Path.home() / 'scrobot_ws/evaluation_results/odometry_lab/replays'
+        )
+        root.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+        output = root / f'hardware_replay_{stamp}_{uuid4().hex[:6]}.json'
+    with output.open('x', encoding='utf-8') as stream:
+        json.dump(result, stream, indent=2)
+        stream.write('\\n')
+    print(f'Saved Odometry Lab replay: {output}')
     print(json.dumps(result,indent=2))
