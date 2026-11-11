@@ -47,10 +47,12 @@ def generate_launch_description():
     model_path = LaunchConfiguration('model_path')
     device = LaunchConfiguration('device')
     publish_debug_image = LaunchConfiguration('publish_debug_image')
+    enable_yolo = LaunchConfiguration('enable_yolo')
 
     shuttle_mode = LaunchConfiguration('shuttle_mode')
     shuttle_count = LaunchConfiguration('shuttle_count')
     shuttle_seed = LaunchConfiguration('shuttle_seed')
+    spawn_shuttles = LaunchConfiguration('spawn_shuttles')
 
     robot_x = LaunchConfiguration('robot_x')
     robot_y = LaunchConfiguration('robot_y')
@@ -121,7 +123,7 @@ def generate_launch_description():
         'perception.launch.py',
         {
             'use_sim_time': use_sim_time,
-            'enable_yolo': 'true',
+            'enable_yolo': enable_yolo,
             'model_path': model_path,
             'device': device,
             'publish_debug_image': publish_debug_image,
@@ -180,6 +182,10 @@ def generate_launch_description():
             description='Ultralytics inference device.',
         ),
         DeclareLaunchArgument(
+            'enable_yolo', default_value='true', choices=['true', 'false'],
+            description='Run YOLO perception; disable during isolated wheel odometry experiments.',
+        ),
+        DeclareLaunchArgument(
             'publish_debug_image',
             default_value='false',
             choices=['true', 'false'],
@@ -189,6 +195,10 @@ def generate_launch_description():
             ),
         ),
 
+        DeclareLaunchArgument(
+            'spawn_shuttles', default_value='true', choices=['true', 'false'],
+            description='Spawn the shuttle batch; disable for clean odometry motion experiments.',
+        ),
         DeclareLaunchArgument(
             'shuttle_mode',
             default_value='mixed',
@@ -247,7 +257,8 @@ def generate_launch_description():
                 perception,
             ],
         ),
-        TimerAction(period=shuttle_delay, actions=[shuttles]),
+        TimerAction(period=shuttle_delay, actions=[shuttles],
+                    condition=IfCondition(spawn_shuttles)),
         TimerAction(period=mission_delay, actions=[mission],
                     condition=IfCondition(launch_mission)),
     ])
