@@ -185,7 +185,19 @@ function display(s){
   " · commands -> "+(s.command_topic||"wheel controller")+
   ". No Nav2, AprilTags or smoother. Physics and motor model come from published Mobility Lab calibration.";
  const saved=changed(s.settings),inrun=["pre","running"].includes(s.state);
- $("run").disabled=busy||!s.ready||!s.gazebo_alive||s.rates_changed||saved||inrun;
+ const cfg=fields(),peak=profilePeakSpeed(cfg);
+ const pendingSensorChanges=["wheel_odom_hz","imu_hz","magnetometer_hz","ground_truth_hz","ekf_hz","use_magnetometer"].some(k=>cfg[k]!==s.settings[k]);
+ const invalidSpeed=!Number.isFinite(peak)||peak>nominalWheelLimit+1e-9;
+ const blockers=[];
+ if(inrun)blockers.push("experiment already running");
+ if(!s.gazebo_alive)blockers.push("Gazebo is not running");
+ if(!s.ready)blockers.push("wheel controller not ready");
+ if(s.rates_changed||pendingSensorChanges)blockers.push("save sensor rates and restart Gazebo");
+ if(invalidSpeed)blockers.push("selected profile exceeds 0.50 m/s per wheel");
+ $("run").disabled=busy||blockers.length>0;
+ $("runStatus").textContent=blockers.length?"Run unavailable: "+blockers.join("; ")+".":"Ready. Motion changes save automatically when you run.";
+ $("runStatus").className=blockers.length?"warn hint":"ok hint";
+ updateMotionReadout();
  $("stop").disabled=!inrun;
  $("save").disabled=!s.metrics;
  $("publish").disabled=busy||saved||inrun;
