@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="scrobot_gazebo_sensors" params="enable_magnetometer:=false enable_depth_camera:=true imu_rate_hz:=100.0 magnetometer_rate_hz:=50.0">
+  <xacro:macro name="scrobot_gazebo_sensors" params="enable_magnetometer:=false enable_depth_camera:=true imu_rate_hz:=100.0 magnetometer_rate_hz:=50.0 color_width:=1280 color_height:=720 color_fps:=15.0 depth_width:=848 depth_height:=480 depth_fps:=15.0">
 
     <!-- ====================================================== -->
     <!-- D435i combined IMU                                     -->
@@ -55,7 +55,7 @@
     <gazebo reference="camera_color_frame">
       <sensor name="d435i_color" type="camera">
         <always_on>true</always_on>
-        <update_rate>15.0</update_rate>
+        <update_rate>${color_fps}</update_rate>
         <visualize>true</visualize>
 
         <topic>/camera/color</topic>
@@ -72,8 +72,8 @@
           <camera_info_topic>/camera/color/camera_info</camera_info_topic>
 
           <image>
-            <width>1280</width>
-            <height>720</height>
+            <width>${color_width}</width>
+            <height>${color_height}</height>
             <format>R8G8B8</format>
           </image>
 
@@ -96,7 +96,7 @@
     <gazebo reference="camera_depth_frame">
       <sensor name="d435i_depth" type="depth_camera">
         <always_on>true</always_on>
-        <update_rate>15.0</update_rate>
+        <update_rate>${depth_fps}</update_rate>
         <visualize>true</visualize>
 
         <topic>/camera/depth</topic>
@@ -113,8 +113,8 @@
           <camera_info_topic>/camera/depth/camera_info</camera_info_topic>
 
           <image>
-            <width>848</width>
-            <height>480</height>
+            <width>${depth_width}</width>
+            <height>${depth_height}</height>
             <format>R_FLOAT32</format>
           </image>
 
