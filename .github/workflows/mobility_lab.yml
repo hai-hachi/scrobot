@@ -40,5 +40,16 @@ jobs:
                        'rightChart', 'matlabFile'):
               assert name in ui, name
           PY
+      - name: Syntax-check embedded browser JavaScript
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('tools/mobility_lab/index.html').read_text()
+          assert text.count('<script>') == 1 and text.count('</script>') == 1
+          Path('/tmp/mobility-lab-browser.js').write_text(
+              text.split('<script>', 1)[1].split('</script>', 1)[0]
+          )
+          PY
+          node --check /tmp/mobility-lab-browser.js
       - name: Run headless system-identification tests
         run: python3 -m unittest discover -s tools/mobility_lab/tests -p 'test_*.py' -v
