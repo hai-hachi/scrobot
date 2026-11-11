@@ -47,7 +47,7 @@ Gazebo process; it never launches or stops that process.
 
 1. Set **Left wheel only**, **90 RPM**, **Baseline**.
 2. Keep default physical settings (drive mu 5.0, caster mu 0.05, joint damping
-   0.0 N m s/rad, collision width 0.001 m). These are **existing simulation
+   0.0 N m s/rad, collision width 0.001 m, and contact slip1/slip2 0). These are **existing simulation
    values**, **not measured material constants**.
 3. Wait for fresh joint states. Click **Run 90 RPM test**. The tool holds
    zero for 0.30 s, applies +90 RPM to the left wheel for 1.50 s, then commands
@@ -141,6 +141,8 @@ Parameters in the web page:
 | Drive tire `mu1/mu2` | Wheel-ground traction | 5.0 | Respawn |
 | Caster `mu1/mu2` | Caster-ground drag/traction | 0.05 | Respawn |
 | Wheel joint damping | Bearing viscous torque | 0.0 | Respawn |
+| Rolling contact slip1 | Tire longitudinal force-dependent slip | 0.0 | Respawn |
+| Lateral contact slip2 | Tire lateral force-dependent slip | 0.0 | Respawn |
 | Wheel collision width | Tire contact geometry | 0.001 m | Respawn |
 | Motor tau / gain | Closed-loop RPM command surrogate | 0.05 s / 1.0 | Next test |
 
@@ -150,6 +152,11 @@ to evaluate slip/contact effects. Real chassis position, IMU yaw-rate or
 external motion capture are needed before ground-friction parameters can be
 calibrated to reality; a 90 RPM encoder trace alone cannot identify tire
 friction, damping or wheel slip uniquely.
+
+Gazebo contact-slip parameters are available for experiments but may be treated
+differently by different physics engines. A setting has not been physically
+validated merely because it is accepted in SDF. Verify effects with independent
+ground-truth body displacement and yaw before tuning them against real data.
 
 **Physical-model limitation (important):** stock
 `gz_ros2_control/GazeboSimSystem` applies the requested wheel joint velocity
