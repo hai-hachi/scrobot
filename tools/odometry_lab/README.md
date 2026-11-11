@@ -59,7 +59,9 @@ and mode restoration (not a hardware E-stop). This is intended for simulation.
 
 Use **Lighting (8765)**, **Mobility (8766)** and **Odometry (8767)** as
 separate web applications. Lighting owns a temporary Gazebo world, and
-Mobility owns an isolated Gazebo/ROS domain; do not treat either as the
+Lighting and Mobility each own isolated Gazebo/ROS domains (defaults **76**
+and **77** respectively); Odometry instead monitors the normal simulation
+ROS domain. Do not treat either as the
 production-control simulation expected by Odometry Lab.
 
 After publishing the Lighting and Mobility calibrations, start one normal
@@ -115,6 +117,13 @@ configured in Gazebo itself.
 Record RTF and the complete config for every trial; repeat several times.
 
 Output root by default: `~/scrobot_ws/evaluation_results/odometry_lab`.
+Each run receives an exclusive directory; reusing a CLI `--run-name` reserves a
+numbered suffix instead of overwriting an earlier run. A manually edited
+`run_root` is rejected if it overlaps `evaluation_results/lighting_lab/`,
+`evaluation_results/mobility_lab/`, or the source checkout.
+For real-wheel replay, the default is a uniquely named JSON file under
+`evaluation_results/odometry_lab/replays/`; an existing explicit `--output`
+file is never overwritten.
 Each run includes `config_snapshot.yaml`, `samples.csv`, `clock.csv`,
 `live.json`, `wheel_speeds.csv`, `summary.json`, `summary.csv`, `trajectory.svg`, `monitor.log`
 and `motion.log` (if motion was requested). Use:
