@@ -24,7 +24,7 @@ be used to hide missing physical wheel slip or floor-contact effects.
 **Prerequisites:** SCROBOT workspace built and sourced, `ros2 run scrobot_evaluation
 local_odom_test_runner` installed, `rclpy`, `nav_msgs`, `sensor_msgs`,
 `rosgraph_msgs`, `std_msgs`, `python3-yaml`, `python3-numpy`, `python3-matplotlib`,
-`python3-tk`, optionally `python3-psutil`. Start the Gazebo simulation,
+optionally `python3-psutil`. Start the Gazebo simulation,
 production control stack, perception depth scan / collision monitor and
 localization before issuing test motion. Do not launch two test runners at once.
 
@@ -55,7 +55,7 @@ collision monitor / diff_drive_controller. The test runner restores AUTO when
 it completes normally. On interruption, the launcher attempts a zero command
 and mode restoration (not a hardware E-stop). This is intended for simulation.
 
-## Four tabs
+## Four test areas (plus Overview)
 
 1. **Timing**: independent encoder-sample, estimator and lab-publication Hz,
    lab-only QoS reliability and queue depth, plus the existing motion
@@ -76,7 +76,7 @@ and mode restoration (not a hardware E-stop). This is intended for simulation.
    endpoint drift and velocity error. Stationary test automatically scores all
    matched samples when no active-motion samples are labeled.
 
-**Apply writes `config/lab.yaml`**; a currently running test keeps its immutable
+**Apply settings writes `config/lab.yaml`**; a currently running test keeps its immutable
 `config_snapshot.yaml` and is unaffected. Start begins a fresh run directory.
 
 ## Reproducibility and sweeps
@@ -138,3 +138,59 @@ requires a separate measured pose reference (e.g. motion capture or survey).
   and accuracy metrics additionally use timestamp interpolation.
 - No hardware controller commands are sent directly by the monitor. Use the
   real robot emergency stop when operating physical equipment.
+
+## Browser dashboard (recommended)
+
+The lab now uses a **local web dashboard** instead of Tkinter. The server uses
+Python's standard-library HTTP server, bundled HTML/CSS/JavaScript, and the
+same ROS 2 monitoring backend as the previous desktop GUI. No external CDN,
+Node.js installation, or internet connection is needed. Only localhost can
+access the web server; it binds to `127.0.0.1` and requires same-origin JSON
+for control requests. This interface does not depend on the Lighting Lab web
+source, which is not currently present in the connected GitHub repository.
+
+```bash
+cd ~/scrobot_ws
+source install/setup.bash
+python3 tools/odometry_lab/web_server.py
+# Open http://127.0.0.1:8765 (opens automatically unless --no-browser)
+```
+
+To launch headless or choose another port:
+
+```bash
+python3 tools/odometry_lab/web_server.py --no-browser --port 8765
+```
+
+`python3 tools/odometry_lab/gui.py` remains as a backwards-compatible alias
+and now opens the web dashboard. Tkinter is no longer required.
+
+The browser has five areas: Overview, Publishing, Performance, Hardware model,
+and Accuracy. Sliders and numeric inputs are linked; **Apply settings** writes
+`config/lab.yaml`, **Start experiment** invokes `run_lab.py`, and **Stop**
+requests the launcher's normal cleanup, which attempts a zero manual command
+and AUTO restoration. You can export CSV, YAML, summary JSON and SVG when the
+run files become available. Each new experiment snapshots its saved settings.
+
+For motion scenarios (anything except `none`), the web server checks that
+`/clock`, the Gazebo ground-truth topic and `/joint_states` exist, and that the
+first two topics have active publishers **before allowing Start**. It also
+requires an explicit browser confirmation. This is a simulation-only guard,
+not proof that no physical motor controller is connected and not a replacement
+for an emergency stop. Do not expose the dashboard publicly or port-forward it
+without a separate authentication/security layer.
+
+**Important frequency distinction:** the Publishing controls change the lab's
+isolated encoder sampling / estimation / publication rates. They never edit
+the production diff-drive controller `publish_rate` or EKF transform ownership.
+The `P95 interval` KPI is an inter-arrival interval, not the formal jitter
+standard deviation. Published performance numbers and trajectory previews are
+illustrative until live Gazebo signals are present; accuracy is finalized only
+by time-aligned offline analysis after a run.
+
+Validation without ROS 2:
+
+```bash
+python3 -m pytest -q tools/odometry_lab/tests
+python3 -m py_compile tools/odometry_lab/web_server.py
+```
