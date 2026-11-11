@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SCROBOT · Mobility Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#0c121b;--panel:#141e2a;--panel2:#1d2a38;--line:#293b4c;--text:#eaf1f6;--muted:#a1b2c1;--teal:#3ed8c5;--amber:#fac06e;--pink:#ed88a9;--violet:#a8a0f3}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(155deg,#0b1721 0%,#0b111a 65%);font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;color:var(--text);font-size:14px}header{padding:22px max(26px,calc((100vw - 1470px)/2));border-bottom:1px solid var(--line);background:#0e1722bd;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.eyebrow{text-transform:uppercase;font-size:11px;letter-spacing:2.5px;color:var(--teal);font-weight:700}h1{font-size:26px;letter-spacing:-.5px;margin:5px 0 2px}h2{font-size:15px;font-weight:700;margin:0 0 14px}p{margin:0;color:var(--muted);line-height:1.55}.wrap{max-width:1510px;margin:auto;padding:22px 24px 55px}.layout{display:grid;grid-template-columns:minmax(300px,380px) minmax(460px,1fr);gap:18px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 9px 30px #0002}.panel+.panel{margin-top:16px}.control{margin:14px 0}.control label{display:flex;justify-content:space-between;gap:8px;margin-bottom:7px;font-size:12px;color:var(--muted)}.control output{font-variant-numeric:tabular-nums;color:var(--text);font-weight:700}input[type=range]{width:100%;accent-color:var(--teal);cursor:pointer}select{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:10px;border-radius:7px;width:100%;font:inherit}button{font:inherit;padding:10px 14px;border:1px solid var(--line);border-radius:8px;cursor:pointer;background:#29394a;color:var(--text);font-weight:600}button:hover{filter:brightness(1.2)}button:disabled{opacity:.4;cursor:not-allowed}.primary{background:#087f7a;border-color:#0bb4a2;color:#fff}.danger{background:#573145;border-color:#925672}.buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}small,.hint{font-size:11px;color:var(--muted);line-height:1.5}.tag{font-size:11px;padding:5px 9px;border:1px solid var(--line);border-radius:15px;background:var(--panel2);color:var(--muted)}.good{color:var(--teal)}.warn{color:var(--amber)}.bad{color:var(--pink)}.statusline{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.dot{width:8px;height:8px;border-radius:50%;background:var(--pink)}.dot.ready{background:var(--teal)}.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}.metric{background:var(--panel2);border-radius:9px;padding:13px;min-height:80px}.metric strong{font-size:19px;display:block;margin-top:7px;letter-spacing:-.3px;font-variant-numeric:tabular-nums}.metric small{display:block}.chart{width:100%;height:256px;display:block;border:1px solid var(--line);border-radius:9px;background:#101924}.chart.short{height:195px}.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:11px}.key{width:15px;height:3px;display:inline-block;vertical-align:middle;margin-right:5px}.split{display:grid;grid-template-columns:1fr 270px;gap:14px}.note{border-left:3px solid var(--amber);background:#4432213b;border-radius:3px;padding:10px 12px;color:#edd5b2;font-size:12px;line-height:1.5;margin:12px 0}.upload{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.upload input{max-width:260px;color:var(--muted)}.tabs{display:flex;gap:9px;align-items:center}.error{color:#ff9fae;margin:8px 0;min-height:16px;font-size:12px}.inline{display:flex;justify-content:space-between;align-items:center;gap:8px}footer{color:var(--muted);font-size:11px;line-height:1.6;margin-top:16px}@media(max-width:1000px){.layout{grid-template-columns:1fr}.split{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}}@media(max-width:520px){.wrap{padding:14px}.panel{padding:13px}.row{grid-template-columns:1fr}.metrics{gap:8px}h1{font-size:21px}}
+</style>
+</head>
+<body>
+<header>
+  <div><div class="eyebrow">SCROBOT · CALIBRATION TOOLS</div><h1>Mobility Lab</h1><p>Floor-loaded wheel dynamics and tire contact calibration</p></div>
+  <div class="statusline"><span id="stage" class="tag">Connecting</span><span id="readyDot" class="dot"></span><span id="readiness" class="hint">Waiting for /joint_states</span></div>
+</header>
+<main class="wrap layout">
+<section>
+ <div class="panel">
+  <h2>01 · Experiment</h2>
+  <div class="control"><label>90 RPM floor-loaded test profile</label><select id="profile"><option value="left">Left wheel only</option><option value="right">Right wheel only</option><option value="forward">Both wheels forward</option><option value="reverse">Both wheels reverse</option><option value="spin">Spin in place (L− / R+)</option></select></div>
+  <div id="controls-experiment"></div>
+  <div class="buttons"><button id="run" class="primary">▶ Run 90 RPM test</button><button id="abort" class="danger">■ Stop</button><button id="save">Save result</button><button id="csv">Export CSV</button></div>
+  <div id="actionError" class="error"></div>
+  <p class="hint">Direct command to <code>/diff_drive_controller/cmd_vel</code>, with NO Nav2, no mission and no velocity smoother. The robot stays on Gazebo's floor with wheel and caster collisions enabled.</p>
+ </div>
+ <div class="panel">
+  <h2>02 · Closed-loop motor model</h2>
+  <div class="control"><label>Simulator motor response mode</label><select id="model"><option value="baseline">Baseline · Gazebo direct velocity</option><option value="first_order">First-order · command-side approximation</option></select></div>
+  <div id="controls-motor"></div>
+  <div class="note">A first-order command filter emulates measured closed-loop RPM dynamics; it does <b>not</b> simulate motor torque or make acceleration depend on tire load. Compare its joint feedback to MATLAB before accepting the fit. Typical 2% settling: 0.2 s ≈ τ 0.05 s.</div>
+ </div>
+ <div class="panel">
+  <h2>03 · Floor and drivetrain physics</h2>
+  <div id="controls-physics"></div>
+  <p class="hint"><b>Contact friction</b> acts at tire/caster-floor contacts. <b>Joint damping</b> is bearing-like viscous resistance—not ground friction. Wheel width affects contact geometry. Gazebo's default velocity interface can largely mask damping in wheel RPM; measure the separate ground-truth robot motion to assess contact changes.</p>
+  <div class="buttons"><button id="apply">Apply & save settings</button><button id="restart">Restart Gazebo with physics</button></div>
+  <p class="hint" style="margin-top:9px" id="physicsStatus">Physics changes require respawning the floor-loaded robot.</p>
+ </div>
+</section>
+<section>
+ <div class="panel">
+  <div class="inline"><h2>Live experiment telemetry</h2><span class="tag" id="clock">Sim time —</span></div>
+  <div class="metrics">
+    <div class="metric"><small>Left wheel actual</small><strong id="leftRpm">—</strong><small>RPM</small></div>
+    <div class="metric"><small>Right wheel actual</small><strong id="rightRpm">—</strong><small>RPM</small></div>
+    <div class="metric"><small>MATLAB target</small><strong>0.20 s</strong><small>2% settling band</small></div>
+    <div class="metric"><small>Ground truth bridge</small><strong id="groundTruth">—</strong><small>Gazebo body odom</small></div>
+  </div>
+  <div class="split">
+    <div><div class="inline"><h2>Wheel command and encoder RPM</h2><span class="hint">Sim-clock timestamps</span></div><canvas class="chart" id="leftChart"></canvas><div class="legend"><span><i class="key" style="background:var(--amber)"></i>90 RPM step</span><span><i class="key" style="background:var(--violet)"></i>Filtered command</span><span><i class="key" style="background:var(--teal)"></i>Joint RPM</span><span><i class="key" style="background:white"></i>Real MATLAB CSV</span></div></div>
+    <div><h2>Robot ground-truth path</h2><canvas class="chart" id="pathChart"></canvas><p class="hint" style="margin-top:10px">From <code>/evaluation/scrobot/ground_truth_odom_gz</code>. Unlike wheel odometry, this shows actual body motion on the floor.</p></div>
+  </div>
+  <h2 style="margin-top:20px">Right-wheel response</h2><canvas class="chart short" id="rightChart"></canvas>
+ </div>
+ <div class="panel">
+  <h2>04 · Validation results</h2>
+  <div class="metrics">
+    <div class="metric"><small>Left settling (2%)</small><strong id="leftSettle">—</strong><small>seconds</small></div>
+    <div class="metric"><small>Right settling (2%)</small><strong id="rightSettle">—</strong><small>seconds</small></div>
+    <div class="metric"><small>Body speed disagreement</small><strong id="bodyRmse">—</strong><small>encoder vs ground truth, m/s</small></div>
+    <div class="metric"><small>Yaw-rate disagreement</small><strong id="yawRmse">—</strong><small>encoder vs ground truth, rad/s</small></div>
+  </div>
+  <p id="metricsDetail" class="hint">Complete a step experiment for response metrics.</p>
+  <hr style="border:0;border-top:1px solid var(--line);margin:17px 0">
+  <h2>Load real MATLAB wheel response</h2>
+  <div class="upload"><input id="matlabFile" type="file" accept=".csv,text/csv"><button id="import">Import MATLAB CSV</button><span id="referenceInfo" class="hint">No reference imported</span></div>
+  <p class="hint" style="margin-top:9px">CSV columns: <code>time_s,left_actual_rpm,right_actual_rpm</code>; either actual RPM column may be omitted for a single-wheel test. Time must be relative to the command-step onset (t=0). Do not compare recordings from different wheel-load conditions.</p>
+  <div class="metrics" style="grid-template-columns:1fr 1fr">
+    <div class="metric"><small>Left RPM RMSE vs MATLAB</small><strong id="leftRmse">—</strong></div>
+    <div class="metric"><small>Right RPM RMSE vs MATLAB</small><strong id="rightRmse">—</strong></div>
+  </div>
+  <div class="buttons"><button id="downloadJson">Export full JSON</button></div>
+ </div>
+ <footer>Calibration-only environment. Physical friction and joint damping are applied when Gazebo respawns. The lab does not overwrite your production URDF, world, lighting settings, or normal velocity pipeline. Repeated tests start from rest; use Restart Gazebo for identical starting poses.</footer>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const groups={
+ "controls-experiment":[["target_rpm","Target RPM",5,95,5," RPM"],["pre_s","Rest before step",0.1,1,0.05," s"],["hold_s","Step hold",0.5,5,0.1," s"],["post_s","Record after stop",0.4,3,0.05," s"]],
+ "controls-motor":[["tau_left","Left τ",0.005,0.25,0.005," s"],["tau_right","Right τ",0.005,0.25,0.005," s"],["gain_left","Left gain K",0.8,1.1,0.01,""],["gain_right","Right gain K",0.8,1.1,0.01,""]],
+ "controls-physics":[["drive_contact_mu","Drive-wheel ground μ",0.05,10,0.05,""],["caster_contact_mu","Caster ground μ",0,2,0.01,""],["wheel_joint_damping","Wheel-joint damping",0,0.5,0.005," N·m·s/rad"],["wheel_collision_width","Tire collision width",0.001,0.03,0.001," m"]]
+};
+let initial=false,last=null,config={},busy=false;
+for(const [parent,items] of Object.entries(groups))for(const [key,label,min,max,step,unit]of items){
+ const block=document.createElement("div");block.className="control";block.innerHTML='<label for="'+key+'">'+label+'<output id="out-'+key+'"></output></label><input id="'+key+'" type="range" min="'+min+'" max="'+max+'" step="'+step+'">';
+ $(parent).append(block);$(key).oninput=()=>{$("out-"+key).textContent=Number($(key).value).toFixed(step<0.01?3:step<0.1?2:1)+unit};
+}
+const names=["profile","target_rpm","pre_s","hold_s","post_s","model","tau_left","tau_right","gain_left","gain_right","drive_contact_mu","caster_contact_mu","wheel_joint_damping","wheel_collision_width"];
+function loadConfig(cfg){for(const key of names)if(cfg[key]!==undefined){$(key).value=cfg[key];if($("out-"+key))$(key).oninput()}initial=true;}
+function currentConfig(){const out={};for(const key of names)out[key]=["profile","model"].includes(key)?$(key).value:Number($(key).value);return out}
+function notify(msg,isError=false){$("actionError").textContent=msg;$("actionError").className=isError?"error":"hint"}
+async function api(path,body){let response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});let data=await response.json();if(!response.ok)throw Error(data.error||"Request failed");return data}
+async function invoke(fn){if(busy)return;busy=true;try{await fn();notify("Settings/action accepted.")}catch(e){notify(e.message,true)}finally{busy=false}}
+$("apply").onclick=()=>invoke(async()=>{config=await api("/api/settings",currentConfig());notify("Saved. Restart Gazebo if physical parameters changed.")});
+$("restart").onclick=()=>invoke(async()=>{await api("/api/settings",currentConfig());await api("/api/restart",{});notify("Gazebo restarted; wait for /joint_states.")});
+$("run").onclick=()=>invoke(async()=>{await api("/api/settings",currentConfig());await api("/api/run",{});notify("Running step-response test...")});
+$("abort").onclick=()=>invoke(async()=>{await api("/api/abort",{});notify("Stopped and commanded zero.")});
+$("save").onclick=()=>invoke(async()=>{const r=await api("/api/save",{});notify("Saved: "+r.saved)});
+$("csv").onclick=()=>window.open("/api/last.csv","_blank");
+$("downloadJson").onclick=()=>window.open("/api/result","_blank");
+$("import").onclick=()=>invoke(async()=>{
+ const f=$("matlabFile").files[0];if(!f)throw Error("Choose a MATLAB-exported CSV first.");
+ const res=await api("/api/reference",{csv:await f.text()});notify("Imported "+res.rows+" time-aligned samples.");
+});
+function number(v,d=2){return v==null?"—":Number(v).toFixed(d)}
+function fmtMetric(m,key){return m&&m[key]!=null?number(m[key],3):"—"}
+function renderMetrics(data){
+ const m=data.metrics||{};
+ $("leftSettle").textContent=fmtMetric(m.left,"settling_s");
+ $("rightSettle").textContent=fmtMetric(m.right,"settling_s");
+ $("bodyRmse").textContent=number(m.body_velocity_rmse_m_s,4);
+ $("yawRmse").textContent=number(m.yaw_rate_rmse_rad_s,4);
+ $("leftRmse").textContent=number(data.reference_rmse?.left,2);
+ $("rightRmse").textContent=number(data.reference_rmse?.right,2);
+ $("metricsDetail").textContent=m.left||m.right?
+  "Left: rise "+fmtMetric(m.left,"rise_10_90_s")+" s, τ63 "+fmtMetric(m.left,"tau_63_s")+" s, overshoot "+fmtMetric(m.left,"overshoot_pct")+"%. Right: rise "+fmtMetric(m.right,"rise_10_90_s")+" s, τ63 "+fmtMetric(m.right,"tau_63_s")+" s, overshoot "+fmtMetric(m.right,"overshoot_pct")+"%.":
+  "Complete a step experiment for response metrics. A blank settling time means the measured RPM did not remain in the 2% command band.";
+}
+function canvasSetup(canvas){const rect=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1;canvas.width=Math.max(240,Math.round(rect.width*dpr));canvas.height=Math.max(140,Math.round(rect.height*dpr));const g=canvas.getContext("2d");g.scale(dpr,dpr);return {g,w:rect.width,h:rect.height}}
+function poly(g,points,color,width=2,dash=[]){if(points.length<2)return;g.beginPath();g.setLineDash(dash);for(let i=0;i<points.length;i++){const [x,y]=points[i];if(i===0)g.moveTo(x,y);else g.lineTo(x,y)}g.strokeStyle=color;g.lineWidth=width;g.stroke();g.setLineDash([])}
+function chart(id,data,side){
+ const {g,w,h}=canvasSetup($(id)),pad={l:44,r:14,t:15,b:28};
+ const cfg=data.settings||config||{};
+ const rows=data.samples||[], ref=data.reference||[];
+ const xMin=-0.08,xMax=Math.max(1,Number(cfg.hold_s||1.5)+Number(cfg.post_s||.65));
+ const target=Number(cfg.target_rpm||90),yRange=Math.max(100,target*1.18);
+ const yMin=-yRange,yMax=yRange;
+ const X=x=>pad.l+(x-xMin)/(xMax-xMin)*(w-pad.l-pad.r),Y=y=>pad.t+(yMax-y)/(yMax-yMin)*(h-pad.t-pad.b);
+ g.font="11px system-ui";g.fillStyle="#a1b2c1";g.strokeStyle="#2b3d4b";g.lineWidth=1;
+ for(const v of [-90,-45,0,45,90]){const yy=Y(v);if(yy<pad.t||yy>h-pad.b)continue;g.beginPath();g.moveTo(pad.l,yy);g.lineTo(w-pad.r,yy);g.stroke();g.fillText(String(v),8,yy+4)}
+ for(let t=0;t<xMax;t+=0.5){let xx=X(t);g.beginPath();g.moveTo(xx,pad.t);g.lineTo(xx,h-pad.b);g.stroke();g.fillText(t.toFixed(1),xx-7,h-8)}
+ const wanted="input_"+side+"_rpm",filtered="sent_"+side+"_rpm",actual="actual_"+side+"_rpm";
+ const line=(records,key,color,width=2,dash=[])=>poly(g,records.filter(r=>r[key]!=null&&r.t>=xMin&&r.t<=xMax).map(r=>[X(r.t),Y(r[key])]),color,width,dash);
+ line(rows,wanted,"#fac06e",2,[5,3]);line(rows,filtered,"#a8a0f3",2,[2,3]);line(rows,actual,"#3ed8c5",2.3);
+ line(ref,actual,"#f2f2f2",1.7,[6,4]);
+ g.fillStyle="#9eafbf";g.fillText("t (s)",w-36,h-8);
+}
+function pathPlot(data){
+ const {g,w,h}=canvasSetup($("pathChart")),rows=(data.samples||[]).filter(r=>r.truth_x_m!=null&&r.truth_y_m!=null);
+ g.strokeStyle="#2a4651";g.lineWidth=1;for(let i=1;i<6;i++){const x=i*w/6,y=i*h/6;g.beginPath();g.moveTo(x,0);g.lineTo(x,h);g.moveTo(0,y);g.lineTo(w,y);g.stroke()}
+ if(!rows.length){g.fillStyle="#9eafbf";g.font="12px system-ui";g.fillText("Waiting for ground truth",12,h/2);return}
+ const x0=rows[0].truth_x_m,y0=rows[0].truth_y_m;
+ const local=rows.map(r=>({x:r.truth_x_m-x0,y:r.truth_y_m-y0}));
+ const maxD=Math.max(1.0,...local.map(p=>Math.max(Math.abs(p.x),Math.abs(p.y))));
+ const scale=Math.min(w,h)*.39/maxD;
+ const points=local.map(p=>[w/2+p.x*scale,h/2-p.y*scale]);
+ poly(g,points,"#fac06e",2);
+ const tail=points.at(-1),yaw=rows.at(-1).truth_yaw_rad||0;
+ g.fillStyle="#3ed8c5";g.beginPath();g.arc(...tail,5,0,Math.PI*2);g.fill();
+ g.strokeStyle="#3ed8c5";g.lineWidth=2;g.beginPath();g.moveTo(...tail);g.lineTo(tail[0]+Math.cos(yaw)*20,tail[1]-Math.sin(yaw)*20);g.stroke();
+ g.font="11px system-ui";g.fillStyle="#9eafbf";g.fillText("Start at center",10,h-9);
+}
+function display(data){
+ last=data;
+ if(!initial&&data.settings)loadConfig(data.settings);
+ $("stage").textContent=(data.stage||"idle").toUpperCase();
+ $("readyDot").className="dot"+(data.controller_ready&&data.gazebo_alive?" ready":"");
+ $("readiness").textContent=data.controller_ready?"Wheel feedback online":"Waiting for wheel controllers";
+ $("clock").textContent="Sim "+number(data.sim_time,2)+" s";
+ $("groundTruth").textContent=data.truth_age_wall_s!=null&&data.truth_age_wall_s<2?"Online":"Missing";
+ $("leftRpm").textContent=number(data.joints_rpm?.[0],1);
+ $("rightRpm").textContent=number(data.joints_rpm?.[1],1);
+ $("referenceInfo").textContent=(data.reference_count||0)+" reference samples";
+ $("physicsStatus").textContent=data.physics_dirty?"⚠ Physical settings modified: restart Gazebo before testing.":"Physical settings applied to current floor-loaded robot.";
+ $("physicsStatus").className=data.physics_dirty?"warn hint":"good hint";
+ $("run").disabled=busy||data.physics_dirty||!data.controller_ready||!data.gazebo_alive||["pre","hold","post"].includes(data.stage);
+ $("abort").disabled=!["pre","hold","post"].includes(data.stage);
+ $("save").disabled=!data.metrics;
+ $("csv").disabled=!data.metrics;
+ $("downloadJson").disabled=!data.metrics;
+ renderMetrics(data);chart("leftChart",data,"left");chart("rightChart",data,"right");pathPlot(data);
+ if(data.server_error)notify(data.server_error,true);
+}
+async function poll(){try{const r=await fetch("/api/status",{cache:"no-store"});if(!r.ok)throw Error("status HTTP "+r.status);const data=await r.json();display(data)}catch(e){$("readiness").textContent=e.message;$("readyDot").className="dot"}}
+setInterval(poll,300);window.addEventListener("resize",()=>{if(last)display(last)});poll();
+</script>
+</body>
+</html>
