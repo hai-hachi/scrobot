@@ -20,6 +20,8 @@ def generate_launch_description():
     caster = LaunchConfiguration('caster_contact_mu')
     damping = LaunchConfiguration('wheel_joint_damping')
     width = LaunchConfiguration('wheel_collision_width')
+    slip1 = LaunchConfiguration('drive_slip1')
+    slip2 = LaunchConfiguration('drive_slip2')
     sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'simulation.launch.py')),
         launch_arguments={
@@ -32,6 +34,8 @@ def generate_launch_description():
             'caster_contact_mu': caster,
             'wheel_joint_damping': damping,
             'wheel_collision_width': width,
+            'drive_slip1': slip1,
+            'drive_slip2': slip2,
         }.items(),
     )
     controllers = [
@@ -48,6 +52,8 @@ def generate_launch_description():
         DeclareLaunchArgument('caster_contact_mu', default_value='0.05'),
         DeclareLaunchArgument('wheel_joint_damping', default_value='0.0'),
         DeclareLaunchArgument('wheel_collision_width', default_value='0.001'),
+        DeclareLaunchArgument('drive_slip1', default_value='0.0'),
+        DeclareLaunchArgument('drive_slip2', default_value='0.0'),
         DeclareLaunchArgument('controller_delay', default_value='4.0'),
         sim,
         TimerAction(period=LaunchConfiguration('controller_delay'), actions=controllers),
