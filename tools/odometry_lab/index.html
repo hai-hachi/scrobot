@@ -18,7 +18,7 @@ body{background:linear-gradient(135deg,#0a1721,#0b1119);font:14px system-ui,sans
    <div id="motion-controls"></div>
    <p id="wheelSpeedStatus" class="hint" aria-live="polite">Wheel-speed preview will appear here.</p>
    <p id="actualWheelSpeed" class="hint">Measured wheel speed: waiting for /joint_states</p>
-   <div class="buttons"><button id="run" class="primary">▶ Run test</button><button id="stop" class="danger">■ Stop</button><button id="save">Save CSV + report</button></div>
+   <div class="buttons"><button id="nominalPreset">Set 0.50 m/s straight</button><button id="run" class="primary">▶ Run test</button><button id="stop" class="danger">■ Stop</button><button id="save">Save CSV + report</button></div>
    <p id="runStatus" class="hint" aria-live="polite">Checking whether the test can start.</p>
    <p id="motorInfo">No Nav2, no AprilTags, no smoother. Reuses published Mobility Lab actuation when enabled.</p><p>Nominal wheel-rim limit: <b>0.50 m/s per wheel</b> (95.49 RPM at 0.05 m radius). A physical 95 RPM limiter or the optional simulation motor filter can cap actual speed near 0.497 m/s.</p>
   </div>
@@ -130,6 +130,14 @@ function changed(s){const c=fields();return keys.some(k=>c[k]!==s[k])}
 function show(msg,err=false){$("error").textContent=msg;$("error").className=err?"warn":"ok"}
 async function api(url,payload){const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok)throw Error(d.error||r.status);return d}
 async function invoke(fn){if(busy)return;busy=true;try{await fn()}catch(e){show(e.message,true)}finally{busy=false}}
+$("nominalPreset").onclick=()=>{
+ $("profile").value="straight";
+ $("linear_m_s").value="0.50";
+ $("linear_m_s").oninput();
+ updateMotionReadout();
+ if(last)display(last);
+ show("Nominal speed preset: straight at 0.50 m/s for both wheels. Click Run test; motion settings save automatically.");
+};
 $("apply").onclick=()=>invoke(async()=>{await api("/api/settings",fields());show("Lab settings saved. Restart Gazebo to apply frequency/magnetic changes.")});
 $("restart").onclick=()=>invoke(async()=>{await api("/api/settings",fields());await api("/api/restart",{});show("Gazebo restarting with the saved odometry rates. Wait for joint feedback.")});
 $("run").onclick=()=>invoke(async()=>{await api("/api/settings",fields());let r=await api("/api/run",{});show("Running "+r.profile+" for "+r.duration_s+" s of simulation time.")});
