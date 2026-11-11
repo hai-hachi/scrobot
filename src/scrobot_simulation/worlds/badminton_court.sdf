@@ -249,9 +249,9 @@
           <pose>0 0 -0.001 0 0 0</pose>
           <geometry><box><size>21.0000 12.0000 0.0180</size></box></geometry>
           <material>
-            <ambient>0.05632 0.06016 0.06400 1</ambient>
-            <diffuse>0.07040 0.07520 0.08000 1</diffuse>
-            <specular>0.02 0.02 0.02 1</specular>
+            <ambient>0.04800 0.16133 0.32000 1.00000</ambient>
+            <diffuse>0.06000 0.20167 0.40000 1.00000</diffuse>
+            <specular>0 0 0 1</specular>
           </material>
         </visual>
 
@@ -261,9 +261,9 @@
           <pose>0 0 0.009 0 0 0</pose>
           <geometry><box><size>15.4 7.2 0.002</size></box></geometry>
           <material>
-            <ambient>0.04480 0.28000 0.15064 1</ambient>
-            <diffuse>0.05600 0.35000 0.18830 1</diffuse>
-            <specular>0.02 0.02 0.02 1</specular>
+            <ambient>0.00800 0.16000 0.07893 1.00000</ambient>
+            <diffuse>0.01000 0.20000 0.09867 1.00000</diffuse>
+            <specular>0 0 0 1</specular>
           </material>
         </visual>
       </link>
@@ -288,9 +288,9 @@
           <pose>10.4500 0 0.20 0 0 0</pose>
           <geometry><box><size>0.1000 12.0000 0.40</size></box></geometry>
           <material>
-            <ambient>0.11160 0.11160 0.12000 1</ambient>
-            <diffuse>0.13950 0.13950 0.15000 1</diffuse>
-            <specular>0.02 0.02 0.02 1</specular>
+            <ambient>0.03600 0.03767 0.04000 1.00000</ambient>
+            <diffuse>0.04500 0.04708 0.05000 1.00000</diffuse>
+            <specular>0 0 0 1</specular>
           </material>
         </visual>
 
@@ -302,9 +302,9 @@
           <pose>-10.4500 0 0.20 0 0 0</pose>
           <geometry><box><size>0.1000 12.0000 0.40</size></box></geometry>
           <material>
-            <ambient>0.11160 0.11160 0.12000 1</ambient>
-            <diffuse>0.13950 0.13950 0.15000 1</diffuse>
-            <specular>0.02 0.02 0.02 1</specular>
+            <ambient>0.03600 0.03767 0.04000 1.00000</ambient>
+            <diffuse>0.04500 0.04708 0.05000 1.00000</diffuse>
+            <specular>0 0 0 1</specular>
           </material>
         </visual>
 
@@ -316,9 +316,9 @@
           <pose>0 5.9500 0.20 0 0 0</pose>
           <geometry><box><size>20.8000 0.1000 0.40</size></box></geometry>
           <material>
-            <ambient>0.11160 0.11160 0.12000 1</ambient>
-            <diffuse>0.13950 0.13950 0.15000 1</diffuse>
-            <specular>0.02 0.02 0.02 1</specular>
+            <ambient>0.03600 0.03767 0.04000 1.00000</ambient>
+            <diffuse>0.04500 0.04708 0.05000 1.00000</diffuse>
+            <specular>0 0 0 1</specular>
           </material>
         </visual>
 
@@ -330,9 +330,9 @@
           <pose>0 -5.9500 0.20 0 0 0</pose>
           <geometry><box><size>20.8000 0.1000 0.40</size></box></geometry>
           <material>
-            <ambient>0.11160 0.11160 0.12000 1</ambient>
-            <diffuse>0.13950 0.13950 0.15000 1</diffuse>
-            <specular>0.02 0.02 0.02 1</specular>
+            <ambient>0.03600 0.03767 0.04000 1.00000</ambient>
+            <diffuse>0.04500 0.04708 0.05000 1.00000</diffuse>
+            <specular>0 0 0 1</specular>
           </material>
         </visual>
 
