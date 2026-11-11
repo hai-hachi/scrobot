@@ -48,7 +48,7 @@
     <div class="metric"><small>Ground truth bridge</small><strong id="groundTruth">—</strong><small>Gazebo body odom</small></div>
   </div>
   <div class="split">
-    <div><div class="inline"><h2>Wheel command and encoder RPM</h2><span class="hint">Sim-clock timestamps</span></div><canvas class="chart" id="leftChart"></canvas><div class="legend"><span><i class="key" style="background:var(--amber)"></i>90 RPM step</span><span><i class="key" style="background:var(--violet)"></i>Filtered command</span><span><i class="key" style="background:var(--teal)"></i>Joint RPM</span><span><i class="key" style="background:white"></i>MATLAB CSV / ideal 0.2 s</span></div></div>
+    <div><div class="inline"><h2>Wheel command and encoder RPM</h2><span class="hint">Sim-clock timestamps</span></div><canvas class="chart" id="leftChart"></canvas><div class="legend"><span><i class="key" style="background:var(--amber)"></i>90 RPM step</span><span><i class="key" style="background:var(--violet)"></i>Filtered command</span><span><i class="key" style="background:var(--teal)"></i>Joint RPM</span><span><i class="key" style="background:white"></i>Real WL/WR (or ideal 0.2 s if not comparable)</span></div></div>
     <div><h2>Robot ground-truth path</h2><canvas class="chart" id="pathChart"></canvas><p class="hint" style="margin-top:10px">From <code>/evaluation/ground_truth_odom</code>. Unlike wheel odometry, this shows actual body motion on the floor.</p></div>
   </div>
   <h2 style="margin-top:20px">Right-wheel response</h2><canvas class="chart short" id="rightChart"></canvas>
@@ -63,12 +63,14 @@
   </div>
   <p id="metricsDetail" class="hint">Complete a step experiment for response metrics.</p>
   <hr style="border:0;border-top:1px solid var(--line);margin:17px 0">
-  <h2>Load real MATLAB wheel response</h2>
-  <div class="upload"><input id="matlabFile" type="file" accept=".csv,text/csv"><button id="import">Import MATLAB CSV</button><span id="referenceInfo" class="hint">No reference imported</span></div>
-  <p class="hint" style="margin-top:9px">CSV columns: <code>time_s,left_actual_rpm,right_actual_rpm</code>; either actual RPM column may be omitted for a single-wheel test. Time must be relative to the command-step onset (t=0). Do not compare recordings from different wheel-load conditions.</p>
+  <h2>Real floor-loaded 90 RPM validation · included</h2>
+  <p style="margin-bottom:10px">September 22, 2026 STM32 PID validation, 903 samples per motor at ~100 Hz. Left settled within 2% in <b>0.210 s</b>; right in <b>0.220 s</b>.</p>
+  <p id="referenceInfo" class="hint" style="margin-bottom:14px">Loading bundled WL/WR references...</p>
+  <div class="upload"><input id="matlabFile" type="file" accept=".csv,text/csv"><button id="import">Override with CSV</button><button id="builtin">Restore bundled data</button></div>
+  <p class="hint" style="margin-top:9px">CSV: <code>time_s,left_actual_rpm,right_actual_rpm</code> (either wheel column optional). Time zero is the rising RPM command edge. The bundled data includes separately aligned stopping responses. Each physical run tested only one wheel: combined forward/spin tests intentionally have no direct real-world RPM comparison.</p>
   <div class="metrics" style="grid-template-columns:1fr 1fr">
-    <div class="metric"><small>Left RPM RMSE vs MATLAB</small><strong id="leftRmse">—</strong></div>
-    <div class="metric"><small>Right RPM RMSE vs MATLAB</small><strong id="rightRmse">—</strong></div>
+    <div class="metric"><small>Left RPM RMSE vs real</small><strong id="leftRmse">—</strong></div>
+    <div class="metric"><small>Right RPM RMSE vs real</small><strong id="rightRmse">—</strong></div>
   </div>
   <div class="buttons"><button id="downloadJson">Export full JSON</button></div>
  </div>
@@ -104,6 +106,11 @@ $("import").onclick=()=>invoke(async()=>{
  const f=$("matlabFile").files[0];if(!f)throw Error("Choose a MATLAB-exported CSV first.");
  const res=await api("/api/reference",{csv:await f.text()});notify("Imported "+res.rows+" time-aligned samples.");
 });
+$("builtin").onclick=()=>invoke(async()=>{
+ const res=await api("/api/reference/reset",{});
+ $("matlabFile").value="";
+ notify("Restored "+res.step_samples+" step and "+res.stop_samples+" stopping samples per wheel.");
+});
 function number(v,d=2){return v==null?"—":Number(v).toFixed(d)}
 function fmtMetric(m,key){return m&&m[key]!=null?number(m[key],3):"—"}
 function renderMetrics(data){
@@ -122,7 +129,7 @@ function canvasSetup(canvas){const rect=canvas.getBoundingClientRect(),dpr=windo
 function poly(g,points,color,width=2,dash=[]){if(points.length<2)return;g.beginPath();g.setLineDash(dash);for(let i=0;i<points.length;i++){const [x,y]=points[i];if(i===0)g.moveTo(x,y);else g.lineTo(x,y)}g.strokeStyle=color;g.lineWidth=width;g.stroke();g.setLineDash([])}
 function chart(id,data,side){
  const {g,w,h}=canvasSetup($(id)),pad={l:44,r:14,t:15,b:28};
- const cfg=data.settings||config||{};
+ const cfg=data.result_settings||data.settings||config||{};
  const rows=data.samples||[], ref=data.reference||[];
  const xMin=-0.08,xMax=Math.max(1,Number(cfg.hold_s||1.5)+Number(cfg.post_s||.65));
  const target=Number(cfg.target_rpm||90),yRange=Math.max(100,target*1.18);
@@ -134,7 +141,7 @@ function chart(id,data,side){
  const wanted="input_"+side+"_rpm",filtered="sent_"+side+"_rpm",actual="actual_"+side+"_rpm";
  const line=(records,key,color,width=2,dash=[])=>poly(g,records.filter(r=>r[key]!=null&&r.t>=xMin&&r.t<=xMax).map(r=>[X(r.t),Y(r[key])]),color,width,dash);
  line(rows,wanted,"#fac06e",2,[5,3]);line(rows,filtered,"#a8a0f3",2,[2,3]);line(rows,actual,"#3ed8c5",2.3);
- if(ref.length){line(ref,actual,"#f2f2f2",1.7,[6,4])}
+ if(ref.some(r=>r[actual]!=null)){line(ref,actual,"#f2f2f2",1.7,[6,4])}
  else {
   const profile=cfg.profile||"left";
   const amplitude=side==="left"?
@@ -176,7 +183,8 @@ function display(data){
  $("groundTruth").textContent=data.truth_age_wall_s!=null&&data.truth_age_wall_s<2?"Online":"Missing";
  $("leftRpm").textContent=number(data.joints_rpm?.[0],1);
  $("rightRpm").textContent=number(data.joints_rpm?.[1],1);
- $("referenceInfo").textContent=(data.reference_count||0)+" reference samples";
+ $("referenceInfo").textContent=data.reference_label||"No applicable real reference";
+ $("referenceInfo").className=(data.reference?.length?"good hint":"warn hint");
  $("physicsStatus").textContent=data.physics_dirty?"⚠ Physical settings modified: restart Gazebo before testing.":"Physical settings applied to current floor-loaded robot.";
  $("physicsStatus").className=data.physics_dirty?"warn hint":"good hint";
  $("run").disabled=busy||data.physics_dirty||!data.controller_ready||!data.gazebo_alive||["pre","hold","post"].includes(data.stage);
