@@ -34,7 +34,7 @@ async function api(url,body){
   let response;
   try{response=await fetch(url,{...opts,cache:'no-store'});}catch(e){throw new Error('Local web service unavailable: '+e.message);}
   const payload=await response.json();
-  if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);
+  if(!response.ok){const error=new Error(payload.error||`HTTP ${response.status}`);error.httpStatus=response.status;throw error;}
   return payload;
 }
 function getPath(obj,path){return path.split('.').reduce((v,k)=>v?.[k],obj);}
@@ -103,7 +103,7 @@ async function stop(){
   try{const data=await api('/api/stop',{});message(data.message);}catch(e){message(e.message,true);}
   finally{state.pending=false;setButtons();}
 }
-function setButtons(){const running=Boolean(state.status?.running);$('start').disabled=running||state.pending;$('stop').disabled=!running||state.pending;}
+function setButtons(){const running=Boolean(state.status?.running);const checking=Boolean(state.status?.preflight_in_progress);$('start').disabled=running||checking||state.pending;$('stop').disabled=!running||state.pending;}
 function setTab(tab){state.tab=tab;document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.tab===tab));document.querySelectorAll('.tab-panel').forEach(n=>n.classList.toggle('hidden',n.id!=='tab-'+tab));drawAll();}
 
 function metrics(s){
@@ -151,7 +151,7 @@ function updateStatus(s){
   state.status=s;
   const live=s?.live||{};
   $('run-dot').classList.toggle('on',s?.running||false);
-  $('run-badge').textContent=s?.running?'RUNNING':s?.run_name?'COMPLETED / STOPPED':'IDLE';
+  $('run-badge').textContent=s?.preflight_in_progress?'CHECKING ROS':s?.running?'RUNNING':s?.run_name?'COMPLETED / STOPPED':'IDLE';
   $('run-name').textContent=s?.run_name||'No experiment selected';
   $('run-scenario').textContent=(live?.state||s?.scenario||'—').replaceAll('_',' ');
   $('connection-label').textContent='Local service online';
@@ -242,7 +242,10 @@ async function poll(){
   try{
     const s=await api('/api/status');updateStatus(s);
     state.lastError='';
-  }catch(e){$('connection-label').textContent='Server disconnected';if(state.lastError!==e.message){message(e.message,true);state.lastError=e.message;}}
+  }catch(e){
+    $('connection-label').textContent=e.httpStatus?'Server error':'Server disconnected';
+    if(state.lastError!==e.message){message(e.message,true);state.lastError=e.message;}
+  }
 }
 async function pollSamples(){
   try{const r=await api('/api/samples?limit=2200');state.samples=r.samples||[];drawAll();}catch(e){/* Status poll surfaces connectivity errors. */}
