@@ -16,6 +16,7 @@ def generate_launch_description():
     )
     use_sim_time = LaunchConfiguration('use_sim_time')
     manual_command_timeout = LaunchConfiguration('manual_command_timeout')
+    collision_monitor_output = LaunchConfiguration('collision_monitor_output')
 
     joint_state_broadcaster_spawner = Node(
         package='controller_manager',
@@ -89,6 +90,10 @@ def generate_launch_description():
         name='collision_monitor',
         output='screen',
         parameters=[pipeline_params, {'use_sim_time': use_sim_time}],
+        # Default stays direct, including every real-robot launch. The
+        # normal simulation bringup may choose a sim-only first-order
+        # wheel response after collision safety, before the controller.
+        remappings=[('/diff_drive_controller/cmd_vel', collision_monitor_output)],
     )
 
     lifecycle_manager = Node(
@@ -108,6 +113,11 @@ def generate_launch_description():
             'use_sim_time',
             default_value='true',
             choices=['true', 'false'],
+        ),
+        DeclareLaunchArgument(
+            'collision_monitor_output',
+            default_value='/diff_drive_controller/cmd_vel',
+            description='Collision-monitor velocity output. Sim-only motor surrogate may route via /cmd_vel_motor_target.',
         ),
         DeclareLaunchArgument(
             'manual_command_timeout',
