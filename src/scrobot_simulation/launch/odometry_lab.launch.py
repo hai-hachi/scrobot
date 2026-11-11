@@ -5,6 +5,7 @@ and robot_localization. Does not launch a competing command producer.
 """
 from pathlib import Path
 import sys
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -27,6 +28,13 @@ def generate_launch_description():
     from odometry_rate_config import load_rates, prepare_configurations
     sim_share = Path(get_package_share_directory("scrobot_simulation"))
     rates = load_rates(sim_share / "config/odometry_calibration.yaml")
+    mobility = yaml.safe_load(
+        (sim_share / "config/mobility_calibration.yaml").read_text(encoding="utf-8")
+    )
+    motor = mobility["motor"]
+    if motor["model"] not in ("baseline", "first_order"):
+        raise RuntimeError("Unsupported published simulator motor response")
+    motor_enabled = motor["model"] == "first_order"
     generated = prepare_configurations(
         rates,
         Path(get_package_share_directory("scrobot_control")) / "config/controllers.yaml",
@@ -49,6 +57,20 @@ def generate_launch_description():
         "use_magnetometer": mag,
         "ekf_params": LaunchConfiguration("ekf_params"),
     })
+    # Reuse the published Mobility Lab wheel response, with no Nav2/smoother.
+    # Exactly one publisher drives diff_drive_controller when motor mode is on.
+    sim_motor = Node(
+        package="scrobot_simulation", executable="sim_motor_response",
+        name="odometry_lab_sim_motor", output="screen",
+        parameters=[{
+            "use_sim_time": True,
+            "tau_left": float(motor["tau_left"]),
+            "tau_right": float(motor["tau_right"]),
+            "gain_left": float(motor["gain_left"]),
+            "gain_right": float(motor["gain_right"]),
+            "command_timeout": 0.4,
+        }],
+    ) if motor_enabled else None
     controller_spawners = [
         Node(
             package="controller_manager", executable="spawner", output="screen",
@@ -68,6 +90,7 @@ def generate_launch_description():
         DeclareLaunchArgument("ekf_params",
                               default_value=generated["ekf_params"]),
         sim,
+        *([sim_motor] if sim_motor is not None else []),
         TimerAction(period=4.0, actions=controller_spawners),
         TimerAction(period=4.5, actions=[local]),
     ])
