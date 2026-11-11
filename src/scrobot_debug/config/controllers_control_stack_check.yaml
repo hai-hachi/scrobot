@@ -42,6 +42,11 @@ diff_drive_controller:
 
     cmd_vel_timeout: 0.5
 
+    # Mirror production body-axis limits for controller-only debug runs.
+    # Coupled wheel envelope still needs separate proportional limiting.
     linear.x.has_velocity_limits: true
-    linear.x.max_velocity: 1.0
-    linear.x.min_velocity: -1.0
+    linear.x.max_velocity: 0.50
+    linear.x.min_velocity: -0.50
+    angular.z.has_velocity_limits: true
+    angular.z.max_velocity: 2.30
+    angular.z.min_velocity: -2.30
