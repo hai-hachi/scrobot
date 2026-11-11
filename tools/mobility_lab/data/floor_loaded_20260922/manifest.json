@@ -1,0 +1,47 @@
+{
+  "title": "SCROBOT real floor-loaded individual wheel PID validation, +90 to 0 RPM",
+  "acquisition_date": "2026-09-22",
+  "rpm_command": 90,
+  "sample_rate_approx_hz": 100,
+  "original_test_type": "Separate left wheel and right wheel step tests, not simultaneous dual-wheel motion",
+  "reference_time_origin": "Each source's first sample whose reference_rpm rises from 0 to 90",
+  "reference_stop_origin": "Each source's first sample whose reference_rpm falls from 90 to 0",
+  "files": {
+    "raw_left": "../raw/WL_pid_validation_p90_0rpm_20260922_121710.csv",
+    "raw_right": "../raw/WR_pid_validation_p90_0rpm_20260922_121700.csv",
+    "normalized_left": "WL_90rpm_aligned.csv",
+    "normalized_right": "WR_90rpm_aligned.csv",
+    "step_reference": "reference_step_90rpm.csv",
+    "stop_reference": "reference_stop_90rpm.csv"
+  },
+  "sources": {
+    "left": {
+      "filename": "WL_pid_validation_p90_0rpm_20260922_121710.csv",
+      "rows": 903,
+      "step_onset_host_s": 2.010601335001411,
+      "stop_onset_host_s": 7.020093191997148,
+      "step_hold_s": 5.009491856995737,
+      "kp": 37.136077880859375,
+      "ki": 961.8081665039062,
+      "kd": -0.42323681712150574,
+      "tf_s": 0.033914417028427124
+    },
+    "right": {
+      "filename": "WR_pid_validation_p90_0rpm_20260922_121700.csv",
+      "rows": 903,
+      "step_onset_host_s": 2.0104008880007314,
+      "stop_onset_host_s": 7.019960773002822,
+      "step_hold_s": 5.009559885002091,
+      "kp": 43.15770721435547,
+      "ki": 980.6747436523438,
+      "kd": -0.5726243853569031,
+      "tf_s": 0.03798243775963783
+    }
+  },
+  "interpretation": "The merged step/stop reference columns are independently aligned responses from different physical runs. They are not synchronized and cannot establish straight-line or spin-in-place chassis dynamics.",
+  "measurement": "encoder RPM while floor loaded, with STM32 PID active",
+  "units": "RPM",
+  "engine": "STM32 closed loop",
+  "resampling": "Linear interpolation to a common 0.01 s grid, preserving exact irregular host timestamps in normalized per-wheel data and source recordings",
+  "physics_identification_caveat": "RPM-only measurements cannot independently identify tire-ground traction, chassis slip, damping, friction, or pose trajectory."
+}
