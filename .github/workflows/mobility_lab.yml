@@ -1,0 +1,39 @@
+name: SCROBOT Mobility Lab
+
+on:
+  push:
+    branches: [real-comparison]
+    paths:
+      - 'tools/mobility_lab/**'
+      - 'src/scrobot_description/urdf/scrobot.urdf.xacro'
+      - 'src/scrobot_description/urdf/wheels.xacro'
+      - 'src/scrobot_simulation/launch/mobility_lab.launch.py'
+      - 'src/scrobot_simulation/launch/simulation.launch.py'
+      - 'src/scrobot_simulation/launch/spawn_robot.launch.py'
+      - '.github/workflows/mobility_lab.yml'
+  workflow_dispatch:
+
+jobs:
+  headless-contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax-check Python modules and ROS launch descriptions
+        run: |
+          python3 -m compileall -q tools/mobility_lab src/scrobot_simulation/launch/mobility_lab.launch.py src/scrobot_simulation/launch/spawn_robot.launch.py src/scrobot_simulation/launch/simulation.launch.py
+      - name: Validate wheel Xacro XML and lab controls
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          for path in ('src/scrobot_description/urdf/scrobot.urdf.xacro',
+                       'src/scrobot_description/urdf/wheels.xacro'):
+              ET.parse(path)
+          ui = Path('tools/mobility_lab/index.html').read_text()
+          for name in ('drive_contact_mu', 'caster_contact_mu', 'wheel_joint_damping',
+                       'wheel_collision_width', 'tau_left', 'tau_right', 'leftChart',
+                       'rightChart', 'matlabFile'):
+              assert name in ui, name
+          PY
+      - name: Run headless system-identification tests
+        run: python3 -m unittest discover -s tools/mobility_lab/tests -p 'test_*.py' -v
