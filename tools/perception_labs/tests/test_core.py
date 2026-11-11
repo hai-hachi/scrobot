@@ -161,6 +161,9 @@ class PerceptionCoreTests(unittest.TestCase):
         self.assertIn("yolo_shuttle_detector",launch)
         self.assertIn("condition=tag_enabled",launch)
         self.assertIn("condition=yolo_enabled",launch)
+        self.assertIn("enable_depth_registration",sim)
+        self.assertIn("condition=IfCondition(PythonExpression",sim)
+        self.assertIn("enable_depth_camera, \"' == 'true' and '\"",sim)
         self.assertIn("LaunchConfiguration('world')",dataset)
         self.assertIn("/evaluation/shuttle_ground_truth",bridge)
         for x in ("Camera Performance","AprilTag","Shuttle YOLO",
