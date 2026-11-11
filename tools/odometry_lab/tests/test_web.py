@@ -117,12 +117,12 @@ def test_motion_preflight_rejects_missing_controller_and_duplicate_clock(monkeyp
             calls.append(cmd)
             if cmd[1:3] == ['topic', 'list']:
                 listed = [t for t in expected if t != missing]
-                out = '\\n'.join(listed)
+                out = '\n'.join(listed)
             elif cmd[1:3] == ['topic', 'info']:
                 count = 2 if cmd[3] == '/clock' and duplicate_clock else 1
-                out = f'Publisher count: {count}\\nSubscription count: 1\\n'
+                out = f'Publisher count: {count}\nSubscription count: 1\n'
             elif cmd[1:3] == ['service', 'type']:
-                out = 'std_srvs/srv/SetBool\\n' if service else ''
+                out = 'std_srvs/srv/SetBool\n' if service else ''
             else:
                 raise AssertionError(cmd)
             return subprocess.CompletedProcess(cmd, 0, stdout=out, stderr='')
