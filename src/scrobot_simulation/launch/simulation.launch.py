@@ -13,7 +13,7 @@ from launch.actions import (
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 
 
 def generate_launch_description():
@@ -162,7 +162,10 @@ def generate_launch_description():
         launch_arguments={
             'use_sim_time': use_sim_time,
         }.items(),
-        condition=IfCondition(enable_depth_registration),
+        condition=IfCondition(PythonExpression([
+            "'", enable_depth_camera, "' == 'true' and '",
+            enable_depth_registration, "' == 'true'",
+        ])),
     )
 
     return LaunchDescription([
