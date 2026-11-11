@@ -28,6 +28,7 @@ from core import DEFAULTS, reference_csv, validate_settings
 from reference import (
     bundled_validation, compare_validation, phase_aligned_reference, status_label,
 )
+from publish import publish_saved_calibration, published_status
 
 HERE = Path(__file__).resolve().parent
 OUTPUT = Path.home() / "scrobot_ws/evaluation_results/mobility_lab"
@@ -181,6 +182,19 @@ class Lab:
             write_settings(self.settings)
             return self.settings
 
+    def publish(self):
+        # Publish only what the operator already saved, never unsaved browser
+        # sliders. No Gazebo/ROS state is modified until the normal sim restarts.
+        with self.lock:
+            if self.bridge.node.stage in ("pre", "hold", "post"):
+                raise RuntimeError("Stop the wheel experiment before publishing")
+            if not SETTINGS_PATH.exists():
+                raise RuntimeError("Click Save Lab Settings before publishing")
+            current_saved = read_settings()
+            if current_saved != self.settings:
+                raise RuntimeError("Lab settings have changed since saving")
+            return publish_saved_calibration(SETTINGS_PATH)
+
     def run(self):
         with self.lock:
             if self.restarting:
@@ -219,6 +233,7 @@ class Lab:
                 "reference_label": status_label(settings, self.reference_source),
                 "real_source_count": 903 if self.reference_source == "builtin" else None,
                 "reference_rmse": rmse,
+                "publication": published_status(self.settings),
                 "server_error": self.error,
             })
             return data
@@ -346,6 +361,10 @@ class Handler(BaseHTTPRequestHandler):
                 result = self.lab.upload_reference(body.get("csv", ""))
             elif route == "/api/reference/reset":
                 result = self.lab.reset_reference()
+            elif route == "/api/publish":
+                if body.get("confirm") is not True:
+                    raise ValueError("Publishing requires explicit confirmation")
+                result = self.lab.publish()
             elif route == "/api/save":
                 result = self.lab.save_result()
             else:
