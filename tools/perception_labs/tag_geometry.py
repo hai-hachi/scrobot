@@ -61,6 +61,13 @@ def expected_camera_to_tag(base_world, camera_in_base, tag_world):
     return rotate(conjugate(qc),tuple(tag_world[i]-pc[i] for i in range(3)))
 
 
+def quaternion_delta_deg(a,b):
+    """Shortest relative 3D orientation difference (q and -q equivalent)."""
+    a,b=norm(a),norm(b)
+    cosine=min(1.0,max(-1.0,abs(sum(x*y for x,y in zip(a,b)))))
+    return round(math.degrees(2*math.acos(cosine)),4)
+
+
 def translation_error(observed,expected):
     if not all(math.isfinite(float(v)) for v in (*observed,*expected)):
         raise ValueError("Non-finite tag translation")
