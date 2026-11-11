@@ -65,12 +65,13 @@ At 200 Hz EKF, the filter predicts more often but does not create additional
 sensor measurements. The GUI table reports the **measured** Hz and timestamp
 jitter, which can be lower because of Gazebo scheduling, RTF, QoS or CPU load.
 
-This only changes **simulation** defaults and generated **simulation-only**
-controller/EKF configuration copies. Source
-`src/scrobot_control/config/controllers.yaml` and
-`src/scrobot_localization/config/ekf.yaml` remain at their hardware-safe
-existing values (50 Hz publication). The real STM32 firmware and IMU drivers
-remain unchanged.
+The lab changes only **simulation sensor acquisition frequencies** and
+generates simulation-only controller/EKF overrides. Additionally, the shared
+ROS controller YAML now requests **100 Hz wheel odometry publishing**, and
+the shared EKF YAML now requests **100 Hz fused-odom output**, including on
+the real robot. Those two changes do NOT increase the STM32's existing
+100 Hz PID loop rate, nor do they increase a physical IMU's native sampling
+rate. Actual delivered rate must be verified using topic-header timing.
 
 The rate distribution is:
 ```text
@@ -144,6 +145,13 @@ After completion it displays:
 - wheel yaw, Madgwick IMU yaw, EKF yaw RMSE vs independent truth
 - final position and yaw errors
 
+Additional recorded estimates include wheel forward speed and yaw-rate RMSE,
+transformed-IMU gyro-z angular-rate RMSE, mean gyro-z and standard deviation,
+and the relative rotation of the magnetic field vector versus true heading.
+The magnetic metric is **relative only** and must not be presented as an
+absolute compass heading. IMU gyro mean is a bias estimate only in the
+stationary test; during motion it includes genuine rotation.
+
 The lab aligns the initial poses once and does *not* continuously correct
 estimated trajectories. AprilTag corrections are disabled. Error plots and
 metrics should be interpreted in the **local frame**, not as a guaranteed
@@ -179,9 +187,11 @@ source install/setup.bash
 ros2 launch scrobot_bringup sim.launch.py
 ```
 
-The physical `robot.launch.py` is not modified; it still uses its native
-hardware controller parameters and existing EKF defaults. No real motor PID,
-STM32 transport, or physical IMU rate is changed by this lab.
+The physical `robot.launch.py` is not modified. It still uses its native
+hardware controller and sensor drivers, although the shared
+`controllers.yaml` wheel-odometry publish rate and `ekf.yaml` output rate
+have both been raised to 100 Hz. No real motor PID, STM32 transport, or
+physical IMU acquisition rate is changed by this lab.
 
 ## Limitations / future real-world comparison
 
