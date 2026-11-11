@@ -49,6 +49,7 @@ class MobilityDriver(Node):
         self.last_tick = None
         self.latest_joints = None
         self.latest_truth = None
+        self.latest_pose = None
         self.latest_limited = None
         self.last_joint_wall = 0.0
         self.last_truth_wall = 0.0
@@ -93,6 +94,9 @@ class MobilityDriver(Node):
                 "encoder_yaw_rad_s": round(w_enc, 6),
                 "truth_v_m_s": round(gt[0], 6) if gt else None,
                 "truth_yaw_rad_s": round(gt[1], 6) if gt else None,
+                "truth_x_m": round(self.latest_pose[0], 5) if self.latest_pose else None,
+                "truth_y_m": round(self.latest_pose[1], 5) if self.latest_pose else None,
+                "truth_yaw_rad": round(self.latest_pose[2], 6) if self.latest_pose else None,
             })
             if len(self.samples) > 2000:
                 self.samples = self.samples[-2000:]
@@ -105,6 +109,11 @@ class MobilityDriver(Node):
                 float(msg.twist.twist.linear.x),
                 float(msg.twist.twist.angular.z),
             )
+            p = msg.pose.pose.position
+            q = msg.pose.pose.orientation
+            yaw = math.atan2(2 * (q.w * q.z + q.x * q.y),
+                             1 - 2 * (q.y * q.y + q.z * q.z))
+            self.latest_pose = (p.x, p.y, yaw)
             self.last_truth_wall = time.monotonic()
 
     def on_limited(self, msg):
@@ -227,6 +236,7 @@ class MobilityDriver(Node):
             self.stage = "idle"
             self.latest_joints = None
             self.latest_truth = None
+            self.latest_pose = None
             self.latest_limited = None
             self.last_joint_wall = self.last_truth_wall = 0
             self.last_tick = None
@@ -244,6 +254,7 @@ class MobilityDriver(Node):
                 "truth_age_wall_s": round(gt_age, 2) if gt_age is not None else None,
                 "joints_rpm": list(self.latest_joints) if self.latest_joints else None,
                 "truth_velocity": list(self.latest_truth) if self.latest_truth else None,
+                "pose": list(self.latest_pose) if self.latest_pose else None,
                 "requested_rpm": list(self.target),
                 "sent_rpm": list(self.sent),
                 "limited_twist": list(self.latest_limited) if self.latest_limited else None,
