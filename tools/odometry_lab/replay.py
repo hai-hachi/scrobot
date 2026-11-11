@@ -97,6 +97,6 @@ if __name__=='__main__':
         output = root / f'hardware_replay_{stamp}_{uuid4().hex[:6]}.json'
     with output.open('x', encoding='utf-8') as stream:
         json.dump(result, stream, indent=2)
-        stream.write('\\n')
+        stream.write('\n')
     print(f'Saved Odometry Lab replay: {output}')
     print(json.dumps(result,indent=2))
