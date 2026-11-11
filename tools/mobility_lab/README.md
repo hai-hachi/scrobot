@@ -226,6 +226,81 @@ writes to the production badminton court, the main robot URDF defaults,
 Lighting Lab calibration, or the normal control pipeline. User settings
 persist in `evaluation_results/mobility_lab/settings.json`.
 
+## Save vs Publish calibration to the NORMAL simulation
+
+The dashboard now has **two distinct actions**:
+
+| Action | Writes | When values take effect |
+| --- | --- | --- |
+| **Save Lab Settings** | `~/scrobot_ws/evaluation_results/mobility_lab/settings.json` | Changes motor surrogate settings on the next lab run; contact physics after restarting lab Gazebo |
+| **Publish to Simulation** | `~/scrobot_ws/src/scrobot_simulation/config/mobility_calibration.yaml` | After rebuilding/sourcing if needed and restarting NORMAL Gazebo |
+
+**Publish** only reads previously saved settings, validates all values and
+asks for a browser confirmation; unsaved slider changes prevent publishing.
+The publication is an atomic single-file replacement and first creates a
+byte-for-byte backup under
+`~/scrobot_ws/evaluation_results/mobility_lab/published_backups/`.
+
+To use published settings in the full SCROBOT simulation:
+
+```bash
+# After publishing from the Mobility Lab web GUI:
+cd ~/scrobot_ws
+colcon build --symlink-install --packages-up-to scrobot_bringup
+source install/setup.bash
+
+# Restart the normal simulation (stop any previous instance first):
+ros2 launch scrobot_bringup sim.launch.py
+```
+
+The **simulation-only** YAML has two sections: `physics` (drive/caster contact
+friction, contact slip, wheel-joint damping and collision width), and `motor`
+(model selection, gains, independent left/right time constants). The
+`scrobot_simulation/simulation.launch.py` defaults read this file for all
+normal Gazebo physical settings; explicit launch arguments can override
+individual physics values for isolated experiments.
+
+When `motor.model: first_order`, the **normal**
+`scrobot_bringup/sim.launch.py` additionally launches
+`scrobot_simulation/sim_motor_response`. The collision monitor publishes to
+`/cmd_vel_motor_target` and the response node translates this to filtered
+left/right wheel setpoints before publishing to
+`/diff_drive_controller/cmd_vel`. This uses the existing downstream
+differential-drive joint velocity controller. When `model: baseline`, the
+sim-only node is absent and the collision monitor goes directly to
+`/diff_drive_controller/cmd_vel`, exactly as before.
+
+The motor surrogate is **not** an effort/torque-based load-dependent model.
+It approximates real closed-loop wheel RPM response (including both the real
+STM32's PID and motor) by filtering the desired RPM. Do not confuse its lag
+with wheel contact friction or the already-present 25 Hz velocity smoother;
+the full mission response includes the effects of both smoothing and lag.
+
+The real `scrobot_bringup/robot.launch.py` does not load mobility calibration,
+does not start the simulation motor node, and retains the same hardware
+velocity commands and STM32 PID.
+
+**Validation and reproducibility:** Publishing copies settings to the
+simulation; it does *not* certify them against real data. The original
+floor-loaded WL/WR 90 RPM step recordings alone do not validate the robot's
+ground friction, traction or skid. Keep the lab's motor-vs-real RMSE and
+independent Gazebo-vs-wheel odometry results for each candidate and calibrate
+against real robot motion when those measurements are available.
+
+**Standalone test caveat:** The published *physics* defaults apply when using
+`scrobot_simulation/simulation.launch.py` on its own. The published *motor*
+surrogate is activated by the normal
+`scrobot_bringup/sim.launch.py`; standalone debug launches that bypass that
+bringup continue to use direct wheel velocity unless separately wired.
+
+### Recovering the previous published calibration
+
+Each successful changed publication saves the exact prior YAML in
+`evaluation_results/mobility_lab/published_backups/`. To roll back, copy the
+desired backup over `src/scrobot_simulation/config/mobility_calibration.yaml`,
+rebuild/sync the installed config and restart Gazebo. The lab's local
+`settings.json` is unaffected by this rollback.
+
 ## Troubleshooting
 
 - If `/joint_states` never becomes ready, check
