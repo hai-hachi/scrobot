@@ -38,16 +38,17 @@ the robot's supporting collision floor. Existing random shuttle models are
 cleared; use **Replace shuttle layout** to spawn them again. Lighting and
 material settings are retained.
 
-## Fast-rendering eight-light baseline
+## Current published six-light calibration
 
-The tracked `lighting_lab.yaml` and production `badminton_court.sdf` use
-**2 rows × 4 columns**, X reach **±4.5 m** and Y reach **±4.6 m**.
-All eight lights illuminate the court, but just **two center-biased,
-diagonally distributed fixtures cast shadows**. In the default 2×4 grid
-these are `lab_light_00_01` and `lab_light_01_02`, corresponding to
-`court_light_00_01` and `court_light_01_02` in production.
+The **saved** `lighting_lab.yaml` and published production
+`badminton_court.sdf` use **2 rows × 3 columns**, X reach **±4.5 m**
+and Y reach **±4.6 m**, with **intensity 2.5**. Six lights illuminate
+the court and **two center-column lights cast shadows**:
+`lab_light_00_01` and `lab_light_01_01` (with `court_light_` prefixes in
+production). The code's factory fallback remains 2×4 / intensity 1.0;
+it does not override saved calibration.
 
-Adjust **Shadow-casting lights** (0–32) to compare 0, 1, 2, 4, or all eight.
+Adjust **Shadow-casting lights** (0–32) to compare 0, 1, 2, 4, or all six.
 The global **Allow selected lights to cast shadows** checkbox disables all
 shadows without disabling illumination. The effective caster count cannot
 exceed the number of spawned lights. An explicit temporary shadow-free
@@ -249,10 +250,10 @@ colcon build --symlink-install --packages-select scrobot_simulation
 source install/setup.bash
 ```
 
-The branch's initial tracked YAML contains a *baseline*, not measured
-post-experiment results. The normal simulation on this branch was
-initialized with those baseline light/material values and net shadows
-disabled. Saving and publishing a new experiment replaces that baseline.
+The tracked YAML now records the saved 2×3, intensity-2.5 experiment
+settings. The production SDF is synchronized with those saved settings;
+this is a scene configuration, not a photometrically validated lux measurement.
+Saving and publishing a different experiment replaces that calibration.
 
 **WARP/VPN compatibility is automatic on every run, including after reboot.**
 The Python launcher sets `GZ_IP=127.0.0.1` and
@@ -371,15 +372,16 @@ overlap for the same camera.
 ## Recommended first real-comparison experiment
 
 1. Fix the robot pose, camera settings, shuttle seed and venue clearance.
-2. Use **2 × 4** spotlights, **2 shadow casters**, **reach X=4.5 m**,
-   **reach Y=4.6 m**, **height=7 m**, **H=55°, S=3%, V=95%**, **intensity=1×**.
+2. Start with the saved **2 × 3** spotlights, **2 shadow casters**,
+   **reach X=4.5 m**, **reach Y=4.6 m**, **height=7 m**,
+   **H=55°, S=3%, V=95%**, **intensity=2.5×**.
 3. Spawn 20 random shuttles, seed 20261003. Save preset
-   `baseline_8_lights_2_shadows`.
+   `published_6_lights_2_shadows`.
 4. Change only **intensity** while keeping HSV, camera pose and light count
    constant. Compare image clipping and mean brightness with RTF.
 5. Adjust **H/S/V** at fixed intensity to compare light color. HSV models
    appearance, **not actual lamp spectral response or measured lux**.
-6. Compare **0, 2, 4 and 8 shadow-casting lights** without changing any
+6. Compare **0, 2, 4 and 6 shadow-casting lights** without changing any
    other parameter; use Download performance samples (JSON) to retain RTF,
    sensor FPS, GPU load and JPEG processing timings.
 7. Increase/decrease light rows, columns, center-based X/Y reach, height,
