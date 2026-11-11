@@ -85,7 +85,7 @@ const groups={
 let initial=false,last=null,config={},busy=false;
 for(const [parent,items] of Object.entries(groups))for(const [key,label,min,max,step,unit]of items){
  const block=document.createElement("div");block.className="control";block.innerHTML='<label for="'+key+'">'+label+'<output id="out-'+key+'"></output></label><input id="'+key+'" type="range" min="'+min+'" max="'+max+'" step="'+step+'">';
- $(parent).append(block);$(key).oninput=()=>{$("out-"+key).textContent=Number($(key).value).toFixed(step<0.01?3:step<0.1?2:1)+unit};
+ $(parent).append(block);$(key).oninput=()=>{$("out-"+key).textContent=Number($(key).value).toFixed(step<0.001?4:step<0.01?3:step<0.1?2:1)+unit};
 }
 const names=["profile","target_rpm","pre_s","hold_s","post_s","model","tau_left","tau_right","gain_left","gain_right","drive_contact_mu","caster_contact_mu","wheel_joint_damping","drive_slip1","drive_slip2","wheel_collision_width"];
 function loadConfig(cfg){for(const key of names)if(cfg[key]!==undefined){$(key).value=cfg[key];if($("out-"+key))$(key).oninput()}initial=true;}
