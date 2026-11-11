@@ -137,6 +137,7 @@ class Lab:
                      f'robot_y:={s["robot_y"]}',
                      f'robot_yaw:={math.radians(s["robot_yaw_deg"])}',
                      f'enable_depth_camera:={str(s["enable_depth"]).lower()}',
+                     f'enable_depth_registration:={str(s["mode"]=="yolo" or s["enable_registration"]).lower()}',
                      f'model_path:={str(self.model_path()) if s["mode"]=="yolo" else ""}',
                      f'device:={s["device"]}',
                      f'max_detection_rate:={s["max_detection_rate"]}']
