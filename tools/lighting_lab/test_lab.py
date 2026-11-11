@@ -150,7 +150,9 @@ class SceneTests(unittest.TestCase):
         config_file = ROOT / "src/scrobot_simulation/config/lighting_lab.yaml"
         defaults = read_lab_config(config_file)
         self.assertEqual(defaults["lights"]["hsv"], [55.0, 3.0, 95.0])
-        self.assertEqual(defaults["lights"]["intensity"], 1.0)
+        # Production/light-lab presets are user-calibrated, not immutable
+        # initial defaults. Assert the published file retains its calibration.
+        self.assertEqual(defaults["lights"]["intensity"], 2.5)
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "lighting_lab.yaml"
             updated = default_settings()
