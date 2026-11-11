@@ -167,7 +167,7 @@ def simulated_topics_present(config):
 
     for name in required:
         information = ros_cli('topic', 'info', name, timeout=6)
-        match = re.search(r'Publisher count:\\s*(\\d+)', information)
+        match = re.search(r'Publisher count:\s*(\d+)', information)
         if not match:
             raise RuntimeError(f'Cannot determine publisher count on {name}')
         count = int(match.group(1))
