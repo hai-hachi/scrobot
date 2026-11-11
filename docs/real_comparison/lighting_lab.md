@@ -264,6 +264,14 @@ dashboard to `127.0.0.1`. There are no shell exports or startup-file edits
 to redo after reboot. This setup assumes Gazebo and the Lighting Lab run
 on the same computer, not in separate containers or remote machines.
 
+The lab also defaults to private **ROS_DOMAIN_ID=76** and a matching
+`GZ_PARTITION=scrobot_lighting_<uid>_76`, so its Gazebo sensors,
+`/clock`, light-update commands and robot do not join normal SCROBOT
+autonomy or Odometry Lab. Mobility Lab independently defaults to domain
+**77**; the Odometry Lab intentionally attaches to the **normal**
+simulation domain. Use `--ros-domain-id` only when deliberately
+connecting to another isolated Lighting Lab session.
+
 Loopback configuration avoids interface selection via WARP but cannot
 guarantee operation if OS firewall, routing, graphics drivers or Gazebo
 server initialization itself is faulty. The standalone real robot remains
@@ -275,6 +283,8 @@ set the same scope in that terminal:
 ```bash
 export GZ_IP=127.0.0.1
 export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+export ROS_DOMAIN_ID=76
+export GZ_PARTITION="scrobot_lighting_$(id -u)_76"
 gz topic -l | grep -E '/gui/camera/pose|/lighting_lab/'
 gz service -l | grep '/world/badminton_court'
 ```
@@ -282,7 +292,7 @@ gz service -l | grep '/world/badminton_court'
 Other commands:
 
 ```bash
-python3 tools/lighting_lab/server.py --port 8766 --no-browser
+python3 tools/lighting_lab/server.py --port 8865 --no-browser
 python3 tools/lighting_lab/server.py --preset /path/to/saved_preset.json
 ```
 
@@ -393,6 +403,8 @@ For any candidate, save a JSON preset and camera snapshots. Presets include
 the Git SHA, source-world checksum, selected settings and a measurement
 snapshot. They live in
 `~/scrobot_ws/evaluation_results/lighting_lab/presets/`.
+Saving under an existing preset name now fails rather than replacing the
+previous result; choose a new name for a new experimental run.
 
 Actual performance (RTF, sensor frame rate, GPU load) measures compute cost;
 image brightness and clipped-pixel statistics measure visual appearance,
