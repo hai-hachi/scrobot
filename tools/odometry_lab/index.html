@@ -17,7 +17,7 @@ body{background:linear-gradient(135deg,#0a1721,#0b1119);font:14px system-ui,sans
    </select></div>
    <div id="motion-controls"></div>
    <div class="buttons"><button id="run" class="primary">▶ Run test</button><button id="stop" class="danger">■ Stop</button><button id="save">Save CSV + report</button></div>
-   <p>Commands go directly to <code>/diff_drive_controller/cmd_vel</code>. No Nav2, no AprilTag corrections, no velocity smoother. Wheel-speed combinations remain below 0.5 m/s per wheel.</p>
+   <p id="motorInfo">No Nav2, no AprilTags, no smoother. Reuses published Mobility Lab actuation when enabled.</p><p>Wheel-speed combinations remain below 0.5 m/s per wheel.</p>
   </div>
   <div class="panel"><h2>02 · Sensor and fusion frequency</h2>
    <p>Controller and STM32 PID run at 100 Hz. These are requested simulation publication/update rates; the table shows measured topic rates, jitter and ages.</p>
@@ -112,8 +112,12 @@ function graph(name,trajectory){
   else for(const [id,color]of [["ground_truth","#f7b964"],["wheel_odom","#aaa2ec"],["ekf","#42d0c2"],["imu_orientation","#ed8ca8"]]){
    const rows=(trajectory[id]||[]).filter(r=>r.yaw!=null);
    if(rows.length<2)continue;
-   const t0=rows[0].t,yaw0=rows[0].yaw;
-   data.push({id,color,coords:rows.map(r=>[r.t-t0,((r.yaw-yaw0+Math.PI*5)%(Math.PI*2)-Math.PI)*180/Math.PI])});
+   const t0=rows[0].t;let lastYaw=rows[0].yaw,unwrapped=0;
+   const coords=rows.map((r,i)=>{
+    if(i){let dy=r.yaw-lastYaw;dy=((dy+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;unwrapped+=dy;lastYaw=r.yaw}
+    return [r.t-t0,unwrapped*180/Math.PI];
+   });
+   data.push({id,color,coords});
   }
   if(!data.length){g.fillText("Run a trajectory to populate this plot",pad,h/2);return}
   const all=data.flatMap(d=>d.coords);
@@ -132,6 +136,9 @@ function display(s){
  last=s;if(!first&&s.settings)load(s.settings);
  $("stage").textContent=s.state.toUpperCase();$("clock").textContent="Simulation "+fmt(s.sim_time)+" s";
  $("readiness").textContent=s.ready?"Wheel controller ready":"Waiting for controller";
+ $("motorInfo").textContent="Motor response: "+(s.motor_model||"unknown")+
+  " · commands -> "+(s.command_topic||"wheel controller")+
+  ". No Nav2, AprilTags or smoother. Physics and motor model come from published Mobility Lab calibration.";
  const saved=changed(s.settings),inrun=["pre","running"].includes(s.state);
  $("run").disabled=busy||!s.ready||!s.gazebo_alive||s.rates_changed||saved||inrun;
  $("stop").disabled=!inrun;
