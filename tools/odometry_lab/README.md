@@ -153,13 +153,13 @@ source, which is not currently present in the connected GitHub repository.
 cd ~/scrobot_ws
 source install/setup.bash
 python3 tools/odometry_lab/web_server.py
-# Open http://127.0.0.1:8765 (opens automatically unless --no-browser)
+# Open http://127.0.0.1:8767 (opens automatically unless --no-browser)
 ```
 
 To launch headless or choose another port:
 
 ```bash
-python3 tools/odometry_lab/web_server.py --no-browser --port 8765
+python3 tools/odometry_lab/web_server.py --no-browser --port 8767
 ```
 
 `python3 tools/odometry_lab/gui.py` remains as a backwards-compatible alias
