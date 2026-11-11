@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 import yaml
 
@@ -29,6 +30,21 @@ def generate_launch_description():
         raise RuntimeError(f'Invalid mobility calibration: {calibration_path}')
     physics = calibration['physics']
 
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from odometry_rate_config import load_rates, prepare_configurations
+    rate_config = Path(simulation_pkg) / 'config/odometry_calibration.yaml'
+    published_rates = load_rates(rate_config)
+    production_controller = (
+        Path(get_package_share_directory('scrobot_control')) /
+        'config/controllers.yaml'
+    )
+    production_ekf = (
+        Path(get_package_share_directory('scrobot_localization')) /
+        'config/ekf.yaml'
+    )
+    generated = prepare_configurations(
+        published_rates, production_controller, production_ekf
+    )
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     world = LaunchConfiguration('world')
@@ -41,6 +57,9 @@ def generate_launch_description():
     z = LaunchConfiguration('z')
     yaw = LaunchConfiguration('yaw')
     enable_magnetometer = LaunchConfiguration('enable_magnetometer')
+    imu_rate_hz = LaunchConfiguration('imu_rate_hz')
+    magnetometer_rate_hz = LaunchConfiguration('magnetometer_rate_hz')
+    ground_truth_rate_hz = LaunchConfiguration('ground_truth_rate_hz')
     enable_depth_camera = LaunchConfiguration('enable_depth_camera')
     robot_visual_mode = LaunchConfiguration('robot_visual_mode')
     wheel_joint_damping = LaunchConfiguration('wheel_joint_damping')
@@ -92,6 +111,9 @@ def generate_launch_description():
             'z': z,
             'yaw': yaw,
             'enable_magnetometer': enable_magnetometer,
+            'imu_rate_hz': imu_rate_hz,
+            'magnetometer_rate_hz': magnetometer_rate_hz,
+            'ground_truth_rate_hz': ground_truth_rate_hz,
             'enable_depth_camera': enable_depth_camera,
             'robot_visual_mode': robot_visual_mode,
             'wheel_joint_damping': wheel_joint_damping,
@@ -179,6 +201,15 @@ def generate_launch_description():
             default_value='2.0',
             description='Delay before spawning robot [s].',
         ),
+        DeclareLaunchArgument('imu_rate_hz',
+                              default_value=str(published_rates['imu_hz']),
+                              description='Gazebo D435i IMU update rate in Hz.'),
+        DeclareLaunchArgument('magnetometer_rate_hz',
+                              default_value=str(published_rates['magnetometer_hz']),
+                              description='Gazebo magnetic-field update rate in Hz.'),
+        DeclareLaunchArgument('ground_truth_rate_hz',
+                              default_value=str(published_rates['ground_truth_hz']),
+                              description='Gazebo ground truth odometry rate in Hz.'),
         DeclareLaunchArgument(
             'enable_magnetometer',
             default_value='true',
@@ -219,12 +250,8 @@ def generate_launch_description():
                               description='Lateral tire contact slip in Gazebo.'),
         DeclareLaunchArgument(
             'controller_params',
-            default_value=os.path.join(
-                get_package_share_directory('scrobot_control'),
-                'config',
-                'controllers.yaml',
-            ),
-            description='ros2_control controller YAML loaded by Gazebo.',
+            default_value=generated['controller_params'],
+            description='Simulation-only controller YAML with published wheel odometry rate.',
         ),
 
         gazebo,
