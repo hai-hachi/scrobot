@@ -54,6 +54,13 @@ install(
   RENAME spawn_shuttles
 )
 
+install(
+  PROGRAMS
+    scripts/sim_motor_response.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME sim_motor_response
+)
+
 # ------------------------------------------------------------------
 # Generate the installed AprilTag model directly from the localization
 # landmark configuration so simulation and localization cannot silently drift.
