@@ -57,8 +57,9 @@ class DriveLimitsTests(unittest.TestCase):
         self.assertLessEqual(cruise * (1 + WHEEL_SEPARATION / (2 * radius)),
                              MAX_WHEEL_M_S)
         self.assertEqual(cruise, 0.35)
-        self.assertLessEqual(rpp["min_lookahead_dist"], cruise * rpp["lookahead_time"])
-        self.assertGreaterEqual(rpp["max_lookahead_dist"], cruise * rpp["lookahead_time"])
+        effective_lookahead = round(cruise * rpp["lookahead_time"], 6)
+        self.assertLessEqual(rpp["min_lookahead_dist"], effective_lookahead)
+        self.assertGreaterEqual(rpp["max_lookahead_dist"], effective_lookahead)
 
     def test_smc_maxima_respect_combined_wheel_limit(self):
         for config in (
