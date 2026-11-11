@@ -107,11 +107,11 @@
     </scene>
 
     <light type="spot" name="court_light_00_00">
-      <pose>-4.5000 -4.6000 7.0000 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1.00000</diffuse>
-      <specular>0.19000 0.18952 0.18430 1.00000</specular>
+      <pose>-7.0000 -4.5000 12.0000 0 0 0</pose>
+      <diffuse>0.95000 0.94763 0.92150 1.00000</diffuse>
+      <specular>0.19000 0.18953 0.18430 1.00000</specular>
       <intensity>2.5</intensity>
-      <cast_shadows>false</cast_shadows>
+      <cast_shadows>true</cast_shadows>
       <direction>0.00000 0.00000 -1.00000</direction>
       <attenuation>
         <range>20.0</range>
@@ -127,9 +127,9 @@
     </light>
 
     <light type="spot" name="court_light_00_01">
-      <pose>0.0000 -4.6000 7.0000 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1.00000</diffuse>
-      <specular>0.19000 0.18952 0.18430 1.00000</specular>
+      <pose>0.0000 -4.5000 12.0000 0 0 0</pose>
+      <diffuse>0.95000 0.94763 0.92150 1.00000</diffuse>
+      <specular>0.19000 0.18953 0.18430 1.00000</specular>
       <intensity>2.5</intensity>
       <cast_shadows>true</cast_shadows>
       <direction>0.00000 0.00000 -1.00000</direction>
@@ -147,11 +147,11 @@
     </light>
 
     <light type="spot" name="court_light_00_02">
-      <pose>4.5000 -4.6000 7.0000 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1.00000</diffuse>
-      <specular>0.19000 0.18952 0.18430 1.00000</specular>
+      <pose>7.0000 -4.5000 12.0000 0 0 0</pose>
+      <diffuse>0.95000 0.94763 0.92150 1.00000</diffuse>
+      <specular>0.19000 0.18953 0.18430 1.00000</specular>
       <intensity>2.5</intensity>
-      <cast_shadows>false</cast_shadows>
+      <cast_shadows>true</cast_shadows>
       <direction>0.00000 0.00000 -1.00000</direction>
       <attenuation>
         <range>20.0</range>
@@ -167,11 +167,11 @@
     </light>
 
     <light type="spot" name="court_light_01_00">
-      <pose>-4.5000 4.6000 7.0000 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1.00000</diffuse>
-      <specular>0.19000 0.18952 0.18430 1.00000</specular>
+      <pose>-7.0000 4.5000 12.0000 0 0 0</pose>
+      <diffuse>0.95000 0.94763 0.92150 1.00000</diffuse>
+      <specular>0.19000 0.18953 0.18430 1.00000</specular>
       <intensity>2.5</intensity>
-      <cast_shadows>false</cast_shadows>
+      <cast_shadows>true</cast_shadows>
       <direction>0.00000 0.00000 -1.00000</direction>
       <attenuation>
         <range>20.0</range>
@@ -187,9 +187,9 @@
     </light>
 
     <light type="spot" name="court_light_01_01">
-      <pose>0.0000 4.6000 7.0000 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1.00000</diffuse>
-      <specular>0.19000 0.18952 0.18430 1.00000</specular>
+      <pose>0.0000 4.5000 12.0000 0 0 0</pose>
+      <diffuse>0.95000 0.94763 0.92150 1.00000</diffuse>
+      <specular>0.19000 0.18953 0.18430 1.00000</specular>
       <intensity>2.5</intensity>
       <cast_shadows>true</cast_shadows>
       <direction>0.00000 0.00000 -1.00000</direction>
@@ -207,11 +207,11 @@
     </light>
 
     <light type="spot" name="court_light_01_02">
-      <pose>4.5000 4.6000 7.0000 0 0 0</pose>
-      <diffuse>0.95000 0.94762 0.92150 1.00000</diffuse>
-      <specular>0.19000 0.18952 0.18430 1.00000</specular>
+      <pose>7.0000 4.5000 12.0000 0 0 0</pose>
+      <diffuse>0.95000 0.94763 0.92150 1.00000</diffuse>
+      <specular>0.19000 0.18953 0.18430 1.00000</specular>
       <intensity>2.5</intensity>
-      <cast_shadows>false</cast_shadows>
+      <cast_shadows>true</cast_shadows>
       <direction>0.00000 0.00000 -1.00000</direction>
       <attenuation>
         <range>20.0</range>

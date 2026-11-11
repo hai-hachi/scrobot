@@ -1,28 +1,27 @@
-# All odometry_lab/ values are isolated from the production controller and TF.
-scenario: straight
+scenario: arc
 run_root: ~/scrobot_ws/evaluation_results/odometry_lab
 rates:
-  encoder_sample_hz: 100.0
-  estimator_hz: 50.0
-  publish_hz: 50.0
-  gui_hz: 5.0
+  encoder_sample_hz: 100
+  estimator_hz: 50
+  publish_hz: 50
+  gui_hz: 5
 hardware:
   encoder_ticks_per_motor_rev: 2048
-  gear_ratio: 1.0  # joint_states are wheel-side; effective ticks/wheel rev = ticks * ratio
-  wheel_radius_m: 0.050
-  wheel_separation_m: 0.420
-  left_radius_multiplier: 1.0
-  right_radius_multiplier: 1.0
-  encoder_noise_ticks_std: 0.0
-  encoder_drop_probability: 0.0
-  feedback_delay_ms: 0.0
-  feedback_jitter_ms: 0.0
+  gear_ratio: 1
+  wheel_radius_m: 0.05
+  wheel_separation_m: 0.42
+  left_radius_multiplier: 1
+  right_radius_multiplier: 1
+  encoder_noise_ticks_std: 0
+  encoder_drop_probability: 0
+  feedback_delay_ms: 0
+  feedback_jitter_ms: 0
   random_seed: 1234
 qos:
-  reliability: best_effort  # lab-only stream, never modifies production QoS
+  reliability: best_effort
   depth: 5
 stress:
-  cpu_duty: 0.0  # 0=off, max .75 of one CPU core, separate process
+  cpu_duty: 0
 topics:
   joint_states: /joint_states
   wheel_odom: /diff_drive_controller/odom
@@ -33,13 +32,13 @@ topics:
   left_joint: left_wheel_joint
   right_joint: right_wheel_joint
 motion:
-  command_publish_hz: 20.0
-  linear_speed_mps: 0.471238898  # 90 RPM for radius 0.050 m, before acceleration limiting
-  straight_distance_m: 2.0
+  command_publish_hz: 20
+  linear_speed_mps: 0.471238898
+  straight_distance_m: 2
   angular_speed_rps: 0.5
   arc_linear_speed_mps: 0.25
   arc_angular_speed_rps: 0.25
-  start_delay_s: 3.0
-  stop_duration_s: 2.0
-  static_duration_s: 10.0
-  final_settle_duration_s: 3.0
+  start_delay_s: 3
+  stop_duration_s: 2
+  static_duration_s: 10
+  final_settle_duration_s: 3

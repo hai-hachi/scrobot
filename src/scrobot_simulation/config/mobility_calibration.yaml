@@ -1,22 +1,17 @@
-# SCROBOT simulation-only mobility calibration.
-# Managed by tools/mobility_lab Publish to Simulation.
-# This YAML is loaded by the normal Gazebo launch; it is NEVER used by robot.launch.py.
-# Unpublished lab sliders/settings.json do not affect production simulation.
+# Simulation-only SCROBOT mobility calibration.
+# Published from Mobility Lab SAVED settings; do not edit real robot.
+# Apply after restarting the normal Gazebo simulation.
+# No motor PID is added to the physical robot.
 schema_version: 1
-
 physics:
   drive_contact_mu: 5.0
   caster_contact_mu: 0.05
   wheel_joint_damping: 0.0
-  wheel_collision_width: 0.001
+  wheel_collision_width: 0.01
   drive_slip1: 0.0
   drive_slip2: 0.0
-
 motor:
-  # 'baseline' preserves direct Gazebo wheel velocity actuation.
-  # 'first_order' adds a *sim-only* command-side closed-loop RPM surrogate
-  # AFTER the collision monitor, before diff_drive_controller.
-  model: baseline
+  model: first_order
   tau_left: 0.05
   tau_right: 0.05
   gain_left: 1.0

@@ -4,9 +4,9 @@
 lights:
   rows: 2
   cols: 3
-  reach_x: 4.5
-  reach_y: 4.6
-  height: 7.0
+  reach_x: 7.0
+  reach_y: 4.5
+  height: 12.0
   kind: spot
   hsv:
   - 55.0
@@ -21,6 +21,7 @@ lights:
   outer: 2.0
   falloff: 1.0
   shadows: true
+  shadow_count: 6
   specular: 0.2
 colors:
   floor:
