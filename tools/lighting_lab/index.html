@@ -99,7 +99,7 @@
     <div class="metric"><small>Real-time factor</small><b id="m-rtf">—</b><em>Target 1.0× / lower means slower</em></div>
     <div class="metric"><small>Robot RGB rate</small><b id="m-robot-fps">—</b><em>Frames per second received</em></div>
     <div class="metric"><small>Robot exposure proxy</small><b id="m-bright">—</b><em>Mean image brightness, not lux</em></div>
-    <div class="metric"><small>Active lights</small><b id="m-lights">6</b><em>Up to 32 / shadows add cost</em></div>
+    <div class="metric"><small>Active lights</small><b id="m-lights">8</b><em id="m-shadow-summary">2 shadow-casting · 6 fill lights</em></div>
     <div class="metric"><small>CPU load · 1 min</small><b id="m-cpu">—</b><em id="m-cores">Host system average</em></div>
     <div class="metric"><small>NVIDIA GPU load</small><b id="m-gpu">—</b><em id="m-gpu-mem">nvidia-smi if available</em></div>
   </section>
@@ -139,7 +139,8 @@
       <div class="paneltitle"><h2>Light array</h2><small>Center aligned to court</small></div>
       <div class="fields" id="lightfields"></div>
       <div class="divider"></div>
-      <label class="toggle"><input type="checkbox" id="light-shadows" checked> Cast shadows (performance intensive)</label>
+      <label class="toggle"><input type="checkbox" id="light-shadows" checked> Allow selected lights to cast shadows</label>
+      <p class="helper">The shadow-count slider selects spatially distributed shadow casters. Remaining lights still illuminate normally. Set shadow count to 0 for none, or uncheck this option to disable all.</p>
       <label style="margin-top:8px">Light type
         <select id="light-kind"><option value="spot">Spot (focused)</option><option value="point">Point (omnidirectional)</option></select>
       </label>
@@ -246,11 +247,36 @@
         <span class="statuskey">Robot overexposure (pixels ≥ 248)</span><span class="statusvalue" id="detail-high">—</span>
         <span class="statuskey">Robot underexposure (pixels ≤ 12)</span><span class="statusvalue" id="detail-low">—</span>
         <span class="statuskey">Last Gazebo stats age</span><span class="statusvalue" id="detail-age">—</span>
+        <span class="statuskey">Robot sensor / dashboard preview rate</span><span class="statusvalue" id="detail-robot-rates">—</span>
+        <span class="statuskey">Robot image JPEG processing</span><span class="statusvalue" id="detail-image-cost">—</span>
+        <span class="statuskey">Robot preview frame age</span><span class="statusvalue" id="detail-robot-age">—</span>
       </div>
       <div class="divider"></div>
       <label>Real-time factor history (last 60 samples)</label>
       <canvas id="rtf-trend" width="640" height="90" style="width:100%;height:75px;background:#0b151e;border:1px solid var(--line);border-radius:7px;margin:7px 0"></canvas>
       <p class="helper" id="diagnosis">Waiting for camera histogram and simulation statistics…</p>
+      <div class="divider"></div>
+      <h3>Actual Gazebo rendering budget</h3>
+      <div class="fields">
+        <label>Inspection camera sensors
+          <select id="inspection-profile">
+            <option value="lean">Lean · 640×360 @ 4 Hz each</option>
+            <option value="full">Full · 960×540 / 800×450 @ 8 Hz</option>
+          </select>
+        </label>
+        <label>Robot visual geometry
+          <select id="robot-visual-mode">
+            <option value="simple">Simple · low-poly body proxy</option>
+            <option value="none">None · no robot visuals</option>
+            <option value="full">Full · original STL meshes</option>
+          </select>
+        </label>
+      </div>
+      <label class="toggle"><input id="enable-depth-camera" type="checkbox"> Render D435i depth sensor (848×480 @ 15 Hz)</label>
+      <div class="buttonrow"><button id="apply-render-budget" class="primary" onclick="applyRenderBudget()">Apply render budget · restart Gazebo</button></div>
+      <p class="helper" id="render-budget-status">Lean inspection cameras, simple robot proxy, depth off by default. D435i RGB stays at 1280×720 @ 15 Hz. Changing actual sensor rates or visual geometry needs a lab restart; shuttles will be cleared.</p>
+      <p class="helper">The desktop Gazebo GUI frame rate cannot be read reliably from these sensors. Compare GUI responsiveness separately from real-time factor (RTF), raw camera FPS and preview FPS.</p>
+      <div class="buttonrow"><button id="download-benchmark" onclick="downloadBenchmark()">Download performance samples (JSON)</button></div>
       <div class="fields" style="margin-top:12px">
         <label>Calibration preset name<input id="preset-name" type="text" maxlength="60" value="lighting_baseline"></label>
         <div class="buttonrow" style="align-items:end;margin:0"><button class="primary" onclick="savePreset()">Save JSON preset</button></div>
@@ -273,6 +299,7 @@ const lightSpecs = [
   ["rows","Rows",1,8,1,""],["cols","Columns",1,12,1,""],
   ["reach_x","X reach from center",0,10,.25,"m"],["reach_y","Y reach from center",0,8,.25,"m"],
   ["height","Height",2,13,.5,"m"],
+  ["shadow_count","Shadow-casting lights",0,32,1,""],
   ["intensity","Intensity",0,4,.05,"×"],
   ["range","Range",2,40,1,"m"],["specular","Specular ratio",0,1,.05,""],
   ["constant","Attenuation const",.01,2,.01,""],
@@ -283,9 +310,9 @@ const lightSpecs = [
   ["falloff","Spot falloff",0,2,.05,""]
 ];
 const defaults={
- lights:{rows:2,cols:3,reach_x:4.5,reach_y:4.6,height:7,kind:"spot",
+ lights:{rows:2,cols:4,reach_x:4.5,reach_y:4.6,height:7,kind:"spot",
  hsv:[55,3,95],intensity:1,range:18,
- constant:.45,linear:.015,quadratic:.001,inner:.7,outer:1.2,falloff:.8,shadows:true,
+ constant:.45,linear:.015,quadratic:.001,inner:.7,outer:1.2,falloff:.8,shadows:true,shadow_count:2,
  specular:.2},
  colors:{floor:[210,12,8],walls:[240,7,15],court:[147,84,35],poles:[0,0,15]},
  venue:{clearance_x:2.3,clearance_y:2.4}
@@ -403,6 +430,18 @@ async function toggleLightFrames(){
   $("show-light-frames").checked=lastStatus.light_frames.requested;
  }
 }
+async function applyRenderBudget(){
+ if(!confirm("Changing actual Gazebo inspection sensor rates, robot meshes, or depth rendering restarts the lighting experiment. Current shuttles will be removed. Continue?"))return;
+ const ok=await action("/api/render_budget",{
+  inspection_profile:$("inspection-profile").value,
+  robot_visual_mode:$("robot-visual-mode").value,
+  depth_camera:$("enable-depth-camera").checked
+ },"apply-render-budget");
+ if(ok){
+  for(const key of ["robot","overhead","free"])$("feed-"+key).classList.remove("has-frame");
+  toast("Gazebo restarted with the new rendering budget; re-spawn shuttles if needed.");
+ }
+}
 async function setPreviewMode(){
  const mode=$("preview-mode").value, shadow_free=$("shadow-preview").checked;
  if(mode==="accurate" && shadow_free){
@@ -507,6 +546,24 @@ function drawRtfTrend(){
  ctx.stroke();
 }
 async function savePreset(){await action("/api/preset",{name:$("preset-name").value},null);}
+const performanceSamples=[];
+function downloadBenchmark(){
+ if(!performanceSamples.length){toast("No performance samples recorded yet",true);return;}
+ const payload={
+  recorded_utc:new Date().toISOString(),
+  purpose:"SCROBOT Gazebo Lighting Lab rendering/sensor performance samples",
+  note:"RTF and camera FPS are measured; GPU load is device-wide. Gazebo desktop GUI FPS is not measured.",
+  sample_interval_seconds:1.1,
+  light_configuration:lastStatus?.settings?.lights,
+  render_budget:lastStatus?.render_budget,
+  samples:performanceSamples,
+ };
+ const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+ const url=URL.createObjectURL(blob),link=document.createElement("a");
+ link.href=url;link.download="scrobot_lighting_benchmark_"+new Date().toISOString().replace(/[:.]/g,"-")+".json";
+ link.click();URL.revokeObjectURL(url);
+ toast("Downloaded "+performanceSamples.length+" performance samples");
+}
 let lastStatus=null;
 let statusBusy=false;
 async function getStatus(){
@@ -516,6 +573,14 @@ async function getStatus(){
   const response=await fetch("/api/status",{cache:"no-store"});
   if(!response.ok)throw Error("No backend");
   const s=await response.json();lastStatus=s;
+  performanceSamples.push({
+   time_utc:s.status_utc, rtf:s.sim.rtf, stats_age_s:s.sim.stats_age_s,
+   rgb:s.feeds.robot, overhead:s.feeds.overhead, free:s.feeds.free,
+   gpu:s.gpu, cpu_load_1m:s.load_1m, shadow_lights:s.shadow_lights,
+   active_lights:s.lights, render_budget:s.render_budget,
+   light_command:s.updates?.lights, material_command:s.updates?.materials
+  });
+  if(performanceSamples.length>120)performanceSamples.shift();
   if(!controlsHydrated && s.settings){
    syncControls(s.settings);
    controlsHydrated=true;
@@ -527,6 +592,8 @@ async function getStatus(){
   $("m-rtf").textContent=rtf===undefined?"—":rtf.toFixed(2)+"×";
   $("m-rtf").style.color=rtf===undefined?"":(rtfGood?"var(--primary)":"var(--yellow)");
   $("m-lights").textContent=s.lights;
+  $("m-shadow-summary").textContent=s.shadow_lights+" shadow-casting · "+
+   Math.max(0,s.lights-s.shadow_lights)+" fill lights";
   $("m-robot-fps").textContent=(s.feeds.robot.fps||0).toFixed(1)+" Hz";
   $("m-cpu").textContent=s.load_1m.toFixed(1);
   $("m-cores").textContent="System load / "+s.cpu_cores+" CPU threads";
@@ -540,6 +607,21 @@ async function getStatus(){
   $("detail-age").textContent=s.sim.stats_age_s===null?"—":s.sim.stats_age_s+" s";
   $("detail-high").textContent=exp?exp.clipped_bright+"%":"—";
   $("detail-low").textContent=exp?exp.clipped_dark+"%":"—";
+  const rgb=s.feeds.robot;
+  $("detail-robot-rates").textContent=rgb.fps+" / "+rgb.preview_fps+" Hz";
+  $("detail-image-cost").textContent=rgb.jpeg_encode_ms===null?"—":
+   rgb.jpeg_encode_ms+" ms · "+rgb.jpeg_kib+" KiB";
+  $("detail-robot-age").textContent=rgb.age_s===null?"—":rgb.age_s+" s";
+  if(s.render_budget){
+   const b=s.render_budget;
+   if(document.activeElement!==$("inspection-profile"))$("inspection-profile").value=b.inspection_profile;
+   if(document.activeElement!==$("robot-visual-mode"))$("robot-visual-mode").value=b.robot_visual_mode;
+   if(document.activeElement!==$("enable-depth-camera"))$("enable-depth-camera").checked=b.depth_camera;
+   $("render-budget-status").textContent="Running: "+b.inspection_profile+
+    " inspection sensors · robot visuals "+b.robot_visual_mode+
+    " · depth "+(b.depth_camera?"on":"off")+
+    " · robot RGB remains 1280×720 at 15 Hz";
+  }
   if(s.preview){
    // Do not overwrite an actively changed selector while the request runs.
    if(document.activeElement!==$("preview-mode"))$("preview-mode").value=s.preview.mode;

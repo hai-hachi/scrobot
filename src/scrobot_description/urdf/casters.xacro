@@ -17,6 +17,7 @@
           izz="1.83e-5"/>
       </inertial>
 
+      <xacro:if value="${scrobot_visual_mode == 'full'}">
       <visual name="${name}_caster_fork_visual">
         <origin
           xyz="0 0 0"
@@ -28,6 +29,7 @@
         <material name="rubber_black"/>
 
       </visual>
+      </xacro:if>
     </link>
 
     <joint name="${name}_caster_swivel_joint" type="continuous">
@@ -51,6 +53,7 @@
           izz="3.39e-6"/>
       </inertial>
 
+      <xacro:if value="${scrobot_visual_mode == 'full'}">
       <visual name="${name}_caster_wheel_visual">
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
@@ -60,6 +63,7 @@
         <material name="rubber_black"/>
 
       </visual>
+      </xacro:if>
 
       <collision name="${name}_caster_wheel_collision">
         <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>

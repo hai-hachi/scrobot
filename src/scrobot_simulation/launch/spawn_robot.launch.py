@@ -31,6 +31,8 @@ def generate_launch_description():
     z = LaunchConfiguration('z')
     yaw = LaunchConfiguration('yaw')
     enable_magnetometer = LaunchConfiguration('enable_magnetometer')
+    enable_depth_camera = LaunchConfiguration('enable_depth_camera')
+    robot_visual_mode = LaunchConfiguration('robot_visual_mode')
     drive_contact_mu = LaunchConfiguration('drive_contact_mu')
     caster_contact_mu = LaunchConfiguration('caster_contact_mu')
     controller_params = LaunchConfiguration('controller_params')
@@ -65,6 +67,10 @@ def generate_launch_description():
             ' wheel_collision_width:=0.001',
             ' enable_magnetometer:=',
             enable_magnetometer,
+            ' enable_depth_camera:=',
+            enable_depth_camera,
+            ' robot_visual_mode:=',
+            robot_visual_mode,
             ' drive_contact_mu:=',
             drive_contact_mu,
             ' caster_contact_mu:=',
@@ -161,6 +167,14 @@ def generate_launch_description():
             default_value='true',
             choices=['true', 'false'],
             description='Enable the simulated 5883L magnetometer and its TF frame.',
+        ),
+        DeclareLaunchArgument(
+            'enable_depth_camera', default_value='true', choices=['true', 'false'],
+            description='Enable the real-resolution Gazebo depth sensor.',
+        ),
+        DeclareLaunchArgument(
+            'robot_visual_mode', default_value='full', choices=['full', 'simple', 'none'],
+            description='Visual rendering only: full / simple / none; joints and collisions stay.',
         ),
         DeclareLaunchArgument(
             'drive_contact_mu',

@@ -14,6 +14,7 @@
           izz="1.24e-3"/>
       </inertial>
 
+      <xacro:if value="${scrobot_visual_mode == 'full'}">
       <visual name="collector_visual">
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
@@ -22,6 +23,7 @@
 
         <material name="plastic_blue"/>
       </visual>
+      </xacro:if>
     </link>
 
     <joint name="collector_joint" type="fixed">

@@ -10,20 +10,21 @@ production world SDF. The robot, Nav2 and mission code are not modified.
 
 | Area | Control | Defaults |
 | --- | --- | --- |
-| Light grid | Rows × columns (max 32 lights), spot/point type | 2 × 3 spot |
+| Light grid | Rows × columns (max 32 lights), spot/point type | **2 × 4 spot** |
 | X/Y light reach | Distance from court center **to outermost fixtures**, each side; Y requires ≥2 rows | ±4.5 m X, ±4.6 m Y |
 | Light elevation | Z above venue floor | 7.0 m |
 | Light XYZ frames | GUI-only RGB axes at fixture locations with yellow floor-projection guides | Shown by default; togglable |
 | Light HSV color | Hue (0–360°), saturation (0–100%), value (0–100%) | H=55°, S=3%, V=95% |
 | Light intensity | Gazebo light intensity 0–4× (not calibrated lux) | 1× |
-| Light rendering | Shadow toggle, range, attenuation, spot inner/outer cone, falloff, specular | Original court approximations |
+| Light rendering | Per-array shadow-caster budget, global shadow toggle, range, attenuation, spot cone, falloff, specular | **2 of 8** lights cast shadows; all 8 still illuminate |
 | Badminton net | Net mesh and white top tape do not cast shadows | Shadows disabled for these two visuals |
 | Surface colors | Independent HSV sliders for venue floor, court mat, safety walls, net poles | Original appearance approximations |
 | Venue X clearance | **Per side** beyond the 15.4 m-long mat | 2.3 m |
 | Venue Y clearance | **Per side** beyond the 7.2 m-wide mat | 2.4 m |
 | Net poles | Original fixed 50 mm diameter | Not adjustable |
 | Shuttle scene | Seeded random uniform / center / net distributions; selectable count | 20, seed 20261003 |
-| Performance | RTF chart, actual sensor FPS, image clipping, CPU load, GPU utilization/VRAM if available | Measured from Gazebo |
+| Performance | RTF chart, raw sensor vs browser preview FPS, JPEG processing time, image age, image clipping, CPU load, device-wide GPU utilization/VRAM, downloadable JSON samples | Real sensor/host metrics; **not** GUI FPS |
+| Gazebo inspection rendering | Lean/full overhead/free camera profiles and low-detail/full/hidden robot visuals | **Lean 640×360 @ 4 Hz** each; simple robot proxy; D435i depth off |
 
 **Venue geometry:** venue floor X length = `15.4 + 2 × clearance_x`
 meters and Y width = `7.2 + 2 × clearance_y` meters. The collision floor,
@@ -36,6 +37,29 @@ stays open, but the lab simulation is restarted to avoid dynamically changing
 the robot's supporting collision floor. Existing random shuttle models are
 cleared; use **Replace shuttle layout** to spawn them again. Lighting and
 material settings are retained.
+
+## Fast-rendering eight-light baseline
+
+The tracked `lighting_lab.yaml` and production `badminton_court.sdf` use
+**2 rows × 4 columns**, X reach **±4.5 m** and Y reach **±4.6 m**.
+All eight lights illuminate the court, but just **two center-biased,
+diagonally distributed fixtures cast shadows**. In the default 2×4 grid
+these are `lab_light_00_01` and `lab_light_01_02`, corresponding to
+`court_light_00_01` and `court_light_01_02` in production.
+
+Adjust **Shadow-casting lights** (0–32) to compare 0, 1, 2, 4, or all eight.
+The global **Allow selected lights to cast shadows** checkbox disables all
+shadows without disabling illumination. The effective caster count cannot
+exceed the number of spawned lights. An explicit temporary shadow-free
+preview overrides the caster budget only in the running scene and never
+changes the saved calibration. Lower caster count generally saves more
+rendering work than adjusting HSV, intensity or a matte material.
+
+The production court lights now point directly **downward (0,0,−1)**.
+Court and venue floor plus perimeter-wall materials use plain matte diffuse
+colors with zero specular; no new textures, PBR maps or scene geometry were
+introduced. The court markings, shuttle models and net-post highlights
+remain unchanged.
 
 ## Light XYZ frames and Y-range calibration
 
@@ -261,6 +285,54 @@ python3 tools/lighting_lab/server.py --port 8766 --no-browser
 python3 tools/lighting_lab/server.py --preset /path/to/saved_preset.json
 ```
 
+## Actual Gazebo sensor and robot rendering budget
+
+Use **Performance and presets → Actual Gazebo rendering budget** to select
+the inspection sensor profile, robot visual detail and whether the physical
+D435i depth sensor is enabled. This requires clicking **Apply render budget
+· restart Gazebo** because changing sensor rates or robot geometry must
+rebuild the derivative calibration world. Current shuttles are cleared.
+
+| Mode | Overhead camera | Free camera | Robot body | Robot RGB | Robot depth |
+| --- | --- | --- | --- | --- | --- |
+| Lighting Lab default | 640×360 @ 4 Hz | 640×360 @ 4 Hz | Simple box proxy | **1280×720 @ 15 Hz** | Disabled |
+| Full inspection (select in UI) | 960×540 @ 8 Hz | 800×450 @ 8 Hz | Selectable full STL | **1280×720 @ 15 Hz** | Optional |
+| Normal production ROS 2 launch | No lab inspection sensors | No lab inspection sensors | Original full STL | **1280×720 @ 15 Hz** | **848×480 @ 15 Hz** |
+
+The simple robot mode replaces expensive robot STL visuals with one low box
+that remains below the D435i camera position. **Physical collisions,
+wheel/caster joints, mass/inertia, motor controllers, TF frames, robot
+spawn position, camera extrinsics and RGB calibration are unchanged.**
+The D435i still sees the court and shuttles; if it sees the proxy at an
+extreme view angle, select `none` to remove every robot visual only in the
+lab. A missing robot in the Gazebo desktop view does not imply missing
+physics or odometry.
+
+The depth-sensor option disables actual simulated depth rendering and the
+depth-to-color registration launch in the lab. Do not run perception tests
+requiring depth in this mode. Normal production launches default to depth
+enabled and full original robot visuals; these options are fully opt-in.
+Commands used to spawn in the lab pass `enable_depth_camera:=false`
+and `robot_visual_mode:=simple` by default. The user can also pass
+`--inspection-profile full --robot-visual-mode full --depth-camera`
+to `server.py` to start a full-quality experiment.
+
+The **Download performance samples (JSON)** button exports up to the last
+120 dashboard status samples (roughly two minutes), including simulated
+RTF, raw RGB/inspection sensor rates, JPEG preview rates, frame age,
+average JPEG processing milliseconds, host CPU load, device-wide NVIDIA
+GPU utilization (if reported), shadow-caster count, and last Gazebo command
+timings. The Gazebo desktop **GUI FPS is not directly measured** by this
+dashboard. Use one consistent robot pose and shuttle layout when comparing
+scenarios.
+
+Note that lowering dashboard JPEG quality does **not** reduce Gazebo
+sensor-rendering work; the lean inspection profile and disabling unused
+depth do. The camera options affect the **lab derivative**, not the
+tracked production world or real robot. To return to faithful sensor
+comparisons, re-enable depth when needed, use the full inspection cameras
+and restore full robot visuals if robot-generated shadows/occlusion matter.
+
 ## Interactive preview performance
 
 The Lighting Lab has two **dashboard preview-quality modes**, independent
@@ -299,15 +371,17 @@ overlap for the same camera.
 ## Recommended first real-comparison experiment
 
 1. Fix the robot pose, camera settings, shuttle seed and venue clearance.
-2. Use **2 × 3** spotlights with **reach X=4.5 m**, **reach Y=4.6 m**,
-   **height=7 m**, **H=55°, S=3%, V=95%**, **intensity=1×**.
+2. Use **2 × 4** spotlights, **2 shadow casters**, **reach X=4.5 m**,
+   **reach Y=4.6 m**, **height=7 m**, **H=55°, S=3%, V=95%**, **intensity=1×**.
 3. Spawn 20 random shuttles, seed 20261003. Save preset
-   `baseline_6_lights`.
+   `baseline_8_lights_2_shadows`.
 4. Change only **intensity** while keeping HSV, camera pose and light count
    constant. Compare image clipping and mean brightness with RTF.
 5. Adjust **H/S/V** at fixed intensity to compare light color. HSV models
    appearance, **not actual lamp spectral response or measured lux**.
-6. Toggle shadows without changing lights to evaluate rendering cost.
+6. Compare **0, 2, 4 and 8 shadow-casting lights** without changing any
+   other parameter; use Download performance samples (JSON) to retain RTF,
+   sensor FPS, GPU load and JPEG processing timings.
 7. Increase/decrease light rows, columns, center-based X/Y reach, height,
    attenuation and spotlight angle. Inspect the broadcast and robot POVs.
 8. Adjust venue clearance only when you want to study the physical floor
@@ -338,5 +412,6 @@ migrated to center-based reaches.
 Offline CI validates source generation, YAML persistence, scene geometry,
 production SDF publishing, pickup/plugin preservation, net shadow settings,
 HSV/intensity conversion, browser startup and Python 3 syntax. **Gazebo Transport runtime service
-behavior, GUI orbit synchronization, rendering performance and WARP behavior
-still require a hands-on run on the SCROBOT workstation.**
+behavior, compiled Xacro launch behavior, GUI orbit synchronization,
+rendering performance and WARP behavior still require a hands-on run on
+the SCROBOT workstation.**

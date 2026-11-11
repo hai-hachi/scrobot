@@ -66,11 +66,11 @@ class SceneTests(unittest.TestCase):
     def test_source_exists(self):
         self.assertTrue(SOURCE.exists())
 
-    def test_default_grid_matches_existing_six_side_lights(self):
+    def test_default_grid_matches_eight_spotlights(self):
         cfg = checked_lights(DEFAULTS["lights"])
         poses = list(centered_positions(cfg))
-        self.assertEqual(len(poses), 6)
-        self.assertEqual(sorted({round(x, 2) for _, x, _, _ in poses}), [-4.5, 0.0, 4.5])
+        self.assertEqual(len(poses), 8)
+        self.assertEqual(sorted({round(x, 2) for _, x, _, _ in poses}), [-4.5, -1.5, 1.5, 4.5])
         self.assertEqual(sorted({round(y, 2) for _, _, y, _ in poses}), [-4.6, 4.6])
 
     def test_single_grid_centered(self):
@@ -183,7 +183,7 @@ class SceneTests(unittest.TestCase):
         world = root.find("world")
         self.assertEqual(world.get("name"), WORLD)
         lights = world.findall("light")
-        self.assertEqual(len(lights), 6)
+        self.assertEqual(len(lights), 8)
         self.assertTrue(all(light.get("name").startswith("lab_light_") for light in lights))
         self.assertEqual(len(world.findall("plugin")), len(ET.parse(SOURCE).getroot().find("world").findall("plugin")))
         manager = next(p for p in world.findall("plugin")
@@ -317,6 +317,7 @@ class SceneTests(unittest.TestCase):
             "spawn-btn", "shuttle-count", "shuttle-seed",
             "m-rtf", "m-robot-fps", "m-bright", "m-cpu",
             "apply-venue", "copy-orbit", "follow-orbit",
+            "apply-render-budget", "download-benchmark",
         ):
             with self.subTest(field=field):
                 self.assertIn(field, parser.ids)

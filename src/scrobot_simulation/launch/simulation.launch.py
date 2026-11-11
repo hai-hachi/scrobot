@@ -9,6 +9,7 @@ from launch.actions import (
     TimerAction,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 
 
@@ -29,6 +30,8 @@ def generate_launch_description():
     z = LaunchConfiguration('z')
     yaw = LaunchConfiguration('yaw')
     enable_magnetometer = LaunchConfiguration('enable_magnetometer')
+    enable_depth_camera = LaunchConfiguration('enable_depth_camera')
+    robot_visual_mode = LaunchConfiguration('robot_visual_mode')
     drive_contact_mu = LaunchConfiguration('drive_contact_mu')
     caster_contact_mu = LaunchConfiguration('caster_contact_mu')
     controller_params = LaunchConfiguration('controller_params')
@@ -74,6 +77,8 @@ def generate_launch_description():
             'z': z,
             'yaw': yaw,
             'enable_magnetometer': enable_magnetometer,
+            'enable_depth_camera': enable_depth_camera,
+            'robot_visual_mode': robot_visual_mode,
             'drive_contact_mu': drive_contact_mu,
             'caster_contact_mu': caster_contact_mu,
             'controller_params': controller_params,
@@ -96,6 +101,7 @@ def generate_launch_description():
         launch_arguments={
             'use_sim_time': use_sim_time,
         }.items(),
+        condition=IfCondition(enable_depth_camera),
     )
 
     return LaunchDescription([
@@ -159,6 +165,16 @@ def generate_launch_description():
             default_value='true',
             choices=['true', 'false'],
             description='Enable the simulated 5883L magnetometer on /imu/mag.',
+        ),
+        DeclareLaunchArgument(
+            'enable_depth_camera',
+            default_value='true', choices=['true', 'false'],
+            description='Keep the physical D435i depth sensor (false for lighting-only experiments).',
+        ),
+        DeclareLaunchArgument(
+            'robot_visual_mode',
+            default_value='full', choices=['full', 'simple', 'none'],
+            description='Render full meshes, a lightweight proxy, or no robot visual; physics unchanged.',
         ),
         DeclareLaunchArgument(
             'drive_contact_mu',

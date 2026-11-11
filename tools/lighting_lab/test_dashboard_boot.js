@@ -97,7 +97,8 @@ for (const id of [
 }
 const lights = vm.runInContext("lightPayload()", context);
 assert.equal(lights.rows, 2);
-assert.equal(lights.cols, 3);
+assert.equal(lights.cols, 4);
+assert.equal(lights.shadow_count, 2);
 assert.equal(lights.kind, "spot");
 assert.equal(lights.reach_x, 4.5);
 assert.equal(lights.reach_y, 4.6);
@@ -163,6 +164,12 @@ assert(registry.has("light-y-layout"), "Missing applied Y-spread diagnostics");
 assert(registry.has("light-frame-status"), "Missing overlay readiness status");
 assert.match(html, /\/api\/light_frames/);
 assert(registry.has("light-update-timing"), "Missing lighting latency metric");
+assert(registry.has("apply-render-budget"), "Missing real Gazebo rendering budget control");
+assert(registry.has("download-benchmark"), "Missing performance samples export");
+assert(registry.has("robot-visual-mode"), "Missing robot visual simplification selector");
+assert(registry.has("inspection-profile"), "Missing Gazebo inspection sensor profile selector");
+assert(registry.has("enable-depth-camera"), "Missing depth sensor toggle");
+assert.match(html, /\/api\/render_budget/);
 assert(registry.has("material-update-timing"), "Missing material latency metric");
 assert.match(html, /\/api\/preview/);
 assert.match(html, /frameBusy\[key\]/);

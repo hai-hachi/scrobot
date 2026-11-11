@@ -34,6 +34,9 @@
     1 mm line-contact approximation because the full-width collision produced
     excessive lateral skid in simulation.
   -->
+  <!-- Simulation can disable robot STL rendering without changing physics. -->
+  <xacro:arg name="robot_visual_mode" default="full"/>
+  <xacro:property name="scrobot_visual_mode" value="$(arg robot_visual_mode)"/>
   <xacro:arg name="wheel_collision_width" default="0.030"/>
   <xacro:property name="wheel_collision_width" value="$(arg wheel_collision_width)"/>
 

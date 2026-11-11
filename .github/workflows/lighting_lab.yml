@@ -6,6 +6,9 @@ on:
       - real-comparison
     paths:
       - "tools/lighting_lab/**"
+      - "src/scrobot_description/urdf/**"
+      - "src/scrobot_simulation/urdf/**"
+      - "src/scrobot_simulation/launch/**"
       - "src/scrobot_simulation/worlds/badminton_court.sdf"
       - "src/scrobot_simulation/config/lighting_lab.yaml"
       - "docs/real_comparison/lighting_lab.md"
@@ -52,7 +55,8 @@ jobs:
               target.write_text(build_world(src, settings))
               world = ET.parse(target).getroot().find("world")
               assert world.get("name") == "badminton_court"
-              assert len(world.findall("light")) == 6
+              assert len(world.findall("light")) == 8
+              assert sum(light.findtext("cast_shadows") == "true" for light in world.findall("light")) == 2
               camera_models = {
                   m.get("name") for m in world.findall("model")
                   if m.find("./link/sensor") is not None
