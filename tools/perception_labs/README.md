@@ -92,6 +92,9 @@ Test repeatable distances/angles/lighting, measuring:
   `base_footprint→camera_color_optical_frame` and
   `camera_color_optical_frame→observed_tag_N` TF are available, against
   the production court tag geometry and independent Gazebo base pose.
+- Tag 3D orientation **repeatability** from quaternion angular deviation
+  relative to the first sample at the same stationary robot pose. This is
+  not absolute orientation error, and includes any time drift.
 
 Tag detection-to-RGB ratios are **not calibrated recall** unless a tag is
 known to be visible in every evaluated frame. Translation results are
