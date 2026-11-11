@@ -24,15 +24,31 @@ def _overlaps(a: Path, b: Path) -> bool:
 
 
 def validated_result_root(raw) -> Path:
-    """Resolve user-supplied root; fail closed on cross-lab/source overlap."""
+    """Allow the designated Odometry results, but protect other labs and code.
+
+    When tools are exposed as ~/scrobot_ws/tools (rather than inside the
+    checkout), REPO can resolve to ~/scrobot_ws itself. The standard output
+    ~/scrobot_ws/evaluation_results/odometry_lab is still safe in that case.
+    """
     if not isinstance(raw, (str, Path)) or not str(raw).strip():
         raise ValueError("Odometry run_root must be a nonempty path")
     root = Path(raw).expanduser().resolve()
-    protected = (REPO, *(p.resolve() for p in OTHER_LAB_RESULTS))
-    if any(_overlaps(root, target) for target in protected):
+
+    # Check other lab roots first, including shared parent directories and
+    # symlinks. Never exempt a path that resolves inside another lab's data.
+    if any(_overlaps(root, p.resolve()) for p in OTHER_LAB_RESULTS):
         raise ValueError(
-            "Odometry run_root overlaps the source checkout or another "
-            f"lab's results: {root}"
+            f"Odometry run_root overlaps Lighting/Mobility Lab results: {root}"
+        )
+
+    own_results = (WORKSPACE_RESULTS / "odometry_lab").resolve()
+    inside_own_results = root == own_results or own_results in root.parents
+
+    # The code-checkout guard must not reject the explicitly designated
+    # persistent Odometry results even if the tools are under workspace root.
+    if not inside_own_results and _overlaps(root, REPO.resolve()):
+        raise ValueError(
+            f"Odometry run_root overlaps the source checkout: {root}"
         )
     return root
 
