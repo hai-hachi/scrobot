@@ -158,6 +158,24 @@ class PerceptionCoreTests(unittest.TestCase):
             self.assertTrue(status(new,dst)["matches"])
             self.assertFalse(publish(new,dst,td/"backup")["changed"])
 
+    def test_ros_launch_command_never_passes_empty_model_path(self):
+        import server as lab_server
+        for mode in ("camera", "apriltag"):
+            argv=lab_server.launch_command({**DEFAULTS, "mode":mode})
+            self.assertEqual(argv[:4],[
+                "ros2", "launch", "scrobot_simulation",
+                "perception_lab.launch.py"
+            ])
+            self.assertIn(f"mode:={mode}",argv)
+            self.assertFalse(any(x.startswith("model_path:=") for x in argv))
+            self.assertFalse(any(x.endswith(":=") for x in argv))
+        with self.assertRaisesRegex(ValueError,"requires an existing model"):
+            lab_server.launch_command({**DEFAULTS,"mode":"yolo"})
+        yolo=lab_server.launch_command(
+            {**DEFAULTS,"mode":"yolo"}, "/tmp/weights.pt")
+        self.assertIn("model_path:=/tmp/weights.pt",yolo)
+        self.assertFalse(any(x.endswith(":=") for x in yolo))
+
     def test_local_gazebo_warp_network_and_startup_diagnostics(self):
         from unittest.mock import patch
         from types import SimpleNamespace
