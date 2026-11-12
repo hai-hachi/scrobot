@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
-# Dedicated Camera Lab entrypoint. Reuses the proven Perception v3 simulator
-# smoke/test engine but prevents starting AprilTag or YOLO on this instance.
+# Fresh Camera Lab. No dependency on the former Perception Labs.
 set -euo pipefail
 DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WS="${SCROBOT_WS:-$(cd -- "$DIR/../.." && pwd)}"
-if [[ ! -f "$WS/tools/perception_labs/start.sh" ]]; then
-  echo "Missing shared Perception v3 startup: $WS/tools/perception_labs/start.sh" >&2
+if [[ ! -f /opt/ros/jazzy/setup.bash ]]; then
+  echo "Missing ROS 2 Jazzy: /opt/ros/jazzy/setup.bash" >&2
   exit 2
 fi
-exec bash "$WS/tools/perception_labs/start.sh" "$@" --port 8769 --camera-only
+set +u
+source /opt/ros/jazzy/setup.bash
+if [[ -f "$WS/install/setup.bash" ]]; then
+  source "$WS/install/setup.bash"
+fi
+set -u
+for command in gz ros2 python3; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "Required command not found: $command" >&2
+    exit 2
+  fi
+done
+printf 'SCROBOT Camera Lab: http://127.0.0.1:8769\n'
+printf 'Only RGB/depth cameras + one ROS image bridge + one monitor will run.\n'
+exec python3 "$DIR/server.py" "$@"
