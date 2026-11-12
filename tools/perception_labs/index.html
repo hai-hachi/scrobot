@@ -56,6 +56,11 @@ pre{background:#0e1a25;color:#bdcbd5;border-radius:7px;padding:12px;max-height:2
 </div><label class="check"><input type="checkbox" id="depth_enabled">Enable depth camera</label>
 <p class="hint">YOLO uses identical co-located RGB/depth optics in this test world, so 3D sampling uses aligned pixels. Physical D435i stereo calibration must still be tested separately.</p>
 </section>
+<section class="panel" data-for="camera"><h2>Publish Camera Lab calibration</h2>
+<p class="hint">Run the full court Camera Lab for at least 30 RGB frames (and 30 depth frames when enabled). Save a benchmark, then publish. Validated settings are written to <code>src/scrobot_simulation/config/camera_calibration.yaml</code> with a prior-file backup; changes take effect after rebuilding and restarting NORMAL Gazebo. The physical RealSense driver remains unchanged.</p>
+<div class="buttons"><button id="publishCamera" class="primary">Publish saved camera benchmark</button></div>
+<p id="publishCameraStatus" class="hint">Not yet checked.</p>
+</section>
 <section class="panel" data-for="apriltag yolo"><h2>Robot spawning pose</h2>
 <p class="hint">Static robot body proxy with D435i camera height/pitch. No controllers, Nav2, or localization are started.</p>
 <div class="fields"><div><label>Robot X [m]</label><input id="robot_x" type="number" min="-6.3" max="6.3" step=".1"></div>
@@ -87,11 +92,19 @@ pre{background:#0e1a25;color:#bdcbd5;border-radius:7px;padding:12px;max-height:2
 <div class="grid"><div class="tile"><small>RGB wall FPS</small><strong id="rgbWall">—</strong></div>
 <div class="tile"><small>RGB sim FPS</small><strong id="rgbSim">—</strong></div>
 <div class="tile"><small>Depth wall FPS</small><strong id="depthWall">—</strong></div>
-<div class="tile"><small>Detector wall FPS</small><strong id="detectWall">—</strong></div></div>
+<div class="tile"><small>Detector wall FPS</small><strong id="detectWall">—</strong></div>
+<div class="tile"><small>RGB ROS payload</small><strong id="rgbMBs">—</strong><small>MB/s delivered</small></div>
+<div class="tile"><small>Depth ROS payload</small><strong id="depthMBs">—</strong><small>MB/s delivered</small></div>
+<div class="tile"><small>Total image payload</small><strong id="totalMBs">—</strong><small>MB/s (RGB + depth)</small></div>
+<div class="tile"><small>Effective camera RTF</small><strong id="cameraRTF">—</strong><small>wall FPS / sim FPS</small></div></div>
 <div id="bottleneck" class="status waiting">Waiting for frames to identify the bottleneck.</div>
 <canvas id="fpsChart" width="800" height="155"></canvas>
-<div class="scroll"><table><thead><tr><th>Topic</th><th>Samples</th><th>Sim FPS</th><th>Wall FPS</th><th>Eff. RTF</th><th>Jitter</th><th>Age</th></tr></thead>
+<div class="scroll"><table><thead><tr><th>Topic</th><th>Samples</th><th>Sim FPS</th><th>Wall FPS</th><th>Payload MB/s</th><th>Eff. RTF</th><th>Jitter</th><th>Age</th></tr></thead>
 <tbody id="streams"></tbody></table></div>
+<div class="scroll" style="margin-top:14px"><h3>CPU / memory by process tree</h3>
+<table><thead><tr><th>Process group</th><th>CPU % (1 core = 100%)</th><th>RSS MB*</th><th>Processes</th></tr></thead>
+<tbody id="resourceRows"></tbody></table></div>
+<p class="hint">*Sum of process resident memory may double-count shared pages. CPU measures Gazebo, bridges, and monitor separately; GPU utilization and native Gazebo transport bytes are not measured here. ROS payload throughput excludes DDS and Gazebo transport overhead.</p>
 </section>
 <section class="panel" data-for="apriltag"><h2>AprilTag measurement</h2>
 <div class="grid"><div class="tile"><small>Detected IDs</small><strong id="tagIds">—</strong></div>
@@ -128,6 +141,13 @@ $("start").onclick=()=>act(async()=>{await post("/api/start",fields());say("Star
 $("stop").onclick=()=>act(async()=>{await post("/api/stop");say("Lab Gazebo and ROS processes stopped.")});
 $("gui").onclick=()=>act(async()=>{await post("/api/gui");say("Gazebo GUI requested. Open GUI log below if no window appears.")});
 $("benchmark").onclick=()=>act(async()=>{const r=await post("/api/benchmark");say("Saved benchmark: "+r.saved)});
+$("publishCamera").onclick=()=>act(async()=>{
+ if(mode!=="camera")throw Error("Select Camera performance first");
+ if(!confirm("Publish the SAVED and MEASURED camera benchmark to the main simulation camera_calibration.yaml? The previous file will be backed up. This does NOT affect the real camera. Restart normal Gazebo after rebuilding."))return;
+ const p=await post("/api/camera/publish",{confirm:true});
+ say(p.changed?"Published camera settings: "+p.path+"; backup: "+p.backup:
+   "Already published. No file changes needed.");
+});
 $("move").onclick=()=>act(async()=>{const s=fields();await post("/api/pose",{x:s.robot_x,y:s.robot_y,yaw:s.robot_yaw});say("Robot camera pose updated.")});
 $("shuttle").onclick=()=>act(async()=>{const s=fields();await post("/api/shuttle",{x:s.shuttle_x,y:s.shuttle_y,name:"lab_shuttle_001"});say("Placed shuttle 001.")});
 $("random").onclick=()=>act(async()=>{const s=fields();await post("/api/random",{count:s.shuttle_count,seed:s.seed});say("Placed deterministic shuttle group.")});
@@ -154,6 +174,11 @@ function render(s){
  $("health").className="status "+(s.phase==="failed"?"failed":(s.phase==="streaming"||s.phase==="world_verified")?"":"waiting");
  $("rgbWall").textContent=fmt(rgb.wall_fps);$("rgbSim").textContent=fmt(rgb.sim_fps);
  $("depthWall").textContent=fmt(depth.wall_fps);$("detectWall").textContent=fmt(det.wall_fps);
+ $("rgbMBs").textContent=fmt(rgb.payload_mb_s,2);
+ $("depthMBs").textContent=fmt(depth.payload_mb_s,2);
+ const payloads=[rgb.payload_mb_s,depth.payload_mb_s].filter(x=>typeof x==="number");
+ $("totalMBs").textContent=payloads.length?fmt(payloads.reduce((a,b)=>a+b,0),2):"—";
+ $("cameraRTF").textContent=fmt(rgb.effective_rtf,2);
  $("bottleneck").textContent=m.bottleneck||"Waiting for ROS topic samples.";
  $("imageKind").textContent=m.image_type||"RGB";
  $("tagIds").textContent=(m.tags||[]).join(", ")||"—";
@@ -170,11 +195,25 @@ function render(s){
  const tbody=$("streams");tbody.replaceChildren();
  for(const key of ["rgb","depth","rgb_info","depth_info","tag","yolo","yolo3d"]){
   const t=rows[key]||{},tr=document.createElement("tr");
-  for(const item of [key,t.samples??0,fmt(t.sim_fps),fmt(t.wall_fps),fmt(t.effective_rtf,2),fmt(t.jitter_ms),fmt(t.age_s)]){const cell=document.createElement("td");cell.textContent=item;tr.append(cell)}
+  for(const item of [key,t.samples??0,fmt(t.sim_fps),fmt(t.wall_fps),fmt(t.payload_mb_s,2),fmt(t.effective_rtf,2),fmt(t.jitter_ms),fmt(t.age_s)]){const cell=document.createElement("td");cell.textContent=item;tr.append(cell)}
   tbody.append(tr)
  }
  const b=$("boxes");b.replaceChildren();
  for(const detection of m.bboxes||[]){const tr=document.createElement("tr");for(const val of [detection.x,detection.y,detection.w,detection.h,fmt(detection.confidence,2)]){const cell=document.createElement("td");cell.textContent=val;tr.append(cell)}b.append(tr)}
+ const resources=$("resourceRows");resources.replaceChildren();
+ for(const [name,stat] of Object.entries(s.resources||{})){
+  const tr=document.createElement("tr");
+  for(const value of [name,fmt(stat.cpu_pct_one_core),fmt(stat.rss_mb),stat.process_count]){
+   const td=document.createElement("td");td.textContent=value;tr.append(td);
+  }
+  resources.append(tr);
+ }
+ const pub=s.camera_publication||{};
+ $("publishCameraStatus").textContent=pub.error?"Camera config unavailable: "+pub.error:
+  pub.matches_lab?"Published camera settings match this lab selection.":
+  s.camera_benchmark_saved?"Saved benchmark: "+s.camera_benchmark_saved+" · ready to publish after validation.":
+  "No Camera Lab benchmark saved in this session.";
+ $("publishCamera").disabled=busy||s.mode!=="camera"||s.phase!=="streaming"||!s.camera_benchmark_saved||!!pub.error;
  $("placed").textContent="Initial placements: "+JSON.stringify(s.placed||{});
  $("processes").textContent=Object.entries(s.processes||{}).map(([k,p])=>k+": "+(p.alive?"running":"exited "+p.return_code)).join(" · ")||"No processes";
  $("gazeboLog").textContent=s.logs?.gazebo||"No Gazebo output.";
