@@ -4,7 +4,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-WS_DIR="${SCROBOT_WS:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
+# tools/perception_labs lives under <workspace>/src/tools/perception_labs.
+# Three parent traversals reach the colcon workspace, not the Git checkout.
+WS_DIR="${SCROBOT_WS:-$(cd -- "$SCRIPT_DIR/../../.." && pwd)}"
 ROS_SETUP="/opt/ros/jazzy/setup.bash"
 WS_SETUP="$WS_DIR/install/setup.bash"
 
