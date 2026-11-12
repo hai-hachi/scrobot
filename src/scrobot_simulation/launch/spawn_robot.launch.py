@@ -35,6 +35,12 @@ def generate_launch_description():
     magnetometer_rate_hz = LaunchConfiguration('magnetometer_rate_hz')
     ground_truth_rate_hz = LaunchConfiguration('ground_truth_rate_hz')
     enable_depth_camera = LaunchConfiguration('enable_depth_camera')
+    color_width = LaunchConfiguration('color_width')
+    color_height = LaunchConfiguration('color_height')
+    color_fps = LaunchConfiguration('color_fps')
+    depth_width = LaunchConfiguration('depth_width')
+    depth_height = LaunchConfiguration('depth_height')
+    depth_fps = LaunchConfiguration('depth_fps')
     robot_visual_mode = LaunchConfiguration('robot_visual_mode')
     wheel_joint_damping = LaunchConfiguration('wheel_joint_damping')
     wheel_collision_width = LaunchConfiguration('wheel_collision_width')
@@ -82,6 +88,12 @@ def generate_launch_description():
             ' ground_truth_rate_hz:=', ground_truth_rate_hz,
             ' enable_depth_camera:=',
             enable_depth_camera,
+            ' color_width:=', color_width,
+            ' color_height:=', color_height,
+            ' color_fps:=', color_fps,
+            ' depth_width:=', depth_width,
+            ' depth_height:=', depth_height,
+            ' depth_fps:=', depth_fps,
             ' robot_visual_mode:=',
             robot_visual_mode,
             ' drive_contact_mu:=',
@@ -191,6 +203,12 @@ def generate_launch_description():
             choices=['true', 'false'],
             description='Enable the simulated 5883L magnetometer and its TF frame.',
         ),
+        DeclareLaunchArgument('color_width', default_value='1280'),
+        DeclareLaunchArgument('color_height', default_value='720'),
+        DeclareLaunchArgument('color_fps', default_value='15'),
+        DeclareLaunchArgument('depth_width', default_value='848'),
+        DeclareLaunchArgument('depth_height', default_value='480'),
+        DeclareLaunchArgument('depth_fps', default_value='15'),
         DeclareLaunchArgument(
             'enable_depth_camera', default_value='true', choices=['true', 'false'],
             description='Enable the real-resolution Gazebo depth sensor.',
