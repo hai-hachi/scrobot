@@ -16,11 +16,10 @@ down with Ctrl+C.
 After pulling `real-comparison`, run this once to build and start:
 
 ```bash
-cd ~/scrobot_ws/src
+cd ~/scrobot_ws
 git switch real-comparison
 git pull --ff-only
 
-cd ~/scrobot_ws
 bash tools/perception_labs/start.sh --build
 ```
 
@@ -81,6 +80,11 @@ To open the dashboard without launching a browser on a headless machine:
 ```bash
 bash ~/scrobot_ws/tools/perception_labs/start.sh --no-browser
 ```
+
+The launcher locates the workspace two directories above
+`tools/perception_labs/start.sh` and confines `colcon` discovery to the
+workspace's `src/` directory. It will reject an invalid workspace instead
+of scanning `~/Downloads` or another unrelated source tree.
 
 To use a non-standard workspace root, set `SCROBOT_WS=/absolute/workspace`
 when calling the launcher. The launcher accepts `--build` to rebuild before

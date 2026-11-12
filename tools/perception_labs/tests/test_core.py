@@ -202,12 +202,15 @@ class PerceptionCoreTests(unittest.TestCase):
             "streaming",
         )
 
-    def test_launcher_resolves_workspace_above_git_checkout(self):
+    def test_launcher_resolves_workspace_and_restricts_package_discovery(self):
         script=(LAB/"start.sh").read_text()
-        # Installed tree: ~/scrobot_ws/src/tools/perception_labs/start.sh
-        # Must build in ~/scrobot_ws, not ~/scrobot_ws/src.
-        self.assertIn('$SCRIPT_DIR/../../..',script)
-        self.assertIn('colcon build --symlink-install',script)
+        # The checked out tree is ~/scrobot_ws/tools/perception_labs.
+        # A third parent traversal resolves to $HOME, where Downloads
+        # contains unrelated duplicate ROS packages.
+        self.assertIn('$SCRIPT_DIR/../..',script)
+        self.assertNotIn('$SCRIPT_DIR/../../..',script)
+        self.assertIn('colcon build --base-paths "$WS_DIR/src"',script)
+        self.assertIn('! -d "$WS_DIR/src"',script)
 
     def test_launch_and_isolation_contracts(self):
         launch=(ROOT/"src/scrobot_simulation/launch/perception_lab.launch.py").read_text()

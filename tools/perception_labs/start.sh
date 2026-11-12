@@ -4,9 +4,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# tools/perception_labs lives under <workspace>/src/tools/perception_labs.
-# Three parent traversals reach the colcon workspace, not the Git checkout.
-WS_DIR="${SCROBOT_WS:-$(cd -- "$SCRIPT_DIR/../../.." && pwd)}"
+# The actual tree is <workspace>/tools/perception_labs next to
+# <workspace>/src, NOT inside the src directory. Avoid accidentally
+# launching colcon in $HOME (which discovers duplicate packages in Downloads).
+WS_DIR="${SCROBOT_WS:-$(cd -- "$SCRIPT_DIR/../.." && pwd)}"
+if [[ ! -d "$WS_DIR/src" || ! -f "$WS_DIR/tools/perception_labs/server.py" ]]; then
+  printf 'ERROR: Invalid SCROBOT workspace: %s (expected src/ and tools/perception_labs/)\n' "$WS_DIR" >&2
+  exit 2
+fi
+WS_DIR="$(cd -- "$WS_DIR" && pwd)"
 ROS_SETUP="/opt/ros/jazzy/setup.bash"
 WS_SETUP="$WS_DIR/install/setup.bash"
 
@@ -37,7 +43,9 @@ if [[ "$build" -eq 1 ]]; then
     exit 2
   fi
   printf 'Building SCROBOT simulation, perception and debug packages...\n'
-  (cd "$WS_DIR" && colcon build --symlink-install \
+  # Keep package discovery inside the real ROS source tree even if
+  # the user's home has other workspaces, backups, or Downloads.
+  (cd "$WS_DIR" && colcon build --base-paths "$WS_DIR/src" --symlink-install \
     --packages-up-to scrobot_simulation scrobot_debug scrobot_perception)
 fi
 
