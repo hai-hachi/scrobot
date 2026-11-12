@@ -5,6 +5,7 @@ on:
     branches: [real-comparison]
     paths:
       - 'tools/perception_labs/**'
+      - 'tools/camera_lab/**'
       - 'src/scrobot_simulation/config/camera_calibration.yaml'
       - 'src/scrobot_simulation/launch/simulation.launch.py'
       - 'src/scrobot_simulation/launch/spawn_robot.launch.py'
@@ -30,6 +31,7 @@ jobs:
         run: |
           python -m compileall -q tools/perception_labs src/scrobot_simulation/launch/simulation.launch.py src/scrobot_simulation/launch/spawn_robot.launch.py src/scrobot_debug/launch/yolo_dataset_capture.launch.py
           bash -n tools/perception_labs/start.sh
+          bash -n tools/camera_lab/start.sh
           python - <<'PY'
           from pathlib import Path
           p=Path('tools/perception_labs/index.html').read_text(encoding='utf-8')
