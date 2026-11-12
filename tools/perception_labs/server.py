@@ -70,7 +70,8 @@ def terminate(proc):
         pass
 
 class Lab:
-    def __init__(self):
+    def __init__(self, camera_only=False):
+        self.camera_only=bool(camera_only)
         OUTPUT.mkdir(parents=True,exist_ok=True)
         self.lock=threading.RLock()
         self.settings=dict(DEFAULTS)
@@ -157,6 +158,8 @@ class Lab:
 
     def start(self,raw):
         cfg=validate(raw)
+        if self.camera_only and cfg["mode"] not in ("world_smoke","rgb_smoke","camera"):
+            raise ValueError("Camera Lab only permits the physics/RGB smoke and camera benchmarks")
         if cfg["mode"]=="yolo":
             model=Path(cfg["model"]).expanduser() if cfg["model"] else self.model_path()
             if cfg["model"] and not model.is_absolute():
@@ -386,6 +389,8 @@ class Lab:
         return YOLO/"dataset/gazebo_scrobot_current"
 
     def start_job(self,kind):
+        if self.camera_only:
+            raise ValueError("Offline YOLO jobs belong to Shuttle Lab, not Camera Lab")
         if kind not in ("dataset","check","train","validate"):
             raise ValueError("Unknown job")
         if not YOLO.is_dir():
@@ -571,6 +576,7 @@ class Lab:
                   ("gazebo","bridge","images","monitor","detector","gui")}
             return {
                 "phase":self.phase,"error":self.error,"mode":self.active_mode,
+                "camera_only":self.camera_only,
                 "resources":self.resource_meter.snapshot(self.processes),
                 "camera_publication":camera_publish_status(self.settings),
                 "camera_benchmark_saved":str(self.saved_camera_benchmark)
@@ -669,17 +675,19 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--port",type=int,default=8768)
     parser.add_argument("--no-browser",action="store_true")
+    parser.add_argument("--camera-only",action="store_true",
+                        help="Expose only Camera Lab and its staged smoke tests")
     args=parser.parse_args()
     os.environ["ROS_DOMAIN_ID"]="79"
     os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"]="LOCALHOST"
     os.environ["GZ_PARTITION"]=f"scrobot_perception_v3_{os.getuid()}_79"
     os.environ["GZ_IP"]="127.0.0.1"
     os.environ.pop("ROS_LOCALHOST_ONLY",None)
-    lab=Lab()
+    lab=Lab(camera_only=args.camera_only)
     web=ThreadingHTTPServer(("127.0.0.1",args.port),Handler)
     web.lab=lab
     url=f"http://127.0.0.1:{args.port}"
-    print("Perception Labs v3:",url,flush=True)
+    print("Camera Lab:" if args.camera_only else "Perception Labs v3:",url,flush=True)
     print("Start with MINIMAL SMOKE TEST in the dashboard; Gazebo will not auto-start.",flush=True)
     if not args.no_browser:
         webbrowser.open(url)
