@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Perception Labs v2: staged Gazebo server, explicit GUI, independent ROS tools.
+"""Perception Labs v3: verify physics first, then RGB, tags and YOLO independently.
 
 Run from <scrobot_ws>/tools/perception_labs/start.sh. No real robot, wheel
 controllers, tag global-localizer, mission or other labs are started.
@@ -97,7 +97,7 @@ class Lab:
         env=os.environ.copy()
         env["ROS_DOMAIN_ID"]=str(domain)
         env["ROS_AUTOMATIC_DISCOVERY_RANGE"]="LOCALHOST"
-        env["GZ_PARTITION"]=f"scrobot_perception_v2_{os.getuid()}_{domain}"
+        env["GZ_PARTITION"]=f"scrobot_perception_v3_{os.getuid()}_{domain}"
         env["GZ_IP"]="127.0.0.1"
         env.pop("ROS_LOCALHOST_ONLY",None)
         paths=[str(SIM_MODELS),
@@ -217,6 +217,10 @@ class Lab:
                 raise RuntimeError("Gazebo world did not advertise create service within 40 s. "
                                    "Check gazebo.log and GPU/render configuration.")
             self.phase_set(token,"world_ready")
+            if cfg["mode"]=="world_smoke":
+                # Verify Gazebo physics services without loading Ogre2 or ROS.
+                self.phase_set(token,"world_verified")
+                return
             with self.lock:
                 self._write_bridge_config(cfg)
                 self.spawn("bridge",[
@@ -459,6 +463,28 @@ class Lab:
             "log":tail(self.job_log,4500),
         }
 
+    def save_benchmark(self):
+        with self.lock:
+            if self.phase not in ("streaming", "world_verified"):
+                raise ValueError("A healthy Gazebo test is required before saving")
+            record = {
+                "created_utc": datetime.now(timezone.utc).isoformat(),
+                "mode": self.active_mode, "settings": dict(self.settings),
+                "scene": self.provenance, "phase": self.phase, "monitor": {},
+            }
+            status=OUTPUT/"monitor.json"
+            if status.is_file():
+                record["monitor"] = json.loads(status.read_text())
+            folder=OUTPUT/"benchmarks"
+            folder.mkdir(parents=True,exist_ok=True)
+            filename=folder/(now_id()+"_"+self.active_mode+".json")
+            suffix=0
+            while filename.exists():
+                suffix+=1
+                filename=folder/(now_id()+"_"+self.active_mode+"_"+str(suffix)+".json")
+            filename.write_text(json.dumps(record,indent=2)+chr(10))
+            return {"saved":str(filename),"mode":self.active_mode}
+
     def status(self):
         with self.lock:
             processes={name:{
@@ -556,6 +582,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path=="/api/clear":out=self.lab.clear_shuttles()
             elif path=="/api/job":out=self.lab.start_job(d.get("kind"))
             elif path=="/api/job/stop":out=self.lab.stop_job()
+            elif path=="/api/benchmark":out=self.lab.save_benchmark()
             else:return self.reply(404,{"error":"Unknown endpoint"})
             return self.reply(200,out)
         except (ValueError,RuntimeError,OSError,TypeError,KeyError,
@@ -573,14 +600,14 @@ def main():
     args=parser.parse_args()
     os.environ["ROS_DOMAIN_ID"]="79"
     os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"]="LOCALHOST"
-    os.environ["GZ_PARTITION"]=f"scrobot_perception_v2_{os.getuid()}_79"
+    os.environ["GZ_PARTITION"]=f"scrobot_perception_v3_{os.getuid()}_79"
     os.environ["GZ_IP"]="127.0.0.1"
     os.environ.pop("ROS_LOCALHOST_ONLY",None)
     lab=Lab()
     web=ThreadingHTTPServer(("127.0.0.1",args.port),Handler)
     web.lab=lab
     url=f"http://127.0.0.1:{args.port}"
-    print("Perception Labs v2:",url,flush=True)
+    print("Perception Labs v3:",url,flush=True)
     print("Start with MINIMAL SMOKE TEST in the dashboard; Gazebo will not auto-start.",flush=True)
     if not args.no_browser:
         webbrowser.open(url)

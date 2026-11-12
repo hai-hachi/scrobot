@@ -24,7 +24,7 @@ def sub(parent, name, value=None, attrs=None):
         node.text = str(value)
     return node
 
-def plugins(world):
+def plugins(world, render=True):
     for suffix, name in (
         ("physics", "Physics"), ("user-commands", "UserCommands"),
         ("scene-broadcaster", "SceneBroadcaster"),
@@ -32,10 +32,11 @@ def plugins(world):
         sub(world, "plugin", attrs={
             "filename": f"gz-sim-{suffix}-system",
             "name": f"gz::sim::systems::{name}"})
-    sensor = sub(world, "plugin", attrs={
-        "filename": "gz-sim-sensors-system",
-        "name": "gz::sim::systems::Sensors"})
-    sub(sensor, "render_engine", "ogre2")
+    if render:
+        sensor = sub(world, "plugin", attrs={
+            "filename": "gz-sim-sensors-system",
+            "name": "gz::sim::systems::Sensors"})
+        sub(sensor, "render_engine", "ogre2")
 
 def add_camera(link, name, kind, resolution, fps, hfov, frame):
     sensor = sub(link, "sensor", attrs={"name": name, "type": kind})
@@ -89,9 +90,9 @@ def build(settings, production, destination):
     physics = sub(world,"physics",attrs={"name":"lab_physics","type":"ignored"})
     sub(physics,"max_step_size","0.01")
     sub(physics,"real_time_factor","1.0")
-    plugins(world)
+    plugins(world, render=cfg["mode"]!="world_smoke")
     source_hash = None
-    if cfg["mode"]=="smoke":
+    if cfg["mode"] in ("world_smoke", "rgb_smoke"):
         scene = sub(world,"scene")
         sub(scene,"ambient","0.6 0.6 0.6 1")
         sub(scene,"background","0.07 0.09 0.11 1")
@@ -100,6 +101,13 @@ def build(settings, production, destination):
         link=sub(floor,"link",attrs={"name":"floor_link"})
         box=sub(sub(sub(link,"visual",attrs={"name":"floor"}),"geometry"),"box")
         sub(box,"size","16 8 0.01")
+        collision=sub(link,"collision",attrs={"name":"floor_collision"})
+        sub(sub(sub(collision,"geometry"),"box"),"size","16 8 0.01")
+        if cfg["mode"]=="rgb_smoke":
+            light=sub(world,"light",attrs={"name":"smoke_sun","type":"directional"})
+            sub(light,"pose","0 0 5 0 0 0")
+            sub(light,"diffuse","0.8 0.8 0.8 1")
+            sub(light,"direction","-0.2 0 -1")
     else:
         raw=Path(production).read_bytes()
         source_hash=hashlib.sha256(raw).hexdigest()
@@ -116,7 +124,8 @@ def build(settings, production, destination):
             raise ValueError("Published world is missing a court model or lighting")
         inc=sub(world,"include")
         sub(inc,"uri","model://court_apriltags")
-    robot(world,cfg)
+    if cfg["mode"]!="world_smoke":
+        robot(world,cfg)
     destination=Path(destination)
     destination.parent.mkdir(parents=True,exist_ok=True)
     ET.indent(root,space="  ")

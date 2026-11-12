@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SCROBOT Perception Labs v2: browser first, Gazebo only after an explicit test.
+# SCROBOT Perception Labs v3: browser first, Gazebo only after an explicit test.
 set -euo pipefail
 DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # Checkout is the workspace: ~/scrobot_ws/tools and ~/scrobot_ws/src.
@@ -40,10 +40,10 @@ for cmd in gz ros2 python3; do
 done
 export ROS_DOMAIN_ID=79
 export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
-export GZ_PARTITION="scrobot_perception_v2_$(id -u)_79"
+export GZ_PARTITION="scrobot_perception_v3_$(id -u)_79"
 export GZ_IP=127.0.0.1
 unset ROS_LOCALHOST_ONLY || true
-printf '\nPerception Labs v2: http://127.0.0.1:8768\n'
-printf 'Gazebo is NOT auto-started. Click Minimal smoke test first.\n'
+printf '\nPerception Labs v3: http://127.0.0.1:8768\n'
+printf 'Gazebo is NOT auto-started. Verify world physics first, then RGB.\n'
 printf 'Only this lab uses ROS domain 79 and Gazebo partition %s.\n\n' "$GZ_PARTITION"
 exec python3 "$DIR/server.py" "${args[@]}"

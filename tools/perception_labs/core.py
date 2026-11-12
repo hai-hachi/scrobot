@@ -1,4 +1,4 @@
-"""Perception Labs v2: configuration and FPS measurement. No ROS imports."""
+"""Perception Labs v3: isolated camera, tags and YOLO benchmark. No ROS imports."""
 from __future__ import annotations
 from collections import deque
 import math
@@ -9,9 +9,9 @@ COLOR = {"640x480": (640, 480), "848x480": (848, 480), "1280x720": (1280, 720)}
 DEPTH = {"424x240": (424, 240), "640x480": (640, 480),
          "848x480": (848, 480), "1280x720": (1280, 720)}
 FPS = (5, 10, 15, 30, 60)
-MODES = ("smoke", "camera", "apriltag", "yolo")
+MODES = ("world_smoke", "rgb_smoke", "camera", "apriltag", "yolo")
 DEFAULTS = {
-    "mode": "smoke", "color": "640x480", "depth": "640x480",
+    "mode": "world_smoke", "color": "640x480", "depth": "640x480",
     "color_fps": 15, "depth_fps": 15, "depth_enabled": False,
     "robot_x": 2.0, "robot_y": 0.0, "robot_yaw": 0.0,
     "shuttle_x": 3.0, "shuttle_y": 0.0, "shuttle_count": 5,
@@ -58,7 +58,7 @@ def validate(raw):
         c not in "0123456789cpu,-" for c in cfg["device"]
     ):
         raise ValueError("Invalid inference device")
-    if cfg["mode"] == "smoke":
+    if cfg["mode"] in ("world_smoke", "rgb_smoke"):
         cfg.update(color="640x480", color_fps=15, depth_enabled=False)
     if cfg["mode"] == "yolo":
         # Exactly co-located depth and RGB with identical intrinsics avoids
@@ -109,6 +109,8 @@ class Meter:
         }
 
 def bottleneck(streams, requested, mode):
+    if mode == "world_smoke":
+        return "Physics-only Gazebo smoke test; no rendering or cameras required."
     rgb = streams.get("rgb", {})
     depth = streams.get("depth", {})
     det = streams.get("tag" if mode == "apriltag" else "yolo", {})
@@ -123,7 +125,7 @@ def bottleneck(streams, requested, mode):
         return "Gazebo slower than real time (compare effective RTF)"
     if mode in ("apriltag","yolo") and det.get("samples",0) < 3:
         return "Detector has not produced enough outputs"
-    if mode != "smoke" and depth.get("samples",0) and depth.get("sim_fps"):
+    if mode not in ("world_smoke", "rgb_smoke") and depth.get("samples",0) and depth.get("sim_fps"):
         if depth["sim_fps"] < requested * 0.8:
             return "Depth stream below target sim FPS"
     return "No clear bottleneck at the selected profile"
