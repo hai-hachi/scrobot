@@ -106,6 +106,10 @@ pre{background:#0e1a25;color:#bdcbd5;border-radius:7px;padding:12px;max-height:2
 <tbody id="resourceRows"></tbody></table></div>
 <p class="hint">*Sum of process resident memory may double-count shared pages. CPU measures Gazebo, bridges, and monitor separately; GPU utilization and native Gazebo transport bytes are not measured here. ROS payload throughput excludes DDS and Gazebo transport overhead.</p>
 </section>
+<section class="panel" data-for="camera"><h2>Saved camera benchmark comparison</h2>
+<p class="hint">Each row is a saved independent experiment, not an inferred performance claim. Compare full court with and without depth at the same RGB rate to isolate depth cost. CPU figures are per logical core; 100% = one fully busy core.</p>
+<div class="scroll"><table><thead><tr><th>Mode</th><th>RGB config</th><th>Depth config</th><th>Wall FPS</th><th>Sim FPS</th><th>RTF</th><th>ROS MB/s</th><th>Gazebo CPU %</th><th>Image bridge CPU %</th></tr></thead>
+<tbody id="benchmarkRows"></tbody></table></div></section>
 <section class="panel" data-for="apriltag"><h2>AprilTag measurement</h2>
 <div class="grid"><div class="tile"><small>Detected IDs</small><strong id="tagIds">—</strong></div>
 <div class="tile"><small>Decision margin</small><strong id="margin">—</strong></div></div>
@@ -124,7 +128,7 @@ pre{background:#0e1a25;color:#bdcbd5;border-radius:7px;padding:12px;max-height:2
 </main>
 <script>
 const $=id=>document.getElementById(id);
-let mode="camera",live=null,busy=false,previousImage=null,loaded=false;
+let mode="camera",live=null,busy=false,previousImage=null,loaded=false,pollTick=0;
 const defaults={color:"640x480",depth:"640x480",color_fps:15,depth_fps:15,depth_enabled:false,robot_x:2,robot_y:0,robot_yaw:0,shuttle_x:3,shuttle_y:0,shuttle_count:5,seed:42,model:"",device:"0",dataset_images:1200,dataset_shuttles:40,positive_fraction:.85,epochs:15,batch:8,imgsz:640};
 const numbers=new Set(["color_fps","depth_fps","robot_x","robot_y","robot_yaw","shuttle_x","shuttle_y","shuttle_count","seed","dataset_images","dataset_shuttles","positive_fraction","epochs","batch","imgsz"]);
 function apply(s){for(const k of Object.keys(defaults)){if(s[k]===undefined)continue;if(k==="depth_enabled")$(k).checked=s[k];else $(k).value=s[k]}}
@@ -140,7 +144,7 @@ $("rgbSmoke").onclick=()=>act(async()=>{await post("/api/start",fields("rgb_smok
 $("start").onclick=()=>act(async()=>{await post("/api/start",fields());say("Starting "+mode+" with current published court scene.")});
 $("stop").onclick=()=>act(async()=>{await post("/api/stop");say("Lab Gazebo and ROS processes stopped.")});
 $("gui").onclick=()=>act(async()=>{await post("/api/gui");say("Gazebo GUI requested. Open GUI log below if no window appears.")});
-$("benchmark").onclick=()=>act(async()=>{const r=await post("/api/benchmark");say("Saved benchmark: "+r.saved)});
+$("benchmark").onclick=()=>act(async()=>{const r=await post("/api/benchmark");await refreshBenchmarks();say("Saved benchmark: "+r.saved)});
 $("publishCamera").onclick=()=>act(async()=>{
  if(mode!=="camera")throw Error("Select Camera performance first");
  if(!confirm("Publish the SAVED and MEASURED camera benchmark to the main simulation camera_calibration.yaml? The previous file will be backed up. This does NOT affect the real camera. Restart normal Gazebo after rebuilding."))return;
@@ -227,7 +231,27 @@ function render(s){
  $("stopJob").disabled=!j.running;
  plot(rows,s.settings?.color_fps||15);
 }
-async function poll(){try{const r=await fetch("/api/status",{cache:"no-store"});if(r.ok)render(await r.json())}catch(e){say("Cannot read status: "+e.message,true)}}
+function renderBenchmarks(rows){
+ const body=$("benchmarkRows");body.replaceChildren();
+ for(const item of rows||[]){
+  const tr=document.createElement("tr");
+  const cells=[item.mode,(item.color||"—")+" @ "+(item.color_fps||"—")+" Hz",
+    item.depth?item.depth+" @ "+item.depth_fps+" Hz":"off",
+    fmt(item.rgb_wall_fps),fmt(item.rgb_sim_fps),fmt(item.rtf,2),
+    fmt(item.payload_mb_s,2),fmt(item.gazebo_cpu),fmt(item.image_bridge_cpu)];
+  for(const value of cells){const td=document.createElement("td");td.textContent=value;tr.append(td)}
+  body.append(tr);
+ }
+}
+async function refreshBenchmarks(){
+ const r=await fetch("/api/benchmarks",{cache:"no-store"});
+ if(r.ok)renderBenchmarks((await r.json()).benchmarks);
+}
+async function poll(){try{
+ const r=await fetch("/api/status",{cache:"no-store"});
+ if(r.ok)render(await r.json());
+ if(pollTick++%5===0)await refreshBenchmarks();
+}catch(e){say("Cannot read status: "+e.message,true)}}
 async function frame(){if(!live?.monitor?.fresh)return;try{const r=await fetch("/api/image",{cache:"no-store"});if(!r.ok)return;const next=URL.createObjectURL(await r.blob()),old=previousImage;const img=$("image");img.onload=()=>{if(old)URL.revokeObjectURL(old)};img.src=next;img.classList.remove("hidden");$("placeholder").classList.add("hidden");previousImage=next}catch(e){}}
 setInterval(poll,1000);setInterval(frame,450);poll();
 </script></body></html>
