@@ -496,6 +496,46 @@ class Lab:
                 self.saved_camera_benchmark=filename
             return {"saved":str(filename),"mode":self.active_mode}
 
+    def recent_benchmarks(self, limit=40):
+        """Summaries of saved independent camera/physics benchmark stages."""
+        folder=OUTPUT/"benchmarks"
+        if not folder.is_dir():
+            return []
+        rows=[]
+        for path in sorted(folder.glob("*.json"),reverse=True):
+            if len(rows)>=limit:
+                break
+            try:
+                report=json.loads(path.read_text())
+                streams=(report.get("monitor") or {}).get("streams") or {}
+                rgb=streams.get("rgb") or {}
+                depth=streams.get("depth") or {}
+                resource=report.get("resource_usage") or {}
+                def cpu(name):
+                    return (resource.get(name) or {}).get("cpu_pct_one_core")
+                rows.append({
+                    "file":path.name,
+                    "mode":report.get("mode"),
+                    "color":(report.get("settings") or {}).get("color"),
+                    "color_fps":(report.get("settings") or {}).get("color_fps"),
+                    "depth":(report.get("settings") or {}).get("depth")
+                        if (report.get("settings") or {}).get("depth_enabled") else None,
+                    "depth_fps":(report.get("settings") or {}).get("depth_fps")
+                        if (report.get("settings") or {}).get("depth_enabled") else None,
+                    "rgb_sim_fps":rgb.get("sim_fps"),
+                    "rgb_wall_fps":rgb.get("wall_fps"),
+                    "depth_wall_fps":depth.get("wall_fps"),
+                    "payload_mb_s":round((rgb.get("payload_mb_s") or 0)+
+                                         (depth.get("payload_mb_s") or 0),2),
+                    "rtf":rgb.get("effective_rtf"),
+                    "gazebo_cpu":cpu("gazebo"),
+                    "image_bridge_cpu":cpu("images"),
+                    "created_utc":report.get("created_utc"),
+                })
+            except (OSError,ValueError,TypeError,KeyError):
+                continue
+        return rows
+
     def publish_camera(self):
         with self.lock:
             if self.phase!="streaming" or self.active_mode!="camera":
@@ -586,6 +626,8 @@ class Handler(BaseHTTPRequestHandler):
                                   "text/html; charset=utf-8")
             if path=="/api/status":
                 return self.reply(200,self.lab.status())
+            if path=="/api/benchmarks":
+                return self.reply(200,{"benchmarks":self.lab.recent_benchmarks()})
             if path=="/api/image":
                 file=OUTPUT/"camera.jpg"
                 if file.is_file() and time.time()-file.stat().st_mtime<5:
