@@ -30,6 +30,22 @@ def generate_launch_description():
         raise RuntimeError(f'Invalid mobility calibration: {calibration_path}')
     physics = calibration['physics']
 
+    # Camera Lab publishes only to this dedicated SIMULATION YAML. Existing
+    # real D435i hardware launch and RealSense driver are not modified.
+    camera_path = Path(simulation_pkg) / 'config/camera_calibration.yaml'
+    with camera_path.open('r', encoding='utf-8') as stream:
+        camera = yaml.safe_load(stream)
+    if not isinstance(camera, dict) or camera.get('schema_version') != 1:
+        raise RuntimeError(f'Invalid published camera calibration: {camera_path}')
+    for stream_name in ('color', 'depth'):
+        values = camera.get(stream_name)
+        if not isinstance(values, dict):
+            raise RuntimeError(f'Missing camera stream: {stream_name}')
+        if any(type(values.get(k)) is not int or values[k] <= 0
+               for k in ('width', 'height', 'fps')):
+            raise RuntimeError(f'Invalid {stream_name} geometry or rate')
+
+
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from odometry_rate_config import load_rates, prepare_configurations
     rate_config = Path(simulation_pkg) / 'config/odometry_calibration.yaml'
@@ -61,6 +77,12 @@ def generate_launch_description():
     magnetometer_rate_hz = LaunchConfiguration('magnetometer_rate_hz')
     ground_truth_rate_hz = LaunchConfiguration('ground_truth_rate_hz')
     enable_depth_camera = LaunchConfiguration('enable_depth_camera')
+    color_width = LaunchConfiguration('color_width')
+    color_height = LaunchConfiguration('color_height')
+    color_fps = LaunchConfiguration('color_fps')
+    depth_width = LaunchConfiguration('depth_width')
+    depth_height = LaunchConfiguration('depth_height')
+    depth_fps = LaunchConfiguration('depth_fps')
     robot_visual_mode = LaunchConfiguration('robot_visual_mode')
     wheel_joint_damping = LaunchConfiguration('wheel_joint_damping')
     wheel_collision_width = LaunchConfiguration('wheel_collision_width')
@@ -115,6 +137,12 @@ def generate_launch_description():
             'magnetometer_rate_hz': magnetometer_rate_hz,
             'ground_truth_rate_hz': ground_truth_rate_hz,
             'enable_depth_camera': enable_depth_camera,
+            'color_width': color_width,
+            'color_height': color_height,
+            'color_fps': color_fps,
+            'depth_width': depth_width,
+            'depth_height': depth_height,
+            'depth_fps': depth_fps,
             'robot_visual_mode': robot_visual_mode,
             'wheel_joint_damping': wheel_joint_damping,
             'wheel_collision_width': wheel_collision_width,
@@ -216,6 +244,18 @@ def generate_launch_description():
             choices=['true', 'false'],
             description='Enable the simulated 5883L magnetometer on /imu/mag.',
         ),
+        DeclareLaunchArgument('color_width',
+                              default_value=str(camera['color']['width'])),
+        DeclareLaunchArgument('color_height',
+                              default_value=str(camera['color']['height'])),
+        DeclareLaunchArgument('color_fps',
+                              default_value=str(camera['color']['fps'])),
+        DeclareLaunchArgument('depth_width',
+                              default_value=str(camera['depth']['width'])),
+        DeclareLaunchArgument('depth_height',
+                              default_value=str(camera['depth']['height'])),
+        DeclareLaunchArgument('depth_fps',
+                              default_value=str(camera['depth']['fps'])),
         DeclareLaunchArgument(
             'enable_depth_camera',
             default_value='true', choices=['true', 'false'],
