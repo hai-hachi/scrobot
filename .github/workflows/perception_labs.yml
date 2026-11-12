@@ -38,6 +38,12 @@ jobs:
                        'src/scrobot_debug/worlds/yolo_dataset.sdf'):
               ET.parse(path)
           PY
+      - name: Validate one-command ROS/Gazebo launcher
+        run: |
+          bash -n tools/perception_labs/start.sh
+          grep -F 'exec python3 "$SCRIPT_DIR/server.py"' tools/perception_labs/start.sh
+          grep -F 'self.restart()' tools/perception_labs/server.py
+          grep -F 'stop_group(self.process)' tools/perception_labs/server.py
       - name: Validate dashboard JavaScript
         run: |
           python3 - <<'PY'
