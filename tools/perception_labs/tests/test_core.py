@@ -202,6 +202,13 @@ class PerceptionCoreTests(unittest.TestCase):
             "streaming",
         )
 
+    def test_launcher_resolves_workspace_above_git_checkout(self):
+        script=(LAB/"start.sh").read_text()
+        # Installed tree: ~/scrobot_ws/src/tools/perception_labs/start.sh
+        # Must build in ~/scrobot_ws, not ~/scrobot_ws/src.
+        self.assertIn('$SCRIPT_DIR/../../..',script)
+        self.assertIn('colcon build --symlink-install',script)
+
     def test_launch_and_isolation_contracts(self):
         launch=(ROOT/"src/scrobot_simulation/launch/perception_lab.launch.py").read_text()
         sim=(ROOT/"src/scrobot_simulation/launch/simulation.launch.py").read_text()
