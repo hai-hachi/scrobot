@@ -19,7 +19,7 @@ TEMPLATE=ROOT/"src/scrobot_debug/worlds/yolo_dataset.sdf"
 
 class PerceptionV2(unittest.TestCase):
     def test_validation(self):
-        self.assertEqual(validate({})["mode"],"smoke")
+        self.assertEqual(validate({})["mode"],"world_smoke")
         for invalid in (
             {"color":"111x222"},{"color_fps":120},{"depth_fps":29},
             {"mode":"malicious"},{"robot_x":99},{"robot_yaw":999},
@@ -29,7 +29,7 @@ class PerceptionV2(unittest.TestCase):
             with self.subTest(invalid=invalid):
                 with self.assertRaises((ValueError,TypeError)):
                     validate(invalid)
-        smoke=validate({"mode":"smoke","color":"1280x720",
+        smoke=validate({"mode":"rgb_smoke","color":"1280x720",
                         "color_fps":60,"depth_enabled":True})
         self.assertEqual(smoke["color"],"640x480")
         self.assertFalse(smoke["depth_enabled"])
@@ -38,19 +38,31 @@ class PerceptionV2(unittest.TestCase):
         self.assertTrue(yolo["depth_enabled"])
         self.assertEqual(yolo["depth"],"848x480")
 
-    def test_minimal_sdf_isolated(self):
+    def test_world_smoke_is_physics_only(self):
         with tempfile.TemporaryDirectory() as td:
-            dst=Path(td)/"smoke.sdf"
-            info=build({},SOURCE,dst)
+            file=Path(td)/"world.sdf"
+            info=build({},SOURCE,file)
             self.assertIsNone(info["lighting_sha256"])
-            world=ET.parse(dst).getroot().find("world")
+            world=ET.parse(file).getroot().find("world")
             self.assertEqual(world.get("name"),WORLD)
+            self.assertEqual(len(world.findall("plugin")),3)
+            self.assertEqual(len(world.findall(".//sensor")),0)
+            self.assertIsNone(world.find("./model[@name='perception_robot']"))
+            self.assertIsNotNone(world.find("./model[@name='smoke_floor']"))
+            self.assertIsNone(world.find("./plugin[@filename='gz-sim-sensors-system']"))
+
+    def test_rgb_smoke_has_one_low_cost_camera(self):
+        with tempfile.TemporaryDirectory() as td:
+            file=Path(td)/"rgb.sdf"
+            build({"mode":"rgb_smoke","depth_enabled":True,
+                   "color_fps":60},SOURCE,file)
+            world=ET.parse(file).getroot().find("world")
             self.assertEqual(len(world.findall("plugin")),4)
-            self.assertEqual(len(world.findall(".//sensor")),1)
-            self.assertEqual(world.findtext(".//sensor/topic"),"/lab/camera/color")
-            self.assertEqual(world.findtext(".//sensor/camera/image/width"),"640")
-            self.assertIsNone(world.find("./model[@name='scrobot']"))
-            self.assertIsNone(world.find("./plugin[@filename='libshuttle_manager_system.so']"))
+            sensor=world.findall(".//sensor")
+            self.assertEqual(len(sensor),1)
+            self.assertEqual(sensor[0].findtext("topic"),"/lab/camera/color")
+            self.assertEqual(sensor[0].findtext("update_rate"),"15")
+            self.assertEqual(sensor[0].findtext("camera/image/width"),"640")
 
     def test_court_uses_published_lighting(self):
         before=SOURCE.read_bytes()
@@ -126,13 +138,16 @@ class PerceptionV2(unittest.TestCase):
                      '"ros2","run","scrobot_perception","yolo_shuttle_detector"'):
             self.assertIn(line,server)
         self.assertNotIn("perception_lab.launch.py",server)
+        self.assertIn('self.phase_set(token,"world_verified")',server)
+        self.assertIn('"/api/benchmark"',server)
+        self.assertIn('world:={scene}',server)
         import server as lab_server
         lab=lab_server.Lab()
         self.assertEqual(lab.processes,{})
         self.assertEqual(lab.phase,"idle")
         lab.close()
         html=(LAB/"index.html").read_text()
-        for key in ("smoke","start","gui","stop","health","gazeboLog",
+        for key in ("smoke","rgbSmoke","start","gui","stop","benchmark","health","gazeboLog",
                     "image","color","depth","robot_x","robot_yaw",
                     "shuttle","random","boxes","dataset","train","validate"):
             self.assertIn(f'id="{key}"',html)
