@@ -212,7 +212,9 @@ class PerceptionCoreTests(unittest.TestCase):
         self.assertIn("/evaluation/shuttle_ground_truth",bridge)
         for x in ("Camera Performance","AprilTag","Shuttle YOLO",
                   'id="court"','id="cameraImage"','id="publish"',
-                  'id="fpsPlot"','id="tagPoseRows"','id="dataset"'):
+                  'id="fpsPlot"','id="tagPoseRows"','id="dataset"',
+                  'id="startupStatus"','id="startupDetails"',
+                  'id="gazeboLog"','id="safeStart"'):
             self.assertIn(x,ui)
 
 
