@@ -56,10 +56,7 @@ class PublishTests(unittest.TestCase):
             self.assertIn(light.findtext("cast_shadows"), ("true", "false"))
             self.assertEqual([float(v) for v in light.findtext("diffuse").split()],
                              [0.7, 0, 0, 1])
-        self.assertEqual(
-            sum(l.findtext("cast_shadows") == "true" for l in world.findall("light")),
-            min(candidate["lights"]["shadow_count"], 4),
-        )
+        self.assertEqual(sum(l.findtext("cast_shadows") == "true" for l in world.findall("light")), 2)
         self.assertTrue(all([float(v) for v in l.findtext("direction").split()] == [0., 0., -1.]
                             for l in world.findall("light")))
         floor = model(world, "court_floor")

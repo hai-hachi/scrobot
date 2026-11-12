@@ -152,10 +152,7 @@ class SceneTests(unittest.TestCase):
         self.assertEqual(defaults["lights"]["hsv"], [55.0, 3.0, 95.0])
         # Production/light-lab presets are user-calibrated, not immutable
         # initial defaults. Assert the published file retains its calibration.
-        # Published presets evolve as lighting is calibrated. Validate their
-        # schema, not an obsolete historical brightness value.
-        self.assertGreaterEqual(defaults["lights"]["intensity"], 0.0)
-        self.assertLessEqual(defaults["lights"]["intensity"], 4.0)
+        self.assertEqual(defaults["lights"]["intensity"], 2.5)
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "lighting_lab.yaml"
             updated = default_settings()

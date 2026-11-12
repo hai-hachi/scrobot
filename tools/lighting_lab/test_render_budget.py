@@ -143,11 +143,7 @@ class RenderBudgetTests(unittest.TestCase):
         sim = (ROOT / "src/scrobot_simulation/launch/simulation.launch.py").read_text()
         spawn = (ROOT / "src/scrobot_simulation/launch/spawn_robot.launch.py").read_text()
         source = ET.parse(ROOT / "src/scrobot_simulation/urdf/sensors_gazebo.xacro").getroot()
-        # Registration requires BOTH the depth camera and the registration
-        # switch; preserve production defaults while allowing RGB-only labs.
-        self.assertIn("condition=IfCondition(PythonExpression(", sim)
-        self.assertIn("enable_depth_camera", sim)
-        self.assertIn("enable_depth_registration", sim)
+        self.assertIn("condition=IfCondition(enable_depth_camera)", sim)
         self.assertIn("default_value='true'", sim)
         self.assertIn("'enable_depth_camera': enable_depth_camera", sim)
         self.assertIn("'robot_visual_mode': robot_visual_mode", sim)

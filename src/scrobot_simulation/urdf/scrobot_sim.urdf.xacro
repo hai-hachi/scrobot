@@ -6,12 +6,6 @@
   <xacro:arg name="imu_rate_hz" default="100.0"/>
   <xacro:arg name="magnetometer_rate_hz" default="100.0"/>
   <xacro:arg name="ground_truth_rate_hz" default="100.0"/>
-  <xacro:arg name="color_width" default="1280"/>
-  <xacro:arg name="color_height" default="720"/>
-  <xacro:arg name="color_fps" default="15.0"/>
-  <xacro:arg name="depth_width" default="848"/>
-  <xacro:arg name="depth_height" default="480"/>
-  <xacro:arg name="depth_fps" default="15.0"/>
   <xacro:arg name="drive_contact_mu" default="5.0"/>
   <xacro:arg name="caster_contact_mu" default="0.05"/>
   <xacro:arg name="drive_slip1" default="0.0"/>
@@ -47,13 +41,7 @@
     enable_magnetometer="$(arg enable_magnetometer)"
     enable_depth_camera="$(arg enable_depth_camera)"
     imu_rate_hz="$(arg imu_rate_hz)"
-    magnetometer_rate_hz="$(arg magnetometer_rate_hz)"
-    color_width="$(arg color_width)"
-    color_height="$(arg color_height)"
-    color_fps="$(arg color_fps)"
-    depth_width="$(arg depth_width)"
-    depth_height="$(arg depth_height)"
-    depth_fps="$(arg depth_fps)"/>
+    magnetometer_rate_hz="$(arg magnetometer_rate_hz)"/>
   <xacro:scrobot_gazebo_physics
     drive_contact_mu="$(arg drive_contact_mu)"
     caster_contact_mu="$(arg caster_contact_mu)"
