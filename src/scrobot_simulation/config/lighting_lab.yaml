@@ -4,23 +4,24 @@
 lights:
   rows: 2
   cols: 3
-  reach_x: 4.5
-  reach_y: 4.6
-  height: 7.0
+  reach_x: 7.0
+  reach_y: 5.0
+  height: 12.0
   kind: spot
   hsv:
   - 55.0
   - 3.0
   - 95.0
-  intensity: 2.5
+  intensity: 3.0
   range: 20.0
-  constant: 0.3
+  constant: 0.2
   linear: 0.25
   quadratic: 0.001
   inner: 0.05
   outer: 2.0
   falloff: 1.0
   shadows: true
+  shadow_count: 6
   specular: 0.2
 colors:
   floor:
