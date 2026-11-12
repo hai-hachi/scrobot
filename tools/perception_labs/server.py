@@ -40,6 +40,30 @@ DATASET_POINTER=OUTPUT/"latest_dataset.txt"
 WORLD=OUTPUT/"worlds/yolo_dataset_lighting_current.sdf"
 
 
+def launch_command(settings, model_path=None):
+    """Build valid ros2 launch argv without empty name:= assignments.
+
+    Camera and AprilTag launches intentionally do not supply YOLO weights.
+    ROS 2 rejects an explicit `model_path:=` with an empty value.
+    """
+    s=validate(settings)
+    cmd=["ros2","launch","scrobot_simulation","perception_lab.launch.py",
+         f'mode:={s["mode"]}',
+         f'robot_x:={s["robot_x"]}',
+         f'robot_y:={s["robot_y"]}',
+         f'robot_yaw:={math.radians(s["robot_yaw_deg"])}',
+         f'enable_depth_camera:={str(s["enable_depth"]).lower()}',
+         f'enable_depth_registration:={str(s["mode"]=="yolo" or s["enable_registration"]).lower()}',
+         f'device:={s["device"]}',
+         f'max_detection_rate:={s["max_detection_rate"]}']
+    if s["mode"]=="yolo":
+        if not model_path:
+            raise ValueError("Shuttle YOLO mode requires an existing model path")
+        cmd.append(f"model_path:={model_path}")
+    cmd.extend(f"{key}:={value}" for key,value in camera_args(s).items())
+    return cmd
+
+
 def latest_dataset():
     # Each lighting condition gets its own immutable dataset folder.
     if DATASET_POINTER.exists():
@@ -157,18 +181,7 @@ class Lab:
                             f"No Shuttle YOLO model found: {model}. Clone yoloshuttle "
                             "or choose a valid existing .pt model in settings."
                         )
-                args=camera_args(s)
-                cmd=["ros2","launch","scrobot_simulation","perception_lab.launch.py",
-                     f'mode:={s["mode"]}',
-                     f'robot_x:={s["robot_x"]}',
-                     f'robot_y:={s["robot_y"]}',
-                     f'robot_yaw:={math.radians(s["robot_yaw_deg"])}',
-                     f'enable_depth_camera:={str(s["enable_depth"]).lower()}',
-                     f'enable_depth_registration:={str(s["mode"]=="yolo" or s["enable_registration"]).lower()}',
-                     f'model_path:={str(self.model_path()) if s["mode"]=="yolo" else ""}',
-                     f'device:={s["device"]}',
-                     f'max_detection_rate:={s["max_detection_rate"]}']
-                cmd += [f"{key}:={value}" for key,value in args.items()]
+                cmd=launch_command(s, self.model_path() if s["mode"]=="yolo" else None)
                 # Show only the current launch's errors, never stale messages
                 # from an earlier failed Gazebo session.
                 self.sim_log=self.sim_log_path.open("wb")
