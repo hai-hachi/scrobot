@@ -106,7 +106,14 @@ class Lab:
         self.last_record=None
         self.hardware_cache={}
         self.hardware_checked=0.0
-        self.restart()
+        # Auto-start Gazebo when the dashboard starts. If startup fails, keep
+        # the localhost UI alive so the operator can inspect the log and
+        # correct settings, then use Restart with this lab.
+        try:
+            self.restart()
+        except (OSError, RuntimeError, ValueError) as exc:
+            self.error=str(exc)
+            print(f"Perception Labs Gazebo auto-start failed: {exc}",file=sys.stderr)
 
     def env(self,domain=79):
         env=os.environ.copy()
@@ -164,6 +171,7 @@ class Lab:
                 self.error=None
             except Exception as exc:
                 self.error=str(exc)
+                self.stop_sim()
                 raise
             finally:
                 self.restarting=False
@@ -528,15 +536,22 @@ def main():
     os.environ["ROS_DOMAIN_ID"]="79"
     os.environ["GZ_PARTITION"]=f"scrobot_perception_{os.getuid()}_79"
     lab=Lab()
-    http=ThreadingHTTPServer(("127.0.0.1",opts.port),Handler)
-    http.lab=lab
-    url=f"http://127.0.0.1:{opts.port}"
-    print("SCROBOT Perception Labs",url,"yoloshuttle:",YOLO_REPO,flush=True)
-    if not opts.no_browser:webbrowser.open(url)
-    try:http.serve_forever(poll_interval=.2)
-    except KeyboardInterrupt:pass
+    http=None
+    try:
+        http=ThreadingHTTPServer(("127.0.0.1",opts.port),Handler)
+        http.lab=lab
+        url=f"http://127.0.0.1:{opts.port}"
+        print("SCROBOT Perception Labs",url,"yoloshuttle:",YOLO_REPO,flush=True)
+        print("Gazebo and mode-specific detector are managed automatically.",flush=True)
+        if not opts.no_browser:
+            webbrowser.open(url)
+        try:
+            http.serve_forever(poll_interval=.2)
+        except KeyboardInterrupt:
+            pass
     finally:
-        http.server_close()
+        if http is not None:
+            http.server_close()
         lab.close()
 
 
