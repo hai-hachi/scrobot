@@ -16,6 +16,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image, CameraInfo
 from core import Meter, bottleneck
+from tag_quality import TagQuality
 
 def stamp(header):
     return header.stamp.sec + header.stamp.nanosec * 1e-9
@@ -35,6 +36,7 @@ class Observer(Node):
             "rgb","depth","rgb_info","depth_info","tag","yolo","yolo3d")}
         self.tags=[]
         self.margins=[]
+        self.tag_quality=TagQuality()
         self.bboxes=[]
         self.last_image_wall=0.0
         self.last_image_type="raw_rgb"
@@ -125,6 +127,22 @@ class Observer(Node):
         self.tags=[int(d.id) for d in msg.detections]
         self.margins=[round(float(d.decision_margin),2)
                       for d in msg.detections if hasattr(d,"decision_margin")]
+        samples=[]
+        for d in msg.detections:
+            item={"id":int(d.id),
+                  "margin":getattr(d,"decision_margin",None),
+                  "hamming":getattr(d,"hamming",None)}
+            try:
+                # apriltag_msgs pose is PoseWithCovarianceStamped in ROS 2.
+                pose=d.pose.pose.pose
+                pos,q=pose.position,pose.orientation
+                item["position"]=(pos.x,pos.y,pos.z)
+                item["quaternion"]=(q.x,q.y,q.z,q.w)
+            except (AttributeError,TypeError,ValueError):
+                # Some detector builds omit pose; ID/margin remain valid.
+                pass
+            samples.append(item)
+        self.tag_quality.add(samples)
     def yolo(self,msg):
         self.meter("yolo",msg)
         detections=[]
@@ -148,6 +166,8 @@ class Observer(Node):
             "streams":{key:m.status() for key,m in self.meters.items()},
             "tags":self.tags,
             "decision_margins":self.margins,
+            "tag_quality":self.tag_quality.status(),
+            "tag_frames":self.tag_quality.message_count,
             "bboxes":self.bboxes,
             "image_type":self.last_image_type,
             "preview_age_s":round(time.monotonic()-self.last_image_wall,2)
