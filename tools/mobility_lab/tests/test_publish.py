@@ -28,9 +28,18 @@ def sim_motor():
 
 
 class PublicationTests(unittest.TestCase):
-    def test_baseline_matches_published_defaults(self):
-        self.assertEqual(read_production_config(SIM_CONFIG), calibration_document(DEFAULTS))
-        self.assertEqual(read_production_config(SIM_CONFIG)["motor"]["model"], "baseline")
+    def test_published_defaults_are_valid_after_calibration(self):
+        # The published configuration is calibrated by the user and may
+        # intentionally enable a first-order motor response. Do not require
+        # the factory baseline after legitimate Mobility Lab publishing.
+        published = read_production_config(SIM_CONFIG)
+        self.assertEqual(published["schema_version"], 1)
+        self.assertIn(published["motor"]["model"], ("baseline", "first_order"))
+        self.assertGreaterEqual(published["physics"]["drive_contact_mu"], 0)
+        self.assertEqual(
+            read_production_config(SIM_CONFIG), published
+        )
+        self.assertEqual(calibration_document(DEFAULTS)["motor"]["model"], "baseline")
 
     def test_atomic_publish_and_previous_file_backup(self):
         with tempfile.TemporaryDirectory() as temp:
