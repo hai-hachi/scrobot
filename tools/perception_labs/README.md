@@ -82,12 +82,17 @@ start full robot physics, Nav2, controllers, or collection.
 
 Select **AprilTag**, start the lab, position and rotate the static robot
 proxy. The production `apriltag_ros` detector receives RGB and CameraInfo.
-The dashboard reports measured tag output rate, IDs, and decision margins
-for existing 16h5 court tags 0–3.
+The dashboard reports measured tag output rate, IDs, decision margins,
+per-tag detection frequency, observed camera-relative range, translation
+repeatability and quaternion-sign-invariant 3D orientation repeatability
+for existing 16h5 court tags 0–3. Moving the robot clears the per-pose
+observation history so statistics from different poses do not mix.
 
-This initial rebuilt version deliberately does **not** claim reliable
-absolute pose RMSE until the detector/camera optical-frame convention has
-been checked with actual Gazebo data. It does not change `map→odom`.
+The repeatability statistics are **not absolute position or orientation
+accuracy**. This rebuilt version deliberately does **not** claim reliable
+absolute pose RMSE until the optical-frame convention, tag physical
+mount transform and Gazebo ground truth have been checked on the
+workstation. It does not change `map→odom`.
 
 ## Shuttle YOLO
 
