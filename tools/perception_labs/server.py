@@ -26,6 +26,8 @@ import webbrowser
 
 from core import DEFAULTS, validate
 from world import build, build_dataset, WORLD
+from resources import ResourceMeter
+from camera_config import publish_benchmark, status as camera_publish_status
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -92,6 +94,8 @@ class Lab:
         self.dataset=OUTPUT/"latest_dataset.txt"
         self.active_mode=None
         self.gui_requested=False
+        self.resource_meter=ResourceMeter()
+        self.saved_camera_benchmark=None
 
     def environment(self,domain=79):
         env=os.environ.copy()
@@ -171,6 +175,7 @@ class Lab:
             self.phase="generating_world"
             self.error=None
             self.gui_requested=False
+            self.saved_camera_benchmark=None
             thread=threading.Thread(target=self._start, args=(token,cfg),
                                     daemon=True,name="PerceptionGazeboStarter")
             thread.start()
@@ -474,6 +479,7 @@ class Lab:
                 "created_utc": datetime.now(timezone.utc).isoformat(),
                 "mode": self.active_mode, "settings": dict(self.settings),
                 "scene": self.provenance, "phase": self.phase, "monitor": {},
+                "resource_usage": self.resource_meter.snapshot(self.processes),
             }
             status=OUTPUT/"monitor.json"
             if status.is_file():
@@ -486,7 +492,20 @@ class Lab:
                 suffix+=1
                 filename=folder/(now_id()+"_"+self.active_mode+"_"+str(suffix)+".json")
             filename.write_text(json.dumps(record,indent=2)+chr(10))
+            if self.active_mode=="camera":
+                self.saved_camera_benchmark=filename
             return {"saved":str(filename),"mode":self.active_mode}
+
+    def publish_camera(self):
+        with self.lock:
+            if self.phase!="streaming" or self.active_mode!="camera":
+                raise ValueError("Start Camera Lab and verify streaming first")
+            if self.saved_camera_benchmark is None:
+                raise ValueError("Save a Camera Lab benchmark before publishing")
+            record=json.loads(self.saved_camera_benchmark.read_text())
+            if record["settings"]!=self.settings:
+                raise ValueError("Settings changed since the saved benchmark")
+            return publish_benchmark(record)
 
     def status(self):
         with self.lock:
@@ -512,6 +531,10 @@ class Lab:
                   ("gazebo","bridge","images","monitor","detector","gui")}
             return {
                 "phase":self.phase,"error":self.error,"mode":self.active_mode,
+                "resources":self.resource_meter.snapshot(self.processes),
+                "camera_publication":camera_publish_status(self.settings),
+                "camera_benchmark_saved":str(self.saved_camera_benchmark)
+                    if self.saved_camera_benchmark else None,
                 "settings":self.settings,"processes":processes,
                 "monitor":monitor,"logs":logs,"scene":self.provenance,
                 "placed":self.placed,"job":self.job_status(),
@@ -586,6 +609,10 @@ class Handler(BaseHTTPRequestHandler):
             elif path=="/api/job":out=self.lab.start_job(d.get("kind"))
             elif path=="/api/job/stop":out=self.lab.stop_job()
             elif path=="/api/benchmark":out=self.lab.save_benchmark()
+            elif path=="/api/camera/publish":
+                if d.get("confirm") is not True:
+                    raise ValueError("Explicit publication confirmation required")
+                out=self.lab.publish_camera()
             else:return self.reply(404,{"error":"Unknown endpoint"})
             return self.reply(200,out)
         except (ValueError,RuntimeError,OSError,TypeError,KeyError,
