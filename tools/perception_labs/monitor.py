@@ -79,7 +79,8 @@ class Observer(Node):
 
     def meter(self,name,msg):
         self.meters[name].add(stamp(msg.header),
-            getattr(msg,"width",None),getattr(msg,"height",None))
+            getattr(msg,"width",None),getattr(msg,"height",None),
+            len(msg.data) if isinstance(msg, Image) else 0)
 
     def preview(self,msg,label):
         now=time.monotonic()
