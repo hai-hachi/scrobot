@@ -68,8 +68,8 @@ def world(settings, destination):
     root = ET.Element("sdf", version="1.10")
     scene = ET.SubElement(root, "world", name="camera_lab")
 
-    def node(parent, name, value=None, **attributes):
-        elem = ET.SubElement(parent, name, attributes)
+    def node(parent, tag, value=None, **attributes):
+        elem = ET.SubElement(parent, tag, attributes)
         if value is not None:
             elem.text = str(value)
         return elem
