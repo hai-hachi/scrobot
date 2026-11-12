@@ -68,6 +68,8 @@ h1{font-size:24px;margin:3px 0}h2{font-size:16px;margin:0 0 13px}h3{font-size:13
       </div>
     </div>
     <div id="startupStatus" class="notice" aria-live="polite">Checking Gazebo and the ROS camera bridge…</div>
+    <div class="buttons"><button id="safeStart">Retry lightweight RGB-only camera</button></div>
+    <p class="hint">Starts the Camera Lab with 640×480 RGB at 15 FPS, no depth or registration. Use this to isolate startup and rendering failures.</p>
     <details id="startupInspector">
       <summary style="cursor:pointer;color:var(--muted);font-size:12px">Gazebo startup diagnostics / error log</summary>
       <pre id="startupDetails" class="log">Checking topic discovery…</pre>
@@ -174,6 +176,16 @@ function changeTab(which,display=true){
  if(display)show("Selected "+mode+". Save settings and restart Gazebo to activate this processing mode.");
 }
 for(const btn of tabButtons)btn.onclick=()=>changeTab(btn.dataset.tab);
+$("safeStart").onclick=()=>action(async()=>{
+ changeTab("camera",false);
+ $("color_mode").value="640x480";
+ $("color_fps").value="15";
+ $("enable_depth").checked=false;
+ $("enable_registration").checked=false;
+ await api("/api/settings",fields());
+ await api("/api/restart",{});
+ show("Restarted lightweight RGB-only Gazebo profile. Check startup diagnostics and RGB FPS.");
+});
 $("saveSettings").onclick=()=>action(async()=>{await api("/api/settings",fields());show("Saved lab settings; restart Gazebo to apply camera configuration.")});
 $("restart").onclick=()=>action(async()=>{await api("/api/settings",fields());await api("/api/restart",{});show("Gazebo restarting with "+mode+" mode and selected RGB/depth configuration.")});
 $("publish").onclick=()=>action(async()=>{
