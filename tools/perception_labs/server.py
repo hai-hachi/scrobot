@@ -96,6 +96,9 @@ class Lab:
         self.bridge=RosBridge()
         self.process=None
         self.sim_log=None
+        self.sim_log_path=OUTPUT/"gazebo.log"
+        self.diagnostic_at=0.0
+        self.diagnostic_cache={}
         self.restarting=False
         self.error=None
         self.job=None
@@ -116,9 +119,14 @@ class Lab:
             print(f"Perception Labs Gazebo auto-start failed: {exc}",file=sys.stderr)
 
     def env(self,domain=79):
+        # Match the WARP-safe network settings used by Lighting Lab on every
+        # subprocess, including after reboot. These labs are localhost-only.
         env=os.environ.copy()
         env["ROS_DOMAIN_ID"]=str(domain)
         env["GZ_PARTITION"]=f"scrobot_perception_{os.getuid()}_{domain}"
+        env["GZ_IP"]="127.0.0.1"
+        env["ROS_AUTOMATIC_DISCOVERY_RANGE"]="LOCALHOST"
+        env.pop("ROS_LOCALHOST_ONLY",None)
         return env
 
     def stop_sim(self):
@@ -130,6 +138,8 @@ class Lab:
         self.bridge.node.reset_observation()
         self.applied=None
         self.spawned_shuttles=[]
+        self.diagnostic_at=0.0
+        self.diagnostic_cache={}
 
     def restart(self):
         with self.lock:
@@ -159,7 +169,9 @@ class Lab:
                      f'device:={s["device"]}',
                      f'max_detection_rate:={s["max_detection_rate"]}']
                 cmd += [f"{key}:={value}" for key,value in args.items()]
-                self.sim_log=(OUTPUT/"gazebo.log").open("ab")
+                # Show only the current launch's errors, never stale messages
+                # from an earlier failed Gazebo session.
+                self.sim_log=self.sim_log_path.open("wb")
                 self.process=subprocess.Popen(
                     cmd,env=self.env(),stdout=self.sim_log,
                     stderr=subprocess.STDOUT,start_new_session=True
@@ -423,9 +435,88 @@ class Lab:
         self.hardware_checked=time.monotonic()
         return out
 
+    def startup_diagnostics(self,stream_data):
+        """Check Gazebo's own topic graph, then the ROS image bridge.
+
+        A live ros2 launch PID is not proof that Gazebo or its RGB sensor
+        exists. Cache the Gazebo query so browser polling stays lightweight.
+        """
+        now=time.monotonic()
+        alive=self.process is not None and self.process.poll() is None
+        if now-self.diagnostic_at>4.0 or not self.diagnostic_cache:
+            gz_topics=[]
+            probe_error=None
+            if alive:
+                try:
+                    probe=subprocess.run(
+                        ["gz","topic","-l"],env=self.env(),
+                        text=True,stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,timeout=2.0,
+                    )
+                    if probe.returncode:
+                        probe_error=probe.stdout[-600:] or (
+                            "Gazebo topic discovery exited "+str(probe.returncode))
+                    else:
+                        gz_topics=[t.strip() for t in probe.stdout.splitlines()
+                                   if t.strip().startswith("/")]
+                except (OSError,subprocess.TimeoutExpired) as exc:
+                    probe_error=f"Gazebo topic discovery: {exc}"
+            self.diagnostic_cache={
+                "gz_world":any(t.startswith("/world/badminton_court/")
+                               for t in gz_topics),
+                "gz_rgb_topic":"/camera/color" in gz_topics,
+                "gz_depth_topic":"/camera/depth" in gz_topics,
+                "gz_topic_count":len(gz_topics),
+                "probe_error":probe_error,
+            }
+            self.diagnostic_at=now
+        info=dict(self.diagnostic_cache)
+        rgb=stream_data.get("rgb",{})
+        count=rgb.get("count",0)
+        age=rgb.get("age_wall_s")
+        ros_publishers=self.bridge.node.count_publishers(
+            "/camera/camera/color/image_raw")
+        info.update({
+            "ros_rgb_publishers":ros_publishers,
+            "ros_rgb_frames":count,
+            "ros_rgb_age_s":age,
+            "launch_alive":alive,
+            "launch_exit_code":None if self.process is None else self.process.poll(),
+            "log_path":str(self.sim_log_path),
+            "log_tail":_tail(self.sim_log_path,8500),
+            "display_available":bool(os.environ.get("DISPLAY") or
+                                      os.environ.get("WAYLAND_DISPLAY")),
+            "display":os.environ.get("DISPLAY") or
+                      os.environ.get("WAYLAND_DISPLAY") or "",
+        })
+        if not alive:
+            stage="launch_stopped"
+            message="Gazebo launch is stopped or exited; inspect the launch log."
+        elif not info["gz_world"]:
+            stage="waiting_world"
+            message="Waiting for Gazebo world; if persistent, inspect launch log."
+        elif not info["gz_rgb_topic"]:
+            stage="waiting_sensor"
+            message="Gazebo world discovered, but no RGB sensor topic: check robot spawn / xacro."
+        elif ros_publishers==0:
+            stage="waiting_bridge"
+            message="Gazebo RGB topic exists, but ROS RGB image bridge has no publisher."
+        elif count==0 or age is None or age>5.0:
+            stage="waiting_frames"
+            message="ROS RGB publisher exists, but the lab has not received fresh frames."
+        else:
+            stage="streaming"
+            message="Gazebo RGB camera is publishing through ROS to this lab."
+        if not info["display_available"]:
+            message+=" No DISPLAY/WAYLAND_DISPLAY: Gazebo GUI cannot open here."
+        info["stage"]=stage
+        info["message"]=message
+        return info
+
     def status(self):
         with self.lock:
             data=self.bridge.node.status(self.settings)
+            data["startup"]=self.startup_diagnostics(data.get("streams",{}))
             data.update({
                 "settings":dict(self.settings),
                 "applied":self.applied,
@@ -535,6 +626,13 @@ def main():
     opts=parser.parse_args()
     os.environ["ROS_DOMAIN_ID"]="79"
     os.environ["GZ_PARTITION"]=f"scrobot_perception_{os.getuid()}_79"
+    # Mirror Lighting Lab's WARP-safe localhost discovery. Must be set
+    # BEFORE rclpy.init() and before any gazebo / bridge subprocess.
+    os.environ["GZ_IP"]="127.0.0.1"
+    os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"]="LOCALHOST"
+    os.environ.pop("ROS_LOCALHOST_ONLY",None)
+    print("Perception Lab WARP transport: GZ_IP=127.0.0.1, "
+          "ROS discovery=LOCALHOST",flush=True)
     lab=Lab()
     http=None
     try:
