@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SCROBOT Perception Labs v2</title>
+<title>SCROBOT Perception Labs v3</title>
 <style>
 :root{color-scheme:dark;--bg:#0d1721;--panel:#182634;--surface:#253747;--line:#435462;--ink:#e5f1f5;--muted:#acbec8;--accent:#55ddc7;--warn:#eac289;--bad:#ff879c}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px system-ui,Segoe UI,sans-serif}
@@ -32,22 +32,22 @@ pre{background:#0e1a25;color:#bdcbd5;border-radius:7px;padding:12px;max-height:2
 @media(max-width:1100px){.layout{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:540px){header,main{padding:12px}.panel{padding:12px}.fields{grid-template-columns:1fr}}
 </style></head><body>
-<header><div><div class="eyebrow">SCROBOT · REAL-COMPARISON</div><h1>Perception Labs v2</h1>
+<header><div><div class="eyebrow">SCROBOT · REAL-COMPARISON</div><h1>Perception Labs v3</h1>
 <small>Independent Gazebo smoke test · Camera FPS · AprilTag · Shuttle YOLO</small></div>
 <div><span id="phase" class="badge">Not started</span> <span class="badge">ROS 79 / isolated Gazebo partition</span></div></header>
 <main>
 <div class="panel">
- <div class="row"><div><h2>Launch in verified stages</h2><small>The web page opens without Gazebo. Test the minimal sensor world before loading the published court.</small></div>
- <div class="buttons"><button id="smoke" class="primary">1 · Minimal smoke test</button><button id="start">2 · Start selected lab</button>
- <button id="gui">Open Gazebo GUI</button><button id="stop" class="danger">Stop lab</button></div></div>
- <div id="health" class="status waiting">Gazebo not started. Click Minimal smoke test.</div>
- <p id="message" role="status">Gazebo server, camera topic, ROS bridge and GUI are checked separately.</p>
+ <div class="row"><div><h2>Launch in verified stages</h2><small>Verify physics first, then a single RGB camera; only then run the full court and detectors.</small></div>
+ <div class="buttons"><button id="smoke" class="primary">1 · Gazebo physics only</button><button id="rgbSmoke">2 · RGB camera smoke</button><button id="start">3 · Start selected lab</button>
+ <button id="gui">Open Gazebo GUI</button><button id="benchmark">Save benchmark</button><button id="stop" class="danger">Stop lab</button></div></div>
+ <div id="health" class="status waiting">Gazebo not started. Click Gazebo physics only.</div>
+ <p id="message" role="status">Gazebo server, camera rendering, image bridge and detectors are checked separately.</p>
 </div>
 <nav class="tabs"><button class="active" data-tab="camera">Camera performance</button>
 <button data-tab="apriltag">AprilTag</button><button data-tab="yolo">Shuttle YOLO</button></nav>
 <div class="layout"><aside>
 <section class="panel"><h2>RGB / depth settings</h2>
-<p class="hint">Applies when starting the selected lab. Smoke mode forces 640×480 RGB at 15 FPS, no depth, no court lighting.</p>
+<p class="hint">Applies when starting the selected lab. Physics smoke has no renderer or sensors; RGB smoke is 640×480 at 15 FPS with no depth or court lighting.</p>
 <div class="fields">
 <div><label for="color">RGB resolution</label><select id="color"><option>640x480</option><option>848x480</option><option>1280x720</option></select></div>
 <div><label for="color_fps">RGB FPS</label><select id="color_fps"><option>5</option><option>10</option><option>15</option><option>30</option><option>60</option></select></div>
@@ -100,13 +100,13 @@ pre{background:#0e1a25;color:#bdcbd5;border-radius:7px;padding:12px;max-height:2
 <section class="panel" data-for="yolo"><h2>YOLO detections and bounding boxes</h2>
 <div class="scroll"><table><thead><tr><th>X</th><th>Y</th><th>Width</th><th>Height</th><th>Confidence</th></tr></thead><tbody id="boxes"></tbody></table></div>
 <p class="hint">Boxes are from the real production YOLO detector, not simulated overlay shapes. Initial shuttle placements are not dynamic ground-truth tracking.</p><p id="placed" class="hint"></p></section>
-<section class="panel"><h2>Gazebo startup diagnostics</h2><p class="hint">Gazebo server → world service → camera bridge → fresh RGB → optional GUI. The diagnostics remain visible even after a crash.</p>
+<section class="panel"><h2>Gazebo startup diagnostics</h2><p class="hint">Gazebo physics → world service → optional Ogre2 camera → ROS image bridge → fresh RGB → detector. The diagnostics remain visible even after a crash.</p>
 <div id="processes" class="hint"></div>
 <details open><summary>Gazebo server log</summary><pre id="gazeboLog">Not started.</pre></details>
 <details><summary>ROS image / detector logs</summary><pre id="rosLog">Not started.</pre></details>
 <details><summary>Gazebo GUI log</summary><pre id="guiLog">Not opened.</pre></details></section>
 </div></div>
-<p class="hint">This rebuild never starts a motor controller, modifies the published Lighting Lab SDF, or changes a real RealSense camera.</p>
+<p class="hint">This lab does not launch motor controllers or change the production Lighting, Mobility, Odometry or D435i settings.</p>
 </main>
 <script>
 const $=id=>document.getElementById(id);
@@ -121,10 +121,12 @@ for(const b of document.querySelectorAll("[data-tab]"))b.onclick=()=>tab(b.datas
 async function post(path,value={}){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(value)});const j=await r.json();if(!r.ok)throw Error(j.error||"Request failed");return j}
 function say(msg,isError=false){$("message").textContent=msg;$("message").className=isError?"error":""}
 async function act(task){if(busy)return;busy=true;try{await task()}catch(e){say(e.message,true)}finally{busy=false}}
-$("smoke").onclick=()=>act(async()=>{await post("/api/start",fields("smoke"));say("Smoke-test world starting. Inspect Gazebo log and wait for streaming.")});
+$("smoke").onclick=()=>act(async()=>{await post("/api/start",fields("world_smoke"));say("Physics-only world starting; wait for world service verification, not RGB.")});
+$("rgbSmoke").onclick=()=>act(async()=>{await post("/api/start",fields("rgb_smoke"));say("Small RGB camera test starting; wait for streaming.")});
 $("start").onclick=()=>act(async()=>{await post("/api/start",fields());say("Starting "+mode+" with current published court scene.")});
 $("stop").onclick=()=>act(async()=>{await post("/api/stop");say("Lab Gazebo and ROS processes stopped.")});
 $("gui").onclick=()=>act(async()=>{await post("/api/gui");say("Gazebo GUI requested. Open GUI log below if no window appears.")});
+$("benchmark").onclick=()=>act(async()=>{const r=await post("/api/benchmark");say("Saved benchmark: "+r.saved)});
 $("move").onclick=()=>act(async()=>{const s=fields();await post("/api/pose",{x:s.robot_x,y:s.robot_y,yaw:s.robot_yaw});say("Robot camera pose updated.")});
 $("shuttle").onclick=()=>act(async()=>{const s=fields();await post("/api/shuttle",{x:s.shuttle_x,y:s.shuttle_y,name:"lab_shuttle_001"});say("Placed shuttle 001.")});
 $("random").onclick=()=>act(async()=>{const s=fields();await post("/api/random",{count:s.shuttle_count,seed:s.seed});say("Placed deterministic shuttle group.")});
@@ -145,10 +147,10 @@ function plot(rows,target){
 function render(s){
  live=s;if(!loaded){apply(s.settings||defaults);loaded=true}
  const m=s.monitor||{},rows=m.streams||{},rgb=rows.rgb||{},depth=rows.depth||{},det=rows[s.mode==="apriltag"?"tag":"yolo"]||{};
- const reason={idle:"Gazebo is not running. Start with Minimal smoke test.",generating_world:"Generating minimal simulation world...",waiting_for_world:"Gazebo process started. Waiting for the world service...",world_ready:"World service is alive. Launching ROS bridges...",waiting_for_rgb:"World running; waiting for fresh ROS RGB camera frames...",streaming:"Gazebo is publishing fresh camera frames. Open the GUI separately.",failed:"STARTUP FAILED. Inspect Gazebo server log below.",stopped:"Stopped this lab's processes.",offline_job:"Dataset, training or validation is running."};
+ const reason={idle:"Gazebo not started; run the physics-only smoke test.",generating_world:"Generating minimal simulation world...",waiting_for_world:"Gazebo process started. Waiting for the world service...",world_ready:"Gazebo world service is alive.",world_verified:"Physics-only Gazebo PASSED; no camera or renderer needed. Next try RGB smoke.",waiting_for_rgb:"World running; waiting for fresh ROS RGB camera frames...",streaming:"Gazebo is publishing fresh camera frames. Open the GUI separately.",failed:"STARTUP FAILED. Inspect Gazebo server log below.",stopped:"Stopped this lab's processes.",offline_job:"Dataset, training or validation is running."};
  $("phase").textContent=s.phase;
  $("health").textContent=(reason[s.phase]||s.phase)+(s.error?" Error: "+s.error:"");
- $("health").className="status "+(s.phase==="failed"?"failed":s.phase==="streaming"?"":"waiting");
+ $("health").className="status "+(s.phase==="failed"?"failed":(s.phase==="streaming"||s.phase==="world_verified")?"":"waiting");
  $("rgbWall").textContent=fmt(rgb.wall_fps);$("rgbSim").textContent=fmt(rgb.sim_fps);
  $("depthWall").textContent=fmt(depth.wall_fps);$("detectWall").textContent=fmt(det.wall_fps);
  $("bottleneck").textContent=m.bottleneck||"Waiting for ROS topic samples.";
