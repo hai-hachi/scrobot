@@ -37,6 +37,7 @@ class Observer(Node):
         self.tags=[]
         self.margins=[]
         self.tag_quality=TagQuality()
+        self.pose_reset_value=None
         self.bboxes=[]
         self.last_image_wall=0.0
         self.last_image_type="raw_rgb"
@@ -161,6 +162,17 @@ class Observer(Node):
         self.preview(msg,"YOLO bounding boxes")
 
     def write_status(self):
+        marker=self.out/"tag_pose_reset.txt"
+        if marker.is_file():
+            try:
+                value=marker.read_text()
+                if value != self.pose_reset_value:
+                    self.pose_reset_value=value
+                    self.tag_quality=TagQuality()
+                    self.tags=[]
+                    self.margins=[]
+            except OSError:
+                pass
         data={
             "time_wall":time.time(),
             "streams":{key:m.status() for key,m in self.meters.items()},
