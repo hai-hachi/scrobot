@@ -6,10 +6,14 @@ validation and simulation with real bounding-box overlays). Based on the
 existing SCROBOT ROS2 Jazzy + Gazebo Harmonic pipeline and the author's
 `hai-hachi/yoloshuttle` repository.
 
-## Launch
+## One-command launch (Gazebo starts automatically)
 
-Build changed simulation, perception, localization and debug components
-after pulling `real-comparison`:
+**Do not start Gazebo in a separate terminal.** The Perception Labs
+dashboard owns the complete **Gazebo + robot camera + bridges + optional
+depth registration + selected detector** ROS launch process and shuts it
+down with Ctrl+C.
+
+After pulling `real-comparison`, run this once to build and start:
 
 ```bash
 cd ~/scrobot_ws/src
@@ -17,13 +21,46 @@ git switch real-comparison
 git pull --ff-only
 
 cd ~/scrobot_ws
-colcon build --symlink-install --packages-up-to scrobot_simulation scrobot_debug scrobot_perception
-source /opt/ros/jazzy/setup.bash
-source ~/scrobot_ws/install/setup.bash
-python3 ~/scrobot_ws/tools/perception_labs/server.py
+bash tools/perception_labs/start.sh --build
 ```
 
-Open **http://127.0.0.1:8768**. The server binds only to
+On subsequent uses, the entire workflow is a single command:
+
+```bash
+bash ~/scrobot_ws/tools/perception_labs/start.sh
+```
+
+The launcher sources ROS 2 Jazzy and this workspace automatically, starts
+the local dashboard server, starts **Gazebo + the Camera Performance
+experiment** using the saved settings (or defaults), and opens the browser.
+If the browser cannot open automatically, visit
+**http://127.0.0.1:8768**.
+
+The three tabs share one Gazebo instance **at a time**, not three separate
+simulators. To switch to AprilTag or Shuttle YOLO, select its tab and click
+**Start / restart this lab**. The server automatically stops the previous
+Gazebo session and launches the selected detector along with the camera and
+bridges; you never need a standalone `ros2 launch` command. This is
+intentional: running YOLO in the camera-only test would invalidate the
+FPS baseline.
+
+If Gazebo fails to start (e.g. missing ROS dependency), the web UI now
+stays available to show the failure and let you retry the restart button.
+Inspect `~/scrobot_ws/evaluation_results/perception_labs/gazebo.log`.
+
+To open the dashboard without launching a browser on a headless machine:
+
+```bash
+bash ~/scrobot_ws/tools/perception_labs/start.sh --no-browser
+```
+
+To use a non-standard workspace root, set `SCROBOT_WS=/absolute/workspace`
+when calling the launcher. The launcher accepts `--build` to rebuild before
+starting. You do not need to re-run a build after changing only HTML/Python
+files in `tools/perception_labs` when the ROS package dependencies were
+already built.
+
+The server binds only to
 `127.0.0.1`, with `ROS_DOMAIN_ID=79` and a dedicated `GZ_PARTITION`.
 It does not run Nav2, controllers, localization, the full mission, or
 automatic shuttle collection commands. Do not run other applications using
