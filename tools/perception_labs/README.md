@@ -44,9 +44,37 @@ bridges; you never need a standalone `ros2 launch` command. This is
 intentional: running YOLO in the camera-only test would invalidate the
 FPS baseline.
 
-If Gazebo fails to start (e.g. missing ROS dependency), the web UI now
-stays available to show the failure and let you retry the restart button.
-Inspect `~/scrobot_ws/evaluation_results/perception_labs/gazebo.log`.
+If Gazebo fails to start (e.g. missing ROS dependency), the web UI stays
+available. It now applies the same **WARP-safe localhost network settings**
+as Lighting Lab, and checks actual Gazebo world/topic discovery and ROS
+publisher/message reception rather than treating a running `ros2 launch`
+PID as proof that Gazebo is working.
+
+Open **Gazebo startup diagnostics / error log** immediately below the
+camera preview. The status pinpoints these different startup stages:
+
+- **Gazebo launch stopped:** the launch exited, or failed before Gazebo was ready.
+- **Gazebo world missing:** the process is alive, but the court world was
+  not discovered yet. Look for plugin/rendering errors in its launch log.
+- **Gazebo RGB sensor missing:** court world exists, but the robot camera
+  was not spawned or the xacro/sensor failed.
+- **ROS image bridge missing:** Gazebo has `/camera/color`, but the ROS
+  `/camera/camera/color/image_raw` publisher is absent.
+- **No fresh RGB messages:** the publisher exists, but images are not being
+  delivered to the monitor; check QoS, topic rates and simulation progress.
+- **Streaming:** new ROS RGB frames have arrived within the past five
+  seconds; the camera path is functioning.
+
+The dashboard exposes a **Retry lightweight RGB-only camera** button that
+automatically saves and starts 640×480 RGB at 15 FPS with depth/registration
+disabled. This separates a basic render/startup problem from the cost of
+running both D435i channels. Return to the 1280×720/848×480 published
+baseline after confirming camera frames.
+
+The latest launch log is reset on every Gazebo restart and is available at
+`~/scrobot_ws/evaluation_results/perception_labs/gazebo.log` and directly
+in the diagnostics panel. If it still fails, copy the **launch-stage status
+and the last errors**; do not start a second Gazebo process manually.
 
 To open the dashboard without launching a browser on a headless machine:
 
