@@ -103,10 +103,13 @@ class PerceptionV2(unittest.TestCase):
                              published.findtext("scene/ambient"))
 
     def test_slow_rtf_not_camera_frame_loss(self):
+        import time
         m=Meter()
+        baseline=time.monotonic()
         for i in range(40):
             m.stamps.append(i/15)
-            m.wall.append(i/7.5)
+            m.wall.append(baseline+(i-39)/7.5)
+        m.n=40
         result=m.status()
         self.assertAlmostEqual(result["effective_rtf"],.5)
         self.assertIn("slower than real time",bottleneck({"rgb":result},15,"camera"))
