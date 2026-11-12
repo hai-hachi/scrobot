@@ -492,6 +492,11 @@ class Lab:
         if not alive:
             stage="launch_stopped"
             message="Gazebo launch is stopped or exited; inspect the launch log."
+        elif count>0 and age is not None and age<=5.0:
+            # Receiving fresh ROS RGB images proves the complete sensor and
+            # bridge pipeline works, even if the gz CLI discovery probe fails.
+            stage="streaming"
+            message="Gazebo RGB camera is publishing through ROS to this lab."
         elif not info["gz_world"]:
             stage="waiting_world"
             message="Waiting for Gazebo world; if persistent, inspect launch log."
