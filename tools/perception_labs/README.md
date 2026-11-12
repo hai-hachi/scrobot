@@ -32,6 +32,94 @@ bash ~/scrobot_ws/tools/perception_labs/start.sh
 No Gazebo process starts automatically. This avoids hiding startup errors
 behind an apparently healthy web server.
 
+## Camera Lab (first calibration stage)
+
+Use the **Camera performance** tab only, with no AprilTag or YOLO detector
+running. This is intentionally isolated from the normal robot, Lighting,
+Mobility and Odometry tests, and reuses the tested v3 staged Gazebo startup.
+
+1. **Gazebo physics only** establishes a baseline with no rendering engine,
+   sensors, bridges, camera traffic, or detection.
+2. **RGB camera smoke** tests a fixed lightweight 640×480 @ 15 FPS stream.
+3. **Start selected lab** with the Camera tab active, and set RGB and depth
+   independently (RGB 640×480 / 848×480 / 1280×720; depth 424×240 /
+   640×480 / 848×480 / 1280×720; 5, 10, 15, 30 or 60 Hz).
+   The full court uses the published Lighting Lab scene. Restart the lab
+   for each camera configuration; changes are not hot-swapped in Gazebo.
+4. Collect **at least 30 frames** on each enabled stream, then **Save
+   benchmark**. Prefer several runs of each setting after warmup.
+5. Compare the saved rows in **Saved camera benchmark comparison**.
+   Track RGB/depth sim FPS, wall FPS, delivered ROS MB/s, effective camera
+   RTF, Gazebo CPU, ROS image bridge CPU and monitor CPU/memory.
+6. If and only if the camera benchmark passes the measured-frame checks,
+   click **Publish saved camera benchmark** and confirm. The live camera
+   configuration is **not** published by changing the UI alone.
+
+### What is actually measured
+
+- **ROS throughput:** each received raw RGB/depth `sensor_msgs/Image.data`
+  length is counted without copying the image. The sliding time window
+  reports decimal **MB per wall-clock second** at the ROS subscriber.
+  This is NOT the Gazebo native transport bandwidth, DDS wire bandwidth,
+  JPEG compression ratio, nor the RGB-depth registration node cost.
+- **Frame rate:** the sensor message header produces sim FPS and jitter;
+  the observer's monotonic clock produces wall FPS. A 50 Hz simulated
+  topic can appear as 60 Hz wall clock when Gazebo runs at 1.2× RTF, or
+  when queued samples arrive in bursts. MQTT/ROS QoS does not create new
+  unique camera frames.
+- **Effective camera RTF:** wall FPS / sim FPS. This estimates simulation
+  speed from camera stamps, *not* a general Gazebo physics RTF diagnostic.
+- **CPU:** sampled from Linux `/proc` for each launched process and its
+  children. **100% means one fully utilized logical CPU core**. A
+  multithreaded Gazebo process can exceed 100%; the bridge and image
+  monitor are shown independently. Summed process RSS can double-count
+  shared memory pages.
+- **Preview:** the browser JPEG preview is sampled to ~2.5 FPS; the
+  actual image-throughput meter counts full-rate raw ROS callbacks.
+  The JPEG conversion still adds a small CPU load, especially on the
+  observer process. For a pure transport measurement, compare with a
+  separate subscriber that omits JPEG conversion.
+- **Not yet measured:** native Gazebo `gz transport` bytes/sec, DDS
+  packet overhead, GPU utilization/VRAM, independent renderer-only FPS,
+  true per-stage end-to-end latency, and the depth-registration
+  component's separate CPU usage. These are future additions rather
+  than being inferred from ROS throughput or bridge process CPU.
+
+The normal camera baseline before publication is **1280×720 RGB / 848×480
+depth, both 15 Hz**, with depth enabled. A candidate below 80% of its
+requested **simulated-time** RGB/depth frame rate cannot be published.
+This is an initial guard, not a guarantee the machine achieves the
+requested FPS in real time; compare wall FPS and RTF before accepting it.
+
+**Publishing:** the lab copies only the saved, measured Camera Lab
+settings into:
+
+```text
+~/scrobot_ws/src/scrobot_simulation/config/camera_calibration.yaml
+```
+
+A byte-exact previous-file backup is stored under
+`evaluation_results/perception_labs/camera_published_backups/`.
+The normal Gazebo `simulation.launch.py` uses this YAML for RGB/depth
+geometry, FPS and depth enable, unless explicit launch arguments override
+them. No physical RealSense driver, STM32 firmware, camera intrinsic
+calibration on the real robot, or other lab setting is changed.
+
+After publishing:
+
+```bash
+cd ~/scrobot_ws
+colcon build --symlink-install --packages-up-to scrobot_bringup
+source install/setup.bash
+# Stop the previous simulator, then start the normal simulation:
+ros2 launch scrobot_bringup sim.launch.py
+```
+
+The standalone camera benchmark's static camera proxy and the full
+physical robot are deliberately different workloads, so validate the
+selected profile once more with the production full robot before relying
+on its observed CPU and real-time performance.
+
 ## Mandatory first check: Minimal smoke test
 
 1. Click **1 · Gazebo physics only**. The generated world contains the
