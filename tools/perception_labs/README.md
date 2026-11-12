@@ -1,8 +1,15 @@
-# SCROBOT Perception Labs v2 — clean rebuild
+# SCROBOT Perception Labs v3 — clean, staged Gazebo recovery
 
-The previous Perception Lab was reverted. This rebuild launches a minimal
-Gazebo **server first**, checks the actual world service, then starts ROS
-image bridges and a separate monitor. The GUI is launched only when asked.
+The previous Perception Lab was backed up and **perception-related simulation
+changes were reverted to the last known pre-perception commit
+`7d7fd4757a6e`**. Lighting, Mobility and Odometry work was preserved.
+This v3 implementation is a standalone workspace-root tool with no changes
+to the normal robot URDF, sensor Xacro or camera publishing defaults.
+
+Gazebo is brought up in **three strictly separated stages**: a physics-only
+world (no rendering plugin), a low-cost RGB camera smoke scene, then the
+selected published-court perception lab. The GUI runs separately and the
+dashboard continues to work when the Gazebo process fails.
 
 ## One-command launch
 
@@ -27,17 +34,27 @@ behind an apparently healthy web server.
 
 ## Mandatory first check: Minimal smoke test
 
-1. Click **1 · Minimal smoke test**. The scene has one 640×480 RGB camera
-   at 15 FPS, a floor and a static robot proxy, with no depth, AprilTag,
-   motor controller, collection manager, or full production court.
-2. Observe the launch stages:
-   **generating_world → waiting_for_world → waiting_for_rgb → streaming**.
-   A running process PID alone does not count as success.
-3. Click **Open Gazebo GUI** after the world service exists. If the server
-   streams but no GUI appears, inspect `gui.log` separately.
-4. Only when this succeeds, select **Camera performance** and click
-   **2 · Start selected lab**. This replaces the smoke world with the
-   published badminton court and lighting.
+1. Click **1 · Gazebo physics only**. The generated world contains the
+   minimum physics, UserCommands and SceneBroadcaster plugins, plus a
+   simple floor. It contains **zero cameras, zero ROS bridges, zero
+   detectors, and no Ogre2 Sensors plugin**. Wait for
+   **world_verified**. If this fails, inspect `gazebo.log` before
+   attempting any RGB rendering.
+2. Click **2 · RGB camera smoke**. This starts a new minimal world with one
+   640×480 RGB camera at 15 Hz and a simple proxy body. Wait for
+   **streaming** and a fresh frame. A healthy Gazebo process alone does
+   not establish that ROS images are actually arriving.
+3. Click **Open Gazebo GUI** independently. If server-side RGB works but
+   the GUI does not, inspect `gui.log`; the GUI is not a prerequisite for
+   sensor benchmarking.
+4. Select **Camera performance**, **AprilTag**, or **Shuttle YOLO**, then
+   click **3 · Start selected lab**. This loads an independent court
+   world with the current published Lighting Lab illumination and only
+   the requested sensors/detector.
+5. Click **Save benchmark** while streaming to retain a timestamped
+   JSON snapshot (scene provenance, selected resolutions/rates and
+   measured ROS stream statistics) under
+   `evaluation_results/perception_labs/benchmarks/`.
 
 Log files live in
 `~/scrobot_ws/evaluation_results/perception_labs/`. The dashboard exposes
@@ -115,9 +132,23 @@ Each run uses a new directory under `yoloshuttle/dataset`, never edits
 old generated data. Offline jobs stop interactive Gazebo first to avoid GPU
 contention.
 
+## Regression boundaries
+
+- Original implementation backup: branch
+  `perception-v2-backup-20261113`. It can be compared or restored without
+  changing other labs.
+- **No production camera-calibration publish action is enabled.** Camera
+  resolution and FPS changes stay inside the isolated world.
+- The detector nodes use the existing SCROBOT AprilTag/YOLO code.
+  Only the selected detector is launched, not Nav2, motor control,
+  local collection, or the normal localization stack.
+- The YOLO dataset capture launch has one backward-compatible optional
+  `world` argument. Its default remains the existing dataset world;
+  the lab passes a temporary copy with published lighting when needed.
+
 ## Current limitations and validation status
 
-- The test suite checks **generated SDF structure, lighting inheritance,
+- The test suite checks **physics-only and RGB-only SDF structure, lighting inheritance,
   camera/depth geometry, shell and browser JavaScript**, but cannot test
   your machine's Ogre2 graphics startup.
 - AprilTag absolute pose accuracy and YOLO 3D ground-truth RMSE are **not
