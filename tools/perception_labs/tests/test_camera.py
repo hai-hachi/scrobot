@@ -98,7 +98,8 @@ class CameraPublishingTests(unittest.TestCase):
         self.assertEqual(result["payload_total_mb"],40)
         self.assertAlmostEqual(result["payload_mean_mb"],1)
         self.assertAlmostEqual(result["payload_mb_s"],30,delta=.1)
-        self.assertAlmostEqual(result["effective_rtf"],.5,delta=.01)
+        # Wall FPS=30 and simulated FPS=15 => RTF=2.0; not 0.5.
+        self.assertAlmostEqual(result["effective_rtf"],2.0,delta=.01)
 
     def test_linux_proc_cpu_sampling_is_noninvasive(self):
         cpu,rss=process_counters(os.getpid())
