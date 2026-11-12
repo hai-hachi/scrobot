@@ -26,9 +26,9 @@ h1{font-size:24px;margin:3px 0}h2{font-size:16px;margin:0 0 13px}h3{font-size:13
     <div class="field"><label for="depth_mode">Depth resolution</label><select id="depth_mode"><option>424x240</option><option>640x480</option><option selected>848x480</option><option>1280x720</option></select></div>
     <div class="field"><label for="depth_fps">Requested depth FPS</label><select id="depth_fps"><option>5</option><option selected>15</option><option>30</option><option>60</option></select></div>
     <div class="switch"><label for="enable_registration">Run depth-to-color alignment</label><input type="checkbox" id="enable_registration"></div>
-    <p class="hint">YOLO automatically needs depth registration. Disable depth and registration for the fastest RGB-only baseline.</p>
-    <div class="buttons"><button id="saveSettings">Save Lab Settings</button><button id="restart" class="primary">Restart with this lab</button></div>
-    <p class="hint" id="restartHint">Camera changes require Gazebo restart.</p>
+    <p class="hint">YOLO automatically needs depth registration. Disable depth and registration for the fastest RGB-only baseline. On startup, Gazebo opens for the saved lab; switching tabs requires Start / restart this lab.</p>
+    <div class="buttons"><button id="saveSettings">Save Lab Settings</button><button id="restart" class="primary">Start / restart this lab</button></div>
+    <p class="hint" id="restartHint">Gazebo, camera bridges and the selected detector launch automatically; no second terminal needed.</p>
     <hr class="divider">
     <div class="panel-free" data-for="apriltag yolo">
       <h2>Robot pose on court</h2><div id="poseControls"></div>
@@ -228,7 +228,7 @@ const streamNames=[["rgb","RGB","color_fps"],["depth","Depth","depth_fps"],["ali
 function display(s){
  last=s;if(!first&&s.settings)load(s.settings);
  $("phase").textContent=mode.toUpperCase();
- $("simStatus").textContent=s.sim_alive?"Gazebo running":"Gazebo stopped";
+ $("simStatus").textContent=s.sim_alive?"Gazebo managed · running":"Gazebo managed · stopped";
  $("simStatus").className="badge "+(s.sim_alive?"ok":"warn");
  const changed=keys.some(k=>fields()[k]!==s.settings?.[k]);
  $("restartHint").textContent=s.restart_needed||changed?"Changes pending. Restart Gazebo to apply scene/vision pipeline.":"Active Gazebo mode matches saved configuration.";
