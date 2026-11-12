@@ -43,7 +43,17 @@ export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
 export GZ_PARTITION="scrobot_perception_v3_$(id -u)_79"
 export GZ_IP=127.0.0.1
 unset ROS_LOCALHOST_ONLY || true
-printf '\nPerception Labs v3: http://127.0.0.1:8768\n'
+port=8768
+label="Perception Labs v3"
+for ((i=0;i<${#args[@]};i++)); do
+  if [[ "${args[i]}" == "--port" ]] && ((i+1<${#args[@]})); then
+    port="${args[i+1]}"
+  fi
+  if [[ "${args[i]}" == "--camera-only" ]]; then
+    label="Camera Lab"
+  fi
+done
+printf '\n%s: http://127.0.0.1:%s\n' "$label" "$port"
 printf 'Gazebo is NOT auto-started. Verify world physics first, then RGB.\n'
 printf 'Only this lab uses ROS domain 79 and Gazebo partition %s.\n\n' "$GZ_PARTITION"
 exec python3 "$DIR/server.py" "${args[@]}"
