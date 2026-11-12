@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # SCROBOT Perception Labs v2: browser first, Gazebo only after an explicit test.
 set -euo pipefail
-DIR="$(cd -- "$(dirname -- "\${BASH_SOURCE[0]}")" && pwd)"
+DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # Checkout is the workspace: ~/scrobot_ws/tools and ~/scrobot_ws/src.
-WS="\${SCROBOT_WS:-$(cd -- "$DIR/../.." && pwd)}"
+WS="${SCROBOT_WS:-$(cd -- "$DIR/../.." && pwd)}"
 if [[ ! -d "$WS/src/scrobot_simulation" || ! -f "$DIR/server.py" ]]; then
   echo "SCROBOT workspace not found: $WS (expected src/scrobot_simulation and tools/perception_labs)" >&2
   exit 2
@@ -46,4 +46,4 @@ unset ROS_LOCALHOST_ONLY || true
 printf '\nPerception Labs v2: http://127.0.0.1:8768\n'
 printf 'Gazebo is NOT auto-started. Click Minimal smoke test first.\n'
 printf 'Only this lab uses ROS domain 79 and Gazebo partition %s.\n\n' "$GZ_PARTITION"
-exec python3 "$DIR/server.py" "\${args[@]}"
+exec python3 "$DIR/server.py" "${args[@]}"
