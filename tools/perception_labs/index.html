@@ -96,7 +96,8 @@ pre{background:#0e1a25;color:#bdcbd5;border-radius:7px;padding:12px;max-height:2
 <section class="panel" data-for="apriltag"><h2>AprilTag measurement</h2>
 <div class="grid"><div class="tile"><small>Detected IDs</small><strong id="tagIds">—</strong></div>
 <div class="tile"><small>Decision margin</small><strong id="margin">—</strong></div></div>
-<p class="hint">Real AprilTag 16h5 detections, IDs 0–3, and throughput. Absolute pose RMSE is intentionally omitted until the optical-frame conventions are verified with live Gazebo.</p></section>
+<p class="hint">Real AprilTag 16h5 detections, IDs 0–3, and throughput. Below are per-pose repeatability diagnostics; they are NOT absolute pose errors. Move the robot to a new position to reset the observation window.</p>
+<div class="scroll"><table><thead><tr><th>Tag</th><th>Count</th><th>Frame %</th><th>Margin</th><th>Range</th><th>Translation jitter</th><th>Orientation jitter</th></tr></thead><tbody id="tagQualityRows"></tbody></table></div></section>
 <section class="panel" data-for="yolo"><h2>YOLO detections and bounding boxes</h2>
 <div class="scroll"><table><thead><tr><th>X</th><th>Y</th><th>Width</th><th>Height</th><th>Confidence</th></tr></thead><tbody id="boxes"></tbody></table></div>
 <p class="hint">Boxes are from the real production YOLO detector, not simulated overlay shapes. Initial shuttle placements are not dynamic ground-truth tracking.</p><p id="placed" class="hint"></p></section>
@@ -157,6 +158,15 @@ function render(s){
  $("imageKind").textContent=m.image_type||"RGB";
  $("tagIds").textContent=(m.tags||[]).join(", ")||"—";
  $("margin").textContent=fmt((m.decision_margins||[]).reduce((a,b)=>a+b,0)/Math.max(1,(m.decision_margins||[]).length));
+ const tagRows=$("tagQualityRows");tagRows.replaceChildren();
+ for(const q of m.tag_quality||[]){
+  const tr=document.createElement("tr");
+  const vals=[q.id,q.detections,fmt(q.detector_frame_fraction*100,1)+"%",
+   fmt(q.mean_margin,1),fmt(q.range_mean_m,2)+" m",
+   fmt(q.translation_std_m,4)+" m",fmt(q.rotation_rms_deg,2)+" °"];
+  for(const val of vals){const td=document.createElement("td");td.textContent=val;tr.append(td)}
+  tagRows.append(tr);
+ }
  const tbody=$("streams");tbody.replaceChildren();
  for(const key of ["rgb","depth","rgb_info","depth_info","tag","yolo","yolo3d"]){
   const t=rows[key]||{},tr=document.createElement("tr");
