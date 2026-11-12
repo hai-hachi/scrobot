@@ -1,0 +1,29 @@
+name: SCROBOT Camera Lab (scratch)
+
+on:
+  push:
+    branches: [real-comparison]
+    paths:
+      - 'tools/camera_lab/**'
+      - 'src/scrobot_simulation/config/camera_calibration.yaml'
+      - 'src/scrobot_simulation/launch/simulation.launch.py'
+      - 'src/scrobot_simulation/launch/spawn_robot.launch.py'
+      - 'src/scrobot_simulation/urdf/sensors_gazebo.xacro'
+      - 'src/scrobot_simulation/urdf/scrobot_sim.urdf.xacro'
+      - '.github/workflows/camera_lab.yml'
+  workflow_dispatch:
+
+jobs:
+  camera-lab-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile Python and validate shell entrypoint
+        run: |
+          python -m compileall -q tools/camera_lab
+          bash -n tools/camera_lab/start.sh
+      - name: Validate mode table, minimal world, CPU metrics and YAML safety
+        run: python -m unittest discover -s tools/camera_lab/tests -p 'test_*.py' -v
