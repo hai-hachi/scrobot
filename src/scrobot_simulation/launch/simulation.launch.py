@@ -258,7 +258,8 @@ def generate_launch_description():
                               default_value=str(camera['depth']['fps'])),
         DeclareLaunchArgument(
             'enable_depth_camera',
-            default_value='true', choices=['true', 'false'],
+            default_value=str(camera['depth']['enabled']).lower(),
+            choices=['true', 'false'],
             description='Keep the physical D435i depth sensor (false for lighting-only experiments).',
         ),
         DeclareLaunchArgument(
