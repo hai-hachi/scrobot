@@ -83,13 +83,23 @@ class Meter:
         self.n = 0
         self.invalid = 0
         self.size = None
+        self.payload = deque(maxlen=180)
+        self.payload_sum = 0
+        self.total_bytes = 0
 
-    def add(self, stamp, width=None, height=None):
+    def add(self, stamp, width=None, height=None, bytes_count=0):
         now = time.monotonic()
         if not math.isfinite(stamp) or stamp < 0:
             self.invalid += 1
             return
         self.n += 1
+        if bytes_count:
+            size = max(0, int(bytes_count))
+            if len(self.payload) == self.payload.maxlen:
+                self.payload_sum -= self.payload[0][1]
+            self.payload.append((now, size))
+            self.payload_sum += size
+            self.total_bytes += size
         if self.stamps and stamp <= self.stamps[-1]:
             self.invalid += 1
         else:
@@ -101,8 +111,19 @@ class Meter:
     def status(self):
         sim,jitter = frame_rate(self.stamps)
         wall,_ = frame_rate(self.wall)
+        # Bytes over the actual receive-time interval, not requested FPS.
+        # This is delivered ROS image DATA throughput, not Gazebo native
+        # network wire rate or DDS framing overhead.
+        rate_window = (self.payload[-1][0]-self.payload[0][0]
+                       if len(self.payload) > 1 else 0)
+        payload_rate = (sum(x[1] for x in list(self.payload)[1:]) /
+                        rate_window / 1e6) if rate_window > 0 else None
         return {
             "samples": self.n, "sim_fps": sim, "wall_fps": wall,
+            "payload_mb_s": round(payload_rate, 3) if payload_rate is not None else None,
+            "payload_total_mb": round(self.total_bytes / 1e6, 3),
+            "payload_mean_mb": round(self.payload_sum / len(self.payload) / 1e6, 3)
+                if self.payload else None,
             "jitter_ms": jitter, "effective_rtf": round(wall/sim,3) if sim and wall else None,
             "age_s": round(time.monotonic()-self.wall[-1],2) if self.wall else None,
             "nonmonotonic": self.invalid, "resolution": self.size,
