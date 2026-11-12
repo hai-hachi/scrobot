@@ -128,7 +128,8 @@ class Lab:
             self.handles.pop(key).close()
         self.active_mode=None
         self.placed.clear()
-        for path in (OUTPUT/"monitor.json",OUTPUT/"camera.jpg"):
+        for path in (OUTPUT/"monitor.json",OUTPUT/"camera.jpg",
+                     OUTPUT/"tag_pose_reset.txt"):
             path.unlink(missing_ok=True)
 
     def stop(self):
@@ -324,6 +325,8 @@ class Lab:
         text=(f'name: "perception_robot", position: {{x:{x:.5f}, y:{y:.5f}, z:0}}, '
               f'orientation: {{w:{math.cos(angle):.8f}, z:{math.sin(angle):.8f}}}')
         self.gz_request("set_pose","gz.msgs.Pose",text)
+        # Reset AprilTag repeatability history when the camera is moved.
+        (OUTPUT/"tag_pose_reset.txt").write_text(str(time.time_ns()))
         return {"position":[x,y],"yaw_deg":yaw,
                 "note":"Camera frames after this pose replace earlier observations; wait for fresh frames."}
 
