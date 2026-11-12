@@ -67,6 +67,13 @@ h1{font-size:24px;margin:3px 0}h2{font-size:16px;margin:0 0 13px}h3{font-size:13
        <div class="surface"><div class="row"><span class="hint">Ground truth robot</span><strong id="gtPose">—</strong></div><div class="row"><span class="hint">Shuttles visible to GT publisher</span><strong id="gtCount">—</strong></div></div>
       </div>
     </div>
+    <div id="startupStatus" class="notice" aria-live="polite">Checking Gazebo and the ROS camera bridge…</div>
+    <details id="startupInspector">
+      <summary style="cursor:pointer;color:var(--muted);font-size:12px">Gazebo startup diagnostics / error log</summary>
+      <pre id="startupDetails" class="log">Checking topic discovery…</pre>
+      <pre id="gazeboLog" class="log">Waiting for launch output…</pre>
+      <p class="hint">The launcher starts Gazebo itself. If these checks fail, copy the error log shown above; no second Gazebo command is required.</p>
+    </details>
     <p id="message" role="status" aria-live="polite"></p>
    </div>
    <div class="panel">
@@ -228,8 +235,28 @@ const streamNames=[["rgb","RGB","color_fps"],["depth","Depth","depth_fps"],["ali
 function display(s){
  last=s;if(!first&&s.settings)load(s.settings);
  $("phase").textContent=mode.toUpperCase();
- $("simStatus").textContent=s.sim_alive?"Gazebo managed · running":"Gazebo managed · stopped";
- $("simStatus").className="badge "+(s.sim_alive?"ok":"warn");
+ const startup=s.startup||{};
+ $("simStatus").textContent=startup.stage==="streaming"?"Gazebo + RGB · running":
+  s.sim_alive?"Gazebo launch active · "+(startup.stage||"checking"):"Gazebo stopped";
+ $("simStatus").className="badge "+(startup.stage==="streaming"?"ok":"warn");
+ $("startupStatus").textContent=startup.message||
+   "Waiting for a Gazebo startup diagnosis…";
+ $("startupStatus").className=startup.stage==="streaming"?"surface ok":"notice";
+ $("startupDetails").textContent=[
+  "Launch process: "+(startup.launch_alive?"running":"stopped")+
+    " · exit code: "+(startup.launch_exit_code??"—"),
+  "Gazebo badminton_court world: "+(startup.gz_world?"discovered":"not discovered"),
+  "Gazebo /camera/color: "+(startup.gz_rgb_topic?"advertised":"not found"),
+  "Gazebo /camera/depth: "+(startup.gz_depth_topic?"advertised":"not found"),
+  "ROS RGB publishers: "+(startup.ros_rgb_publishers??"—"),
+  "ROS RGB frames: "+(startup.ros_rgb_frames??0)+
+    " · last frame age: "+(startup.ros_rgb_age_s??"—")+" s",
+  "Gazebo topics discovered: "+(startup.gz_topic_count??0),
+  "Desktop display: "+(startup.display||"unavailable"),
+  "Gazebo discovery error: "+(startup.probe_error||"none"),
+  "Launch log path: "+(startup.log_path||"—"),
+ ].join("\n");
+ $("gazeboLog").textContent=startup.log_tail||"No launch output yet.";
  const changed=keys.some(k=>fields()[k]!==s.settings?.[k]);
  $("restartHint").textContent=s.restart_needed||changed?"Changes pending. Restart Gazebo to apply scene/vision pipeline.":"Active Gazebo mode matches saved configuration.";
  const d=s.streams||{},rw=d.rgb||{},dw=d.depth||{},aw=d.aligned_depth||{},pd=d[mode==="yolo"?"yolo2d":"apriltag"]||{};
