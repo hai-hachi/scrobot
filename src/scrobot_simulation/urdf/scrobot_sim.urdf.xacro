@@ -3,6 +3,12 @@
 
   <xacro:arg name="enable_magnetometer" default="true"/>
   <xacro:arg name="enable_depth_camera" default="true"/>
+  <xacro:arg name="color_width" default="1280"/>
+  <xacro:arg name="color_height" default="720"/>
+  <xacro:arg name="color_fps" default="15"/>
+  <xacro:arg name="depth_width" default="848"/>
+  <xacro:arg name="depth_height" default="480"/>
+  <xacro:arg name="depth_fps" default="15"/>
   <xacro:arg name="imu_rate_hz" default="100.0"/>
   <xacro:arg name="magnetometer_rate_hz" default="100.0"/>
   <xacro:arg name="ground_truth_rate_hz" default="100.0"/>
@@ -40,6 +46,12 @@
   <xacro:scrobot_gazebo_sensors
     enable_magnetometer="$(arg enable_magnetometer)"
     enable_depth_camera="$(arg enable_depth_camera)"
+    color_width="$(arg color_width)"
+    color_height="$(arg color_height)"
+    color_fps="$(arg color_fps)"
+    depth_width="$(arg depth_width)"
+    depth_height="$(arg depth_height)"
+    depth_fps="$(arg depth_fps)"
     imu_rate_hz="$(arg imu_rate_hz)"
     magnetometer_rate_hz="$(arg magnetometer_rate_hz)"/>
   <xacro:scrobot_gazebo_physics
