@@ -147,6 +147,50 @@ class PerceptionCoreTests(unittest.TestCase):
             self.assertTrue(status(new,dst)["matches"])
             self.assertFalse(publish(new,dst,td/"backup")["changed"])
 
+    def test_local_gazebo_warp_network_and_startup_diagnostics(self):
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        import server as lab_server
+        obj=lab_server.Lab.__new__(lab_server.Lab)
+        env=obj.env(79)
+        self.assertEqual(env["GZ_IP"],"127.0.0.1")
+        self.assertEqual(env["ROS_AUTOMATIC_DISCOVERY_RANGE"],"LOCALHOST")
+        self.assertEqual(env["ROS_DOMAIN_ID"],"79")
+        self.assertNotIn("ROS_LOCALHOST_ONLY",env)
+        self.assertIn("scrobot_perception_",env["GZ_PARTITION"])
+        obj.sim_log_path=ROOT/"tools/perception_labs/README.md"
+        obj.diagnostic_at=0.0
+        obj.diagnostic_cache={}
+        obj.process=SimpleNamespace(poll=lambda:None)
+        publishers=[0]
+        obj.bridge=SimpleNamespace(node=SimpleNamespace(
+            count_publishers=lambda topic:publishers[0]))
+        fake=SimpleNamespace(returncode=0,stdout=(
+            "/world/badminton_court/stats\\n/camera/color\\n/camera/depth\\n"))
+        with patch("server.subprocess.run",return_value=fake):
+            first=obj.startup_diagnostics({"rgb":{"count":0,"age_wall_s":None}})
+            self.assertEqual(first["stage"],"waiting_bridge")
+            publishers[0]=1
+            second=obj.startup_diagnostics({"rgb":{"count":0,"age_wall_s":None}})
+            self.assertEqual(second["stage"],"waiting_frames")
+            done=obj.startup_diagnostics({"rgb":{"count":4,"age_wall_s":.1}})
+            self.assertEqual(done["stage"],"streaming")
+            self.assertTrue(done["gz_world"])
+            self.assertTrue(done["gz_rgb_topic"])
+        obj.process=SimpleNamespace(poll=lambda:2)
+        ended=obj.startup_diagnostics({"rgb":{"count":4,"age_wall_s":.1}})
+        self.assertEqual(ended["stage"],"launch_stopped")
+        # A live monitor frame is trustworthy even if the gz discovery tool
+        # cannot query topic names on a particular WARP configuration.
+        obj.process=SimpleNamespace(poll=lambda:None)
+        obj.diagnostic_cache={"gz_world":False,"gz_rgb_topic":False,
+            "gz_depth_topic":False,"gz_topic_count":0,"probe_error":"timed out"}
+        obj.diagnostic_at=__import__("time").monotonic()
+        self.assertEqual(
+            obj.startup_diagnostics({"rgb":{"count":5,"age_wall_s":.1}})["stage"],
+            "streaming",
+        )
+
     def test_launch_and_isolation_contracts(self):
         launch=(ROOT/"src/scrobot_simulation/launch/perception_lab.launch.py").read_text()
         sim=(ROOT/"src/scrobot_simulation/launch/simulation.launch.py").read_text()
