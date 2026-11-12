@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SCROBOT Camera Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1721;--panel:#192837;--line:#3d5261;--ink:#edf4f5;--muted:#afc1c9;--good:#5bd9c8;--warn:#f3c27b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px system-ui,sans-serif}
+main{max-width:1160px;margin:0 auto;padding:24px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:17px;margin:0 0 12px}
+h3{font-size:14px;margin:12px 0}.hint{font-size:12px;color:var(--muted);line-height:1.5}
+.grid{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:18px;align-items:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;margin-top:18px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+label{display:block;font-size:13px;margin:12px 0 6px;color:var(--muted)}
+select{display:block;width:100%;padding:9px;border-radius:8px;background:#101d29;border:1px solid var(--line);color:var(--ink)}
+input[type=checkbox]{margin:10px 6px 0 0}
+button{padding:10px 14px;background:#304658;border:1px solid #577081;color:var(--ink);border-radius:8px;font-weight:650;cursor:pointer}
+button.primary{background:#08766b;border-color:#24b1a1}button:disabled{opacity:.45;cursor:not-allowed}
+.buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+.status{padding:11px;border-radius:8px;background:#263b4b;border-left:3px solid var(--good);margin-top:12px;line-height:1.5}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.stat{background:#263847;border-radius:8px;padding:12px;min-height:90px}
+.stat strong{display:block;font-size:23px;margin:7px 0;font-variant-numeric:tabular-nums}
+.stat small{color:var(--muted)}
+table{width:100%;border-collapse:collapse;min-width:570px;font-size:13px}
+th,td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+th{font-weight:500;color:var(--muted)}.scroll{overflow-x:auto}
+pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12px;border-radius:8px;white-space:pre-wrap}
+@media(max-width:820px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:500px){main{padding:12px}.card{padding:14px}.cols{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<h1>SCROBOT Camera Lab</h1>
+<p class="hint">RealSense D435i USB 3 mode table · Gazebo Harmonic · ROS 2 Jazzy · camera benchmarking only</p>
+<div class="grid">
+ <section class="card">
+  <h2>Camera settings</h2>
+  <label for="color">RGB resolution</label><select id="color"></select>
+  <label for="color_fps">RGB frame rate</label><select id="color_fps"></select>
+  <label><input id="depth_enabled" type="checkbox" checked>Enable depth camera</label>
+  <label for="depth">Depth resolution</label><select id="depth"></select>
+  <label for="depth_fps">Depth frame rate</label><select id="depth_fps"></select>
+  <p class="hint">Only documented D435i USB 3 resolution/FPS combinations are selectable. RGB and depth rates can differ. Gazebo does not simulate USB bus limits.</p>
+  <div class="buttons">
+   <button class="primary" id="start">Start / Restart test</button>
+   <button id="stop">Stop</button>
+  </div>
+  <div id="health" class="status">Ready. Select a camera mode and start.</div>
+  <p class="hint">Runs isolated Gazebo sensors and ROS image bridge. No GUI, AprilTags, YOLO, controllers or robot navigation.</p>
+  <div class="buttons">
+   <button id="save">Save benchmark JSON</button>
+   <button id="publish">Save tested settings to simulation YAML</button>
+  </div>
+  <p id="message" class="hint" role="status"></p>
+ </section>
+ <div>
+  <section class="card">
+   <h2>Received image data</h2>
+   <div class="stats">
+    <div class="stat"><small>RGB received</small><strong id="rgbRate">—</strong><small>MB/s, wall-clock</small></div>
+    <div class="stat"><small>Depth received</small><strong id="depthRate">—</strong><small>MB/s, wall-clock</small></div>
+    <div class="stat"><small>Total received</small><strong id="totalRate">—</strong><small>MB/s, wall-clock</small></div>
+   </div>
+   <div class="scroll"><table>
+    <thead><tr><th>Stream</th><th>Frames</th><th>Resolution</th><th>Requested</th><th>Sim FPS</th><th>Wall FPS</th><th>Observed MB/s</th></tr></thead>
+    <tbody id="streams"></tbody>
+   </table></div>
+   <p class="hint" id="expected">Waiting for a configuration.</p>
+   <p class="hint">Measured MB/s = received uncompressed ROS Image.data bytes / wall time. This excludes DDS overhead and native Gazebo transport. RGB8 uses 3 bytes/pixel; simulated 32-bit floating-point depth uses 4 bytes/pixel (real USB Z16 uses 2).</p>
+  </section>
+  <section class="card">
+   <h2>CPU and memory</h2>
+   <div class="scroll"><table>
+    <thead><tr><th>Process</th><th>CPU %</th><th>RAM (MB)</th></tr></thead>
+    <tbody id="processes"></tbody>
+   </table></div>
+   <p class="hint">CPU includes each process's children. 100% = one fully occupied logical CPU core; multi-core usage may exceed 100%. RAM is summed RSS and can double-count shared pages.</p>
+  </section>
+  <section class="card">
+   <h2>Startup diagnostics</h2>
+   <details><summary>Gazebo log</summary><pre id="gazeboLog"></pre></details>
+   <details><summary>ROS bridge log</summary><pre id="bridgeLog"></pre></details>
+   <details><summary>Monitor log</summary><pre id="monitorLog"></pre></details>
+  </section>
+ </div>
+</div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let modes=null, started=false, busy=false;
+function setOptions(id,values,selected){
+ const element=$(id);element.replaceChildren();
+ for(const value of values){const option=document.createElement("option");option.value=value;option.textContent=value;element.append(option)}
+ if(selected!=null&&values.includes(selected))element.value=selected;
+}
+function refreshFps(stream,prior){
+ const resolution=$(stream).value;
+ const allowed=modes[stream][resolution].map(String);
+ setOptions(stream+"_fps",allowed,allowed.includes(String(prior))?String(prior):allowed[0]);
+}
+function form(){
+ return {color:$("color").value,color_fps:Number($("color_fps").value),
+         depth:$("depth").value,depth_fps:Number($("depth_fps").value),
+         depth_enabled:$("depth_enabled").checked};
+}
+async function request(path,payload){
+ const response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},
+                               body:JSON.stringify(payload)});
+ const body=await response.json();
+ if(!response.ok)throw Error(body.error||"Request failed");
+ return body;
+}
+async function action(fn){
+ if(busy)return;busy=true;
+ try{await fn()}catch(err){$("message").textContent=err.message}
+ finally{busy=false}
+}
+$("color").onchange=()=>refreshFps("color",$("color_fps").value);
+$("depth").onchange=()=>refreshFps("depth",$("depth_fps").value);
+$("start").onclick=()=>action(async()=>{
+ await request("/api/start",form());
+ started=true;$("message").textContent="Started. Wait for RGB/depth samples, then compare actual FPS and CPU.";
+});
+$("stop").onclick=()=>action(async()=>{
+ await request("/api/stop",{});
+ started=false;$("message").textContent="Stopped.";
+});
+$("save").onclick=()=>action(async()=>{
+ const result=await request("/api/save",{});
+ $("message").textContent="Saved benchmark: "+result.file;
+});
+$("publish").onclick=()=>action(async()=>{
+ if(!confirm("Write the current tested RGB/depth settings to the NORMAL SIMULATION camera YAML? The previous YAML is backed up. This does NOT change the real D435i. Rebuild and restart normal Gazebo to apply."))return;
+ const result=await request("/api/publish",{confirm:true});
+ $("message").textContent=result.changed?
+    "Published to "+result.path+"; backup: "+result.backup+". Restart normal Gazebo after rebuilding.":
+    "Simulation YAML already matches these camera settings.";
+});
+function fmt(value,digits=1){return typeof value==="number"?value.toFixed(digits):"—"}
+function update(s){
+ $("health").textContent="State: "+s.phase+(s.error?" · "+s.error:"");
+ const stream=s.monitor?.streams||{}, settings=s.settings||form();
+ const color=stream.color||{},depth=stream.depth||{};
+ $("rgbRate").textContent=fmt(color.mb_s,2);
+ $("depthRate").textContent=fmt(depth.mb_s,2);
+ const have=[color.mb_s,depth.mb_s].filter(v=>typeof v==="number");
+ $("totalRate").textContent=have.length?fmt(have.reduce((a,b)=>a+b,0),2):"—";
+ const body=$("streams");body.replaceChildren();
+ for(const [name,data,configured,rps] of [
+  ["RGB",color,settings.color,settings.color_fps],
+  ["Depth",depth,settings.depth,settings.depth_fps]]){
+  if(name==="Depth"&&!settings.depth_enabled)continue;
+  const row=document.createElement("tr");
+  for(const cell of [name,data.frames??0,(data.resolution||[]).join("×")||"—",
+                     rps+" Hz",fmt(data.sim_fps),fmt(data.wall_fps),fmt(data.mb_s,2)]){
+   const td=document.createElement("td");td.textContent=String(cell);row.append(td)
+  }
+  body.append(row);
+ }
+ const expected=s.expected||{};
+ $("expected").textContent="Expected uncompressed ROS image payload at requested rates: RGB "+
+  fmt(expected.rgb,2)+" MB/s · Depth "+fmt(expected.depth,2)+
+  " MB/s · Total "+fmt(expected.total,2)+" MB/s.";
+ const cpu=$("processes");cpu.replaceChildren();
+ for(const [name,info] of Object.entries(s.resources||{})){
+  const row=document.createElement("tr");
+  for(const val of [name,fmt(info.cpu_pct),fmt(info.memory_mb)]){
+   const td=document.createElement("td");td.textContent=val;row.append(td)
+  }
+  cpu.append(row);
+ }
+ $("gazeboLog").textContent=s.logs?.gazebo||"";
+ $("bridgeLog").textContent=s.logs?.image_bridge||"";
+ $("monitorLog").textContent=s.logs?.monitor||"";
+ $("save").disabled=s.phase!=="streaming";
+ $("publish").disabled=s.phase!=="streaming";
+}
+async function poll(){
+ try{const response=await fetch("/api/status",{cache:"no-store"});if(response.ok)update(await response.json())}
+ catch(err){$("health").textContent="Dashboard connection lost: "+err.message}
+}
+async function initialize(){
+ const response=await fetch("/api/modes");modes=await response.json();
+ for(const name of ["color","depth"]){
+  setOptions(name,Object.keys(modes[name]),modes.default[name]);
+  refreshFps(name,modes.default[name+"_fps"]);
+ }
+ $("depth_enabled").checked=modes.default.depth_enabled;
+ await poll();
+ setInterval(poll,1000);
+}
+initialize().catch(err=>{$("health").textContent=err.message});
+</script>
+</body>
+</html>
