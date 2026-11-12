@@ -165,10 +165,14 @@ class StreamMeter:
                     round(statistics.pstdev(diffs)*1000,3))
         sim_rate, jitter = rate(self.stamps)
         wall_rate, _ = rate(self.arrivals)
+        # Wall throughput / simulation timestamp rate approximates RTF when
+        # this topic is emitted once per Gazebo sensor update.
+        effective_rtf = (round(wall_rate / sim_rate,3)
+                         if wall_rate is not None and sim_rate else None)
         age = time.monotonic() - self.arrivals[-1] if self.arrivals else None
         return {
             "count": self.count, "sim_fps": sim_rate, "wall_fps": wall_rate,
-            "jitter_ms": jitter, "age_wall_s": round(age,2) if age is not None else None,
+            "rtf_estimate": effective_rtf, "jitter_ms": jitter, "age_wall_s": round(age,2) if age is not None else None,
             "frame": self.frame, "width": self.width, "height": self.height,
             "bytes": self.bytes, "duplicates": self.duplicates,
             "out_of_order": self.out_of_order,
@@ -186,20 +190,34 @@ def timing_summary(streams, settings):
         if settings["mode"] == "yolo" else 0,
     }
     metrics = {key: obj.snapshot() for key, obj in streams.items()}
-    # Determining bottlenecks from measured rates requires steady-state
-    # samples; lacking data must never be interpreted as zero throughput.
-    def ratio(key):
-        m = metrics.get(key, {})
-        return (m["wall_fps"] / expected[key]) if expected.get(key) and m.get("wall_fps") is not None else None
-    if ratio("rgb") is not None and ratio("rgb") < .8:
-        bottleneck = "camera rendering / ROS bridge (RGB delivery)"
-    elif settings["enable_depth"] and ratio("depth") is not None and ratio("depth") < .8:
-        bottleneck = "depth camera rendering / bridge"
-    elif settings["mode"] == "apriltag" and ratio("apriltag") is not None and ratio("apriltag") < .8:
-        bottleneck = "AprilTag detection"
-    elif settings["mode"] == "yolo" and ratio("yolo2d") is not None and ratio("yolo2d") < .8:
-        bottleneck = "YOLO inference / RGB-depth synchronization (not isolated)"
+    # Never label slow real-world delivery as dropped camera samples if
+    # simulation timestamps prove the sensor is publishing at its target.
+    # The ratio of arrival FPS to stamp FPS is an *effective* RTF estimate
+    # at this ROS subscriber, not the Gazebo physics plugin's own statistic.
+    def achieved(name, target):
+        m=metrics.get(name,{})
+        f=m.get("sim_fps")
+        return f is not None and target > 0 and f >= 0.80 * target
+    def slow_wall(name, target):
+        f=metrics.get(name,{}).get("wall_fps")
+        return f is not None and target > 0 and f < 0.80 * target
+
+    if slow_wall("rgb",expected["rgb"]):
+        if achieved("rgb",expected["rgb"]):
+            bottleneck = "Gazebo real-time throughput: RGB samples are on-time in simulation, but arrive slower than real time"
+        else:
+            bottleneck = "RGB rendering / Gazebo-to-ROS bridge: fewer frames delivered even per simulation second"
+    elif expected["depth"] and slow_wall("depth",expected["depth"]):
+        if achieved("depth",expected["depth"]):
+            bottleneck = "Gazebo real-time throughput: depth timestamps are on-rate, wall delivery is slow"
+        else:
+            bottleneck = "depth rendering / ROS bridge: simulation-time depth FPS below target"
+    elif settings["mode"]=="apriltag" and slow_wall("apriltag",expected["apriltag"]):
+        bottleneck = "AprilTag detector stage or dropped input frames"
+    elif settings["mode"]=="yolo" and slow_wall("yolo2d",expected["yolo2d"]):
+        bottleneck = "YOLO inference / RGB-depth synchronization (requires separate profiler to isolate)"
     else:
-        bottleneck = "no confirmed bottleneck; review RTF and matched stages"
+        bottleneck = "no confirmed bottleneck; review frame freshness, RTF and matched stages"
+
     return {"streams":metrics,"bottleneck_hint":bottleneck,
             "note":"Delivered FPS vs requested FPS; sim-time delay is not wall-clock end-to-end latency."}

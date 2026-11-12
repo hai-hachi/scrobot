@@ -79,7 +79,7 @@ h1{font-size:24px;margin:3px 0}h2{font-size:16px;margin:0 0 13px}h3{font-size:13
     <p id="message" role="status" aria-live="polite"></p>
    </div>
    <div class="panel">
-    <div class="row"><h2>Camera pipeline and bottleneck</h2><span class="badge" id="resourceStatus">CPU / GPU —</span></div>
+    <div class="row"><h2>Camera pipeline and bottleneck</h2><span class="badge" id="resourceStatus">CPU / GPU —</span><span class="badge" id="rtfStatus">Effective RTF —</span></div>
     <div class="tiles">
       <div class="tile"><small>RGB delivery</small><strong id="rgbFPS">—</strong><span class="unit">wall FPS</span></div>
       <div class="tile"><small>Depth delivery</small><strong id="depthFPS">—</strong><span class="unit">wall FPS</span></div>
@@ -278,6 +278,7 @@ function display(s){
  $("detectFPS").textContent=fmt(pd.wall_fps);
  const cpu=s.system?.cpu_pct,gpu=s.system?.gpu_util_pct;
  $("resourceStatus").textContent="CPU "+fmt(cpu,0)+"% · GPU "+fmt(gpu,0)+"% · VRAM "+fmt(s.system?.gpu_mem_mb,0)+" MB";
+ $("rtfStatus").textContent="Effective RTF ~"+fmt(rw.rtf_estimate,2)+"× (ROS RGB)";
  $("previewType").textContent=s.preview_kind||"Raw RGB";
  $("gtPose").textContent=s.ground_truth?fmt(s.ground_truth.x,2)+", "+fmt(s.ground_truth.y,2)+" · "+fmt(s.ground_truth.yaw_deg,0)+"°":"—";
  $("gtCount").textContent=(s.shuttles||[]).length;

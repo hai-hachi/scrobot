@@ -65,6 +65,7 @@ class PerceptionCoreTests(unittest.TestCase):
                   sim_now=i*.01+.003,bytes_len=1280*720*3)
         snapshot=m.snapshot()
         self.assertAlmostEqual(snapshot["sim_fps"],100)
+        self.assertIsNotNone(snapshot["rtf_estimate"])
         self.assertEqual(snapshot["jitter_ms"],0)
         self.assertEqual(snapshot["width"],1280)
         self.assertAlmostEqual(snapshot["transport_sim_delay_ms_p95"],3)
@@ -75,6 +76,16 @@ class PerceptionCoreTests(unittest.TestCase):
         streams={key:StreamMeter() for key in ["rgb","depth","apriltag","yolo2d"]}
         result=timing_summary(streams,validate({}))
         self.assertIn("no confirmed bottleneck",result["bottleneck_hint"])
+        # 15 FPS in simulation with only ~7.5 wall FPS is slow RTF,
+        # not necessarily a broken camera renderer or missing samples.
+        rgb=streams["rgb"]
+        rgb.stamps.clear()
+        rgb.arrivals.clear()
+        for i in range(20):
+            rgb.stamps.append(i/15)
+            rgb.arrivals.append(i/7.5)
+        slow=timing_summary(streams,validate({}))
+        self.assertIn("real-time throughput",slow["bottleneck_hint"])
 
     def test_tag_transform_expected_translation(self):
         # base at world (1,2,0), yaw=0, camera in base at (0.3,0,0.2)

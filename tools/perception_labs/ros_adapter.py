@@ -91,6 +91,7 @@ class PerceptionDriver(Node):
         self.latest_tag_stamp = 0
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer,self,spin_thread=False)
+        self.error = None
         try:
             source=(Path(get_package_share_directory("scrobot_localization"))
                     / "config/court_landmarks.yaml")
@@ -100,7 +101,8 @@ class PerceptionDriver(Node):
             self.error=f"Court landmark calibration unavailable: {exc}"
         self.create_timer(.1,self.evaluate_tags)
         self.info = {}
-        self.error = None
+        # Preserve a court landmark load failure for the dashboard; do not
+        # mask it by unconditionally overwriting self.error here.
         sensor = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
         def sub(msgtype, topic, cb):
             self.create_subscription(msgtype, topic, cb, sensor)
