@@ -166,7 +166,7 @@ class PerceptionCoreTests(unittest.TestCase):
         obj.bridge=SimpleNamespace(node=SimpleNamespace(
             count_publishers=lambda topic:publishers[0]))
         fake=SimpleNamespace(returncode=0,stdout=(
-            "/world/badminton_court/stats\\n/camera/color\\n/camera/depth\\n"))
+            "/world/badminton_court/stats\n/camera/color\n/camera/depth\n"))
         with patch("server.subprocess.run",return_value=fake):
             first=obj.startup_diagnostics({"rgb":{"count":0,"age_wall_s":None}})
             self.assertEqual(first["stage"],"waiting_bridge")
