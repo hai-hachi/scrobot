@@ -170,7 +170,15 @@ function plot(rows,target){
  }
 }
 function render(s){
- live=s;if(!loaded){apply(s.settings||defaults);loaded=true}
+ live=s;
+ if(s.camera_only){
+  mode="camera";
+  document.querySelector("h1").textContent="SCROBOT Camera Lab";
+  for(const b of document.querySelectorAll("[data-tab]")){
+   if(b.dataset.tab!=="camera")b.classList.add("hidden");
+  }
+ }
+ if(!loaded){apply(s.settings||defaults);loaded=true}
  const m=s.monitor||{},rows=m.streams||{},rgb=rows.rgb||{},depth=rows.depth||{},det=rows[s.mode==="apriltag"?"tag":"yolo"]||{};
  const reason={idle:"Gazebo not started; run the physics-only smoke test.",generating_world:"Generating minimal simulation world...",waiting_for_world:"Gazebo process started. Waiting for the world service...",world_ready:"Gazebo world service is alive.",world_verified:"Physics-only Gazebo PASSED; no camera or renderer needed. Next try RGB smoke.",waiting_for_rgb:"World running; waiting for fresh ROS RGB camera frames...",streaming:"Gazebo is publishing fresh camera frames. Open the GUI separately.",failed:"STARTUP FAILED. Inspect Gazebo server log below.",stopped:"Stopped this lab's processes.",offline_job:"Dataset, training or validation is running."};
  $("phase").textContent=s.phase;
