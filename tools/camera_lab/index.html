@@ -212,7 +212,8 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
 </main>
 <script>
 const $ = id => document.getElementById(id);
-let modes=null, started=false, busy=false;
+let modes=null, started=false, busy=false, currentTab="camera",
+    live=null, tagImageUrl=null, sweepCache={distance:[],heading:[]};
 function setOptions(id,values,selected){
  const element=$(id);element.replaceChildren();
  for(const value of values){const option=document.createElement("option");option.value=value;option.textContent=value;element.append(option)}
@@ -223,6 +224,92 @@ function refreshFps(stream,prior){
  const allowed=modes[stream][resolution].map(String);
  setOptions(stream+"_fps",allowed,allowed.includes(String(prior))?String(prior):allowed[0]);
 }
+function tagForm(){
+ return {
+  size:Number($("tagSize").value),
+  height:Number($("tagHeight").value),
+  noise_sigma:Number($("noiseSigma").value),
+  tag_id:Number($("tagId").value),
+  robot_x:Number($("robotX").value),
+  robot_y:Number($("robotY").value),
+  robot_yaw:Number($("robotYaw").value)
+ };
+}
+function tagGeometry(){
+ const c=tagForm(),radius=Math.max(c.size*8/6/2+.01,.025+.006);
+ const units=(v)=>v.toFixed(3);
+ $("sizeValue").textContent=units(c.size)+" m active edge";
+ $("heightValue").textContent=units(c.height)+" m";
+ $("noiseValue").textContent=c.noise_sigma.toFixed(0)+" / 255 pixel σ";
+ $("mountRadius").textContent="Calculated center offset from pole = "+units(radius)+" m. "+
+    "Full plate edge = "+units(c.size*8/6)+" m (includes quiet border). "+
+    "Minimum crossing clearance = 0.010 m between adjacent tag plates.";
+ drawCourt();
+}
+function tagPosition(id){
+ const cfg=tagForm(),radius=Math.max(cfg.size*8/6/2+.01,.031);
+ const headings=[-45,45,-135,135];
+ const a=headings[id]*Math.PI/180;
+ return {x:radius*Math.cos(a),y:(id%2===0?3.05:-3.05)+radius*Math.sin(a),
+         z:cfg.height,yaw:a};
+}
+function drawCourt(){
+ if(!$("courtMap"))return;
+ const val=tagForm(),toX=x=>350+x*41.5,toY=y=>205-y*45.5;
+ const marker=$("robotMarker");marker.replaceChildren();
+ const group=$("courtTags");group.replaceChildren();
+ const svgNS="http://www.w3.org/2000/svg";
+ for(let id=0;id<4;id++){
+  const p=tagPosition(id),dot=document.createElementNS(svgNS,"circle");
+  dot.setAttribute("cx",toX(p.x));dot.setAttribute("cy",toY(p.y));
+  dot.setAttribute("r",id===val.tag_id?8:5);
+  dot.setAttribute("fill",id===val.tag_id?"#ffe78b":"#e7faff");
+  group.append(dot);
+  const label=document.createElementNS(svgNS,"text");
+  label.setAttribute("x",toX(p.x)+12);
+  label.setAttribute("y",toY(p.y)+4);
+  label.setAttribute("font-size",14);
+  label.setAttribute("fill","#ffffff");
+  label.textContent="Tag "+id;
+  group.append(label);
+ }
+ const arrow=document.createElementNS(svgNS,"path");
+ arrow.setAttribute("d","M 18 0 L -10 -9 L -6 0 L -10 9 Z");
+ arrow.setAttribute("transform","translate("+toX(val.robot_x)+","+toY(val.robot_y)+") rotate("+(-val.robot_yaw)+")");
+ arrow.setAttribute("fill","#f8b64d");
+ arrow.setAttribute("stroke","#141e25");
+ arrow.setAttribute("stroke-width","2");
+ marker.append(arrow);
+}
+function setTab(name){
+ currentTab=name;
+ $("tagPane").hidden=name!=="apriltags";
+ $("cameraTab").classList.toggle("active",name==="camera");
+ $("tagTab").classList.toggle("active",name==="apriltags");
+}
+$("cameraTab").onclick=()=>setTab("camera");
+$("tagTab").onclick=()=>setTab("apriltags");
+$("courtMap").onclick=evt=>{
+ const rect=$("courtMap").getBoundingClientRect();
+ const x=evt.clientX-rect.left,y=evt.clientY-rect.top;
+ const vx=x/rect.width*700,vy=y/rect.height*410;
+ $("robotX").value=Math.max(-7.2,Math.min(7.2,(vx-350)/41.5)).toFixed(2);
+ $("robotY").value=Math.max(-3.6,Math.min(3.6,(205-vy)/45.5)).toFixed(2);
+ drawCourt();
+};
+for(const id of ["tagId","tagSize","tagHeight","noiseSigma","robotX","robotY","robotYaw"]){
+ $(id).addEventListener("input",tagGeometry);
+}
+$("headOn").onclick=()=>{
+ const id=Number($("tagId").value),p=tagPosition(id);
+ const distance=2.0;
+ $("robotX").value=(p.x+distance*Math.cos(p.yaw)).toFixed(2);
+ $("robotY").value=(p.y+distance*Math.sin(p.yaw)).toFixed(2);
+ $("robotYaw").value=((p.yaw*180/Math.PI+360)%360-180).toFixed(0);
+ // normalized yaw from tag normal + 180°
+ $("robotYaw").value=(((p.yaw*180/Math.PI+180+180)%360)-180).toFixed(0);
+ tagGeometry();
+};
 function form(){
  return {color:$("color").value,color_fps:Number($("color_fps").value),
          depth:$("depth").value,depth_fps:Number($("depth_fps").value),
@@ -253,6 +340,46 @@ $("stop").onclick=()=>action(async()=>{
 $("save").onclick=()=>action(async()=>{
  const result=await request("/api/save",{});
  $("message").textContent="Saved benchmark: "+result.file;
+});
+$("startTag").onclick=()=>action(async()=>{
+ const result=await request("/api/tag/start",{camera:form(),tag:tagForm()});
+ $("message").textContent="AprilTags court scene starting. Wait for live image + detections before moving robot.";
+ setTab("apriltags");
+});
+$("moveRobot").onclick=()=>action(async()=>{
+ const c=tagForm();
+ const result=await request("/api/tag/pose",{
+   robot_x:c.robot_x,robot_y:c.robot_y,robot_yaw:c.robot_yaw,tag_id:c.tag_id});
+ $("robotStatus").textContent="Gazebo placed robot at x="+c.robot_x+" y="+c.robot_y+
+ " yaw="+c.robot_yaw+"°; new accuracy observation window started.";
+});
+$("applyNoise").onclick=()=>action(async()=>{
+ const sigma=Number($("noiseSigma").value);
+ await request("/api/tag/noise",{noise_sigma:sigma});
+ $("message").textContent="Applied RGB Gaussian noise σ="+sigma+" before AprilTag detection.";
+});
+function sweepRequest(kind){
+ const payload={
+  kind,tag_id:Number($("tagId").value),
+  distance_min:Number($("distanceMin").value),
+  distance_max:Number($("distanceMax").value),
+  distance_step:Number($("distanceStep").value),
+  fixed_distance:Number($("fixedDistance").value),
+  angle_min:Number($("angleMin").value),
+  angle_max:Number($("angleMax").value),
+  angle_step:Number($("angleStep").value),
+  dwell_s:Number($("dwell").value)
+ };
+ return action(async()=>{
+  const result=await request("/api/tag/sweep",payload);
+  $("message").textContent=kind+" sweep started across "+result.points+" robot poses.";
+ });
+}
+$("distanceRun").onclick=()=>sweepRequest("distance");
+$("headingRun").onclick=()=>sweepRequest("heading");
+$("cancelSweep").onclick=()=>action(async()=>{
+ await request("/api/tag/cancel",{});
+ $("message").textContent="Sweep cancellation requested.";
 });
 $("publish").onclick=()=>action(async()=>{
  if(!confirm("Write the current tested RGB/depth settings to the NORMAL SIMULATION camera YAML? The previous YAML is backed up. This does NOT change the real D435i. Rebuild and restart normal Gazebo to apply."))return;
