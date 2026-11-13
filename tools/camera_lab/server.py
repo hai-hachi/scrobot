@@ -168,6 +168,251 @@ class Lab:
                 raise
             return {"started": True, "settings": dict(cfg)}
 
+    def write_tag_control(self):
+        """Epoch change resets observer statistics and applies live RGB noise."""
+        self.tag_epoch += 1
+        file = RESULTS / "tag_control.json"
+        temp = file.with_suffix(".tmp")
+        temp.write_text(json.dumps({
+            "epoch": self.tag_epoch, "tag": self.tag, "camera": self.settings,
+            "changed_wall": time.time(),
+        }))
+        temp.replace(file)
+
+    def start_tags(self, data):
+        if not isinstance(data, dict) or set(data) != {"camera", "tag"}:
+            raise ValueError("Specify camera and tag configurations")
+        cfg = validate(data["camera"])
+        tag = validate_tag(data["tag"])
+        with self.lock:
+            self.stop()
+            self.settings = cfg
+            self.tag = tag
+            self.mode = "apriltags"
+            self.error = None
+            try:
+                # Generate current genuine 16h5 tag textures and meshes. Never
+                # change production model files or court_landmarks.yaml.
+                model, params = generate_tags(tag, RESULTS)
+                path = tag_world(cfg, tag, RESULTS / "world.sdf", model)
+                detector = detector_yaml(
+                    tag, RESULTS / "tag_detector.yaml")
+                bridge_cfg = camera_info_bridge_yaml(
+                    RESULTS / "camera_info_bridge.yaml")
+                self.write_tag_control()
+                self.launch("gazebo", [
+                    "gz", "sim", "-r", "-s", "-v", "3", path])
+                topics = ["/camera_lab/color"]
+                if cfg["depth_enabled"]:
+                    topics.append("/camera_lab/depth")
+                self.launch("image_bridge", [
+                    "ros2", "run", "ros_gz_image", "image_bridge", *topics,
+                    "--ros-args", "-p", "qos:=sensor_data"])
+                self.launch("info_bridge", [
+                    "ros2", "run", "ros_gz_bridge", "parameter_bridge",
+                    "--ros-args", "-p", f"config_file:={bridge_cfg}"])
+                self.launch("monitor", [
+                    sys.executable, str(HERE / "monitor.py"),
+                    str(RESULTS / "meter.json"),
+                    "true" if cfg["depth_enabled"] else "false"])
+                self.launch("tag_monitor", [
+                    sys.executable, str(HERE / "tag_monitor.py"), str(RESULTS)])
+                self.launch("detector", [
+                    "ros2", "run", "apriltag_ros", "apriltag_node",
+                    "--ros-args", "--params-file", str(detector),
+                    "-r", "__node:=apriltag",
+                    "-r", "image_rect:=/camera_lab/tag_color",
+                    "-r", "camera_info:=/camera_lab/color/camera_info",
+                    "-r", "detections:=/camera_lab/detections"])
+                self.phase = "starting"
+            except (OSError, ValueError, subprocess.CalledProcessError,
+                    subprocess.TimeoutExpired) as exc:
+                self.error = str(exc)
+                self.stop()
+                self.phase = "failed"
+                raise
+            return {"started": True, "mode": "apriltags",
+                    "tag": self.tag, "tag_mount_radius": mount_radius(tag["size"]),
+                    "world": path}
+
+    def gz_set_robot_pose(self, tag):
+        p = self.procs.get("gazebo")
+        if self.mode != "apriltags" or p is None or p.poll() is not None:
+            raise ValueError("Start the AprilTags court simulation first")
+        yaw = math.radians(tag["robot_yaw"])
+        request = (
+            'name: "camera_rig" '
+            f'position: {{x: {tag["robot_x"]:.7f} y: {tag["robot_y"]:.7f} z: 0.0}} '
+            f'orientation: {{x: 0 y: 0 z: {math.sin(yaw/2):.9f} '
+            f'w: {math.cos(yaw/2):.9f}}}'
+        )
+        result = subprocess.run(
+            ["gz", "service", "-s", "/world/camera_lab/set_pose",
+             "--reqtype", "gz.msgs.Pose",
+             "--reptype", "gz.msgs.Boolean", "--timeout", "5000",
+             "--req", request],
+            env=self.environment(), text=True, capture_output=True, timeout=8,
+        )
+        reply = result.stdout.lower()
+        if result.returncode or "data: true" not in reply:
+            raise RuntimeError("Gazebo did not accept camera rig pose: " +
+                               (result.stdout + result.stderr)[-400:])
+
+    def place_robot(self, data):
+        if not isinstance(data, dict) or set(data) != {
+            "robot_x", "robot_y", "robot_yaw", "tag_id"
+        }:
+            raise ValueError("Pose requires robot_x, robot_y, robot_yaw, tag_id")
+        with self.lock:
+            new = validate_tag({**self.tag, **data})
+            self.gz_set_robot_pose(new)
+            self.tag = new
+            self.write_tag_control()
+            return {"tag": dict(self.tag), "epoch": self.tag_epoch}
+
+    def set_noise(self, data):
+        if not isinstance(data, dict) or set(data) != {"noise_sigma"}:
+            raise ValueError("Use noise_sigma in pixel levels")
+        with self.lock:
+            if self.mode != "apriltags":
+                raise ValueError("Start AprilTags Lab before adjusting noise")
+            self.tag = validate_tag({**self.tag, **data})
+            self.write_tag_control()
+            return {"tag": dict(self.tag), "epoch": self.tag_epoch}
+
+    def begin_sweep(self, data):
+        if not isinstance(data, dict) or set(data) != {
+            "kind", "tag_id", "distance_min", "distance_max",
+            "distance_step", "fixed_distance", "angle_min",
+            "angle_max", "angle_step", "dwell_s",
+        }:
+            raise ValueError("Incomplete distance or heading sweep settings")
+        kind = data["kind"]
+        if kind not in ("distance", "heading"):
+            raise ValueError("Sweep kind must be distance or heading")
+        tag_id = data["tag_id"]
+        if type(tag_id) is not int or tag_id not in (0,1,2,3):
+            raise ValueError("Select tag ID 0, 1, 2 or 3")
+        if kind == "distance":
+            xs = sweep_values(data["distance_min"], data["distance_max"],
+                              data["distance_step"])
+            if not .4 <= xs[0] < xs[-1] <= 8:
+                raise ValueError("Distance sweep must stay within 0.4..8.0 m")
+        else:
+            xs = sweep_values(data["angle_min"],data["angle_max"],
+                              data["angle_step"])
+            if not -90 <= xs[0] < xs[-1] <= 90:
+                raise ValueError("Angle offset sweep must stay within ±90°")
+        fixed = data["fixed_distance"]
+        dwell = data["dwell_s"]
+        if not isinstance(fixed,(int,float)) or not .4 <= fixed <= 8:
+            raise ValueError("Fixed heading-sweep distance must be 0.4..8 m")
+        if not isinstance(dwell,(int,float)) or not 1.0 <= dwell <= 6.0:
+            raise ValueError("Sampling time must be 1..6 seconds per pose")
+        with self.lock:
+            if self.mode != "apriltags" or self.phase != "streaming":
+                raise ValueError("Wait for live AprilTag camera streaming first")
+            if self.sweep.get("state") == "running":
+                raise ValueError("A sweep is already running")
+            for value in xs:
+                head_on_pose(tag_id,
+                             value if kind=="distance" else fixed,
+                             self.tag,
+                             0 if kind=="distance" else value)
+            self.sweep_cancel=threading.Event()
+            self.sweep_id += 1
+            session=self.sweep_id
+            self.sweep={
+                "state":"running","kind":kind,"tag_id":tag_id,
+                "rows":[],"total":len(xs),"current":0,
+                "error":None,"file":None,
+                "unit":"m" if kind=="distance" else "deg",
+            }
+            worker=threading.Thread(
+                target=self._run_sweep,
+                args=(session,self.sweep_cancel,kind,tag_id,xs,float(fixed),
+                      float(dwell)),daemon=True)
+            worker.start()
+            return {"started":True,"points":len(xs),"kind":kind}
+
+    def cancel_sweep(self):
+        with self.lock:
+            self.sweep_cancel.set()
+            if self.sweep.get("state") == "running":
+                self.sweep["state"]="cancelled"
+            return {"cancelled":True}
+
+    def _run_sweep(self, session, cancelled, kind, tag_id, values, fixed, dwell):
+        try:
+            for i, value in enumerate(values):
+                if cancelled.is_set():
+                    return
+                pose=head_on_pose(tag_id,
+                                  value if kind=="distance" else fixed,
+                                  self.tag,
+                                  0 if kind=="distance" else value)
+                self.place_robot({**pose, "tag_id":tag_id})
+                with self.lock:
+                    if session != self.sweep_id:
+                        return
+                    epoch=self.tag_epoch
+                    self.sweep["current"]=i+1
+                # Fresh measurements only after the Gazebo pose update and
+                # observer control epoch. This also flushes stale image queues.
+                if cancelled.wait(.45):
+                    return
+                if cancelled.wait(dwell):
+                    return
+                with self.lock:
+                    if session != self.sweep_id:
+                        return
+                    measured=self.tag_status()
+                    if measured.get("epoch") != epoch:
+                        measured={}
+                    row={
+                        "value":value,
+                        "pose":pose,
+                        "tag_id":tag_id,
+                        "detector_frames":measured.get("detector_frames",0),
+                        "detected_frames":measured.get("detected_frames",0),
+                        "pose_frames":measured.get("pose_frames",0),
+                        "detection_pct":measured.get("detection_pct"),
+                        "position_rmse_m":measured.get("position_rmse_m"),
+                        "range_rmse_m":measured.get("range_rmse_m"),
+                        "bearing_rmse_deg":measured.get("bearing_rmse_deg"),
+                        "normal_axis_rmse_deg":
+                            measured.get("normal_axis_rmse_deg"),
+                        "detector_fps":measured.get("detector_fps"),
+                    }
+                    self.sweep["rows"].append(row)
+            with self.lock:
+                if session != self.sweep_id or cancelled.is_set():
+                    return
+                report={
+                    "created_utc":datetime.now(timezone.utc).isoformat(),
+                    "kind":kind,"tag_id":tag_id,"camera":dict(self.settings),
+                    "tag":dict(self.tag),"dwell_s":dwell,
+                    "rows":self.sweep["rows"],
+                    "accuracy_definition":
+                        "Position RMSE is observed camera-optical TF tag translation "
+                        "vs known Gazebo static geometry. Undetected samples are missing, "
+                        "not zero-error. Normal axis ignores sign; no AprilTag TF "
+                        "pose is invented for missed detections.",
+                }
+                folder=RESULTS/"tag_sweeps"
+                folder.mkdir(parents=True,exist_ok=True)
+                filename=folder/(
+                    f'apriltag_{kind}_'+datetime.now(timezone.utc).strftime(
+                        "%Y%m%dT%H%M%S%fZ")+'.json')
+                filename.write_text(json.dumps(report,indent=2)+"\n")
+                self.sweep["file"]=str(filename)
+                self.sweep["state"]="complete"
+        except (OSError,ValueError,RuntimeError,subprocess.TimeoutExpired) as exc:
+            with self.lock:
+                if session==self.sweep_id:
+                    self.sweep["state"]="failed"
+                    self.sweep["error"]=str(exc)
+
     def tag_status(self):
         path = RESULTS / "tag_status.json"
         try:
