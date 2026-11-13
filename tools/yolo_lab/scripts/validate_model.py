@@ -159,7 +159,8 @@ def main() -> None:
         output=Path(args.metrics_json)
         output.parent.mkdir(parents=True,exist_ok=True)
         payload={"model":str(model_path.resolve()),"dataset":str(data_path.resolve()),
-                 "split":args.split,"precision":float(metrics.box.mp),
+                 "split":args.split,"imgsz":args.imgsz,"batch":args.batch,
+                 "precision":float(metrics.box.mp),
                  "recall":float(metrics.box.mr),"map50":float(metrics.box.map50),
                  "map75":float(metrics.box.map75),"map5095":float(metrics.box.map),
                  "speed_ms":dict(getattr(metrics,"speed",None) or {}),
