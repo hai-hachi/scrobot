@@ -132,7 +132,7 @@ class TagLabTests(TestCase):
             names={m.get("name") for m in world.findall("model")}
             self.assertEqual(names,{
                 "court_floor","court_markings","net_assembly",
-                "camera_rig","court_apriltags",
+                "simulation_safety_boundary","camera_rig","court_apriltags",
             })
             self.assertIsNone(world.find(
                 "./model[@name='target']"))
@@ -486,29 +486,21 @@ class TagLabTests(TestCase):
             unchanged=tag_publish.publish(tag,landmark,detector,folder/"backups")
             self.assertFalse(unchanged["changed"])
 
-    def test_publish_requires_active_apriltags_and_finished_sweep(self):
+    def test_publish_only_saved_apriltags_lab_yaml(self):
         lab=server.Lab()
         try:
-            with self.assertRaisesRegex(ValueError,"Start AprilTags Lab"):
-                lab.publish_tag_configuration()
-            lab.mode="apriltags"
-            lab.phase="streaming"
-            lab.sweep={"state":"running"}
-            with self.assertRaisesRegex(ValueError,"Finish or cancel"):
-                lab.publish_tag_configuration()
-            lab.sweep={"state":"idle"}
-            with mock.patch.object(lab,"tag_status",return_value={
-                    "detector_frames":0}):
-                with self.assertRaisesRegex(ValueError,
-                                            "3 AprilTag detector frames"):
+            with mock.patch.object(server,"read_lab_yaml",return_value=None):
+                with self.assertRaisesRegex(ValueError,"Save AprilTags Lab YAML"):
                     lab.publish_tag_configuration()
-            with (mock.patch.object(lab,"tag_status",
-                         return_value={"detector_frames":40}),
+            saved={**geom.TAG_DEFAULT,"size":0.16,"height":0.32}
+            with (mock.patch.object(server,"read_lab_yaml",return_value=saved),
                   mock.patch.object(server,"publish_tag_geometry",
                          return_value={"changed":True}) as publish):
-                self.assertEqual(lab.publish_tag_configuration(),
-                                 {"changed":True})
-                publish.assert_called_once_with(lab.tag)
+                result=lab.publish_tag_configuration()
+                self.assertTrue(result["changed"])
+                self.assertEqual(result["source_yaml"],
+                                 str(server.lab_yaml_path("apriltags")))
+                publish.assert_called_once_with(geom.validate(saved))
         finally:
             lab.stop()
 
