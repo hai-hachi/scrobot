@@ -1,7 +1,7 @@
 """YOLO Lab stage controller. No dataset/model task runs in the HTTP thread."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
 import json
 import os
@@ -31,10 +31,13 @@ TRAINED = HERE / "models/trained"
 ARTIFACTS = HERE / "artifacts/models"
 RUNS = HERE / "runs/detect"
 DATAROOT = ROOT / "evaluation_results/yolo_lab/datasets"
+# Accept existing UTC-era and unprefixed datasets, but create only dataset_MonDD_NN.
 DATASET_ID = re.compile(
-    r"^(?:dataset_[0-9]{8}T[0-9]{12}Z|[A-Z][a-z]{2}(?:0[1-9]|[12][0-9]|3[01])_[0-9]{2,3})(?:__[a-z0-9][a-z0-9_-]{0,39})?$"
+    r"^(?:dataset_[A-Za-z0-9][A-Za-z0-9_-]{0,90}"
+    r"|[A-Z][a-z]{2}(?:0[1-9]|[12][0-9]|3[01])_[0-9]{2,3}"
+    r"(?:__[a-z0-9][a-z0-9_-]{0,39})?)$"
 )
-DATASET_SLUG = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
+DATASET_SLUG = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
 MODEL_CHOICE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,128}$")
 BASELINE_LABELS = {
     "best.pt": "Legacy YOLO shuttle baseline (best.pt; architecture unverified)",
@@ -44,8 +47,14 @@ BASELINE_LABELS = {
 
 
 
-def _timestamp():
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+def _date_prefix(kind):
+    """Human-readable per-day label in Vietnamese local calendar time."""
+    now = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
+    months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
+              "Aug", "Sep", "Oct", "Nov", "Dec")
+    if kind not in ("dataset", "lab"):
+        raise ValueError("Invalid run name category")
+    return f"{kind}_{months[now.month - 1]}{now.day:02d}"
 
 
 def _read_json(path):
@@ -89,18 +98,21 @@ class Workflow:
             key=lambda p: p.stat().st_mtime, reverse=True)][:100]
 
     def _next_dataset_name(self):
-        # Use workstation location's calendar date; never depend on UTC day.
-        local_day = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
-        months = ("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug",
-                  "Sep","Oct","Nov","Dec")
-        prefix = f"{months[local_day.month-1]}{local_day.day:02d}"
-        occupied = {p.name.split("__", 1)[0]
-                    for p in DATAROOT.iterdir()} if DATAROOT.is_dir() else set()
+        prefix = _date_prefix("dataset")
+        occupied = {p.name for p in DATAROOT.iterdir()} if DATAROOT.is_dir() else set()
         for number in range(1, 1000):
             candidate = f"{prefix}_{number:02d}"
             if candidate not in occupied:
                 return candidate
         raise ValueError("Too many datasets generated on this calendar day")
+
+    def _next_model_run_name(self):
+        prefix = _date_prefix("lab")
+        for number in range(1, 1000):
+            candidate = f"{prefix}_{number:02d}"
+            if not (RUNS / candidate).exists() and not (ARTIFACTS / (candidate + ".pt")).exists():
+                return candidate
+        raise ValueError("Too many YOLO training runs on this calendar day")
 
     def choose_dataset(self, name):
         if not isinstance(name, str) or name not in self.datasets():
@@ -145,12 +157,13 @@ class Workflow:
         old = self._managed_dataset(name)
         if not isinstance(new_name, str):
             raise ValueError("Enter a dataset name")
-        slug = re.sub(r"[-_]+", "_",
-                      re.sub(r"\s+", "_", new_name.strip().lower()))
+        slug = re.sub(r"\s+", "_", new_name.strip())
+        if slug.startswith("dataset_"):
+            slug = slug[len("dataset_"):]
         if not DATASET_SLUG.fullmatch(slug):
-            raise ValueError("Name must use 1-40 lowercase letters, numbers, _ or -")
-        base = name.split("__", 1)[0]
-        proposed = base + "__" + slug
+            raise ValueError("Name must use 1-80 letters, numbers, _ or -")
+        # Never drop or duplicate the dataset_ prefix when renaming.
+        proposed = "dataset_" + slug
         new = DATAROOT / proposed
         if new == old:
             return {"renamed": False, "dataset": name}
@@ -265,10 +278,12 @@ class Workflow:
         target = self._managed_model(choice)
         if not isinstance(new_name, str):
             raise ValueError("Enter a new model name")
-        stem = new_name.strip().removesuffix(".pt")
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}", stem):
-            raise ValueError("Use 1-80 letters, digits, underscore or hyphen")
-        destination = target.with_name(stem + ".pt")
+        stem = re.sub(r"\s+", "_", new_name.strip().removesuffix(".pt"))
+        if stem.startswith("lab_"):
+            stem = stem[len("lab_"):]
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,75}", stem):
+            raise ValueError("Use 1-76 letters, digits, underscore or hyphen")
+        destination = target.with_name("lab_" + stem + ".pt")
         if destination == target:
             return {"renamed":False,"model":choice}
         if destination.exists() or destination.is_symlink():
@@ -471,7 +486,7 @@ class Workflow:
             raise ValueError("Training device must be 0 (CUDA) or cpu")
         yolo = validate_yolo(read_lab("yolo") or {})
         self.lab.stop()  # avoid Gazebo taking GPU capacity during training
-        self.run_name = "lab_" + _timestamp()
+        self.run_name = self._next_model_run_name()
         self.selected_model = model_choice
         cmd = [self.training_python, str(SCRIPTS / "train_finetune.py"),
                "--model", str(model), "--data", str(dataset / "data.yaml"),
