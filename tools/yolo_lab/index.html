@@ -367,7 +367,7 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 const $=id=>document.getElementById(id);
 let mode="camera",busy=false,last=null,options=null,lastPreview=0;
 const cameraKeys=["color","color_fps","depth","depth_fps","depth_enabled"];
-const yoloInt=["shuttle_count","seed","dataset_images","epochs","batch","imgsz"];
+const yoloInt=["shuttle_count","seed","dataset_images","epochs","batch","imgsz","validation_imgsz","validation_batch","live_imgsz"];
 const yoloFloat=["robot_x","robot_y","robot_yaw","positive_fraction","confidence",
  "random_fraction","settle_seconds"];
 const clusterNames=["A singles long","A doubles long","A short","Net","B short","B doubles long","B singles long"];
@@ -511,8 +511,26 @@ function yoloForm(){
   Number($("cluster_left_"+i).value),Number($("cluster_right_"+i).value)]);
  return config;
 }
-function sameFields(a,b){
- return !!a&&!!b&&Object.keys(b).every(k=>JSON.stringify(a[k])===JSON.stringify(b[k]));
+const stageKeys={
+ scene:["spawn_mode","shuttle_count","seed","random_density","random_fraction",
+        "cluster_weights","settle_seconds","robot_x","robot_y","robot_yaw"],
+ dataset:["dataset_images","positive_fraction"],
+ train:["epochs","batch","imgsz"],
+ validate:["validation_imgsz","validation_batch"],
+ live:["live_imgsz","confidence"]
+};
+function sameFields(a,b,keys=Object.keys(b||{})){
+ return !!a&&!!b&&keys.every(k=>JSON.stringify(a[k])===JSON.stringify(b[k]));
+}
+function ensureStageSaved(name){
+ if(!sameFields(last?.saved_yolo,yoloForm(),stageKeys[name]))
+  throw Error("Unsaved "+name+" settings. Save the settings in this tab first.");
+}
+async function saveStageSettings(name){
+ const config=yoloForm(),base=last?.saved_yolo||options.yolo_default;
+ const changes=Object.fromEntries(stageKeys[name].map(k=>[k,config[k]]));
+ const result=await post("/api/config/yolo/save",{...base,...changes});
+ notify("Saved "+name+" settings to "+result.saved+". Other stage settings preserved.");
 }
 async function post(route,body){
  const response=await fetch(route,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
@@ -539,17 +557,16 @@ $("applyRobotPose").onclick=()=>action(async()=>{
  await post("/api/scene/pose",{x:c.robot_x,y:c.robot_y,yaw:c.robot_yaw});
  notify("Moved the actual robot camera; scene distribution and saved YAML unchanged.");
 });
-$("saveYolo").onclick=()=>action(async()=>{
- const result=await post("/api/config/yolo/save",yoloForm());
- notify("Saved "+result.saved+". No production YOLO model was changed.");
-});
+$("saveYolo").onclick=()=>action(()=>saveStageSettings("scene"));
+$("saveDatasetSettings").onclick=()=>action(()=>saveStageSettings("dataset"));
+$("saveTrainingSettings").onclick=()=>action(()=>saveStageSettings("train"));
+$("saveValidationSettings").onclick=()=>action(()=>saveStageSettings("validate"));
+$("saveLiveSettings").onclick=()=>action(()=>saveStageSettings("live"));
 $("startScene").onclick=()=>action(async()=>{
  if(!sameFields(last?.saved_camera,cameraForm())){
   throw Error("Camera controls differ from saved YAML. Use Camera tab → Save Camera Lab YAML first.");
  }
- if(!sameFields(last?.saved_yolo,yoloForm())){
-  throw Error("YOLO controls differ from saved YAML. Use YOLO Lab → Save YOLO Lab YAML first.");
- }
+ ensureStageSaved("scene");
  const result=await post("/api/scene/start",{});
  notify("Started YOLO inspection scene: "+result.shuttles+" real shuttle meshes, camera "+result.camera.color+
  " @ "+result.camera.color_fps+" FPS. No datasets or labels have been generated.");
@@ -638,9 +655,10 @@ function currentModel(id){
  return model;
 }
 $("startDataset").onclick=()=>action(async()=>{
- if(!sameFields(last?.saved_camera,cameraForm())||
-    !sameFields(last?.saved_yolo,yoloForm()))
-  throw Error("Save Camera Lab YAML and YOLO Lab YAML before generating a dataset.");
+ if(!sameFields(last?.saved_camera,cameraForm()))
+  throw Error("Save Camera Lab settings before capturing.");
+ ensureStageSaved("scene");
+ ensureStageSaved("dataset");
  const r=await post("/api/dataset/start",{});
  setTab("dataset");
  notify("Started synchronized capture: "+r.images_target+" images, "+r.camera.color+
@@ -655,6 +673,28 @@ $("datasetList").onchange=()=>action(async()=>{
  await post("/api/dataset/select",{dataset:$("datasetList").value});
  labelIndex=0;labelSetKey="";
  notify("Selected dataset: "+$("datasetList").value);
+});
+$("renameDataset").onclick=()=>action(async()=>{
+ const dataset=$("datasetList").value;
+ if(!dataset)throw Error("Choose a saved dataset.");
+ const name=$("datasetRename").value.trim();
+ if(!name)throw Error("Enter a short name for this dataset.");
+ const result=await post("/api/dataset/rename",{dataset,new_name:name});
+ $("datasetRename").value="";
+ $("datasetDeleteConfirm").value="";
+ labelIndex=0;labelSetKey="";lastCaptureKey="";
+ notify(result.renamed?"Renamed dataset to "+result.dataset:"Dataset already has this name.");
+});
+$("deleteDataset").onclick=()=>action(async()=>{
+ const dataset=$("datasetList").value,confirm=$("datasetDeleteConfirm").value;
+ if(!dataset||confirm!==dataset)
+  throw Error("Type the exact selected dataset ID to confirm permanent deletion.");
+ if(!window.confirm("Permanently delete "+dataset+
+  " and all images, labels and previews? This cannot be undone."))return;
+ const result=await post("/api/dataset/delete",{dataset,confirm});
+ $("datasetDeleteConfirm").value="";$("datasetRename").value="";
+ labelIndex=0;labelSetKey="";lastCaptureKey="";
+ notify("Permanently deleted dataset "+result.deleted);
 });
 $("startInspect").onclick=()=>action(async()=>{
  const n=Number($("inspectSamples").value);
@@ -691,6 +731,7 @@ $("importBaseline").onclick=()=>action(async()=>{
  setTab("train");
 });
 $("startTraining").onclick=()=>action(async()=>{
+ ensureStageSaved("train");
  const result=await post("/api/train/start",{
     model:currentModel("trainModel"),device:$("trainDevice").value});
  notify("Training started: "+result.run+" on "+result.dataset+
@@ -701,6 +742,7 @@ $("stopTraining").onclick=()=>action(async()=>{
  notify("Stopped training. Check run weights and artifacts before validation.");
 });
 $("startValidation").onclick=()=>action(async()=>{
+ ensureStageSaved("validate");
  const r=await post("/api/validate/start",{
    model:currentModel("validateModel"),
    split:$("validationSplit").value,device:$("validateDevice").value});
@@ -711,6 +753,7 @@ $("stopValidation").onclick=()=>action(async()=>{
  notify("Validation stopped.");
 });
 $("startLive").onclick=()=>action(async()=>{
+ ensureStageSaved("live");
  const r=await post("/api/live/start",{model:currentModel("liveModel")});
  notify("Started YOLO inference on actual Gazebo RGB with model "+r.model+
    ". Inference FPS is separate from raw bridge FPS.");
@@ -725,6 +768,10 @@ function renderWorkflow(s){
        summary=w.dataset_summary||{},inspection=w.inspection||{};
  const dsOptions=(w.datasets||[]).map(n=>({value:n,label:n}));
  replaceSelectItems("datasetList",dsOptions,w.selected_dataset);
+ const datasetBusy=["capture","inspect","train","validate","import"].some(
+  n=>w.tasks?.[n]?.running);
+ $("renameDataset").disabled=datasetBusy||!w.selected_dataset;
+ $("deleteDataset").disabled=datasetBusy||!w.selected_dataset;
  $("datasetCount").textContent=progress.saved_images??summary.saved_this_run??"—";
  $("datasetTarget").textContent=progress.target_images??summary.target_images??"—";
  const target=Number(progress.target_images||summary.target_images||0);
