@@ -271,6 +271,7 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
   </select></label>
   <label>Training input size (pixels)<input id="imgsz" type="number" min="320" max="1920" step="32"></label>
 </div>
+<p class="muted">Mosaic is the probability of combining images during training; the current recipe turns mosaic off for the final 10 epochs. If training has 10 epochs or fewer, consider increasing epochs to make mosaic useful. Rect groups training images by aspect ratio and may interact with mosaic. Optimizer <code>auto</code> can override the requested lr0.</p>
 <div class="buttons"><button id="saveTrainingSettings" class="primary">Save training settings</button></div>
 <div class="buttons">
 <label>Device<select id="trainDevice"><option value="0">CUDA GPU 0</option><option value="cpu">CPU</option></select></label>
