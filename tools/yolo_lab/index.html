@@ -179,7 +179,7 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <label>Saved dataset
 <select id="datasetList"><option>None yet</option></select>
 </label>
-<details id="datasetManager" class="card">
+<details id="datasetManager">
   <summary>Manage saved datasets (rename / delete)</summary>
   <p class="muted">Renaming preserves the capture timestamp and updates data.yaml plus saved summary paths. No active capture, inspection, training or validation task may be running.</p>
   <label>Readable dataset name (1–40 letters, numbers, spaces, underscores or hyphens)
@@ -264,7 +264,7 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <h3>Original yoloshuttle baseline checkpoints</h3>
 <p class="muted">Binary weights are optional and aren't duplicated in Git. An explicit import checks the original repository's immutable Git blob hash before storing local files under <code>tools/yolo_lab/models/pretrained/</code>.</p>
 <div class="buttons">
-<select id="baselineChoice" style="max-width:220px">
+<select id="baselineChoice" style="max-width:100%;min-width:280px">
 <option value="best.pt">Original best.pt — legacy shuttle baseline (architecture not specified)</option>
 <option value="yolo11n_shuttle.pt">YOLO11n Nano — shuttlecock-specific</option>
 <option value="yolo11s-ball.pt">YOLO11s Small — ball detector (different target)</option>
