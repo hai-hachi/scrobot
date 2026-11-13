@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 import time
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, ReliabilityPolicy, DurabilityPolicy
 from sensor_msgs.msg import Image
@@ -84,12 +85,18 @@ def main():
     if len(sys.argv) != 3 or sys.argv[2] not in ("true", "false"):
         raise SystemExit("Usage: monitor.py output.json true|false")
     rclpy.init()
-    meter = CameraMeter(sys.argv[1], sys.argv[2] == "true")
+    meter = None
     try:
+        meter = CameraMeter(sys.argv[1], sys.argv[2] == "true")
         rclpy.spin(meter)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        # SIGINT/SIGTERM is expected during Gazebo lab restarts.
+        pass
     finally:
-        meter.destroy_node()
-        rclpy.shutdown()
+        if meter is not None:
+            meter.destroy_node()
+        # ROS 2's signal handler may have already shut down the context.
+        rclpy.try_shutdown()
 
 
 if __name__ == "__main__":
