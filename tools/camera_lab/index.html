@@ -136,6 +136,10 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
     <button class="primary" id="startTag">Start / Restart AprilTags scene</button>
     <button id="applyNoise">Apply noise live</button>
    </div>
+   <div class="buttons">
+    <button id="publishTags">Publish tag geometry to main simulation</button>
+   </div>
+   <p id="tagPublishStatus" class="hint">Publish running tag size, height and calculated mount radius to the main court and detector configuration. Lab-only RGB noise will not be published.</p>
    <p class="hint">Changing tag size or height regenerates the meshes and requires restarting this scene. Gaussian noise modifies the RGB pixels <b>before detection</b>, without restarting Gazebo.</p>
    <h3>Place the robot on the court</h3>
    <svg id="courtMap" viewBox="0 0 700 410" aria-label="Click anywhere on the published venue floor including outside the badminton court to set robot X and Y">
@@ -157,6 +161,7 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
   <div>
    <h3>Live robot camera POV</h3>
    <img id="tagImage" alt="Live RGB frame with detected AprilTag corners and TF pose axes"/>
+   <p id="tagViewMeta" class="hint" role="status">RGB input: — resolution · — FPS received; preview: — resolution · — FPS generated</p>
    <p class="hint">Actual RGB image with detected corner outlines and TF axes when available; preview limited to about 2–3 FPS. This display adds image-conversion CPU work, reported separately under <b>tag_monitor</b>.</p>
    <div class="stats">
     <div class="stat"><small>Detection success</small><strong id="tagHit">—</strong><small>% of processed detector frames</small></div>
@@ -409,6 +414,21 @@ $("applyNoise").onclick=()=>action(async()=>{
  await request("/api/tag/noise",{noise_sigma:sigma});
  notify("Applied RGB Gaussian noise σ="+sigma+" before AprilTag detection.");
 });
+$("publishTags").onclick=()=>action(async()=>{
+ if(currentTab!=="apriltags")throw Error("Open AprilTags Lab first.");
+ const running=live?.tag||{};
+ const displayed=tagForm();
+ if(Math.abs(displayed.size-running.size)>1e-4||
+    Math.abs(displayed.height-running.height)>1e-3){
+  throw Error("Restart the AprilTags scene to apply changed tag size/height before publishing.");
+ }
+ if(!confirm("Publish the RUNNING AprilTag size, height and calculated pole radius to production court_landmarks.yaml AND perception.yaml? This also updates the shared physical AprilTag detector configuration, so real tags must have the same size. Previous YAMLs are backed up. Gaussian pixel noise stays lab-only. Rebuild and restart the main simulation to apply."))return;
+ const result=await request("/api/tag/publish",{confirm:true});
+ notify(result.changed?
+  "Published tag geometry to main simulation. Backup: "+result.backup+
+  ". Rebuild and restart the main simulation (and physical detector if used).":
+  "Production tag geometry already matches the running AprilTags Lab.");
+});
 function sweepRequest(kind){
  const payload={
   kind,tag_id:Number($("tagId").value),
@@ -539,6 +559,12 @@ function renderSweep(sweep){
 }
 function renderTag(s){
  const obs=s.tag_observation||{},r=s.resources||{};
+ function res(value){return Array.isArray(value)&&value.length===2?
+   value[0]+"×"+value[1]:"—"}
+ $("tagViewMeta").textContent="RGB input: "+res(obs.rgb_resolution)+
+   " at "+fmt(obs.rgb_received_fps,1)+" FPS received · JPEG preview: "+
+   res(obs.preview_resolution)+" at "+fmt(obs.preview_fps,1)+
+   " FPS generated (browser refreshes at up to 2 FPS).";
  $("tagHit").textContent=fmt(obs.detection_pct,1);
  $("tagFps").textContent=fmt(obs.detector_fps,1);
  $("tagP50").textContent=fmt(obs.image_to_detection_p50_ms,1);
@@ -589,6 +615,20 @@ function renderTag(s){
       fmt(configured.robot_y,2)+") m, yaw "+fmt(configured.robot_yaw,1)+"°.":
    "Click the court to choose a robot position, then start the AprilTags scene.");
  $("applyNoise").disabled=s.mode!=="apriltags"||s.phase!=="streaming";
+ const publication=s.tag_publication||{};
+ const canPublish=s.mode==="apriltags"&&s.phase==="streaming"&&
+   (obs.detector_frames||0)>=3&&s.sweep?.state!=="running"&&
+   !geometryPending&&!publication.error;
+ $("publishTags").disabled=!canPublish;
+ $("tagPublishStatus").textContent=publication.error?
+  "Cannot read production AprilTag configuration: "+publication.error:
+  publication.matches_lab?
+    "Production tag size, height and pole mount radius match the running lab. "+
+    "Gaussian RGB pixel noise is lab-only.":
+    "Publish writes the running tag size, height and calculated pole radius to "+
+    "court_landmarks.yaml and perception.yaml with backups. The detector "+
+    "configuration is shared with real hardware; physical tags must match. "+
+    "Rebuild and restart the main simulation. Gaussian RGB noise stays lab-only.";
  renderSweep(s.sweep);
 }
 async function showTagFrame(){
