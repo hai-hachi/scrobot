@@ -317,6 +317,9 @@ class TagMonitor(Node):
 
     def preview(self, msg, detections):
         now = time.monotonic()
+        # Do not re-display an old camera frame immediately after moving.
+        if now - self.reset_wall < 0.35:
+            return
         if now - self.last_preview < 0.35:
             return
         if msg.encoding.lower() not in ("rgb8", "bgr8"):
