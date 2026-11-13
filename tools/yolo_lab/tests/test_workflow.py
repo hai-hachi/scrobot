@@ -102,6 +102,43 @@ class WorkflowTests(unittest.TestCase):
                 self.assertTrue((place/"dataset_world.sdf").exists())
                 self.assertTrue((place/"datasets"/result["dataset"]).is_dir())
 
+    def test_early_finish_preserves_capture_and_is_idempotent(self):
+        fake = FakeLab()
+        w = workflow.Workflow(fake)
+        with tempfile.TemporaryDirectory() as td:
+            directory = pathlib.Path(td)
+            w.capture_directory = directory
+            w.dataset = directory.name
+            fake.processes["capture"] = mock.Mock(poll=lambda: None)
+            response = w.cancel_dataset()
+            self.assertTrue(response["stop_requested"])
+            marker = directory/".finish_early.request"
+            self.assertTrue(marker.is_file())
+            self.assertEqual(w.stage, "finishing_early")
+            self.assertNotIn(("terminate", "capture"), fake.events)
+            self.assertTrue(w.stop_task("capture")["stop_requested"])
+            fake.processes["capture"].poll = lambda: 0
+            with self.assertRaisesRegex(ValueError, "No active capture"):
+                w.cancel_dataset()
+
+    def test_latest_label_preview_separate_from_inspector_previews(self):
+        script = LAB/"scripts/dataset_capture.py"
+        tree = ast.parse(script.read_text(),filename=str(script))
+        names = [node.name for node in tree.body if isinstance(node,ast.FunctionDef)]
+        self.assertIn("write_labeled_preview", names)
+        source = script.read_text()
+        self.assertIn('directory / "capture_preview"', source)
+        self.assertIn('write_labeled_preview(bgr, boxes, self.output_dir, split, stem,',source)
+        self.assertIn('self.finalize_partial_dataset(reason="early_stop")',source)
+        self.assertIn('rclpy.try_shutdown()',source)
+        self.assertIn('"last_timings_ms"',source)
+        page=(LAB/"index.html").read_text()
+        self.assertIn('id="capturePreview"',page)
+        self.assertIn('id="startInspect"',page)
+        self.assertNotIn('id="tabLabels"',page)
+        self.assertNotIn('id="labelsPane"',page)
+        self.assertIn('"/api/capture-preview?seq="',page)
+
     def test_model_validation_and_training_require_inspection_pass(self):
         fake=FakeLab()
         with tempfile.TemporaryDirectory() as td:
