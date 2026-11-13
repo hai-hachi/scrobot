@@ -92,60 +92,72 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 </div>
 
 <div id="yoloPane" hidden>
-<div class="grid">
+<section class="card" id="shuttleSpawnCard">
+  <h2>Shuttle spawning</h2>
+  <p class="muted">Change the distribution, seed, count, fraction or zone weights. All court dimensions, line coordinates, centers, spread and single-shuttle pose are read from the existing <code>src/scrobot_simulation/config/shuttle_spawn.yaml</code>.</p>
+  <div class="fields">
+    <label>Spawn mode<select id="spawn_mode"><option value="single">Single</option><option value="random">Random</option><option value="cluster">Cluster</option><option value="mixed">Mixed</option></select></label>
+    <label>Shuttle count<input id="shuttle_count" type="number" min="1" max="60" step="1"></label>
+    <label>Random seed<input id="seed" type="number" min="0" max="2147483647" step="1"></label>
+    <label id="densityField">Random density<select id="random_density"><option value="uniform">Uniform</option><option value="center">Center</option><option value="net">Near net</option></select></label>
+    <label id="mixedFractionField">Mixed random fraction (0–1)<input id="random_fraction" type="number" min="0" max="1" step=".05"></label>
+  </div>
+  <p id="singlePoseInfo" class="muted" hidden>Single mode places one shuttle at the fixed single pose from shuttle_spawn.yaml.</p>
+  <div id="clusterControls">
+    <h3>Cluster weights</h3>
+    <p class="muted">Seven court lines × left (+Y) and right (−Y). Zero excludes a zone; the remaining weights are normalized automatically. Positions are read-only.</p>
+    <div style="overflow-x:auto">
+      <table><thead><tr><th>Cluster row</th><th>Line X (m)</th><th>Left weight</th><th>Right weight</th></tr></thead><tbody id="clusterRows"></tbody></table>
+    </div>
+  </div>
+  <details><summary>Physics settling</summary>
+    <label>Dynamic settling before static freeze (seconds)<input id="settle_seconds" type="number" min=".5" max="15" step=".5" style="max-width:220px"></label>
+    <p class="muted">Shuttles fall using the real collision model. The scene then checks stability and recreates them as static models at their measured final poses.</p>
+  </details>
+  <p id="spawnSourceInfo" class="muted">Loading source court geometry…</p>
+  <div class="buttons"><button id="saveYolo" class="primary">Save YOLO Lab YAML</button></div>
+  <p class="muted" id="yoloFile">Loading YOLO Lab YAML…</p>
+  <p class="muted" id="lightingInfo">Loading saved Lighting Lab configuration…</p>
+</section>
+<div class="grid" id="scenePosePreview">
   <section class="card">
-    <h2>YOLO scene settings</h2>
-    <p class="muted">Saved separately in <code>yolo_lab.yaml</code>. This sets a reproducible initial scene and records proposed dataset/training parameters; it does not produce labels yet.</p>
+    <h2>Robot placement</h2>
+    <p class="muted">Click to place the robot base. Drag toward the direction the robot and camera should face. You can also enter an exact yaw.</p>
     <div class="fields">
-      <label>Shuttle count<input id="shuttle_count" type="number" min="1" max="60" step="1"></label>
-      <label>Spawn mode<select id="spawn_mode"><option value="single">Single</option><option value="random">Random</option><option value="cluster">Cluster</option><option value="mixed">Mixed</option></select></label>
-      <label>Random density<select id="random_density"><option value="uniform">Uniform</option><option value="center">Center</option><option value="net">Near net</option></select></label>
-      <label>Mixed random fraction (0–1)<input id="random_fraction" type="number" min="0" max="1" step=".05"></label>
-      <label>Single X (m)<input id="single_x" type="number" step=".1"></label>
-      <label>Single Y (m)<input id="single_y" type="number" step=".1"></label>
-      <label>Dynamic settling (s)<input id="settle_seconds" type="number" min=".5" max="15" step=".5"></label>
-      <label>Random seed<input id="seed" type="number" min="0" max="2147483647" step="1"></label>
       <label>Robot X (m)<input id="robot_x" type="number" step="0.1"></label>
       <label>Robot Y (m)<input id="robot_y" type="number" step="0.1"></label>
       <label>Robot yaw (°)<input id="robot_yaw" type="number" min="-180" max="180" step="1"></label>
-      <label>Planned dataset images<input id="dataset_images" type="number" min="50" step="50"></label>
-      <label>Positive view fraction<input id="positive_fraction" type="number" min="0" max="1" step="0.05"></label>
-      <label>Planned epochs<input id="epochs" type="number" min="1" step="1"></label>
-      <label>Planned batch<input id="batch" type="number" min="1" step="1"></label>
-      <label>YOLO training imgsz<input id="imgsz" type="number" min="320" step="32"></label>
-      <label>Detection confidence<input id="confidence" type="number" min="0.001" max="1" step="0.01"></label>
     </div>
-    <h3>Cluster controls</h3>
-    <div class="fields">
-      <label>Spread X σ (m)<input id="cluster_sigma_x" type="number" min="0" max="4" step=".05"></label>
-      <label>Spread Y σ (m)<input id="cluster_sigma_y" type="number" min="0" max="4" step=".05"></label>
-      <label>Left center Y (m)<input id="cluster_left_y" type="number" step=".05"></label>
-      <label>Right center Y (m)<input id="cluster_right_y" type="number" step=".05"></label>
-    </div>
-    <p class="muted">Each court marking has independent left (+Y) and right (−Y) weights. Zero disables a zone. All weights are normalized automatically.</p>
-    <table><thead><tr><th>Cluster row</th><th>X (m)</th><th>Left weight</th><th>Right weight</th></tr></thead><tbody id="clusterRows"></tbody></table>
-    <h3>Robot pose selector</h3>
-    <p class="muted">Click the overhead court to position the robot; drag from that point to point its nose and camera. Yaw remains editable numerically.</p>
-    <svg id="robotPoseMap" viewBox="0 0 700 340" style="width:100%;max-width:700px;touch-action:none;cursor:crosshair;background:#183e46;border-radius:8px" aria-label="Overhead court robot position and heading">
+    <svg id="robotPoseMap" viewBox="0 0 700 340" style="width:100%;touch-action:none;cursor:crosshair;background:#183e46;border-radius:8px" aria-label="Overhead court robot position and heading">
       <rect x="32" y="32" width="636" height="276" fill="#226b67" stroke="#eff6f7" stroke-width="2"/>
       <line x1="350" y1="32" x2="350" y2="308" stroke="#f4f5f4" stroke-width="3"/>
       <line x1="70" y1="32" x2="70" y2="308" stroke="#eff6f7"/>
       <line x1="630" y1="32" x2="630" y2="308" stroke="#eff6f7"/>
       <g id="robotMapMarker"><circle cx="350" cy="170" r="8" fill="#ffd68a"/><path d="M350 170 L384 170" stroke="#ffd68a" stroke-width="4"/></g>
     </svg>
-    <div class="buttons"><button id="applyRobotPose">Apply robot pose to running scene</button><button id="saveYolo" class="primary">Save YOLO Lab YAML</button></div>
-    <p class="muted" id="yoloFile">Loading YOLO Lab YAML…</p>
-    <h3>Shared Lighting Lab</h3>
-    <p class="muted" id="lightingInfo">Loading saved lighting…</p>
+    <p class="muted">Overhead selector (not a Gazebo render). The arrow shows the robot’s +X heading.</p>
+    <div class="buttons"><button id="applyRobotPose">Apply pose to live scene</button></div>
   </section>
   <section class="card">
     <h2>Live simulated robot RGB</h2>
-    <p class="muted">Viewpoint: actual robot-mounted camera (base position + camera offset 0.1206 m forward, 0.0325 m sideways and 0.240 m high, pitched 15° downward). Camera moves with robot yaw, not a free-fly camera.</p>
-    <img id="preview" alt="Live Gazebo camera preview, or blank until RGB arrives">
-    <p class="muted" id="previewStatus">JPEG preview is deliberately throttled to approximately 2 FPS. Actual RGB is measured separately.</p>
+    <p class="muted">Viewpoint: robot-mounted camera; offset +0.1206 m forward, +0.0325 m lateral, +0.240 m high, pitched 15° downward. This is the robot camera, not the Gazebo free camera.</p>
+    <img id="preview" alt="Live RGB from the robot-mounted Gazebo camera">
+    <p class="muted" id="previewStatus">JPEG preview is throttled to around 2 FPS. Raw RGB throughput is measured separately.</p>
     <p class="muted" id="sceneStatus">Start the scene to inspect the shuttle models and court.</p>
   </section>
 </div>
+<section class="card">
+  <h2>Dataset, training and inference defaults</h2>
+  <p class="muted">These stay in the YOLO Lab YAML and are not part of shuttle spawning. Save the YAML above after editing.</p>
+  <div class="fields">
+    <label>Planned dataset images<input id="dataset_images" type="number" min="50" step="50"></label>
+    <label>Positive view fraction<input id="positive_fraction" type="number" min="0" max="1" step="0.05"></label>
+    <label>Planned epochs<input id="epochs" type="number" min="1" step="1"></label>
+    <label>Planned batch<input id="batch" type="number" min="1" step="1"></label>
+    <label>YOLO training imgsz<input id="imgsz" type="number" min="320" step="32"></label>
+    <label>Detection confidence<input id="confidence" type="number" min="0.001" max="1" step="0.01"></label>
+  </div>
+</section>
 <section class="card">
   <h2>Integrated workflow from the original <code>yoloshuttle</code> repository</h2>
   <p class="muted">The scripts below have been consolidated under <code>tools/yolo_lab/</code> and are now connected to the five workflow tabs. The dataset label inspector is required before training. The original training scripts remain available for reproducible direct command-line use.</p>
