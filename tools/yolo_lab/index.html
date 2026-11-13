@@ -492,7 +492,8 @@ function cameraForm(){
          depth:$("depth").value,depth_fps:Number($("depth_fps").value),
          depth_enabled:$("depth_enabled").checked};
 }
-function loadYolo(cfg){
+function loadYolo(raw){
+ const cfg={...options.yolo_default,...raw};
  for(const key of yoloInt.concat(yoloFloat))$(key).value=cfg[key];
  $("spawn_mode").value=cfg.spawn_mode;$("random_density").value=cfg.random_density;
  for(let i=0;i<7;i++){
