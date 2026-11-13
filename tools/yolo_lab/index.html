@@ -97,11 +97,17 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
     <h2>YOLO scene settings</h2>
     <p class="muted">Saved separately in <code>yolo_lab.yaml</code>. This sets a reproducible initial scene and records proposed dataset/training parameters; it does not produce labels yet.</p>
     <div class="fields">
-      <label>Static shuttles<input id="shuttle_count" type="number" min="1" max="60" step="1"></label>
+      <label>Shuttle count<input id="shuttle_count" type="number" min="1" max="60" step="1"></label>
+      <label>Spawn mode<select id="spawn_mode"><option value="single">Single</option><option value="random">Random</option><option value="cluster">Cluster</option><option value="mixed">Mixed</option></select></label>
+      <label>Random density<select id="random_density"><option value="uniform">Uniform</option><option value="center">Center</option><option value="net">Near net</option></select></label>
+      <label>Mixed random fraction (0–1)<input id="random_fraction" type="number" min="0" max="1" step=".05"></label>
+      <label>Single X (m)<input id="single_x" type="number" step=".1"></label>
+      <label>Single Y (m)<input id="single_y" type="number" step=".1"></label>
+      <label>Dynamic settling (s)<input id="settle_seconds" type="number" min=".5" max="15" step=".5"></label>
       <label>Random seed<input id="seed" type="number" min="0" max="2147483647" step="1"></label>
       <label>Robot X (m)<input id="robot_x" type="number" step="0.1"></label>
       <label>Robot Y (m)<input id="robot_y" type="number" step="0.1"></label>
-      <label>Robot yaw (°)<input id="robot_yaw" type="number" step="5"></label>
+      <label>Robot yaw (°)<input id="robot_yaw" type="number" min="-180" max="180" step="1"></label>
       <label>Planned dataset images<input id="dataset_images" type="number" min="50" step="50"></label>
       <label>Positive view fraction<input id="positive_fraction" type="number" min="0" max="1" step="0.05"></label>
       <label>Planned epochs<input id="epochs" type="number" min="1" step="1"></label>
@@ -109,13 +115,32 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
       <label>YOLO training imgsz<input id="imgsz" type="number" min="320" step="32"></label>
       <label>Detection confidence<input id="confidence" type="number" min="0.001" max="1" step="0.01"></label>
     </div>
-    <div class="buttons"><button id="saveYolo" class="primary">Save YOLO Lab YAML</button></div>
+    <h3>Cluster controls</h3>
+    <div class="fields">
+      <label>Spread X σ (m)<input id="cluster_sigma_x" type="number" min="0" max="4" step=".05"></label>
+      <label>Spread Y σ (m)<input id="cluster_sigma_y" type="number" min="0" max="4" step=".05"></label>
+      <label>Left center Y (m)<input id="cluster_left_y" type="number" step=".05"></label>
+      <label>Right center Y (m)<input id="cluster_right_y" type="number" step=".05"></label>
+    </div>
+    <p class="muted">Each court marking has independent left (+Y) and right (−Y) weights. Zero disables a zone. All weights are normalized automatically.</p>
+    <table><thead><tr><th>Cluster row</th><th>X (m)</th><th>Left weight</th><th>Right weight</th></tr></thead><tbody id="clusterRows"></tbody></table>
+    <h3>Robot pose selector</h3>
+    <p class="muted">Click the overhead court to position the robot; drag from that point to point its nose and camera. Yaw remains editable numerically.</p>
+    <svg id="robotPoseMap" viewBox="0 0 700 340" style="width:100%;max-width:700px;touch-action:none;cursor:crosshair;background:#183e46;border-radius:8px" aria-label="Overhead court robot position and heading">
+      <rect x="32" y="32" width="636" height="276" fill="#226b67" stroke="#eff6f7" stroke-width="2"/>
+      <line x1="350" y1="32" x2="350" y2="308" stroke="#f4f5f4" stroke-width="3"/>
+      <line x1="70" y1="32" x2="70" y2="308" stroke="#eff6f7"/>
+      <line x1="630" y1="32" x2="630" y2="308" stroke="#eff6f7"/>
+      <g id="robotMapMarker"><circle cx="350" cy="170" r="8" fill="#ffd68a"/><path d="M350 170 L384 170" stroke="#ffd68a" stroke-width="4"/></g>
+    </svg>
+    <div class="buttons"><button id="applyRobotPose">Apply robot pose to running scene</button><button id="saveYolo" class="primary">Save YOLO Lab YAML</button></div>
     <p class="muted" id="yoloFile">Loading YOLO Lab YAML…</p>
     <h3>Shared Lighting Lab</h3>
     <p class="muted" id="lightingInfo">Loading saved lighting…</p>
   </section>
   <section class="card">
     <h2>Live simulated robot RGB</h2>
+    <p class="muted">Viewpoint: actual robot-mounted camera (base position + camera offset 0.19 m forward, 0.287 m high, pitched 15° downward). Camera moves with robot yaw, not a free-fly camera.</p>
     <img id="preview" alt="Live Gazebo camera preview, or blank until RGB arrives">
     <p class="muted" id="previewStatus">JPEG preview is deliberately throttled to approximately 2 FPS. Actual RGB is measured separately.</p>
     <p class="muted" id="sceneStatus">Start the scene to inspect the shuttle models and court.</p>
@@ -301,7 +326,50 @@ const $=id=>document.getElementById(id);
 let mode="camera",busy=false,last=null,options=null,lastPreview=0;
 const cameraKeys=["color","color_fps","depth","depth_fps","depth_enabled"];
 const yoloInt=["shuttle_count","seed","dataset_images","epochs","batch","imgsz"];
-const yoloFloat=["robot_x","robot_y","robot_yaw","positive_fraction","confidence"];
+const yoloFloat=["robot_x","robot_y","robot_yaw","positive_fraction","confidence",
+ "random_fraction","single_x","single_y","settle_seconds",
+ "cluster_sigma_x","cluster_sigma_y","cluster_left_y","cluster_right_y"];
+const clusterNames=["A singles long","A doubles long","A short","Net","B short","B doubles long","B singles long"];
+for(let i=0;i<7;i++){
+ const tr=document.createElement("tr");
+ const label=document.createElement("td");label.textContent=clusterNames[i];tr.append(label);
+ for(const [column,prefix] of [["x","line"],["left","left"],["right","right"]]){
+  const td=document.createElement("td"),field=document.createElement("input");
+  field.id="cluster_"+prefix+"_"+i;field.type="number";field.step="0.05";
+  if(column!=="x")field.min="0";
+  td.append(field);tr.append(td);
+ }
+ $("clusterRows").append(tr);
+}
+function paintRobot(){
+ const x=Number($("robot_x").value), y=Number($("robot_y").value);
+ const yaw=Number($("robot_yaw").value)*Math.PI/180;
+ const px=350+x*636/13.4, py=170-y*276/6.1;
+ $("robotMapMarker").setAttribute("transform",
+  "translate("+px+","+py+") rotate("+(-yaw*180/Math.PI)+") translate(-350,-170)");
+}
+function pointOnCourt(event){
+ const bounds=$("robotPoseMap").getBoundingClientRect();
+ return {x:Math.max(-6.7,Math.min(6.7,((event.clientX-bounds.left)/bounds.width*700-350)*13.4/636)),
+         y:Math.max(-3.05,Math.min(3.05,(170-(event.clientY-bounds.top)/bounds.height*340)*6.1/276))};
+}
+let mapDrag=false;
+$("robotPoseMap").addEventListener("pointerdown",e=>{
+ const p=pointOnCourt(e);
+ $("robot_x").value=p.x.toFixed(2);$("robot_y").value=p.y.toFixed(2);
+ mapDrag=true;$("robotPoseMap").setPointerCapture(e.pointerId);paintRobot();
+});
+$("robotPoseMap").addEventListener("pointermove",e=>{
+ if(!mapDrag)return;
+ const p=pointOnCourt(e);
+ const dx=p.x-Number($("robot_x").value),dy=p.y-Number($("robot_y").value);
+ if(Math.hypot(dx,dy)>.08){
+  $("robot_yaw").value=(Math.atan2(dy,dx)*180/Math.PI).toFixed(1);paintRobot();
+ }
+});
+$("robotPoseMap").addEventListener("pointerup",()=>{mapDrag=false;});
+$("robotPoseMap").addEventListener("pointercancel",()=>{mapDrag=false;});
+for(const key of ["robot_x","robot_y","robot_yaw"])$(key).addEventListener("input",paintRobot);
 const panes={
  camera:["cameraPane","tabCamera"],yolo:["yoloPane","tabYolo"],
  dataset:["datasetPane","tabDataset"],labels:["labelsPane","tabLabels"],
@@ -349,10 +417,22 @@ function cameraForm(){
 }
 function loadYolo(cfg){
  for(const key of yoloInt.concat(yoloFloat))$(key).value=cfg[key];
+ $("spawn_mode").value=cfg.spawn_mode;$("random_density").value=cfg.random_density;
+ for(let i=0;i<7;i++){
+  $("cluster_line_"+i).value=cfg.cluster_line_x[i];
+  $("cluster_left_"+i).value=cfg.cluster_weights[i][0];
+  $("cluster_right_"+i).value=cfg.cluster_weights[i][1];
+ }
+ paintRobot();
 }
 function yoloForm(){
  const config={};
  for(const key of yoloInt.concat(yoloFloat))config[key]=Number($(key).value);
+ config.spawn_mode=$("spawn_mode").value;
+ config.random_density=$("random_density").value;
+ config.cluster_line_x=clusterNames.map((_,i)=>Number($("cluster_line_"+i).value));
+ config.cluster_weights=clusterNames.map((_,i)=>[
+  Number($("cluster_left_"+i).value),Number($("cluster_right_"+i).value)]);
  return config;
 }
 function sameFields(a,b){
@@ -377,6 +457,11 @@ async function action(fn){
 $("saveCamera").onclick=()=>action(async()=>{
  const result=await post("/api/config/camera/save",cameraForm());
  notify("Saved "+result.saved+". Main simulation camera calibration is unchanged.");
+});
+$("applyRobotPose").onclick=()=>action(async()=>{
+ const c=yoloForm();
+ await post("/api/scene/pose",{x:c.robot_x,y:c.robot_y,yaw:c.robot_yaw});
+ notify("Moved the actual robot camera; scene distribution and saved YAML unchanged.");
 });
 $("saveYolo").onclick=()=>action(async()=>{
  const result=await post("/api/config/yolo/save",yoloForm());
@@ -432,7 +517,7 @@ async function poll(){
   " shadow casters requested, venue clearance X="+s.lighting.venue.clearance_x+
   " m, Y="+s.lighting.venue.clearance_y+" m (per side).";
  $("sceneStatus").textContent=s.manifest?
-  "Generated "+s.manifest.shuttles.length+" static visual shuttle models from the production STL. This is an inspection scene only, not a labelled dataset.":
+  "Generated "+s.manifest.shuttles.length+" production shuttles ("+(s.manifest.settled_static?"settled and frozen":"dynamic; settling")+"). This is an inspection scene, not a labelled dataset.":
   "No YOLO inspection scene generated.";
  $("previewStatus").textContent=s.preview?.input_resolution?
   "Actual RGB input "+s.preview.input_resolution.join("×")+
