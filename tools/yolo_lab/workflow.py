@@ -36,6 +36,19 @@ def _read_json(path):
         return {}
 
 
+def _tail(path, max_bytes=3500):
+    path = Path(path)
+    if not path.is_file():
+        return ""
+    try:
+        with path.open("rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell()-max_bytes))
+            return f.read().decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
 class Workflow:
     def __init__(self, lab):
         self.lab = lab
@@ -327,7 +340,8 @@ class Workflow:
             "training":training,"validation":metrics,
             "live":live,
             "run":self.run_name,
-            "task_logs": {n:(self.lab_output/f"{n}.log").read_text(errors="replace")[-3500:]
-                          if (self.lab_output/f"{n}.log").is_file() else ""
-                          for n in ("capture","inspect","train","validate","live","import")},
+            "task_logs": {
+                n: _tail(self.lab_output/f"{n}.log")
+                for n in ("capture","inspect","train","validate","live","import")
+            },
         }
