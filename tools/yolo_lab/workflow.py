@@ -271,6 +271,8 @@ class Workflow:
         if destination.exists() or destination.is_symlink():
             raise ValueError("A model with that name already exists")
         target.rename(destination)
+        if self.selected_model == choice:
+            self.selected_model = str(destination.relative_to(HERE))
         pointer = HERE / "artifacts/latest_model.txt"
         if pointer.is_file() and not pointer.is_symlink():
             if pointer.read_text(encoding="utf-8").strip() == str(target.resolve()):
@@ -523,26 +525,32 @@ class Workflow:
 
     def _validate_pair_worker(self, generation, commands):
         """Evaluate A then B sequentially to keep GPU use bounded."""
-        for slot, cmd in commands:
-            with self.lab.lock:
-                if generation != self.compare_generation:
-                    return
-                proc = self.lab.launch("validate_" + slot, cmd)
-                if self.comparison is not None:
+        try:
+            for slot, cmd in commands:
+                with self.lab.lock:
+                    if generation != self.compare_generation:
+                        return
+                    proc = self.lab.launch("validate_" + slot, cmd)
                     self.comparison["state"] = "running_" + slot
-            code = proc.wait()
+                code = proc.wait()
+                with self.lab.lock:
+                    if generation != self.compare_generation:
+                        return
+                    self.lab._terminate("validate_" + slot)
+                    if code != 0:
+                        self.comparison["state"] = "failed_" + slot
+                        self.comparison["error"] = (
+                            "Model " + slot.upper() + " evaluation exited " + str(code))
+                        return
+                    self.comparison["state"] = "completed_" + slot
             with self.lab.lock:
-                if generation != self.compare_generation:
-                    return
-                self.lab._terminate("validate_" + slot)
-                if code != 0:
-                    self.comparison["state"] = "failed_" + slot
-                    self.comparison["error"] = "Model " + slot.upper() + " evaluation exited " + str(code)
-                    return
-                self.comparison["state"] = "completed_" + slot
-        with self.lab.lock:
-            if generation == self.compare_generation:
-                self.comparison["state"] = "complete"
+                if generation == self.compare_generation:
+                    self.comparison["state"] = "complete"
+        except Exception as exc:
+            with self.lab.lock:
+                if generation == self.compare_generation and self.comparison:
+                    self.comparison["state"] = "failed"
+                    self.comparison["error"] = str(exc)
 
     def start_compare_validation(self, choices, split="test", device="0"):
         self._ensure_idle()
