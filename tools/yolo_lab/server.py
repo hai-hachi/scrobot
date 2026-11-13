@@ -18,7 +18,7 @@ import subprocess
 import sys
 import threading
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -30,6 +30,7 @@ from modes import (COLOR, DEPTH, DEFAULT as CAMERA_DEFAULT,
 from lighting_source import calibration as lighting_calibration
 from yolo_settings import DEFAULT as YOLO_DEFAULT, validate as validate_yolo
 from world import build
+from workflow import Workflow
 
 OUTPUT = ROOT / "evaluation_results/yolo_lab"
 CAMERA_METER = ROOT / "tools/camera_lab/monitor.py"
@@ -73,6 +74,7 @@ class Lab:
         self.handles = {}
         self.manifest = None
         self.started_with = None
+        self.workflow = Workflow(self)
 
     def environment(self):
         env = os.environ.copy()
@@ -274,12 +276,7 @@ class Lab:
                          ("gazebo", "image_bridge", "meter", "preview", "gui")},
                 "display_available": bool(os.environ.get("DISPLAY")
                                           or os.environ.get("WAYLAND_DISPLAY")),
-                "workflow": {
-                    "data_generation": "not yet wired into this new lab",
-                    "auto_labelling": "not yet wired into this new lab",
-                    "train": "not yet wired into this new lab",
-                    "validation": "not yet wired into this new lab",
-                },
+                "workflow": self.workflow.progress(),
             }
 
 
@@ -329,6 +326,21 @@ class Handler(BaseHTTPRequestHandler):
                 if path.is_file() and self.lab.recent_json(OUTPUT / "preview.json"):
                     return self.respond(200, path.read_bytes(), "image/jpeg")
                 return self.respond(404, {"error": "Waiting for fresh RGB image"})
+            if route == "/api/live-frame":
+                path = OUTPUT / "live/live.jpg"
+                if path.is_file():
+                    return self.respond(200, path.read_bytes(), "image/jpeg")
+                return self.respond(404, {"error": "Live YOLO image not available"})
+            if route == "/api/label-preview":
+                name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
+                info = self.lab.workflow.progress()
+                if not isinstance(name, str) or name not in info["previews"]:
+                    raise ValueError("Select a generated label preview from the inspector")
+                dataset = self.lab.workflow.current_dataset()
+                source = dataset / "preview" / name
+                if not source.is_file():
+                    raise ValueError("Requested label preview file does not exist")
+                return self.respond(200, source.read_bytes(), "image/jpeg")
             return self.respond(404, {"error": "Unknown route"})
         except (ValueError, OSError, RuntimeError) as exc:
             return self.respond(400, {"error": str(exc)})
@@ -357,6 +369,43 @@ class Handler(BaseHTTPRequestHandler):
                 if body:
                     raise ValueError("Close GUI expects empty body")
                 result = self.lab.close_gui()
+            elif route == "/api/dataset/start":
+                if body:
+                    raise ValueError("Dataset capture uses saved Camera and YOLO YAML")
+                result = self.lab.workflow.start_dataset()
+            elif route == "/api/dataset/cancel":
+                if body:
+                    raise ValueError("Cancel expects an empty request")
+                result = self.lab.workflow.cancel_dataset()
+            elif route == "/api/dataset/select":
+                if set(body) != {"dataset"}:
+                    raise ValueError("Select a dataset name from the list")
+                result = self.lab.workflow.choose_dataset(body["dataset"])
+            elif route == "/api/inspect/start":
+                if set(body) != {"samples"}:
+                    raise ValueError("Specify label-preview sample count")
+                result = self.lab.workflow.start_inspect(body["samples"])
+            elif route == "/api/train/start":
+                if set(body) != {"model", "device"}:
+                    raise ValueError("Specify trained model and device")
+                result = self.lab.workflow.start_train(body["model"],body["device"])
+            elif route == "/api/validate/start":
+                if set(body) != {"model", "split", "device"}:
+                    raise ValueError("Specify model, split and device")
+                result = self.lab.workflow.start_validate(
+                    body["model"],body["split"],body["device"])
+            elif route == "/api/live/start":
+                if set(body) != {"model"}:
+                    raise ValueError("Select a model from the picker")
+                result = self.lab.workflow.start_live(body["model"])
+            elif route == "/api/model/import":
+                if set(body) != {"model"}:
+                    raise ValueError("Select a pinned original model")
+                result = self.lab.workflow.import_model(body["model"])
+            elif route == "/api/task/stop":
+                if set(body) != {"name"}:
+                    raise ValueError("Choose the stage to stop")
+                result = self.lab.workflow.stop_task(body["name"])
             else:
                 return self.respond(404, {"error": "Unknown route"})
             return self.respond(200, result)
@@ -375,8 +424,8 @@ def main():
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     httpd.RequestHandlerClass.lab = lab
     print(f"SCROBOT YOLO Lab: http://127.0.0.1:{args.port}", flush=True)
-    print("ROS_DOMAIN_ID=83  (isolated); standalone Camera / YOLO tabs", flush=True)
-    print("Synthetic data capture and training are not yet enabled in this first stage.", flush=True)
+    print("ROS_DOMAIN_ID=83 (isolated); Camera, Scene, Dataset, Labels, Train, Validate and Live tabs", flush=True)
+    print("Training requires Ultralytics; a checkpoint must be imported explicitly.", flush=True)
     try:
         httpd.serve_forever(poll_interval=0.2)
     except KeyboardInterrupt:
