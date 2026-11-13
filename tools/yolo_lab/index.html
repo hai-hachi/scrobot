@@ -917,7 +917,8 @@ function renderComparisonPlots(w){
   const report=reports[slot]||{},id=selected[i];
   const matching=!!(report.model&&report.dataset&&id&&w.selected_dataset&&
     String(report.model).endsWith("/"+id)&&
-    String(report.dataset).includes("/"+w.selected_dataset+"/"));
+    String(report.dataset).includes("/"+w.selected_dataset+"/")&&
+    report.split===$("validationSplit").value);
   for(const [imageType,kind] of specs){
    const imageId="cmp"+imageType+upper,element=$(imageId),
          label=$(imageId+"Status");
@@ -942,6 +943,7 @@ function renderComparisonPlots(w){
 }
 $("confusionKind").onchange=()=>renderComparisonPlots(last?.workflow||{});
 $("curveKind").onchange=()=>renderComparisonPlots(last?.workflow||{});
+$("validationSplit").onchange=()=>renderWorkflow(last||{});
 function drawComparisonPlot(values){
  const svg=$("comparisonPlot"),ns="http://www.w3.org/2000/svg";
  svg.replaceChildren();
@@ -1104,7 +1106,8 @@ function renderWorkflow(s){
   const report=reports[slot]||{},raw=livemap[slot]||{};
   const valid=!!(report.model&&id&&w.selected_dataset&&
    String(report.model).endsWith("/"+id)&&
-   String(report.dataset||"").includes("/"+w.selected_dataset+"/"));
+   String(report.dataset||"").includes("/"+w.selected_dataset+"/")&&
+   report.split===$("validationSplit").value);
   const data=valid?report:{};
   const live=cmp.mode==="live"&&cmp.models?.[idx]===id&&
     String(raw.model||"").endsWith("/"+id)?raw:{};
