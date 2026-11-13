@@ -138,6 +138,10 @@ def world(settings, destination):
     if cfg["depth_enabled"]:
         sensor("depth", "depth_camera", cfg["depth"], cfg["depth_fps"],
                "1.5795850624055896", "R_FLOAT32")
+    # Camera-only transport benchmark stays minimal in geometry but uses
+    # exactly the saved Lighting Lab light array, venue and floor color.
+    from lighting_source import apply_simple_world
+    apply_simple_world(scene)
     dest = Path(destination)
     dest.parent.mkdir(parents=True, exist_ok=True)
     ET.indent(root, space="  ")
