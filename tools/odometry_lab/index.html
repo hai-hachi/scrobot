@@ -26,7 +26,7 @@ body{background:linear-gradient(135deg,#0a1721,#0b1119);font:14px system-ui,sans
    <p>Controller and STM32 PID run at 100 Hz. These are requested simulation publication/update rates; the table shows measured topic rates, jitter and ages.</p>
    <div id="rate-controls"></div>
    <div class="switch"><label for="use_magnetometer">Fuse magnetometer in Madgwick</label><input id="use_magnetometer" type="checkbox" checked></div>
-   <div class="buttons"><button id="apply">Save lab settings</button><button id="restart">Restart Gazebo with rates</button></div>
+   <div class="buttons"><button id="apply">Save Odometry Lab YAML</button><button id="restart">Restart Gazebo with rates</button></div>
    <p id="rateStatus" class="hint"></p>
    <div class="notice">Changing Gazebo sensor update rates or EKF rate needs a restart. More Hz improves temporal resolution only if real sensors provide fresh data and CPU / simulator throughput can keep up.</div>
   </div>
@@ -34,6 +34,8 @@ body{background:linear-gradient(135deg,#0a1721,#0b1119);font:14px system-ui,sans
    <p>Publish saved frequencies to <code>src/scrobot_simulation/config/odometry_calibration.yaml</code>. The normal simulator then uses them; real hardware settings remain unchanged.</p>
    <div class="buttons"><button id="publish" class="primary">Publish to Simulation</button></div>
    <p id="publishStatus" class="hint">Checking configuration...</p>
+<p id="labYamlStatus" class="hint">Odometry Lab YAML: not saved yet.</p>
+<p id="mobilityYamlStatus" class="hint">Mobility Lab YAML handoff: checking.</p>
   </div>
  </aside>
  <section>
@@ -138,7 +140,11 @@ $("nominalPreset").onclick=()=>{
  if(last)display(last);
  show("Nominal speed preset: straight at 0.50 m/s for both wheels. Click Run test; motion settings save automatically.");
 };
-$("apply").onclick=()=>invoke(async()=>{await api("/api/settings",fields());show("Lab settings saved. Restart Gazebo to apply frequency/magnetic changes.")});
+$("apply").onclick=()=>invoke(async()=>{
+ await api("/api/settings",fields());
+ const result=await api("/api/config/save",{});
+ show("Saved Odometry Lab YAML: "+result.saved+". Restart Gazebo to apply frequency/magnetic changes.");
+});
 $("restart").onclick=()=>invoke(async()=>{await api("/api/settings",fields());await api("/api/restart",{});show("Gazebo restarting with the saved odometry rates. Wait for joint feedback.")});
 $("run").onclick=()=>invoke(async()=>{await api("/api/settings",fields());let r=await api("/api/run",{});show("Running "+r.profile+" for "+r.duration_s+" s of simulation time.")});
 $("stop").onclick=()=>invoke(async()=>{await api("/api/stop",{});show("Stop command sent.")});
@@ -193,6 +199,15 @@ function display(s){
   " · commands -> "+(s.command_topic||"wheel controller")+
   ". No Nav2, AprilTags or smoother. Physics and motor model come from published Mobility Lab calibration.";
  const saved=changed(s.settings),inrun=["pre","running"].includes(s.state);
+const labYaml=s.lab_yaml||{},mobilityYaml=s.mobility_lab_yaml||{};
+$("labYamlStatus").textContent=labYaml.saved?
+ "Shared Odometry Lab YAML: "+labYaml.path+
+ (labYaml.matches_live?" · matches running settings":" · unsaved live changes"):
+ "No Odometry Lab YAML saved yet.";
+$("mobilityYamlStatus").textContent=mobilityYaml.saved?
+ "Mobility Lab settings available at "+mobilityYaml.path+
+ " · live odometry uses production mobility values until they are published.":
+ "Mobility Lab YAML not saved; live odometry uses published mobility calibration.";
  const cfg=fields(),peak=profilePeakSpeed(cfg);
  const pendingSensorChanges=["wheel_odom_hz","imu_hz","magnetometer_hz","ground_truth_hz","ekf_hz","use_magnetometer"].some(k=>cfg[k]!==s.settings[k]);
  const invalidSpeed=!Number.isFinite(peak)||peak>nominalWheelLimit+1e-9;
@@ -208,10 +223,10 @@ function display(s){
  updateMotionReadout();
  $("stop").disabled=!inrun;
  $("save").disabled=!s.metrics;
- $("publish").disabled=busy||saved||inrun;
+ $("publish").disabled=busy||!labYaml.saved||inrun;
  $("rateStatus").textContent=s.rates_changed?"⚠ Restart Gazebo to apply saved rates/magnetic mode":"Gazebo using saved sensor/fusion settings";
  $("rateStatus").className=s.rates_changed?"warn hint":"ok hint";
- $("publishStatus").textContent=s.published_match&&!saved?"Normal simulation matches saved publication rates":saved?"Unsaved slider values; click Save Lab Settings first":"Normal simulation differs from saved rates. Publish to transfer.";
+ $("publishStatus").textContent=s.published_match&&!saved?"Normal simulation matches saved publication rates":saved?"Unsaved slider values; click Save Odometry Lab YAML first":"Normal simulation differs from saved rates. Publish to transfer.";
  const body=$("sensorRows");body.innerHTML="";
  for(const [id,title,target]of streams){
   const m=s.streams?.[id]||{},row=document.createElement("tr");
