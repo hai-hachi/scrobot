@@ -110,7 +110,7 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
     </div>
   </div>
   <details><summary>Physics settling</summary>
-    <label>Dynamic settling before static freeze (seconds)<input id="settle_seconds" type="number" min=".5" max="15" step=".5" style="max-width:220px"></label>
+    <label>Dynamic settling before static freeze (seconds)<input id="settle_seconds" type="number" min=".5" max="15" step=".5" style="max-width:100%;min-width:280px"></label>
     <p class="muted">Shuttles fall using the real collision model. The scene then checks stability and recreates them as static models at their measured final poses.</p>
   </details>
   <p id="spawnSourceInfo" class="muted">Loading source court geometry…</p>
@@ -146,18 +146,6 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
   </section>
 </div>
 <section class="card">
-  <h2>Dataset, training and inference defaults</h2>
-  <p class="muted">These stay in the YOLO Lab YAML and are not part of shuttle spawning. Save the YAML above after editing.</p>
-  <div class="fields">
-    <label>Planned dataset images<input id="dataset_images" type="number" min="50" step="50"></label>
-    <label>Positive view fraction<input id="positive_fraction" type="number" min="0" max="1" step="0.05"></label>
-    <label>Planned epochs<input id="epochs" type="number" min="1" step="1"></label>
-    <label>Planned batch<input id="batch" type="number" min="1" step="1"></label>
-    <label>YOLO training imgsz<input id="imgsz" type="number" min="320" step="32"></label>
-    <label>Detection confidence<input id="confidence" type="number" min="0.001" max="1" step="0.01"></label>
-  </div>
-</section>
-<section class="card">
   <h2>Integrated workflow from the original <code>yoloshuttle</code> repository</h2>
   <p class="muted">The scripts below have been consolidated under <code>tools/yolo_lab/</code>. Dataset collection and label inspection share one tab. The dataset label inspector is required before training. The original training scripts remain available for reproducible direct command-line use.</p>
   <table><thead><tr><th>Stage</th><th>Original implementation</th><th>Key check</th></tr></thead><tbody>
@@ -176,6 +164,13 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <div class="grid">
 <section class="card">
 <h2>1 · Dataset capture &amp; automatic labels</h2>
+<p class="muted">Dataset capture settings are saved independently to the shared YOLO Lab YAML. Camera resolution and FPS still come from the Camera tab.</p>
+<div class="fields">
+  <label>Target labelled images<input id="dataset_images" type="number" min="50" max="50000" step="50"></label>
+  <label>Shuttle-focused camera pose fraction<input id="positive_fraction" type="number" min="0" max="1" step="0.05"></label>
+</div>
+<div class="buttons"><button class="primary" id="saveDatasetSettings">Save dataset settings</button></div>
+<p class="muted">0.85 targets a shuttle in 85% of pose attempts, not necessarily 85% of saved pictures.</p>
 <p class="muted">Build a fresh Lighting Lab calibrated court, spawn the production shuttle meshes, reposition a triggered camera, and save synchronized RGB + mesh-projected YOLO labels. The old collector's changed/stable render check is retained.</p>
 <div class="buttons">
 <button class="primary" id="startDataset">Generate labelled dataset</button>
@@ -184,6 +179,19 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <label>Saved dataset
 <select id="datasetList"><option>None yet</option></select>
 </label>
+<details id="datasetManager" class="card">
+  <summary>Manage saved datasets (rename / delete)</summary>
+  <p class="muted">Renaming preserves the capture timestamp and updates data.yaml plus saved summary paths. No active capture, inspection, training or validation task may be running.</p>
+  <label>Readable dataset name (1–40 letters, numbers, spaces, underscores or hyphens)
+    <input id="datasetRename" type="text" maxlength="40" placeholder="e.g. 720p_mixed_50_shuttles">
+  </label>
+  <div class="buttons"><button id="renameDataset">Rename selected dataset</button></div>
+  <p class="note">Deletion is permanent and removes all saved JPEGs, labels, preview files and inspection reports inside the selected dataset folder.</p>
+  <label>Confirm permanent deletion: type the exact selected dataset identifier
+    <input id="datasetDeleteConfirm" type="text" autocomplete="off" placeholder="Type selected dataset ID">
+  </label>
+  <div class="buttons"><button id="deleteDataset" class="danger">Permanently delete selected dataset</button></div>
+</details>
 <p class="muted">Dataset config comes from the Camera tab's <code>camera_lab.yaml</code> and Scene tab's <code>yolo_lab.yaml</code>. A new timestamped dataset is created for each capture; old datasets are not overwritten.</p>
 </section>
 <section class="card">
@@ -240,6 +248,12 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <h2>2 · Fine-tune YOLO</h2>
 <p class="muted">Runs the imported Ultralytics training script with saved epochs, batch and imgsz. Starts from the selected checkpoint, not random weights. Automatically stops Gazebo to free GPU capacity.</p>
 <label>Starting checkpoint<select id="trainModel"></select></label>
+<div class="fields">
+  <label>Training epochs<input id="epochs" type="number" min="1" max="300" step="1"></label>
+  <label>Training batch size<input id="batch" type="number" min="1" max="64" step="1"></label>
+  <label>Training input size (pixels)<input id="imgsz" type="number" min="320" max="1920" step="32"></label>
+</div>
+<div class="buttons"><button id="saveTrainingSettings" class="primary">Save training settings</button></div>
 <div class="buttons">
 <label>Device<select id="trainDevice"><option value="0">CUDA GPU 0</option><option value="cpu">CPU</option></select></label>
 </div>
@@ -251,12 +265,13 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <p class="muted">Binary weights are optional and aren't duplicated in Git. An explicit import checks the original repository's immutable Git blob hash before storing local files under <code>tools/yolo_lab/models/pretrained/</code>.</p>
 <div class="buttons">
 <select id="baselineChoice" style="max-width:220px">
-<option value="best.pt">best.pt</option>
-<option value="yolo11n_shuttle.pt">yolo11n_shuttle.pt</option>
-<option value="yolo11s-ball.pt">yolo11s-ball.pt</option>
+<option value="best.pt">Original best.pt — legacy shuttle baseline (architecture not specified)</option>
+<option value="yolo11n_shuttle.pt">YOLO11n Nano — shuttlecock-specific</option>
+<option value="yolo11s-ball.pt">YOLO11s Small — ball detector (different target)</option>
 </select>
 <button id="importBaseline">Import verified baseline weights</button>
 </div>
+<p class="muted">Import labels are descriptive only; the original .pt filenames and pinned checksums remain unchanged.</p>
 <p class="muted" id="modelStatus">No model selected.</p>
 </section>
 <section class="card">
@@ -275,9 +290,14 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <div id="validatePane" hidden>
 <div class="grid">
 <section class="card">
-<h2>4 · Held-out model validation</h2>
+<h2>3 · Held-out model validation</h2>
 <p class="muted">Runs the imported <code>validate_model.py</code> on the selected inspected dataset. Metrics come from Ultralytics evaluation, not guessed ground truth. Run test after model selection.</p>
 <label>Trained or baseline checkpoint<select id="validateModel"></select></label>
+<div class="fields">
+  <label>Validation image size (pixels)<input id="validation_imgsz" type="number" min="320" max="1920" step="32"></label>
+  <label>Validation batch size<input id="validation_batch" type="number" min="1" max="64" step="1"></label>
+</div>
+<div class="buttons"><button id="saveValidationSettings" class="primary">Save validation settings</button></div>
 <div class="fields">
 <label>Dataset split<select id="validationSplit"><option value="test">Held-out test</option><option value="val">Validation</option></select></label>
 <label>Device<select id="validateDevice"><option value="0">CUDA GPU 0</option><option value="cpu">CPU</option></select></label>
@@ -306,9 +326,14 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <div id="livePane" hidden>
 <div class="grid">
 <section class="card">
-<h2>5 · Live YOLO detections</h2>
+<h2>4 · Live YOLO detections</h2>
 <p class="muted">Runs the selected real Ultralytics model on the simulated RGB topic. Annotates actual model-predicted bounding boxes. The independent raw image monitor still measures ROS bridge FPS; model inference is capped to avoid image transport saturation.</p>
 <label>Checkpoint<select id="liveModel"></select></label>
+<div class="fields">
+  <label>Inference confidence<input id="confidence" type="number" min="0.001" max="1" step="0.01"></label>
+  <label>Live inference input size (pixels)<input id="live_imgsz" type="number" min="320" max="1920" step="32"></label>
+</div>
+<div class="buttons"><button id="saveLiveSettings" class="primary">Save live detection settings</button></div>
 <div class="buttons">
 <button id="startLive" class="primary">Start live YOLO</button>
 <button id="stopLive" class="danger">Stop live YOLO</button>
