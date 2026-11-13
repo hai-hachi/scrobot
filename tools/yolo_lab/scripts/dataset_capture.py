@@ -16,6 +16,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
@@ -123,6 +124,55 @@ def image_to_bgr(msg):
     if msg.encoding == 'rgb8':
         return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     return img.copy()
+
+
+def write_labeled_preview(bgr, boxes, directory, split, stem, number):
+    """Publish a small annotated image only after JPEG, labels and CSV are saved.
+
+    This preview is separate from inspector previews and never participates in
+    train/val/test. Atomic writes make dashboard polling safe.
+    """
+    height, width = bgr.shape[:2]
+    target_width = min(width, 960)
+    if target_width < width:
+        target_height = max(1, int(round(height * target_width / width)))
+        display = cv2.resize(bgr, (target_width, target_height),
+                             interpolation=cv2.INTER_AREA)
+    else:
+        display = bgr.copy()
+    out_h, out_w = display.shape[:2]
+    for xc, yc, bw, bh, _depth in boxes:
+        x0 = max(0, min(out_w-1, round((xc-bw/2)*out_w)))
+        x1 = max(0, min(out_w-1, round((xc+bw/2)*out_w)))
+        y0 = max(0, min(out_h-1, round((yc-bh/2)*out_h)))
+        y1 = max(0, min(out_h-1, round((yc+bh/2)*out_h)))
+        cv2.rectangle(display, (x0, y0), (x1, y1), (0, 220, 120), 2)
+    caption = (f"#{number}  {split}  {len(boxes)} shuttle boxes" if boxes
+               else f"#{number}  {split}  NEGATIVE - no shuttle boxes")
+    cv2.putText(display, caption, (12, 28), cv2.FONT_HERSHEY_SIMPLEX,
+                0.65, (0, 0, 0), 4, cv2.LINE_AA)
+    cv2.putText(display, caption, (12, 28), cv2.FONT_HERSHEY_SIMPLEX,
+                0.65, (240, 250, 245), 1, cv2.LINE_AA)
+    good, encoded = cv2.imencode(".jpg", display,
+                                 [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+    if not good:
+        raise OSError("Unable to encode live labelled preview")
+    folder = directory / "capture_preview"
+    folder.mkdir(parents=True, exist_ok=True)
+    filename = folder / "latest.jpg"
+    temp = folder / "latest.jpg.tmp"
+    temp.write_bytes(encoded.tobytes())
+    temp.replace(filename)
+    doc = {
+        "updated_wall": time.time(), "saved_images": number,
+        "split": split, "boxes": len(boxes), "frame": stem,
+        "original_resolution": [width, height],
+    }
+    meta = folder / "latest.json"
+    pending = folder / "latest.json.tmp"
+    pending.write_text(json.dumps(doc) + "\n", encoding="utf-8")
+    pending.replace(meta)
+    return doc
 
 
 class FastYoloDatasetCapture(Node):
@@ -278,6 +328,7 @@ class FastYoloDatasetCapture(Node):
         self.state = 'WAITING_FOR_CAMERA'
         self.initial_trigger_sent = False
         self.finalized = False
+        self.stop_request = self.output_dir / ".finish_early.request"
 
         self.last_saved_split = ''
         self.last_saved_boxes = 0
@@ -833,6 +884,13 @@ class FastYoloDatasetCapture(Node):
         self.last_saved_split = split
         self.last_saved_boxes = len(boxes)
         self.last_saved_focus_boxes = focus_boxes
+        try:
+            write_labeled_preview(bgr, boxes, self.output_dir, split, stem,
+                                  self.saved_images)
+        except (OSError, ValueError, cv2.error) as exc:
+            # Never lose a successfully committed image/label pair just
+            # because its small dashboard preview could not be produced.
+            self.get_logger().warning(f"Live label preview failed: {exc}")
         self.waiting_for_fresh_frame = False
         self.pre_teleport_crc = None
         self.candidate_render_crc = None
@@ -976,6 +1034,12 @@ class FastYoloDatasetCapture(Node):
     def capture_step(self):
         if self.finished:
             return
+        if self.stop_request.is_file():
+            # Finish at the next timer step, without interrupting a write.
+            self.finished = True
+            self.finalize_partial_dataset(reason="early_stop")
+            rclpy.try_shutdown()
+            return
 
         if self.latest_image is None or self.camera_info is None:
             self._set_state('WAITING_FOR_CAMERA')
@@ -1035,6 +1099,7 @@ class FastYoloDatasetCapture(Node):
         usable = (
             counts['train']['images'] > 0
             and counts['val']['images'] > 0
+            and all(c['images'] == c['labels'] for c in counts.values())
         )
 
         summary = {
@@ -1093,6 +1158,7 @@ class FastYoloDatasetCapture(Node):
                 'last_split': self.last_saved_split,
                 'last_boxes': self.last_saved_boxes,
                 'last_focus_boxes': self.last_saved_focus_boxes,
+                'last_timings_ms': dict(self.last_timings),
                 'output_dir': str(self.output_dir),
             }
             self.status_json.parent.mkdir(parents=True, exist_ok=True)
@@ -1113,16 +1179,15 @@ def main(args=None):
         rclpy.spin(node)
         if node.finished:
             stop_reason = 'complete'
-    except KeyboardInterrupt:
-        stop_reason = 'interrupted'
+    except (KeyboardInterrupt, ExternalShutdownException):
+        stop_reason = 'early_stop' if node.stop_request.is_file() else 'interrupted'
     finally:
         try:
             node.finalize_partial_dataset(reason=stop_reason)
         except Exception as exc:
             node.get_logger().error(f'Failed to finalize partial dataset: {exc}')
         node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':
