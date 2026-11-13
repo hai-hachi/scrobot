@@ -1,0 +1,26 @@
+name: SCROBOT YOLO Lab
+on:
+  push:
+    branches: [real-comparison]
+    paths:
+      - "tools/yolo_lab/**"
+      - "tools/camera_lab/modes.py"
+      - "tools/camera_lab/lighting_source.py"
+      - "tools/lighting_lab/scene.py"
+      - "tools/lighting_lab/config.py"
+      - "tools/lab_configs.py"
+      - ".github/workflows/yolo_lab.yml"
+  pull_request:
+    paths:
+      - "tools/yolo_lab/**"
+      - "tools/lab_configs.py"
+      - ".github/workflows/yolo_lab.yml"
+jobs:
+  offline-yolo-lab:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pure-Python test dependency
+        run: python3 -m pip install --break-system-packages PyYAML
+      - name: Validate standalone scene, YAML and browser scripts
+        run: python3 -m unittest discover -s tools/yolo_lab/tests -p 'test_*.py' -v

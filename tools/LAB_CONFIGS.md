@@ -16,6 +16,7 @@ into their own YAML or having to publish to main simulation first.
 | AprilTags | `src/scrobot_simulation/config/apriltags_lab.yaml` | `src/scrobot_localization/config/court_landmarks.yaml` and `src/scrobot_perception/config/perception.yaml` |
 | Mobility | `src/scrobot_simulation/config/mobility_lab.yaml` | `src/scrobot_simulation/config/mobility_calibration.yaml` |
 | Odometry | `src/scrobot_simulation/config/odometry_lab.yaml` | `src/scrobot_simulation/config/odometry_calibration.yaml` |
+| YOLO | `src/scrobot_simulation/config/yolo_lab.yaml` | No production publication yet; model training/validation integration is pending |
 
 ## Rules
 
@@ -43,12 +44,18 @@ into their own YAML or having to publish to main simulation first.
    Camera and Mobility publications do not alter real hardware settings;
    the production AprilTags detector configuration is shared with physical
    operation, so only publish sizes matching real printed tags.
-7. **Legacy settings migration.** Mobility and Odometry continue reading
+7. **YOLO Lab's Camera tab** imports the same Camera Lab D435i mode
+   table and writes the same shared `camera_lab.yaml` when explicitly
+   saved. Its independent `yolo_lab.yaml` records shuttle scene and
+   planned dataset/training settings. Its current launch builds a
+   calibrated court and visual shuttles for inspection; it does not
+   yet generate labels or publish unvalidated weights.
+8. **Legacy settings migration.** Mobility and Odometry continue reading
    their older `evaluation_results/<lab>/settings.json` as a fallback when
    no new YAML has been saved. Live edits may continue to update that
    temporary JSON draft, but publication now **requires** the explicit
    `Save <Lab> YAML` action. Once YAML exists, it wins on the next launch.
-8. **Shared library:** `tools/lab_configs.py` is the one path registry and
+9. **Shared library:** `tools/lab_configs.py` is the one path registry and
    YAML reader/writer used for the modern labs. Lighting Lab retains its
    historic unwrapped `lights/colors/venue` YAML schema for compatibility;
    other lab YAMLs use `schema_version: 1`, `lab: <id>`, and `settings:`.
