@@ -75,6 +75,7 @@ class TagMonitor(Node):
         self.errors = []
         self.margins = []
         self.det_times = deque(maxlen=150)
+        self.latencies_ms = deque(maxlen=300)
         self.latest_observed = None
         self.last_stamp = 0.0
         self.rgb.clear()
@@ -129,7 +130,7 @@ class TagMonitor(Node):
         self.pub.publish(out)
         if time.monotonic() - self.reset_wall > .35:
             self.rgb_count += 1
-        self.rgb.append((stamp(out.header), out))
+        self.rgb.append((stamp(out.header), out, time.monotonic()))
         # Before apriltag_ros starts publishing, still show a live frame.
         # Once it runs, draw from the matching detections/TF timestamps
         # instead of overwriting the overlay with an undecorated image.
@@ -165,6 +166,10 @@ class TagMonitor(Node):
         nearest = min(self.rgb, key=lambda x:abs(x[0]-stamp(msg.header)),
                       default=None)
         if nearest and abs(nearest[0]-stamp(msg.header))<0.03:
+            # From raw ROS image reception to detector result reception:
+            # includes noise processing, ROS queues and detector execution.
+            # Not a claim of isolated detector algorithm execution time.
+            self.latencies_ms.append(max(0.0,(now-nearest[2])*1000.0))
             have_tf = any(
                 key in self.latest_tfs and
                 abs(self.latest_tfs[key]["stamp"] - stamp(msg.header)) < .06
@@ -289,6 +294,10 @@ class TagMonitor(Node):
         window=[t for t in self.det_times if now-t<=3]
         det_fps=((len(window)-1)/(window[-1]-window[0])
                  if len(window)>1 and window[-1]>window[0] else None)
+        latencies=sorted(self.latencies_ms)
+        p50=latencies[len(latencies)//2] if latencies else None
+        p95=latencies[min(len(latencies)-1,
+                          math.ceil(.95*len(latencies))-1)] if latencies else None
         summary = {"updated_wall":time.time(),"epoch":self.epoch,
                    "tag_id":self.control["tag"]["tag_id"] if self.control else None,
                    "rgb_frames":self.rgb_count,"detector_frames":self.tag_frames,
@@ -296,6 +305,8 @@ class TagMonitor(Node):
                    "detection_pct":round(100*self.hits/self.tag_frames,2)
                        if self.tag_frames else None,
                    "detector_fps":round(det_fps,2) if det_fps else None,
+                   "image_to_detection_p50_ms":round(p50,2) if p50 is not None else None,
+                   "image_to_detection_p95_ms":round(p95,2) if p95 is not None else None,
                    "position_rmse_m":summarize(
                        [e["position_error_m"] for e in self.errors]),
                    "range_rmse_m":summarize(
