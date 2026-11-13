@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from ultralytics import YOLO
@@ -89,6 +90,8 @@ def main() -> None:
     p.add_argument("--imgsz", type=int, default=640)
     p.add_argument("--batch", type=int, default=16)
     p.add_argument("--split", choices=["val", "test"], default="val")
+    p.add_argument("--metrics-json", default=None,
+                   help="Write a machine-readable YOLO Lab metrics report")
     args = p.parse_args()
 
     model_path = resolve_model(args.model)
@@ -125,6 +128,18 @@ def main() -> None:
         for key, value in metrics.speed.items():
             print(f"  {key:<12}: {value:.2f}")
     print("=" * 64)
+    if args.metrics_json:
+        output=Path(args.metrics_json)
+        output.parent.mkdir(parents=True,exist_ok=True)
+        payload={"model":str(model_path.resolve()),"dataset":str(data_path.resolve()),
+                 "split":args.split,"precision":float(metrics.box.mp),
+                 "recall":float(metrics.box.mr),"map50":float(metrics.box.map50),
+                 "map75":float(metrics.box.map75),"map5095":float(metrics.box.map),
+                 "speed_ms":dict(getattr(metrics,"speed",None) or {})}
+        temporary=output.with_suffix(".tmp")
+        temporary.write_text(json.dumps(payload,indent=2)+"\n")
+        temporary.replace(output)
+        print(f"YOLO Lab metrics JSON: {output}")
 
 
 if __name__ == "__main__":
