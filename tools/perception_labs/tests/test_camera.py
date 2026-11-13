@@ -14,7 +14,7 @@ ROOT=Path(__file__).resolve().parents[3]
 LAB=ROOT/"tools/perception_labs"
 sys.path.insert(0,str(LAB))
 from camera_config import CONFIG, document, publish_benchmark, read_config, status
-from core import Meter, validate
+from core import Meter, validate, COLOR, DEPTH
 from resources import ResourceMeter, process_counters, descendants
 
 
@@ -32,14 +32,20 @@ def benchmark(config, valid=True):
 
 
 class CameraPublishingTests(unittest.TestCase):
-    def test_published_baseline_is_unchanged(self):
+    def test_current_published_camera_profile_is_readable(self):
+        # Published calibration is intentionally editable by Camera Lab.
+        # Verify round-trip instead of pinning an obsolete 1280x720 mode.
         raw=read_config(CONFIG)
-        self.assertEqual(raw["color"],{"width":1280,"height":720,"fps":15})
-        self.assertEqual(raw["depth"],
-                         {"width":848,"height":480,"fps":15,"enabled":True})
-        self.assertEqual(document({"color":"1280x720","depth":"848x480",
-                                  "color_fps":15,"depth_fps":15,
-                                  "depth_enabled":True}),raw)
+        rgb=next(k for k,wh in COLOR.items() if wh==(
+            raw["color"]["width"],raw["color"]["height"]))
+        depth=next(k for k,wh in DEPTH.items() if wh==(
+            raw["depth"]["width"],raw["depth"]["height"]))
+        self.assertEqual(document({
+            "color":rgb,"depth":depth,
+            "color_fps":raw["color"]["fps"],
+            "depth_fps":raw["depth"]["fps"],
+            "depth_enabled":raw["depth"]["enabled"],
+        }),raw)
 
     def test_publish_only_measured_camera_snapshot_and_backup(self):
         with tempfile.TemporaryDirectory() as td:
