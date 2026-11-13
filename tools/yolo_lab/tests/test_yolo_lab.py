@@ -236,6 +236,37 @@ class YoloLabTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,"Save Camera Lab YAML"):
                     lab.start()
 
+    def test_tunable_settings_live_in_respective_tabs(self):
+        page=(LAB/"index.html").read_text(encoding="utf-8")
+        scene=page.split('<div id="yoloPane" hidden>',1)[1].split(
+            '<div id="datasetPane" hidden>',1)[0]
+        dataset=page.split('<div id="datasetPane" hidden>',1)[1].split(
+            '<div id="trainPane" hidden>',1)[0]
+        train=page.split('<div id="trainPane" hidden>',1)[1].split(
+            '<div id="validatePane" hidden>',1)[0]
+        validation=page.split('<div id="validatePane" hidden>',1)[1].split(
+            '<div id="livePane" hidden>',1)[0]
+        live=page.split('<div id="livePane" hidden>',1)[1]
+        for setting in ("dataset_images","positive_fraction"):
+            self.assertIn(f'id="{setting}"',dataset)
+            self.assertNotIn(f'id="{setting}"',scene)
+        for setting in ("epochs","batch","imgsz"):
+            self.assertIn(f'id="{setting}"',train)
+            self.assertNotIn(f'id="{setting}"',scene)
+        for setting in ("validation_imgsz","validation_batch"):
+            self.assertIn(f'id="{setting}"',validation)
+        for setting in ("confidence","live_imgsz"):
+            self.assertIn(f'id="{setting}"',live)
+        for button in ("saveDatasetSettings","saveTrainingSettings",
+                       "saveValidationSettings","saveLiveSettings",
+                       "renameDataset","deleteDataset","datasetDeleteConfirm"):
+            self.assertIn(f'id="{button}"',page)
+        self.assertNotIn("Dataset, training and inference defaults",page)
+        for model in ("best.pt","yolo11n_shuttle.pt","yolo11s-ball.pt"):
+            self.assertIn(f'value="{model}"',train)
+        for route in ("/api/dataset/delete","/api/dataset/rename"):
+            self.assertIn(route,page)
+
     def test_ui_tabs_and_browser_js_are_valid(self):
         page = (LAB/"index.html").read_text()
         for key in ("tabCamera","tabYolo","color","color_fps",
