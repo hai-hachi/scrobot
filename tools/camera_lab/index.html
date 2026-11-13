@@ -113,7 +113,8 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
  <p id="tagActionStatus" class="status" role="status" aria-live="polite">AprilTags Lab ready. Start the scene to enable pose controls and sweeps.</p>
  <div class="tag-layout">
   <div>
-   <h3>Tags and camera input</h3>
+   <h3>Shared geometry · all 4 AprilTags</h3>
+   <p class="hint">The size, height and calculated pole offset apply to IDs 0, 1, 2 and 3 together. Target tag selection only chooses which tag to measure.</p>
    <div class="tag-columns">
     <div><label for="tagId">Target tag</label><select id="tagId">
        <option value="0">ID 0 · upper pole</option>
@@ -137,10 +138,12 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
     <button id="applyNoise">Apply noise live</button>
    </div>
    <div class="buttons">
-    <button id="publishTags">Publish tag geometry to main simulation</button>
+    <button id="applyAllTags" class="primary">Apply geometry to all 4 tags</button>
+    <button id="publishTags">Publish all 4 tags to main simulation</button>
    </div>
+   <p id="tagSharedStatus" class="hint">One shared geometry. Applying updates all 4 tag plates and matching detector sizes, restarting only the AprilTags scene.</p>
    <p id="tagPublishStatus" class="hint">Publish running tag size, height and calculated mount radius to the main court and detector configuration. Lab-only RGB noise will not be published.</p>
-   <p class="hint">Changing tag size or height regenerates the meshes and requires restarting this scene. Gaussian noise modifies the RGB pixels <b>before detection</b>, without restarting Gazebo.</p>
+   <p class="hint">After changing tag size or height, press <b>Apply geometry to all 4 tags</b> (the lab scene restarts). Gaussian noise modifies RGB pixels <b>before detection</b> without restarting Gazebo.</p>
    <h3>Place the robot on the court</h3>
    <svg id="courtMap" viewBox="0 0 700 410" aria-label="Click anywhere on the published venue floor including outside the badminton court to set robot X and Y">
     <g id="courtSurface"></g>
@@ -176,6 +179,7 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
    <div id="tagMeasurements" class="status">Start the AprilTags scene to measure real detections and estimated tag-to-camera pose.</div>
    <p id="tagPipeline" class="hint" role="status" aria-live="polite">Pipeline status: awaiting RGB and CameraInfo pairs.</p>
    <p id="tagTfStatus" class="hint">TF diagnostic: waiting for a detected marker pose.</p>
+   <p id="tagEpochStatus" class="hint">Accuracy measurements reset after each robot relocation.</p>
    <h3>Tag detector CPU and memory</h3>
    <div class="scroll"><table><thead><tr><th>Process</th><th>CPU % (per core)</th><th>RAM (MB)</th></tr></thead><tbody id="tagCpu"></tbody></table></div>
    <p class="hint">The detection process is separate from the image noise/preview process. Noise and preview overhead are not misattributed to the detector.</p>
@@ -406,13 +410,25 @@ $("moveRobot").onclick=()=>action(async()=>{
  const c=tagForm();
  const result=await request("/api/tag/pose",{
    robot_x:c.robot_x,robot_y:c.robot_y,robot_yaw:c.robot_yaw,tag_id:c.tag_id});
+ clearPoseAccuracy(result.epoch);
+ notify("Robot relocated. Previous pose errors and detection statistics were reset.");
  $("robotStatus").textContent="Gazebo placed robot at x="+c.robot_x+" y="+c.robot_y+
  " yaw="+c.robot_yaw+"°; new accuracy observation window started.";
 });
 $("applyNoise").onclick=()=>action(async()=>{
  const sigma=Number($("noiseSigma").value);
- await request("/api/tag/noise",{noise_sigma:sigma});
- notify("Applied RGB Gaussian noise σ="+sigma+" before AprilTag detection.");
+ const result=await request("/api/tag/noise",{noise_sigma:sigma});
+ clearPoseAccuracy(result.epoch);
+ notify("RGB Gaussian noise σ="+sigma+" applied; accuracy statistics reset.");
+});
+$("applyAllTags").onclick=()=>action(async()=>{
+ const c=tagForm();
+ const result=await request("/api/tag/geometry",{size:c.size,height:c.height});
+ clearPoseAccuracy(result.epoch);
+ notify("All "+result.updated_tag_ids.length+" tag plates and detector sizes updated: "+
+   result.size.toFixed(3)+" m active edge, "+result.height.toFixed(3)+
+   " m height, "+result.mount_radius.toFixed(3)+
+   " m pole radius. Scene restarted; robot pose retained.");
 });
 $("publishTags").onclick=()=>action(async()=>{
  if(currentTab!=="apriltags")throw Error("Open AprilTags Lab first.");
@@ -459,6 +475,16 @@ $("publish").onclick=()=>action(async()=>{
     "Published to "+result.path+"; backup: "+result.backup+". Restart normal Gazebo after rebuilding.":
     "Simulation YAML already matches these camera settings.";
 });
+function clearPoseAccuracy(epoch){
+ for(const id of ["tagHit","tagFps","tagP50","tagP95","tagPosError",
+                  "tagRangeError","tagYawError","tagNormalError"]){
+   $(id).textContent="—";
+ }
+ $("tagMeasurements").textContent="New measurement window: awaiting fresh tag detections and TF poses.";
+ $("tagEpochStatus").textContent="Measurement window #"+epoch+
+   " · all previous accuracy samples cleared; collecting after pose settles.";
+ $("tagImage").removeAttribute("src");
+}
 function fmt(value,digits=1){return typeof value==="number"?value.toFixed(digits):"—"}
 function drawSweepPlot(id,rows,unit){
  const metric=$("chartMetric").value;
@@ -588,6 +614,8 @@ function renderTag(s){
  ".": "Start the AprilTags scene to view measurements.";
  $("tagPipeline").textContent=s.tag_pipeline_hint ||
   "Pipeline status: waiting for camera and AprilTag stream diagnostics.";
+ $("tagEpochStatus").textContent="Measurement window #"+(s.tag_epoch??0)+
+   " · error and detection statistics restart after each robot relocation.";
  $("tagTfStatus").textContent=
    "TF diagnostic · tag transforms: "+(obs.tf_tag_messages??0)+
    " · rejected parent frames: "+(obs.tf_parent_rejected??0)+
@@ -620,6 +648,13 @@ function renderTag(s){
    (obs.detector_frames||0)>=3&&s.sweep?.state!=="running"&&
    !geometryPending&&!publication.error;
  $("publishTags").disabled=!canPublish;
+ $("applyAllTags").disabled=s.mode!=="apriltags"||
+   s.sweep?.state==="running";
+ $("tagSharedStatus").textContent=geometryPending?
+   "Shared geometry is changed but NOT applied. Apply it to all 4 tags (the AprilTags scene restarts and keeps the robot pose).":
+   "All 4 tags share "+fmt(configured.size,3)+" m active edge, "+
+   fmt(configured.height,3)+" m height, "+
+   fmt(s.tag_mount_radius,3)+" m calculated pole offset.";
  $("tagPublishStatus").textContent=publication.error?
   "Cannot read production AprilTag configuration: "+publication.error:
   publication.matches_lab?
