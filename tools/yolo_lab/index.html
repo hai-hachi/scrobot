@@ -369,7 +369,7 @@ let mode="camera",busy=false,last=null,options=null,lastPreview=0;
 const cameraKeys=["color","color_fps","depth","depth_fps","depth_enabled"];
 const yoloInt=["shuttle_count","seed","dataset_images","epochs","batch","imgsz","validation_imgsz","validation_batch","live_imgsz"];
 const yoloFloat=["robot_x","robot_y","robot_yaw","positive_fraction","confidence",
- "random_fraction","settle_seconds"];
+ "random_fraction","settle_seconds","learning_rate"];
 const clusterNames=["A singles long","A doubles long","A short","Net","B short","B doubles long","B singles long"];
 let spawnGeometry=null;
 for(let i=0;i<clusterNames.length;i++){
@@ -450,8 +450,7 @@ for(const key of ["robot_x","robot_y","robot_yaw"])
 const panes={
  camera:["cameraPane","tabCamera"],yolo:["yoloPane","tabYolo"],
  dataset:["datasetPane","tabDataset"],
- train:["trainPane","tabTrain"],validate:["validatePane","tabValidate"],
- live:["livePane","tabLive"]
+ train:["trainPane","tabTrain"],compare:["comparePane","tabCompare"]
 };
 function setTab(value){
  mode=value;
@@ -516,7 +515,7 @@ const stageKeys={
  scene:["spawn_mode","shuttle_count","seed","random_density","random_fraction",
         "cluster_weights","settle_seconds","robot_x","robot_y","robot_yaw"],
  dataset:["dataset_images","positive_fraction"],
- train:["epochs","batch","imgsz"],
+ train:["epochs","batch","imgsz","learning_rate"],
  validate:["validation_imgsz","validation_batch"],
  live:["live_imgsz","confidence"]
 };
@@ -652,7 +651,7 @@ function replaceSelectItems(id,items,selected){
 }
 function currentModel(id){
  const model=$(id).value;
- if(!model)throw Error("No checkpoint imported. Use Training → Import verified baseline weights.");
+ if(!model)throw Error("No local checkpoint found. Put .pt files in models/pretrains/ or train a model.");
  return model;
 }
 $("startDataset").onclick=()=>action(async()=>{
@@ -675,27 +674,86 @@ $("datasetList").onchange=()=>action(async()=>{
  labelIndex=0;labelSetKey="";
  notify("Selected dataset: "+$("datasetList").value);
 });
+const checkedDatasets=new Set(),checkedModels=new Set();
+let lastDatasetListSignature="",lastModelListSignature="";
+function selectedItems(group){return Array.from(group);}
+function renderCheckboxList(container,master,records,checked,editable){
+ const signature=JSON.stringify(records);
+ const isData=container==="datasetChecks";
+ if(isData&&signature===lastDatasetListSignature)return;
+ if(!isData&&signature===lastModelListSignature)return;
+ if(isData)lastDatasetListSignature=signature;else lastModelListSignature=signature;
+ const ids=new Set(records.map(x=>x.id));
+ for(const name of Array.from(checked))if(!ids.has(name))checked.delete(name);
+ const area=$(container);area.replaceChildren();
+ for(const record of records){
+  const label=document.createElement("label");
+  label.style.display="block";label.style.marginBottom="6px";
+  const input=document.createElement("input");
+  input.type="checkbox";input.value=record.id;input.checked=checked.has(record.id);
+  input.disabled=!editable(record);
+  input.addEventListener("change",()=>{
+   if(input.checked)checked.add(record.id);else checked.delete(record.id);
+   $(master).checked=checked.size===records.filter(editable).length&&checked.size>0;
+  });
+  label.append(input,document.createTextNode(" "+record.label));
+  area.append(label);
+ }
+ $(master).checked=checked.size===records.filter(editable).length&&checked.size>0;
+}
+$("datasetSelectAll").onchange=()=>{
+ const target=$("datasetSelectAll").checked;
+ for(const node of $("datasetChecks").querySelectorAll('input[type="checkbox"]')){
+  node.checked=target;
+  if(target)checkedDatasets.add(node.value);else checkedDatasets.delete(node.value);
+ }
+};
+$("modelSelectAll").onchange=()=>{
+ const target=$("modelSelectAll").checked;
+ for(const node of $("modelChecks").querySelectorAll('input[type="checkbox"]')){
+  if(node.disabled)continue;
+  node.checked=target;
+  if(target)checkedModels.add(node.value);else checkedModels.delete(node.value);
+ }
+};
 $("renameDataset").onclick=()=>action(async()=>{
- const dataset=$("datasetList").value;
- if(!dataset)throw Error("Choose a saved dataset.");
+ const selected=selectedItems(checkedDatasets);
+ if(selected.length!==1)throw Error("Check exactly one dataset to rename.");
  const name=$("datasetRename").value.trim();
- if(!name)throw Error("Enter a short name for this dataset.");
- const result=await post("/api/dataset/rename",{dataset,new_name:name});
+ if(!name)throw Error("Enter the new short dataset name.");
+ const result=await post("/api/dataset/rename",{dataset:selected[0],new_name:name});
+ checkedDatasets.clear();lastDatasetListSignature="";
  $("datasetRename").value="";
- $("datasetDeleteConfirm").value="";
- labelIndex=0;labelSetKey="";lastCaptureKey="";
- notify(result.renamed?"Renamed dataset to "+result.dataset:"Dataset already has this name.");
+ notify(result.renamed?"Renamed dataset to "+result.dataset:"Name unchanged.");
 });
 $("deleteDataset").onclick=()=>action(async()=>{
- const dataset=$("datasetList").value,confirm=$("datasetDeleteConfirm").value;
- if(!dataset||confirm!==dataset)
-  throw Error("Type the exact selected dataset ID to confirm permanent deletion.");
- if(!window.confirm("Permanently delete "+dataset+
-  " and all images, labels and previews? This cannot be undone."))return;
- const result=await post("/api/dataset/delete",{dataset,confirm});
- $("datasetDeleteConfirm").value="";$("datasetRename").value="";
- labelIndex=0;labelSetKey="";lastCaptureKey="";
- notify("Permanently deleted dataset "+result.deleted);
+ const selected=selectedItems(checkedDatasets);
+ if(!selected.length)throw Error("Check one or more datasets to delete.");
+ if(!window.confirm("Permanently delete "+selected.length+
+  " checked dataset(s), including all images and labels?"))return;
+ const result=await post("/api/datasets/delete-selected",{datasets:selected,confirm:true});
+ checkedDatasets.clear();lastDatasetListSignature="";
+ labelSetKey="";lastCaptureKey="";
+ notify("Deleted "+result.deleted.length+" selected datasets.");
+});
+$("renameModel").onclick=()=>action(async()=>{
+ const selected=selectedItems(checkedModels);
+ if(selected.length!==1)throw Error("Check exactly one editable model to rename.");
+ const name=$("modelRename").value.trim();
+ if(!name)throw Error("Enter a short name for this trained model.");
+ const result=await post("/api/model/rename",{model:selected[0],new_name:name});
+ checkedModels.clear();lastModelListSignature="";
+ $("modelRename").value="";
+ notify(result.renamed?"Renamed model to "+result.model:"Model name unchanged.");
+});
+$("deleteModels").onclick=()=>action(async()=>{
+ const selected=selectedItems(checkedModels);
+ if(!selected.length)throw Error("Check manageable models to delete.");
+ if(!window.confirm("Permanently delete "+selected.length+
+    " checked trained model(s)? Original pretrains remain protected."))return;
+ const result=await post("/api/models/delete-selected",{models:selected,confirm:true});
+ checkedModels.clear();lastModelListSignature="";
+ notify("Deleted "+result.deleted.length+" managed model(s).");
 });
 $("startInspect").onclick=()=>action(async()=>{
  const n=Number($("inspectSamples").value);
@@ -726,11 +784,6 @@ $("labelPrev").onclick=()=>{
 $("labelNext").onclick=()=>{
  labelIndex++;showLabelSample(last?.workflow?.previews||[]);
 };
-$("importBaseline").onclick=()=>action(async()=>{
- const r=await post("/api/model/import",{model:$("baselineChoice").value});
- notify("Importing original "+r.model+" with pinned Git blob checksum. See trainer logs.");
- setTab("train");
-});
 $("startTraining").onclick=()=>action(async()=>{
  ensureStageSaved("train");
  const result=await post("/api/train/start",{
@@ -742,27 +795,28 @@ $("stopTraining").onclick=()=>action(async()=>{
  await post("/api/task/stop",{name:"train"});
  notify("Stopped training. Check run weights and artifacts before validation.");
 });
-$("startValidation").onclick=()=>action(async()=>{
+function comparedModels(){
+ const models=[currentModel("compareModelA"),currentModel("compareModelB")];
+ if(models[0]===models[1])throw Error("Select two different checkpoints for A and B.");
+ return models;
+}
+$("compareValidate").onclick=()=>action(async()=>{
  ensureStageSaved("validate");
- const r=await post("/api/validate/start",{
-   model:currentModel("validateModel"),
-   split:$("validationSplit").value,device:$("validateDevice").value});
- notify("Validating "+r.model+" on "+r.split+" split. Actual Ultralytics metrics appear below.");
+ const result=await post("/api/compare/validate",{
+  models:comparedModels(),split:$("validationSplit").value,
+  device:$("validateDevice").value
+ });
+ notify("Sequential A/B evaluation started on "+result.split+
+  ". Both models will run on the same dataset and settings.");
 });
-$("stopValidation").onclick=()=>action(async()=>{
- await post("/api/task/stop",{name:"validate"});
- notify("Validation stopped.");
-});
-$("startLive").onclick=()=>action(async()=>{
+$("compareStartLive").onclick=()=>action(async()=>{
  ensureStageSaved("live");
- const r=await post("/api/live/start",{model:currentModel("liveModel")});
- notify("Started YOLO inference on actual Gazebo RGB with model "+r.model+
-   ". Inference FPS is separate from raw bridge FPS.");
- setTab("live");
+ const result=await post("/api/compare/live",{models:comparedModels()});
+ notify("Two live detectors started on the Gazebo RGB topic (up to 8 FPS each).");
 });
-$("stopLive").onclick=()=>action(async()=>{
- await post("/api/task/stop",{name:"live"});
- notify("Live YOLO inference stopped. Camera scene remains available.");
+$("compareStop").onclick=()=>action(async()=>{
+ await post("/api/compare/stop",{});
+ notify("Stopped A/B comparison. Saved validation reports remain available.");
 });
 function renderWorkflow(s){
  const w=s.workflow||{},progress=w.dataset_progress||{},
