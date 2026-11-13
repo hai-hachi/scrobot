@@ -369,6 +369,19 @@ class WorkflowTests(unittest.TestCase):
                     self.assertEqual(cmd[cmd.index("--split")+1],"test")
                 result=w.start_compare_live(models)
                 self.assertTrue(result["started"])
+                self.assertTrue(result["waiting_for_static_scene"])
+                self.assertEqual(w.comparison["state"],"waiting_for_static_scene")
+                # This worker only starts inference once the Gazebo scene
+                # has fully settled and survived its static-world reload.
+                import threading
+                fake.lock = threading.RLock()
+                fake.manifest = {"settled_static":True}
+                fake.processes["gazebo"] = mock.Mock(poll=lambda:None)
+                with mock.patch.object(workflow.time,"sleep",return_value=None):
+                    w._wait_and_launch_live_pair(
+                        w.compare_generation,
+                        [root/"weights"/"A.pt",root/"weights"/"B.pt"],config)
+                self.assertEqual(w.comparison["state"],"running")
                 self.assertIn("live_a",[event[0] for event in fake.events])
                 self.assertIn("live_b",[event[0] for event in fake.events])
                 self.assertTrue(w.stop_comparison()["stopped"])
