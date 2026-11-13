@@ -199,8 +199,10 @@ class WorkflowTests(unittest.TestCase):
                   mock.patch.object(workflow.Workflow,"lab_output",
                                     new_callable=mock.PropertyMock,return_value=root)):
                 renamed = w.rename_dataset(name,"  720p Mixed Sample ")
-                newname = name + "__720p_mixed_sample"
+                newname = "dataset_720p_Mixed_Sample"
                 self.assertEqual(renamed["dataset"],newname)
+                self.assertTrue(newname.startswith("dataset_"))
+                self.assertEqual(w.rename_dataset(newname,"dataset_720p_Mixed_Sample")["renamed"],False)
                 self.assertFalse(folder.exists())
                 self.assertEqual(w.dataset,newname)
                 newfolder=datasets/newname
@@ -285,7 +287,7 @@ class WorkflowTests(unittest.TestCase):
         local_day=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
         months=("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug",
                 "Sep","Oct","Nov","Dec")
-        prefix=f"{months[local_day.month-1]}{local_day.day:02d}"
+        prefix=f"dataset_{months[local_day.month-1]}{local_day.day:02d}"
         with tempfile.TemporaryDirectory() as td:
             root=pathlib.Path(td)
             for suffix in ("01","02"):
@@ -330,10 +332,10 @@ class WorkflowTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,"Only managed"):
                     w.delete_models(["models/pretrains/my_renamed_original.pt"],True)
                 renamed=w.rename_model("artifacts/models/lab_1.pt","shuttle_v2")
-                self.assertEqual(renamed["model"],"artifacts/models/shuttle_v2.pt")
+                self.assertEqual(renamed["model"],"artifacts/models/lab_shuttle_v2.pt")
                 self.assertEqual(pointer.read_text().strip(),str(
-                    (artifacts/"shuttle_v2.pt").resolve()))
-                w.delete_models(["artifacts/models/shuttle_v2.pt",
+                    (artifacts/"lab_shuttle_v2.pt").resolve()))
+                w.delete_models(["artifacts/models/lab_shuttle_v2.pt",
                                  "models/trained/candidate.pt"],True)
                 self.assertFalse(pointer.exists())
                 self.assertTrue(original.is_file())
@@ -342,7 +344,7 @@ class WorkflowTests(unittest.TestCase):
         fake=FakeLab()
         with tempfile.TemporaryDirectory() as td:
             root=pathlib.Path(td)
-            folder=root/"datasets"/"Nov14_01"
+            folder=root/"datasets"/"dataset_Nov14_01"
             folder.mkdir(parents=True)
             (folder/"data.yaml").write_text("path: .\\n")
             (folder/"dataset_summary.json").write_text(
@@ -388,6 +390,85 @@ class WorkflowTests(unittest.TestCase):
                 self.assertIn("live_a",[event[0] for event in fake.events])
                 self.assertIn("live_b",[event[0] for event in fake.events])
                 self.assertTrue(w.stop_comparison()["stopped"])
+
+    def test_model_run_names_keep_lab_prefix_and_increment(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        today=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
+        months=("Jan","Feb","Mar","Apr","May","Jun","Jul",
+                "Aug","Sep","Oct","Nov","Dec")
+        prefix=f"lab_{months[today.month-1]}{today.day:02d}"
+        with tempfile.TemporaryDirectory() as td:
+            root=pathlib.Path(td)
+            runs=root/"runs"
+            artifacts=root/"artifacts"
+            (runs/(prefix+"_01")).mkdir(parents=True)
+            artifacts.mkdir()
+            (artifacts/(prefix+"_02.pt")).write_bytes(b"checkpoint")
+            with (mock.patch.object(workflow,"RUNS",runs),
+                  mock.patch.object(workflow,"ARTIFACTS",artifacts)):
+                self.assertEqual(workflow.Workflow(FakeLab())._next_model_run_name(),
+                                 prefix+"_03")
+
+    def test_train_flags_and_validation_plot_arguments(self):
+        fake=FakeLab()
+        with tempfile.TemporaryDirectory() as td:
+            root=pathlib.Path(td)
+            dataset=root/"datasets/dataset_Nov14_01"
+            dataset.mkdir(parents=True)
+            (dataset/"data.yaml").write_text("path: .\\n")
+            (dataset/"dataset_summary.json").write_text(
+                json.dumps({"training_ready":True,
+                            "counts":{"test":{"images":2}}}))
+            (dataset/"inspection.json").write_text(json.dumps({"passed":True}))
+            cfg={**YOLO_DEFAULT,"optimizer":"SGD","learning_rate":0.0002,
+                 "patience":11,"mosaic":0.4,"rect":True}
+            w=workflow.Workflow(fake)
+            w.dataset=dataset.name
+            with (mock.patch.object(workflow,"DATAROOT",root/"datasets"),
+                  mock.patch.object(workflow,"RUNS",root/"runs"),
+                  mock.patch.object(workflow,"ARTIFACTS",root/"artifacts"),
+                  mock.patch.object(workflow.Workflow,"lab_output",
+                      new_callable=mock.PropertyMock,return_value=root),
+                  mock.patch.object(workflow,"read_lab",return_value=cfg),
+                  mock.patch.object(w,"model_path",return_value=root/"model.pt")):
+                w.start_train("models/pretrains/custom.pt","cpu")
+                cmd=fake.events[-1][1]
+                for key,expected in (
+                    ("--optimizer","SGD"),("--lr0","0.0002"),
+                    ("--patience","11"),("--mosaic","0.4")):
+                    self.assertEqual(cmd[cmd.index(key)+1],expected)
+                self.assertIn("--rect",cmd)
+                self.assertTrue(w.run_name.startswith("lab_"))
+                fake.events.clear()
+                w.start_validate("models/pretrains/custom.pt","test","cpu")
+                self.assertIn("--metrics-json",fake.events[-1][1])
+                # Sequential comparison produces real plot directory args.
+                with mock.patch.object(workflow.threading,"Thread") as fake_thread:
+                    w.start_compare_validation(
+                        ["models/pretrains/A.pt","models/pretrains/B.pt"],
+                        "test","cpu")
+                    commands=fake_thread.call_args.kwargs["args"][1]
+                    for slot,cmd in commands:
+                        self.assertEqual(
+                            cmd[cmd.index("--plots-dir")+1],
+                            str(root/"compare"/("plots_"+slot)))
+                        self.assertIn("--metrics-json",cmd)
+
+    def test_trainer_and_validator_enable_real_ultralytics_plots(self):
+        trainer=(LAB/"scripts/train_finetune.py").read_text()
+        validator=(LAB/"scripts/validate_model.py").read_text()
+        self.assertIn("mosaic=args.mosaic",trainer)
+        self.assertIn("rect=args.rect",trainer)
+        self.assertIn('"--plots-dir"',validator)
+        self.assertIn('"plots": True',validator)
+        for expected in ("confusion_matrix.png","confusion_matrix_normalized.png",
+                         "BoxPR_curve.png","BoxF1_curve.png",
+                         "BoxP_curve.png","BoxR_curve.png"):
+            self.assertIn(expected,validator)
+        server=(LAB/"server.py").read_text()
+        self.assertIn('route == "/api/compare-plot"',server)
+        self.assertIn('kind not in plot_files',server)
 
     def test_original_validator_wrapper_produces_inspection_and_previews(self):
         with tempfile.TemporaryDirectory() as td:
