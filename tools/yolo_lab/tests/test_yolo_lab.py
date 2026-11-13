@@ -87,7 +87,6 @@ class YoloLabTests(unittest.TestCase):
                 self.assertIn(expected, static)
             self.assertNotIn("target", static)
             self.assertNotIn("court_apriltags", static)
-            shuttles = scene.findall("./model[starts-with(@name,'yolo_shuttle')]")
             # ElementTree XPath has no starts-with predicate.
             shuttles = [m for m in scene.findall("model")
                         if m.get("name", "").startswith("yolo_shuttle_")]
