@@ -77,8 +77,10 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
   <p class="hint">Runs isolated Gazebo sensors and ROS image bridge. Use the optional Gazebo UI control above to inspect the scene; the server normally runs headless. No AprilTags, YOLO, controllers or robot navigation in Camera mode.</p>
   <div class="buttons">
    <button id="save">Save benchmark JSON</button>
-   <button id="publish">Save tested camera settings to simulation YAML</button>
+   <button id="saveCameraYaml" class="primary">Save Camera Lab YAML</button>
+   <button id="publish">Publish saved Camera YAML to main simulation</button>
   </div>
+  <p id="cameraYamlStatus" class="hint">Save Camera Lab YAML, then publish it separately when ready.</p>
   <p id="message" class="hint" role="status"></p>
  </section>
  <div>
@@ -144,8 +146,11 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
    </div>
    <div class="buttons">
     <button id="applyAllTags" class="primary">Apply geometry to all 4 tags</button>
-    <button id="publishTags">Publish all 4 tags to main simulation</button>
+    <button id="saveTagYaml">Save AprilTags Lab YAML</button>
+    <button id="publishTags">Publish saved AprilTags YAML to main simulation</button>
    </div>
+   <p id="tagYamlStatus" class="hint">Save the AprilTags Lab YAML before publishing. Shared camera/light settings come from their own lab YAMLs.</p>
+   <p id="lightingYamlStatus" class="hint">Scene lighting is pulled from Lighting Lab YAML at startup.</p>
    <p id="tagSharedStatus" class="hint">One shared geometry. Applying updates all 4 tag plates and matching detector sizes, restarting only the AprilTags scene.</p>
    <p id="tagPublishStatus" class="hint">Publish running tag size, height and calculated mount radius to the main court and detector configuration. Lab-only RGB noise will not be published.</p>
    <p class="hint">After changing tag size or height, press <b>Apply geometry to all 4 tags</b> (the lab scene restarts). Gaussian noise modifies RGB pixels <b>before detection</b> without restarting Gazebo.</p>
@@ -419,6 +424,10 @@ $("save").onclick=()=>action(async()=>{
  const result=await request("/api/save",{});
  $("message").textContent="Saved benchmark: "+result.file;
 });
+$("saveCameraYaml").onclick=()=>action(async()=>{
+ const result=await request("/api/config/camera/save",form());
+ $("message").textContent="Saved "+result.saved+". Main simulation unchanged.";
+});
 $("startTag").onclick=()=>action(async()=>{
  const result=await request("/api/tag/start",{camera:form(),tag:tagForm()});
  notify("AprilTags court scene starting. Wait for live image + detections before moving robot.");
@@ -448,15 +457,15 @@ $("applyAllTags").onclick=()=>action(async()=>{
    " m height, "+result.mount_radius.toFixed(3)+
    " m pole radius. Scene restarted; robot pose retained.");
 });
+$("saveTagYaml").onclick=()=>action(async()=>{
+ const result=await request("/api/config/apriltags/save",tagForm());
+ notify("Saved "+result.saved+" for AprilTag IDs 0–3. Main simulation unchanged.");
+});
 $("publishTags").onclick=()=>action(async()=>{
  if(currentTab!=="apriltags")throw Error("Open AprilTags Lab first.");
- const running=live?.tag||{};
- const displayed=tagForm();
- if(Math.abs(displayed.size-running.size)>1e-4||
-    Math.abs(displayed.height-running.height)>1e-3){
-  throw Error("Restart the AprilTags scene to apply changed tag size/height before publishing.");
- }
- if(!confirm("Publish the RUNNING AprilTag size, height and calculated pole radius to production court_landmarks.yaml AND perception.yaml? This also updates the shared physical AprilTag detector configuration, so real tags must have the same size. Previous YAMLs are backed up. Gaussian pixel noise stays lab-only. Rebuild and restart the main simulation to apply."))return;
+ if(!live?.lab_yaml?.apriltags?.saved)
+   throw Error("Click Save AprilTags Lab YAML before publishing.");
+ if(!confirm("Publish the SAVED AprilTags Lab YAML size, height and calculated pole radius to production court_landmarks.yaml AND perception.yaml? This also updates the shared physical AprilTag detector configuration, so real tags must have the same size. Previous YAMLs are backed up. Gaussian pixel noise stays lab-only. Rebuild and restart the main simulation to apply."))return;
  const result=await request("/api/tag/publish",{confirm:true});
  notify(result.changed?
   "Published tag geometry to main simulation. Backup: "+result.backup+
@@ -487,7 +496,7 @@ $("cancelSweep").onclick=()=>action(async()=>{
  notify("Sweep cancellation requested.");
 });
 $("publish").onclick=()=>action(async()=>{
- if(!confirm("Write the current tested RGB/depth settings to the NORMAL SIMULATION camera YAML? The previous YAML is backed up. This does NOT change the real D435i. Rebuild and restart normal Gazebo to apply."))return;
+ if(!confirm("Transfer SAVED Camera Lab YAML to the NORMAL SIMULATION camera YAML? The previous YAML is backed up. This does NOT change the real D435i. Rebuild and restart normal Gazebo to apply."))return;
  const result=await request("/api/publish",{confirm:true});
  $("message").textContent=result.changed?
     "Published to "+result.path+"; backup: "+result.backup+". Restart normal Gazebo after rebuilding.":
@@ -666,10 +675,16 @@ function renderTag(s){
    "Click the court to choose a robot position, then start the AprilTags scene.");
  $("applyNoise").disabled=s.mode!=="apriltags"||s.phase!=="streaming";
  const publication=s.tag_publication||{};
- const canPublish=s.mode==="apriltags"&&s.phase==="streaming"&&
-   (obs.detector_frames||0)>=3&&s.sweep?.state!=="running"&&
-   !geometryPending&&!publication.error;
+ const canPublish=!!s.lab_yaml?.apriltags?.saved&&!publication.error;
  $("publishTags").disabled=!canPublish;
+ const tagYaml=s.lab_yaml?.apriltags||{};
+ $("tagYamlStatus").textContent=tagYaml.saved?
+   (tagYaml.matches_running?"AprilTags Lab YAML matches running settings. ":
+      "AprilTags Lab YAML differs from running settings. Save to update. ")+
+   tagYaml.path:"No AprilTags Lab YAML saved yet.";
+ $("lightingYamlStatus").textContent="Loaded Lighting Lab config: "+
+   (s.lab_yaml?.lighting?.path||"—")+" · "+
+   (s.lab_yaml?.lighting?.lights??"—")+" calibrated lights; restart scene to reload.";
  $("applyAllTags").disabled=s.mode!=="apriltags"||
    s.sweep?.state==="running";
  $("tagSharedStatus").textContent=geometryPending?
@@ -750,7 +765,13 @@ function update(s){
      "GUI closed · optional desktop view. Launching it may reduce FPS during benchmarks.":
      "Start a simulation first; Gazebo runs headless by default.";
  $("save").disabled=s.phase!=="streaming"||s.mode!=="camera";
- $("publish").disabled=s.phase!=="streaming"||s.mode!=="camera";
+ $("publish").disabled=!s.lab_yaml?.camera?.saved;
+ $("cameraYamlStatus").textContent=s.lab_yaml?.camera?.saved?
+   (s.lab_yaml.camera.matches_running?
+    "Saved Camera YAML matches current settings. ":
+    "Saved Camera YAML differs from live settings. Save to update. ")+
+    s.lab_yaml.camera.path:
+    "No saved Camera Lab YAML yet. Click Save Camera Lab YAML.";
  live=s;
  renderTag(s);
 }
