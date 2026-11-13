@@ -286,7 +286,7 @@
         <button class="primary" id="update-lab-config" onclick="updateLabConfig()">Update lab config YAML</button>
         <button id="publish-simulation" onclick="publishSimulation()">Apply saved YAML to main simulation</button>
       </div>
-      <p class="helper">First save the current light, material and venue sliders to <code>src/scrobot_simulation/config/lighting_lab.yaml</code>. Then apply the saved YAML to the normal <code>badminton_court.sdf</code>. The second action modifies the Git-tracked production SDF on disk; restart the normal Gazebo simulation to use it. Pending sliders not saved to YAML are not published.</p>
+      <p class="helper">First save the current light, material and venue sliders to <code>src/scrobot_simulation/config/lighting_lab.yaml</code>. Camera Lab and AprilTags Lab automatically read this saved YAML at their next scene start, even before production publication. Then apply the saved YAML to the normal <code>badminton_court.sdf</code>. The second action modifies the Git-tracked production SDF on disk; restart the normal Gazebo simulation to use it. Pending sliders not saved to YAML are not published.</p>
       <p class="note">Brightness and clipping are image-based proxies, NOT calibrated lux. Compare the same robot pose, camera settings and shuttle layout before choosing an illumination profile. RTF and FPS indicate computational cost, not illumination quality.</p>
     </article>
   </section>
