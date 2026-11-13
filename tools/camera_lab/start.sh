@@ -19,7 +19,6 @@ for command in gz ros2 python3; do
     exit 2
   fi
 done
-printf 'SCROBOT Camera Lab: http://127.0.0.1:8769\n'
-printf 'Server running without automatic browser launch; open the URL yourself.\n'
-printf 'Camera mode: RGB/depth bridge + monitor. AprilTags mode adds its own detector.\n'
+printf 'Starting standalone Camera & AprilTags Lab (browser opens manually).\n'
+printf 'Camera mode uses RGB/depth bridge; AprilTags mode also starts the detector.\n'
 exec python3 "$DIR/server.py" "$@"
