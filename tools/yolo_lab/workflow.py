@@ -57,6 +57,7 @@ class Workflow:
         self.stage = "idle"
         self.selected_model = None
         self.run_name = None
+        self.capture_directory = None
 
     def datasets(self):
         if not DATAROOT.exists():
@@ -118,6 +119,7 @@ class Workflow:
         run_id = "dataset_" + _timestamp()
         directory = DATAROOT / run_id
         directory.mkdir(parents=True, exist_ok=False)
+        self.capture_directory = directory
         self.dataset = run_id
         self.stage = "dataset"
         (self.lab_output / "capture_progress.json").unlink(missing_ok=True)
@@ -167,10 +169,21 @@ class Workflow:
         return ROOT / "evaluation_results/yolo_lab"
 
     def cancel_dataset(self):
-        self.lab._terminate("capture")
-        # Keep the dataset world available for Gazebo GUI inspection.
-        self.stage = "dataset_stopped"
-        return {"cancelled": True, "dataset": self.dataset}
+        """Request a clean early finish, preserving complete image/label pairs."""
+        process = self.lab.processes.get("capture")
+        if process is None or process.poll() is not None:
+            raise ValueError("No active capture to finish")
+        directory = self.capture_directory
+        if directory is None or not directory.is_dir():
+            raise ValueError("Active capture directory is missing")
+        marker = directory / ".finish_early.request"
+        pending = directory / ".finish_early.request.tmp"
+        pending.write_text("Finish after the current image-label transaction\\n",
+                           encoding="utf-8")
+        pending.replace(marker)
+        self.stage = "finishing_early"
+        return {"stop_requested": True, "dataset": directory.name,
+                "message": "Finishing current image/label pair and finalizing partial dataset"}
 
     def start_inspect(self, sample_count=24):
         self._ensure_idle()
@@ -231,14 +244,13 @@ class Workflow:
     def stop_task(self, name):
         if name not in ("capture", "inspect", "train", "validate", "live", "import"):
             raise ValueError("Unsupported task to stop")
+        if name == "capture":
+            return self.cancel_dataset()
         self.lab._terminate(name)
         if name == "live":
             for item in ("live.jpg","live_status.json"):
                 (self.lab_output / "live" / item).unlink(missing_ok=True)
-        if name == "capture":
-            self.stage = "dataset_stopped"
-        else:
-            self.stage = name + "_stopped"
+        self.stage = name + "_stopped"
         return {"stopped": True, "task": name}
 
     def start_validate(self, model_choice, split="test", device="0"):
@@ -317,6 +329,7 @@ class Workflow:
             status = {}
         summary = _read_json(directory/"dataset_summary.json") if directory else {}
         inspection = _read_json(directory/"inspection.json") if directory else {}
+        capture_preview = _read_json(directory/"capture_preview"/"latest.json") if directory else {}
         live = _read_json(self.lab_output/"live/live_status.json")
         metrics = _read_json(self.lab_output/"validation_metrics.json")
         tasks={}
@@ -346,6 +359,7 @@ class Workflow:
             "selected_dataset":self.dataset,
             "dataset_progress":status,
             "dataset_summary":summary,
+            "capture_preview":capture_preview,
             "inspection":inspection,
             "previews":inspection.get("previews",[]),
             "models":self.models(),
