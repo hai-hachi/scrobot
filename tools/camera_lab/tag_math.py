@@ -9,6 +9,51 @@ The camera transform matches the RealSense mount on scrobot_description:
 """
 from __future__ import annotations
 import math
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+import yaml
+
+# Use the Lighting Lab's CALIBRATED venue clearance and avoid positioning
+# beyond the floor already published in the court SDF.
+WS = Path(__file__).resolve().parents[2]
+LIGHTING_CONFIG = WS / "src/scrobot_simulation/config/lighting_lab.yaml"
+PUBLISHED_COURT = WS / "src/scrobot_simulation/worlds/badminton_court.sdf"
+COURT_LENGTH, COURT_WIDTH = 15.4, 7.2
+ROBOT_EDGE_MARGIN = 0.30  # keep camera proxy inside the outer venue boundary
+
+
+def venue_bounds(lighting_path=LIGHTING_CONFIG, court_path=PUBLISHED_COURT):
+    settings = yaml.safe_load(Path(lighting_path).read_text(encoding="utf-8"))
+    venue = settings["venue"]
+    cx, cy = float(venue["clearance_x"]), float(venue["clearance_y"])
+    if not all(math.isfinite(v) and v >= 0 for v in (cx, cy)):
+        raise ValueError("Lighting Lab venue clearances must be finite and nonnegative")
+    configured_x = COURT_LENGTH + 2 * cx
+    configured_y = COURT_WIDTH + 2 * cy
+    published = ET.parse(court_path).getroot().find(
+        './/model[@name="court_floor"]/link/collision/geometry/box/size'
+    )
+    if published is None or not published.text:
+        raise ValueError("Cannot find published court floor bounds")
+    dimensions = [float(x) for x in published.text.split()]
+    floor_x = min(configured_x, dimensions[0])
+    floor_y = min(configured_y, dimensions[1])
+    if floor_x / 2 <= ROBOT_EDGE_MARGIN or floor_y / 2 <= ROBOT_EDGE_MARGIN:
+        raise ValueError("Venue floor too small for robot placement")
+    return {
+        "clearance_x": cx, "clearance_y": cy,
+        "floor_x": floor_x, "floor_y": floor_y,
+        "limit_x": round(floor_x / 2 - ROBOT_EDGE_MARGIN, 5),
+        "limit_y": round(floor_y / 2 - ROBOT_EDGE_MARGIN, 5),
+        "lighting_config_matches_published_floor": (
+            abs(configured_x - dimensions[0]) < 0.001 and
+            abs(configured_y - dimensions[1]) < 0.001
+        ),
+    }
+
+
+VENUE = venue_bounds()
 
 POLE_RADIUS = 0.025
 PLATE_QUIET_BORDER_FACTOR = 8 / 6
@@ -17,7 +62,7 @@ POLES = {0: (0.0, +3.05), 1: (0.0, -3.05),
          2: (0.0, +3.05), 3: (0.0, -3.05)}
 CAMERA_OFFSET = (0.1206, 0.0325, 0.2400)
 CAMERA_PITCH = math.radians(15.0)
-MIN_DISTANCE, MAX_DISTANCE = 0.4, 8.0
+MIN_DISTANCE, MAX_DISTANCE = 0.4, 12.0
 
 TAG_DEFAULT = {
     "size": 0.10, "height": 0.15, "noise_sigma": 0.0,
@@ -31,8 +76,10 @@ def validate(tag):
     result = {}
     for key, low, high in (
         ("size", 0.04, 0.25), ("height", 0.12, 1.50),
-        ("noise_sigma", 0.0, 50.0), ("robot_x", -7.2, 7.2),
-        ("robot_y", -3.6, 3.6), ("robot_yaw", -180.0, 180.0),
+        ("noise_sigma", 0.0, 50.0),
+        ("robot_x", -VENUE["limit_x"], VENUE["limit_x"]),
+        ("robot_y", -VENUE["limit_y"], VENUE["limit_y"]),
+        ("robot_yaw", -180.0, 180.0),
     ):
         value = tag[key]
         if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -88,14 +135,20 @@ def tag_pose(tag_id, config):
 def head_on_pose(tag_id, distance, config, heading_offset_deg=0.0):
     """Robot base pose, where distance is horizontal base-to-tag distance."""
     if not MIN_DISTANCE <= distance <= MAX_DISTANCE:
-        raise ValueError("Head-on test distance outside [0.4, 8.0] m")
+        raise ValueError("Head-on test distance outside [0.4, 12.0] m")
     t = tag_pose(tag_id, config)
     a = t["yaw"]
     x = t["x"] + distance * math.cos(a)
     y = t["y"] + distance * math.sin(a)
     yaw = (math.degrees(a) + 180 + heading_offset_deg + 180) % 360 - 180
-    if not (-7.2 <= x <= 7.2 and -3.6 <= y <= 3.6):
-        raise ValueError("Robot pose would be outside the court testing area")
+    if not (-VENUE["limit_x"] <= x <= VENUE["limit_x"] and
+            -VENUE["limit_y"] <= y <= VENUE["limit_y"]):
+        raise ValueError(
+            f"Robot pose ({x:.2f}, {y:.2f}) m would exceed the Lighting Lab "
+            f"venue limits (+/-{VENUE['limit_x']:.2f} X, "
+            f"+/-{VENUE['limit_y']:.2f} Y) m. "
+            "Reduce sweep distance or publish a larger venue."
+        )
     return {"robot_x": round(x, 5), "robot_y": round(y, 5),
             "robot_yaw": round(yaw, 5)}
 
