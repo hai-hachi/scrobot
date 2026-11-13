@@ -339,34 +339,67 @@ let mode="camera",busy=false,last=null,options=null,lastPreview=0;
 const cameraKeys=["color","color_fps","depth","depth_fps","depth_enabled"];
 const yoloInt=["shuttle_count","seed","dataset_images","epochs","batch","imgsz"];
 const yoloFloat=["robot_x","robot_y","robot_yaw","positive_fraction","confidence",
- "random_fraction","single_x","single_y","settle_seconds",
- "cluster_sigma_x","cluster_sigma_y","cluster_left_y","cluster_right_y"];
+ "random_fraction","settle_seconds"];
 const clusterNames=["A singles long","A doubles long","A short","Net","B short","B doubles long","B singles long"];
-for(let i=0;i<7;i++){
+let spawnGeometry=null;
+for(let i=0;i<clusterNames.length;i++){
  const tr=document.createElement("tr");
  const label=document.createElement("td");label.textContent=clusterNames[i];tr.append(label);
- for(const [column,prefix] of [["x","line"],["left","left"],["right","right"]]){
+ const x=document.createElement("td");x.id="cluster_line_"+i;tr.append(x);
+ for(const side of ["left","right"]){
   const td=document.createElement("td"),field=document.createElement("input");
-  field.id="cluster_"+prefix+"_"+i;field.type="number";field.step="0.05";
-  if(column!=="x")field.min="0";
+  field.id="cluster_"+side+"_"+i;field.type="number";field.min="0";field.step=".05";
+  field.setAttribute("aria-label",clusterNames[i]+" "+side+" weight");
   td.append(field);tr.append(td);
  }
  $("clusterRows").append(tr);
 }
+function renderSpawnGeometry(source){
+ if(!source)return;
+ if(spawnGeometry&&JSON.stringify(spawnGeometry)===JSON.stringify(source))return;
+ spawnGeometry=source;
+ const c=source.court,k=source.cluster,p=source.single;
+ $("spawnSourceInfo").textContent="Read-only geometry from "+source.path+
+  " | Court "+c.length.toFixed(2)+" × "+c.width.toFixed(2)+" m, margin "+
+  c.margin.toFixed(2)+" m | Cluster σX="+k.sigma_x.toFixed(2)+
+  ", σY="+k.sigma_y.toFixed(2)+" m; centers Y="+
+  k.left_center_y.toFixed(3)+" / "+k.right_center_y.toFixed(3)+
+  " m | Spawn height="+source.spawn.height.toFixed(3)+" m";
+ $("singlePoseInfo").textContent="Single mode: fixed pose X="+p.x.toFixed(2)+
+  " m, Y="+p.y.toFixed(2)+" m (from shuttle_spawn.yaml).";
+ for(let i=0;i<clusterNames.length;i++){
+  $("cluster_line_"+i).textContent=k.line_x[i].toFixed(2);
+ }
+ paintRobot();
+}
+function updateSpawnControls(){
+ const m=$("spawn_mode").value;
+ $("densityField").hidden=!(m==="random"||m==="mixed");
+ $("mixedFractionField").hidden=m!=="mixed";
+ $("clusterControls").hidden=!(m==="cluster"||m==="mixed");
+ $("singlePoseInfo").hidden=m!=="single";
+}
+$("spawn_mode").addEventListener("change",updateSpawnControls);
 function paintRobot(){
- const x=Number($("robot_x").value), y=Number($("robot_y").value);
+ if(!spawnGeometry)return;
+ const x=Number($("robot_x").value),y=Number($("robot_y").value);
  const yaw=Number($("robot_yaw").value)*Math.PI/180;
- const px=350+x*636/13.4, py=170-y*276/6.1;
+ const halfL=spawnGeometry.court.length/2,halfW=spawnGeometry.court.width/2;
+ const px=350+x*318/halfL,py=170-y*138/halfW;
  $("robotMapMarker").setAttribute("transform",
   "translate("+px+","+py+") rotate("+(-yaw*180/Math.PI)+") translate(-350,-170)");
 }
-function pointOnCourt(event){
- const bounds=$("robotPoseMap").getBoundingClientRect();
- return {x:Math.max(-6.7,Math.min(6.7,((event.clientX-bounds.left)/bounds.width*700-350)*13.4/636)),
-         y:Math.max(-3.05,Math.min(3.05,(170-(event.clientY-bounds.top)/bounds.height*340)*6.1/276))};
+function pointOnCourt(e){
+ const bound=$("robotPoseMap").getBoundingClientRect();
+ const halfL=spawnGeometry.court.length/2,halfW=spawnGeometry.court.width/2;
+ return {x:Math.max(-halfL,Math.min(halfL,
+    ((e.clientX-bound.left)/bound.width*700-350)*halfL/318)),
+   y:Math.max(-halfW,Math.min(halfW,
+    (170-(e.clientY-bound.top)/bound.height*340)*halfW/138))};
 }
 let mapDrag=false;
 $("robotPoseMap").addEventListener("pointerdown",e=>{
+ if(!spawnGeometry)return;
  const p=pointOnCourt(e);
  $("robot_x").value=p.x.toFixed(2);$("robot_y").value=p.y.toFixed(2);
  mapDrag=true;$("robotPoseMap").setPointerCapture(e.pointerId);paintRobot();
@@ -376,12 +409,14 @@ $("robotPoseMap").addEventListener("pointermove",e=>{
  const p=pointOnCourt(e);
  const dx=p.x-Number($("robot_x").value),dy=p.y-Number($("robot_y").value);
  if(Math.hypot(dx,dy)>.08){
-  $("robot_yaw").value=(Math.atan2(dy,dx)*180/Math.PI).toFixed(1);paintRobot();
+  $("robot_yaw").value=(Math.atan2(dy,dx)*180/Math.PI).toFixed(1);
+  paintRobot();
  }
 });
 $("robotPoseMap").addEventListener("pointerup",()=>{mapDrag=false;});
 $("robotPoseMap").addEventListener("pointercancel",()=>{mapDrag=false;});
-for(const key of ["robot_x","robot_y","robot_yaw"])$(key).addEventListener("input",paintRobot);
+for(const key of ["robot_x","robot_y","robot_yaw"])
+ $(key).addEventListener("input",paintRobot);
 const panes={
  camera:["cameraPane","tabCamera"],yolo:["yoloPane","tabYolo"],
  dataset:["datasetPane","tabDataset"],labels:["labelsPane","tabLabels"],
@@ -431,10 +466,10 @@ function loadYolo(cfg){
  for(const key of yoloInt.concat(yoloFloat))$(key).value=cfg[key];
  $("spawn_mode").value=cfg.spawn_mode;$("random_density").value=cfg.random_density;
  for(let i=0;i<7;i++){
-  $("cluster_line_"+i).value=cfg.cluster_line_x[i];
   $("cluster_left_"+i).value=cfg.cluster_weights[i][0];
   $("cluster_right_"+i).value=cfg.cluster_weights[i][1];
  }
+ updateSpawnControls();
  paintRobot();
 }
 function yoloForm(){
@@ -442,7 +477,6 @@ function yoloForm(){
  for(const key of yoloInt.concat(yoloFloat))config[key]=Number($(key).value);
  config.spawn_mode=$("spawn_mode").value;
  config.random_density=$("random_density").value;
- config.cluster_line_x=clusterNames.map((_,i)=>Number($("cluster_line_"+i).value));
  config.cluster_weights=clusterNames.map((_,i)=>[
   Number($("cluster_left_"+i).value),Number($("cluster_right_"+i).value)]);
  return config;
@@ -504,6 +538,7 @@ async function poll(){
  const response=await fetch("/api/status",{cache:"no-store"});
  if(!response.ok)throw Error("YOLO Lab server unavailable");
  const s=await response.json();last=s;
+ renderSpawnGeometry(s.spawn_geometry);
  const streams=s.meter?.streams||{},rgb=streams.color||{},depth=streams.depth||{};
  $("rgbWall").textContent=fmt(rgb.wall_fps);
  $("rgbSim").textContent=fmt(rgb.sim_fps);
@@ -759,6 +794,7 @@ async function init(){
  if(!r.ok)throw Error("Could not load camera options");
  options=await r.json();
  const status=options.status;
+ renderSpawnGeometry(status.spawn_geometry);
  loadCamera(status.saved_camera||status.camera||options.camera_default);
  loadYolo(status.saved_yolo||status.yolo||options.yolo_default);
  await poll();notify("Ready. Save camera settings and YOLO scene settings separately, then Start YOLO inspection scene.");
