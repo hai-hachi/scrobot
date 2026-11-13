@@ -30,6 +30,7 @@ from modes import (COLOR, DEPTH, DEFAULT as CAMERA_DEFAULT,
 from lighting_source import calibration as lighting_calibration
 from yolo_settings import DEFAULT as YOLO_DEFAULT, validate as validate_yolo
 from world import build
+from settle import snapshot
 from workflow import Workflow
 from log_text import tail as clean_tail
 
@@ -76,6 +77,8 @@ class Lab:
         self.manifest = None
         self.started_with = None
         self.workflow = Workflow(self)
+        self.scene_generation = 0
+        self.settle_error = None
 
     def environment(self):
         env = os.environ.copy()
@@ -120,6 +123,7 @@ class Lab:
 
     def stop(self):
         with self.lock:
+            self.scene_generation += 1
             for name in reversed(list(self.processes)):
                 self._terminate(name)
             for name in ("meter.json", "preview.jpg", "preview.json"):
@@ -168,22 +172,14 @@ class Lab:
                     "camera": camera, "yolo": yolo,
                     "lighting": lighting,
                 }
-                self.launch("gazebo", [
-                    "gz", "sim", "-r", "-s", "-v", "3", path])
-                topics = ["/camera_lab/color"]
-                if camera["depth_enabled"]:
-                    topics.append("/camera_lab/depth")
-                self.launch("image_bridge", [
-                    "ros2", "run", "ros_gz_image", "image_bridge", *topics,
-                    "--ros-args", "-p", "qos:=sensor_data"])
-                self.launch("meter", [
-                    sys.executable, str(CAMERA_METER),
-                    str(OUTPUT / "meter.json"),
-                    "true" if camera["depth_enabled"] else "false"])
-                self.launch("preview", [
-                    sys.executable, str(HERE / "preview.py"),
-                    str(OUTPUT / "preview.jpg")])
-                self.phase = "starting"
+                self._launch_camera_scene(path, camera)
+                self.phase = "settling"
+                self.settle_error = None
+                generation = self.scene_generation
+                threading.Thread(
+                    target=self._settle_scene,
+                    args=(generation, camera, yolo, lighting),
+                    daemon=True, name="YoloShuttleSettler").start()
             except Exception as exc:
                 self.stop()
                 self.phase = "failed"
@@ -199,6 +195,61 @@ class Lab:
                 },
                 "shuttles": len(manifest["shuttles"]),
             }
+
+    def _settle_scene(self, generation, camera, yolo, lighting):
+        # Never freeze to guessed positions; use actual simulated poses.
+        try:
+            time.sleep(yolo["settle_seconds"])
+            with self.lock:
+                if generation != self.scene_generation:
+                    return
+                names = [entry["name"] for entry in self.manifest["shuttles"]]
+                env = self.environment()
+            poses = snapshot(names, env)
+            with self.lock:
+                if generation != self.scene_generation:
+                    return
+                # Keep the dynamic scene and report an error if any step fails.
+                static_path = OUTPUT / "world_static.sdf"
+                frozen_path, frozen = build(
+                    camera, yolo, static_path, lighting=lighting,
+                    settled_poses=poses)
+                for name in reversed(list(self.processes)):
+                    self._terminate(name)
+                self._launch_camera_scene(frozen_path, camera)
+                self.manifest = frozen
+                self.phase = "starting"
+        except Exception as exc:
+            with self.lock:
+                if generation == self.scene_generation:
+                    self.settle_error = str(exc)
+                    self.error = "Shuttle freeze not completed: " + str(exc)
+
+    def set_robot_pose(self, body):
+        if set(body) != {"x", "y", "yaw"}:
+            raise ValueError("Expected robot X, Y and yaw")
+        import math
+        x, y, yaw = (float(body[key]) for key in ("x", "y", "yaw"))
+        if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(yaw)
+                and -15 <= x <= 15 and -12 <= y <= 12 and -180 <= yaw <= 180):
+            raise ValueError("Robot pose outside venue bounds")
+        with self.lock:
+            gaz = self.processes.get("gazebo")
+            if gaz is None or gaz.poll() is not None:
+                raise ValueError("Start the YOLO scene first")
+            request = (f'name: "camera_rig" position: {{x: {x} y: {y} z: 0}} '
+                       f'orientation: {{z: {math.sin(math.radians(yaw)/2):.10f} '
+                       f'w: {math.cos(math.radians(yaw)/2):.10f}}}')
+            result = subprocess.run(
+                ["gz","service","-s","/world/yolo_lab/set_pose",
+                 "--reqtype","gz.msgs.Pose","--reptype","gz.msgs.Boolean",
+                 "--timeout","5000","--req",request],
+                capture_output=True,text=True,timeout=8,env=self.environment())
+            if result.returncode or "data: true" not in result.stdout.lower():
+                raise RuntimeError("Gazebo rejected robot pose: " +
+                                   (result.stderr or result.stdout)[-350:])
+            self.yolo = {**self.yolo, "robot_x":x,"robot_y":y,"robot_yaw":yaw}
+            return {"x":x,"y":y,"yaw":yaw,"applied":True}
 
     def open_gui(self):
         with self.lock:
@@ -251,6 +302,7 @@ class Lab:
             } for name, proc in self.processes.items()}
             return {
                 "phase": self.phase, "error": self.error,
+                "settle_error": self.settle_error,
                 "camera": self.camera, "yolo": self.yolo,
                 "saved_camera": camera_saved or None,
                 "saved_yolo": yolo_saved or None,
@@ -359,6 +411,8 @@ class Handler(BaseHTTPRequestHandler):
                 if body:
                     raise ValueError("Start uses saved lab YAML, not request values")
                 result = self.lab.start()
+            elif route == "/api/scene/pose":
+                result = self.lab.set_robot_pose(body)
             elif route == "/api/scene/stop":
                 if body:
                     raise ValueError("Stop expects empty body")
