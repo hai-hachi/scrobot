@@ -31,6 +31,7 @@ from lighting_source import calibration as lighting_calibration
 from yolo_settings import DEFAULT as YOLO_DEFAULT, validate as validate_yolo
 from world import build
 from settle import snapshot
+from distribution import geometry as spawn_geometry
 from workflow import Workflow
 from log_text import tail as clean_tail
 
@@ -368,6 +369,7 @@ class Lab:
                         "yolo": validate_yolo(yolo_saved) if yolo_saved else None,
                         "lighting": lighting,
                     },
+                "spawn_geometry": spawn_geometry(),
                 "manifest": self.manifest,
                 "meter": raw, "preview": preview,
                 "expected_mb_s": expected_mb_s(self.camera),
