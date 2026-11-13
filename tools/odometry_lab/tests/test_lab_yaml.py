@@ -7,6 +7,7 @@ import unittest
 ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT/"tools"))
 sys.path.insert(0,str(ROOT/"tools/odometry_lab"))
+sys.path.insert(0,str(ROOT/"src/scrobot_simulation/launch"))
 from lab_configs import read, save, path_for
 from core import DEFAULTS, validate, RATE_NAMES
 from odometry_rate_config import validated_rates
