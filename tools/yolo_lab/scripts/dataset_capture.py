@@ -342,6 +342,7 @@ class FastYoloDatasetCapture(Node):
             'wait_rgb_ms': 0.0,
             'label_ms': 0.0,
             'write_ms': 0.0,
+            'preview_ms': 0.0,
         }
         self.wait_rgb_wall_start = None
         self.last_trigger_wall_time = None
@@ -884,6 +885,7 @@ class FastYoloDatasetCapture(Node):
         self.last_saved_split = split
         self.last_saved_boxes = len(boxes)
         self.last_saved_focus_boxes = focus_boxes
+        preview_t0 = time.perf_counter()
         try:
             write_labeled_preview(bgr, boxes, self.output_dir, split, stem,
                                   self.saved_images)
@@ -891,6 +893,9 @@ class FastYoloDatasetCapture(Node):
             # Never lose a successfully committed image/label pair just
             # because its small dashboard preview could not be produced.
             self.get_logger().warning(f"Live label preview failed: {exc}")
+        finally:
+            self.last_timings['preview_ms'] = (
+                time.perf_counter() - preview_t0) * 1000.0
         self.waiting_for_fresh_frame = False
         self.pre_teleport_crc = None
         self.candidate_render_crc = None
