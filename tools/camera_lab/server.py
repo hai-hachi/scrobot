@@ -92,6 +92,7 @@ class Lab:
         self.mode = "camera"
         self.tag = dict(TAG_DEFAULT)
         self.tag_epoch = 0
+        self.tag_reset_wall = 0.0
         self.sweep_id = 0
         self.sweep_cancel = threading.Event()
         self.sweep = {"state": "idle", "kind": None, "rows": []}
@@ -170,15 +171,22 @@ class Lab:
             return {"started": True, "settings": dict(cfg)}
 
     def write_tag_control(self):
-        """Epoch change resets observer statistics and applies live RGB noise."""
+        """Start a new accuracy window at each accepted pose or noise change.
+
+        The old status and rendered frame must not survive relocation while
+        tag_monitor is still waiting to process the new control epoch.
+        """
         self.tag_epoch += 1
+        self.tag_reset_wall = time.time()
         file = RESULTS / "tag_control.json"
         temp = file.with_suffix(".tmp")
         temp.write_text(json.dumps({
             "epoch": self.tag_epoch, "tag": self.tag, "camera": self.settings,
-            "changed_wall": time.time(),
+            "changed_wall": self.tag_reset_wall,
         }))
         temp.replace(file)
+        (RESULTS / "tag_status.json").unlink(missing_ok=True)
+        (RESULTS / "tag_preview.jpg").unlink(missing_ok=True)
 
     def start_tags(self, data):
         if not isinstance(data, dict) or set(data) != {"camera", "tag"}:
@@ -236,6 +244,32 @@ class Lab:
                     "tag": self.tag, "tag_mount_radius": mount_radius(tag["size"]),
                     "world": path}
 
+    def update_all_tag_geometry(self, data):
+        """Apply common size/height to IDs 0-3 in one scene restart.
+
+        Generated meshes and apriltag_ros PnP sizes must change together.
+        Preserve the running robot pose, selected tag, noise, and camera
+        configuration; a one-shot Gazebo model update cannot safely replace
+        all the textured meshes and live detector intrinsics atomically.
+        """
+        if not isinstance(data, dict) or set(data) != {"size", "height"}:
+            raise ValueError("Specify the shared tag size and height")
+        with self.lock:
+            if self.mode != "apriltags":
+                raise ValueError("Start AprilTags Lab before applying geometry")
+            if self.sweep.get("state") == "running":
+                raise ValueError("Finish or cancel the active sweep before applying tag geometry")
+            tag = validate_tag({**self.tag, **data})
+            camera = dict(self.settings)
+            result = self.start_tags({"camera": camera, "tag": tag})
+            return {
+                "updated_tag_ids": [0, 1, 2, 3],
+                "size": tag["size"], "height": tag["height"],
+                "mount_radius": mount_radius(tag["size"]),
+                "restarted": True, "epoch": self.tag_epoch,
+                "world": result["world"],
+            }
+
     def publish_tag_configuration(self):
         """Explicit publication of the *running* tag geometry, not UI sliders."""
         with self.lock:
@@ -280,10 +314,14 @@ class Lab:
             raise ValueError("Pose requires robot_x, robot_y, robot_yaw, tag_id")
         with self.lock:
             new = validate_tag({**self.tag, **data})
+            if self.sweep.get("state") == "running" and (
+                    threading.current_thread() is threading.main_thread()):
+                raise ValueError("Cannot move robot manually during an active sweep")
             self.gz_set_robot_pose(new)
             self.tag = new
             self.write_tag_control()
-            return {"tag": dict(self.tag), "epoch": self.tag_epoch}
+            return {"tag": dict(self.tag), "epoch": self.tag_epoch,
+                    "accuracy_reset": True}
 
     def set_noise(self, data):
         if not isinstance(data, dict) or set(data) != {"noise_sigma"}:
@@ -295,7 +333,8 @@ class Lab:
                 raise ValueError("Do not change RGB noise during an accuracy sweep")
             self.tag = validate_tag({**self.tag, **data})
             self.write_tag_control()
-            return {"tag": dict(self.tag), "epoch": self.tag_epoch}
+            return {"tag": dict(self.tag), "epoch": self.tag_epoch,
+                    "accuracy_reset": True}
 
     def begin_sweep(self, data):
         if not isinstance(data, dict) or set(data) != {
@@ -464,6 +503,10 @@ class Lab:
             data = json.loads(path.read_text())
             if time.time()-data.get("updated_wall",0)>3:
                 return {}
+            # A previously sampled pose may still be in the latest file
+            # for a timer tick after Gazebo has already moved the robot.
+            if data.get("epoch") != self.tag_epoch:
+                return {}
             return data
         except (OSError, ValueError, TypeError):
             return {}
@@ -587,6 +630,7 @@ class Lab:
                 "venue": dict(VENUE),
                 "tags": {str(i): tag_pose(i, self.tag) for i in range(4)},
                 "tag_observation": tag_obs,
+                "tag_epoch": self.tag_epoch,
                 "tag_pipeline_hint": pipeline_hint,
                 "tag_publication": tag_publish_status(self.tag),
                 "sweep": dict(self.sweep),
@@ -731,6 +775,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = lab.place_robot(data)
             elif route == "/api/tag/noise":
                 result = lab.set_noise(data)
+            elif route == "/api/tag/geometry":
+                result = lab.update_all_tag_geometry(data)
             elif route == "/api/tag/sweep":
                 result = lab.begin_sweep(data)
             elif route == "/api/tag/cancel":
