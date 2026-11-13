@@ -55,6 +55,11 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
 <button id="cameraTab" class="active">Camera Lab</button>
 <button id="tagTab">AprilTags Lab</button>
 </div>
+<div class="buttons" id="gazeboGuiControls" style="align-items:center;margin:14px 0">
+ <button id="toggleGazeboGui" disabled>Open Gazebo UI</button>
+ <span id="gazeboGuiStatus" class="hint" role="status" aria-live="polite">Start a simulation to enable the Gazebo desktop view.</span>
+</div>
+<details id="gazeboGuiLogDetail"><summary>Gazebo UI diagnostics</summary><pre id="gazeboGuiLog"></pre></details>
 <div class="grid" id="cameraPane">
  <section class="card">
   <h2>Camera settings</h2>
@@ -69,7 +74,7 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
    <button id="stop">Stop</button>
   </div>
   <div id="health" class="status">Ready. Select a camera mode and start.</div>
-  <p class="hint">Runs isolated Gazebo sensors and ROS image bridge. No GUI, AprilTags, YOLO, controllers or robot navigation.</p>
+  <p class="hint">Runs isolated Gazebo sensors and ROS image bridge. Use the optional Gazebo UI control above to inspect the scene; the server normally runs headless. No AprilTags, YOLO, controllers or robot navigation in Camera mode.</p>
   <div class="buttons">
    <button id="save">Save benchmark JSON</button>
    <button id="publish">Save tested camera settings to simulation YAML</button>
@@ -398,6 +403,18 @@ $("stop").onclick=()=>action(async()=>{
  await request("/api/stop",{});
  started=false;$("message").textContent="Stopped.";
 });
+$("toggleGazeboGui").onclick=()=>action(async()=>{
+ const closing=!!live?.gazebo_gui?.running;
+ try{
+   await request(closing?"/api/gazebo-gui/close":"/api/gazebo-gui/open",{});
+   $("gazeboGuiStatus").textContent=closing?
+     "Gazebo desktop window closed. The simulation is still running.":
+     "Opening the separate Gazebo desktop window. Use its 3D scene to explore.";
+ }catch(err){
+   $("gazeboGuiStatus").textContent="Gazebo UI error: "+err.message;
+   throw err;
+ }
+});
 $("save").onclick=()=>action(async()=>{
  const result=await request("/api/save",{});
  $("message").textContent="Saved benchmark: "+result.file;
@@ -719,6 +736,19 @@ function update(s){
  $("gazeboLog").textContent=s.logs?.gazebo||"";
  $("bridgeLog").textContent=s.logs?.image_bridge||"";
  $("monitorLog").textContent=s.logs?.monitor||"";
+ const gui=s.gazebo_gui||{};
+ const guiRunning=!!gui.running;
+ $("toggleGazeboGui").textContent=guiRunning?"Close Gazebo UI":"Open Gazebo UI";
+ $("toggleGazeboGui").disabled=!guiRunning&&!s.processes?.gazebo;
+ $("gazeboGuiLog").textContent=s.logs?.gazebo_gui||
+   "No Gazebo GUI client has been launched by this lab.";
+ $("gazeboGuiStatus").textContent=guiRunning?
+   "Gazebo desktop client running. Explore the scene with the 3D view. Closing it does not stop the simulation. Opening the GUI may reduce benchmark FPS.":
+   gui.exit_code!=null?
+     "Gazebo UI client exited (code "+gui.exit_code+"). Check diagnostics if it did not open.":
+   s.processes?.gazebo?
+     "GUI closed · optional desktop view. Launching it may reduce FPS during benchmarks.":
+     "Start a simulation first; Gazebo runs headless by default.";
  $("save").disabled=s.phase!=="streaming"||s.mode!=="camera";
  $("publish").disabled=s.phase!=="streaming"||s.mode!=="camera";
  live=s;
