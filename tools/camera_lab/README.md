@@ -42,6 +42,15 @@ mode is retained as a separate tab.
   Click **Place / rotate robot** to move the static camera rig through
   Gazebo's `/world/camera_lab/set_pose` service. The camera uses the
   calibrated SCROBOT mount and looks down 15 degrees.
+  **Robot placement now extends outside the green court mat**, across the
+  calibrated Lighting Lab venue floor. The limits are loaded from
+  `src/scrobot_simulation/config/lighting_lab.yaml` and restricted by
+  the actual published `badminton_court.sdf` floor; a 0.30 m outer
+  margin remains for the robot proxy. With the current Lighting Lab
+  clearances (X=2.8 m, Y=2.4 m per side), the floor is 21 × 12 m
+  and robot-center limits are ±10.2 m in X and ±5.7 m in Y.
+  The overhead GUI displays both the mat and its surrounding clearance.
+  Restart the lab after changing Lighting Lab venue settings.
 - Adjust the active AprilTag edge size (40–250 mm), height above court
   (120–1500 mm), or RGB Gaussian pixel-noise standard deviation
   (0–50 out of 255).
@@ -134,6 +143,13 @@ displays:
   3-DOF tag orientation error or account for texture orientation.
 - The count of raw camera frames, detector frames, tag hits and TF poses.
 
+The Gazebo ROS image bridge currently sets the actual RGB/AprilTag
+parent frame to `color_optical_frame`. The evaluator now checks TF
+against the **incoming RGB image's own optical frame ID** instead of
+hard-coding `camera_color_optical_frame`. It still rejects transforms
+from genuinely different frames. This resolves blank RMSE measurements
+caused by a frame-ID mismatch when valid tag TF poses are available.
+
 A missed tag is **not** a zero-error measurement. Detector error is
 reported only for actual TF poses. Check both success rate and pose
 accuracy when judging reliability. Color/depth resolution and frame
@@ -142,10 +158,10 @@ rate are still configurable in the shared Camera Lab controls.
 ### Automated experiments
 
 **Distance sweep:** choose target tag, minimum/maximum robot-base
-distance, and step (0.4–8.0 m). The robot moves along the selected
+distance, and step (0.4–12.0 m). The robot moves along the selected
 tag's outward normal and faces directly toward the tag.
 
-**Heading sweep:** choose a fixed robot-base distance (0.4–8.0 m),
+**Heading sweep:** choose a fixed robot-base distance (0.4–12.0 m),
 minimum/maximum angle offsets, and step (within ±90°). The robot stays
 at the fixed location while rotating. 0° means it faces the tag.
 
