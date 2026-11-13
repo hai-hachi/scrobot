@@ -276,6 +276,8 @@ class Lab:
         with self.lock:
             if self.mode != "apriltags":
                 raise ValueError("Start AprilTags Lab before adjusting noise")
+            if self.sweep.get("state") == "running":
+                raise ValueError("Do not change RGB noise during an accuracy sweep")
             self.tag = validate_tag({**self.tag, **data})
             self.write_tag_control()
             return {"tag": dict(self.tag), "epoch": self.tag_epoch}
@@ -314,6 +316,8 @@ class Lab:
                 raise ValueError("Wait for live AprilTag camera streaming first")
             if self.sweep.get("state") == "running":
                 raise ValueError("A sweep is already running")
+            if not self.tag_status().get("camera_info_valid"):
+                raise ValueError("Wait for CameraInfo before sweeping; detector needs intrinsics")
             for value in xs:
                 head_on_pose(tag_id,
                              value if kind=="distance" else fixed,
