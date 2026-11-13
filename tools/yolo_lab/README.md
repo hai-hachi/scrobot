@@ -48,15 +48,15 @@ The server and Gazebo use ROS domain **83** and isolated Gazebo partition
 |---|---|---|
 | Camera tab | `src/scrobot_simulation/config/camera_lab.yaml` | All YOLO RGB/depth modes, camera scene and capture sensor |
 | Lighting Lab | `src/scrobot_simulation/config/lighting_lab.yaml` | YOLO court lights, shadows, HSV materials and venue |
-| YOLO Scene tab | `src/scrobot_simulation/config/yolo_lab.yaml` | Scene shuttles/seed, dataset size, training params, YOLO confidence |
+| YOLO tabs | `src/scrobot_simulation/config/yolo_lab.yaml` | Scene spawning, dataset capture, training, validation, and live inference settings, saved independently by stage |
 
-**Save Camera Lab YAML** and **Save YOLO Lab YAML** are distinct actions.
+**Save Camera Lab YAML** and the YOLO per-tab **Save settings** actions are distinct.
 A scene/capture is generated from the saved YAMLs, **not unsaved sliders**.
 This does not change production perception YAML or deployed model weights.
 If another lab saves lighting or camera settings, restart the YOLO scene or
 start a fresh dataset to take the new snapshot.
 
-## The seven tabs
+## The six tabs
 
 **Camera.** Reuses the same D435i RGB/depth mode table and validator as
 `tools/camera_lab/modes.py`. Measures raw ROS wall FPS, timestamp/sim FPS,
@@ -123,6 +123,33 @@ best checkpoint to `tools/yolo_lab/artifacts/models/<run_name>.pt`,
 updating `artifacts/latest_model.txt`. Training stops Gazebo to avoid
 competing GPU load. Use **Stop training** to interrupt an active run.
 Monitor epochs, recall and mAP from the actual `results.csv`.
+
+Each workflow stage now has its own controls and **Save settings** action,
+all persisted in the same YOLO Lab YAML without overriding the other
+stages' saved parameters:
+
+- **Scene:** spawn distribution, robot pose and shuttle settling
+- **Dataset & Labels:** target images and positive camera-pose fraction
+- **Training:** epochs, training batch size and training input size
+- **Validation:** independent validation batch and input size
+- **Live Detection:** prediction confidence and live inference input size
+
+Previously saved YOLO YAMLs are accepted. Missing validation/live
+parameters receive their current defaults when saved.
+
+The Dataset & Labels tab also allows renaming and permanently deleting old
+captured datasets. Rename preserves the timestamp and appends a name, e.g.
+`dataset_20261114T010203123456Z__720p_mixed`, while updating its
+`data.yaml`, capture summary and inspection references. A rename cannot
+operate while capture, inspection, training, validation or model import
+is running. Deletion also requires typing the complete selected dataset
+identifier and confirming the browser warning; the operation is irreversible.
+Historical training logs referencing the original dataset path are not rewritten.
+
+The imported checkpoint choices are displayed as **Legacy best.pt (unknown
+architecture)**, **YOLO11n Nano shuttle**, and **YOLO11s Small ball**,
+but preserve their original filenames and SHA-1 pinning for verified imports.
+The naming of a checkpoint does not verify its training classes or accuracy.
 
 The original `best.pt`, `yolo11n_shuttle.pt` and `yolo11s-ball.pt`
 are **binary** weights, not Python code. They are intentionally not
