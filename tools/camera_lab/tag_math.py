@@ -37,8 +37,11 @@ def venue_bounds(lighting_path=LIGHTING_CONFIG, court_path=PUBLISHED_COURT):
     if published is None or not published.text:
         raise ValueError("Cannot find published court floor bounds")
     dimensions = [float(x) for x in published.text.split()]
-    floor_x = min(configured_x, dimensions[0])
-    floor_y = min(configured_y, dimensions[1])
+    # Each lab consumes the current SAVED Lighting Lab YAML directly, not
+    # the last published production floor. AprilTags Lab regenerates its
+    # floor/walls to these calibrated dimensions at scene launch.
+    floor_x = configured_x
+    floor_y = configured_y
     if floor_x / 2 <= ROBOT_EDGE_MARGIN or floor_y / 2 <= ROBOT_EDGE_MARGIN:
         raise ValueError("Venue floor too small for robot placement")
     return {
