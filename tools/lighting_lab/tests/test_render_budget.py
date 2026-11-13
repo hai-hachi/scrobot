@@ -65,7 +65,7 @@ class RenderBudgetTests(unittest.TestCase):
                          "0.02 0.02 0.02 1")
 
     def test_production_world_matches_saved_calibrated_lights(self):
-        cfg = read_lab_config(ROOT / "src/scrobot_simulation/config/lighting_lab.yaml")["lights"]
+        cfg = read_lab_config(ROOT / "tools/configs/labs/lighting_lab.yaml")["lights"]
         cfg = checked_lights(cfg)
         world = ET.parse(WORLD).getroot().find("world")
         lights = world.findall("light")
@@ -84,7 +84,7 @@ class RenderBudgetTests(unittest.TestCase):
                              light.get("name").replace("court_light_", "lab_light_") in shadows)
 
     def test_published_floor_wall_and_court_match_saved_hsv_and_venue(self):
-        cfg = read_lab_config(ROOT / "src/scrobot_simulation/config/lighting_lab.yaml")
+        cfg = read_lab_config(ROOT / "tools/configs/labs/lighting_lab.yaml")
         world = ET.parse(WORLD).getroot().find("world")
         mapping = {
             "venue_floor_visual": "floor",
