@@ -138,20 +138,16 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
    </div>
    <p class="hint">Changing tag size or height regenerates the meshes and requires restarting this scene. Gaussian noise modifies the RGB pixels <b>before detection</b>, without restarting Gazebo.</p>
    <h3>Place the robot on the court</h3>
-   <svg id="courtMap" viewBox="0 0 700 410" aria-label="Click to choose the robot's location on the badminton court">
-    <rect x="41" y="40" width="618" height="330" rx="3" fill="#197067"/>
-    <rect x="64" y="63" width="572" height="284" fill="none" stroke="#e8f3ef" stroke-width="2"/>
-    <path d="M350 63V347 M210 63V347 M490 63V347 M64 205H636" stroke="#e8f3ef" stroke-opacity=".7" stroke-width="2" fill="none"/>
-    <line x1="350" y1="48" x2="350" y2="360" stroke="#f4ebac" stroke-width="3"/>
-    <circle cx="350" cy="65.4" r="6" fill="#cbd5df"/>
-    <circle cx="350" cy="344.6" r="6" fill="#cbd5df"/>
+   <svg id="courtMap" viewBox="0 0 700 410" aria-label="Click anywhere on the published venue floor including outside the badminton court to set robot X and Y">
+    <g id="courtSurface"></g>
     <g id="courtTags"></g><g id="robotMarker"></g>
-    <text x="48" y="27" fill="#d6efe7" font-size="15">Upper court side (+Y)</text>
-    <text x="48" y="397" fill="#d6efe7" font-size="14">Click to position the robot; use yaw for its direction</text>
+    <text x="36" y="27" fill="#d6efe7" font-size="15">Lighting Lab venue, including outer clearance (+Y above)</text>
+    <text x="36" y="397" fill="#d6efe7" font-size="14">Click inside outer floor to place robot · gold arrow = robot heading</text>
    </svg>
+   <p id="venueCaption" class="hint">Loading Lighting Lab clearance and published venue dimensions…</p>
    <div class="tag-columns">
-    <div><label for="robotX">Robot X (m)</label><input id="robotX" type="number" min="-7.2" max="7.2" step="0.1" value="1.47"/></div>
-    <div><label for="robotY">Robot Y (m)</label><input id="robotY" type="number" min="-3.6" max="3.6" step="0.1" value="1.58"/></div>
+    <div><label for="robotX">Robot X (m)</label><input id="robotX" type="number" min="-10.2" max="10.2" step="0.1" value="1.47"/></div>
+    <div><label for="robotY">Robot Y (m)</label><input id="robotY" type="number" min="-5.7" max="5.7" step="0.1" value="1.58"/></div>
     <div><label for="robotYaw">Robot yaw (degrees)</label><input id="robotYaw" type="number" min="-180" max="180" step="5" value="135"/></div>
     <div><label>Quick alignment</label><button id="headOn" style="width:100%">Face selected tag at 2 m</button></div>
    </div>
@@ -186,22 +182,22 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
    <div>
     <h3>1 · Distance sweep (robot faces tag)</h3>
     <div class="tag-columns">
-     <div><label>Start (m)</label><input id="distanceMin" type="number" min=".4" max="8" step=".1" value=".6"/></div>
-     <div><label>End (m)</label><input id="distanceMax" type="number" min=".4" max="8" step=".1" value="5.0"/></div>
+     <div><label>Start (m)</label><input id="distanceMin" type="number" min=".4" max="12" step=".1" value=".6"/></div>
+     <div><label>End (m)</label><input id="distanceMax" type="number" min=".4" max="12" step=".1" value="5.0"/></div>
      <div><label>Step (m)</label><input id="distanceStep" type="number" min=".05" max="2" step=".05" value=".4"/></div>
     </div>
-    <p class="hint">Distance is horizontal from robot base to tag center. Each pose turns the robot to face the tag directly.</p>
+    <p class="hint">Distance is horizontal from robot base to tag center (up to 12 m). Each pose turns the robot to face the tag directly, including beyond the court mat within venue clearance.</p>
     <button class="primary" id="distanceRun">Run distance sweep</button>
    </div>
    <div>
     <h3>2 · Heading sweep (fixed distance)</h3>
     <div class="tag-columns">
-     <div><label>Robot-base distance (m)</label><input id="fixedDistance" type="number" min=".4" max="8" step=".1" value="2"/></div>
+     <div><label>Robot-base distance (m)</label><input id="fixedDistance" type="number" min=".4" max="12" step=".1" value="2"/></div>
      <div><label>Start offset (°)</label><input id="angleMin" type="number" min="-90" max="90" step="5" value="-75"/></div>
      <div><label>End offset (°)</label><input id="angleMax" type="number" min="-90" max="90" step="5" value="75"/></div>
      <div><label>Step offset (°)</label><input id="angleStep" type="number" min="1" max="45" step="1" value="15"/></div>
     </div>
-    <p class="hint">Robot stays at the specified distance on the tag normal and rotates about its vertical axis. Zero degrees means directly facing the tag.</p>
+    <p class="hint">Robot stays at the specified distance (up to 12 m) on the tag normal and rotates about its vertical axis. Zero degrees means directly facing the tag.</p>
     <button class="primary" id="headingRun">Run heading sweep</button>
    </div>
   </div>
