@@ -26,6 +26,7 @@ DEFAULT = {
     "dataset_images": 1200,
     "positive_fraction": 0.85,
     "epochs": 15,
+    "learning_rate": 0.0001,
     "batch": 8,
     "imgsz": 640,
     "validation_imgsz": 640,
@@ -83,6 +84,7 @@ def validate(raw):
         ("robot_y", -12.0, 12.0),
         ("robot_yaw", -360.0, 360.0),
         ("positive_fraction", 0.0, 1.0),
+        ("learning_rate", 0.000001, 0.1),
         ("confidence", 0.001, 1.0),
     ):
         value = result[key]
