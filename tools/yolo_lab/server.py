@@ -191,7 +191,7 @@ class Lab:
                 self.manifest = manifest
                 self.started_with = {
                     "camera": camera, "yolo": yolo,
-                    "lighting": lighting,
+                    "lighting": lighting, "spawn_geometry": spawn_geometry(),
                 }
                 self._launch_camera_scene(path, camera)
                 self.phase = "settling"
@@ -368,6 +368,7 @@ class Lab:
                         "camera": validate_camera(camera_saved) if camera_saved else None,
                         "yolo": validate_yolo(yolo_saved) if yolo_saved else None,
                         "lighting": lighting,
+                        "spawn_geometry": spawn_geometry(),
                     },
                 "spawn_geometry": spawn_geometry(),
                 "manifest": self.manifest,
