@@ -102,6 +102,29 @@ class TagLabTests(TestCase):
                           rig.find("link/sensor/pose").text)
             self.assertEqual(len(world.findall(".//sensor")),2)
 
+    def test_canonical_tag_generator_produces_four_renderable_textures(self):
+        try:
+            import cv2
+        except ImportError:
+            self.skipTest("OpenCV missing for tag texture generation")
+        if not hasattr(cv2,"aruco"):
+            self.skipTest("cv2.aruco missing for authentic 16h5 tag textures")
+        import yaml
+        with tempfile.TemporaryDirectory() as td:
+            config={**geom.TAG_DEFAULT,"size":.12,"height":.35}
+            model,params=tags_scene.generate_tags(config,Path(td))
+            self.assertEqual(params["tag_edge_size"],.12)
+            self.assertAlmostEqual(
+                params["tag_mount_radius"],geom.mount_radius(.12))
+            for tag_id in range(4):
+                self.assertTrue(
+                    (model/"materials/textures"/f"tag_{tag_id}.png").is_file())
+                self.assertTrue(
+                    (model/"meshes"/f"tag_{tag_id}.obj").is_file())
+            doc=ET.parse(model/"model.sdf").getroot()
+            self.assertEqual(len(doc.findall(".//link")),4)
+            self.assertEqual(len(doc.findall(".//visual[@name='tag_texture']")),4)
+
     def test_generated_apriltag_config_matches_plate_size(self):
         with tempfile.TemporaryDirectory() as td:
             path=Path(td)/"detector.yaml"
