@@ -21,7 +21,7 @@ from lighting_source import apply_court_world, calibration as load_lighting
 from tag_math import CAMERA_OFFSET, CAMERA_PITCH
 
 from yolo_settings import validate as validate_yolo
-from distribution import sample as sample_shuttles
+from distribution import sample as sample_shuttles, geometry as spawn_geometry
 
 COURT = ROOT / "src/scrobot_simulation/worlds/badminton_court.sdf"
 STATIC_MODELS = ("court_floor", "court_markings", "net_assembly",
@@ -31,6 +31,7 @@ def build(camera, yolo, destination, lighting=None, settled_poses=None):
     """Build real court + calibrated lights + independent RGB/depth + shuttles."""
     camera = validate_camera(camera)
     yolo = validate_yolo(yolo)
+    spawn_dims = spawn_geometry()
     lighting = load_lighting() if lighting is None else lighting
     dest = Path(destination)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -87,13 +88,21 @@ def build(camera, yolo, destination, lighting=None, settled_poses=None):
     source_model = production.getroot().find("model")
     if source_model is None or source_model.find(".//collision") is None:
         raise ValueError("Production shuttle has no collision physics")
-    for i, (x, y, zone) in enumerate(sample_shuttles(yolo)):
+    for i, (x, y, zone) in enumerate(sample_shuttles(yolo, spawn_dims)):
         name = f"yolo_shuttle_{i:03d}"
-        initial_yaw = rng.uniform(-math.pi, math.pi)
-        # A modest initial tilt prevents perfectly upright, balanced shuttles.
-        roll = rng.choice((-1, 1)) * rng.uniform(1.05, 1.35)
-        pitch = rng.uniform(-0.25, 0.25)
-        initial = (x, y, 0.11, roll, pitch, initial_yaw)
+        if yolo["spawn_mode"] == "single":
+            # The fixed single-pose calibration comes from shuttle_spawn.yaml.
+            item = spawn_dims["single"]
+            initial = (x, y, item["z"], item["roll"],
+                       item["pitch"], item["yaw"])
+        else:
+            # Keep the production spawn height and let real collision settle
+            # the shuttle naturally to a side-lying pose.
+            initial_yaw = rng.uniform(-math.pi, math.pi)
+            roll = rng.choice((-1, 1))*rng.uniform(1.05, 1.35)
+            pitch = rng.uniform(-0.25, 0.25)
+            initial = (x, y, spawn_dims["spawn"]["height"],
+                       roll, pitch, initial_yaw)
         pose = tuple(settled_poses[name]) if settled_poses is not None else initial
         if len(pose) != 7 and len(pose) != 6:
             raise ValueError("Settled shuttle pose must be xyz + RPY or quaternion")
@@ -122,6 +131,8 @@ def build(camera, yolo, destination, lighting=None, settled_poses=None):
         "schema_version": 2, "world": "yolo_lab",
         "settled_static": settled_poses is not None,
         "camera": camera, "yolo": yolo,
+        "spawn_source": spawn_dims["path"],
+        "spawn_geometry": spawn_dims,
         "lighting_source": str(ROOT / "src/scrobot_simulation/config/lighting_lab.yaml"),
         "camera_source": str(ROOT / "src/scrobot_simulation/config/camera_lab.yaml"),
         "shuttles": placed,
