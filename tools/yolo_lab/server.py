@@ -85,7 +85,8 @@ class Lab:
         env.pop("ROS_LOCALHOST_ONLY", None)
         additional = [
             str(ROOT / "src/scrobot_simulation/models"),
-            str(ROOT / "src/scrobot_debug/models"),
+            str(HERE / "models"),
+            str(ROOT / "src/scrobot_debug/models"),  # compatibility with old debug tools
             str(ROOT / "install/scrobot_simulation/share/scrobot_simulation/models"),
         ]
         existing = env.get("GZ_SIM_RESOURCE_PATH")
