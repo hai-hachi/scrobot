@@ -42,11 +42,10 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <div class="tabs" role="tablist" aria-label="Lab sections">
   <button id="tabCamera" class="active" role="tab" aria-selected="true">Camera</button>
   <button id="tabYolo" role="tab" aria-selected="false">Scene</button>
-  <button id="tabDataset" role="tab" aria-selected="false">1 · Dataset Generator</button>
-  <button id="tabLabels" role="tab" aria-selected="false">2 · Label Inspector</button>
-  <button id="tabTrain" role="tab" aria-selected="false">3 · Training</button>
-  <button id="tabValidate" role="tab" aria-selected="false">4 · Validation</button>
-  <button id="tabLive" role="tab" aria-selected="false">5 · Live Detection</button>
+  <button id="tabDataset" role="tab" aria-selected="false">1 · Dataset &amp; Labels</button>
+  <button id="tabTrain" role="tab" aria-selected="false">2 · Training</button>
+  <button id="tabValidate" role="tab" aria-selected="false">3 · Validation</button>
+  <button id="tabLive" role="tab" aria-selected="false">4 · Live Detection</button>
 </div>
 <section class="card">
   <h2>Lab controls</h2>
@@ -160,7 +159,7 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 </section>
 <section class="card">
   <h2>Integrated workflow from the original <code>yoloshuttle</code> repository</h2>
-  <p class="muted">The scripts below have been consolidated under <code>tools/yolo_lab/</code> and are now connected to the five workflow tabs. The dataset label inspector is required before training. The original training scripts remain available for reproducible direct command-line use.</p>
+  <p class="muted">The scripts below have been consolidated under <code>tools/yolo_lab/</code>. Dataset collection and label inspection share one tab. The dataset label inspector is required before training. The original training scripts remain available for reproducible direct command-line use.</p>
   <table><thead><tr><th>Stage</th><th>Original implementation</th><th>Key check</th></tr></thead><tbody>
     <tr><td>Generate images</td><td><code>tools/yolo_lab/scripts/dataset_capture.py</code></td><td>Camera pose, deterministic shuttles and fresh Ogre render</td></tr>
     <tr><td>Label automatically</td><td>Same capture script, exact shuttle STL projected using CameraInfo</td><td>One YOLO <code>.txt</code> per image; empty negative frames</td></tr>
@@ -176,11 +175,11 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <div id="datasetPane" hidden>
 <div class="grid">
 <section class="card">
-<h2>1 · Synthetic dataset generator</h2>
+<h2>1 · Dataset capture &amp; automatic labels</h2>
 <p class="muted">Build a fresh Lighting Lab calibrated court, spawn the production shuttle meshes, reposition a triggered camera, and save synchronized RGB + mesh-projected YOLO labels. The old collector's changed/stable render check is retained.</p>
 <div class="buttons">
 <button class="primary" id="startDataset">Generate labelled dataset</button>
-<button id="cancelDataset" class="danger">Stop capture</button>
+<button id="cancelDataset" class="danger">Finish early &amp; keep dataset</button>
 </div>
 <label>Saved dataset
 <select id="datasetList"><option>None yet</option></select>
@@ -196,16 +195,22 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 </div>
 <p id="datasetState" class="muted">Not collecting.</p>
 <table><thead><tr><th>Split</th><th>Images</th><th>Labels</th></tr></thead><tbody id="datasetSplits"><tr><td colspan="3">No dataset yet</td></tr></tbody></table>
+<h3>Latest saved image + YOLO ground-truth labels</h3>
+<p class="muted">Updates when an image, its corresponding label file, and the metadata row have all been saved. Green rectangles are generated labels, not model predictions. Empty images are marked NEGATIVE.</p>
+<img id="capturePreview" alt="Most recent saved dataset image with its actual YOLO ground-truth bounding boxes" style="display:block;width:100%;min-height:200px;max-height:425px;object-fit:contain;background:#08131c;border-radius:9px">
+<p id="capturePreviewInfo" class="muted">No image and label pair saved yet.</p>
+<details><summary>Capture timing breakdown &amp; speed diagnosis</summary>
+<p id="captureTimings" class="muted">Capture timings appear after the first frame.</p>
+<p class="muted">Try a lower RGB resolution first, keep Gazebo desktop UI closed during capture, and reduce shuttle count when testing the pipeline. The changed-pixels + stable-frame check deliberately costs extra triggered renders to avoid stale annotations.</p>
+</details>
 <p id="datasetDirectory" class="muted">No dataset selected.</p>
 <details><summary>Capture logs</summary><pre id="captureLog">No capture process</pre></details>
 </section>
 </div>
-</div>
 
-<div id="labelsPane" hidden>
 <div class="grid">
 <section class="card">
-<h2>2 · Automatic label inspection</h2>
+<h2>Final dataset inspection</h2>
 <p class="muted">Uses the imported old dataset validator: checks image/label pairs, normalized coordinates, negative examples, duplicate image hashes, stale pose metadata and train/val/test splits. Generates bbox overlay previews for human review.</p>
 <label>Preview samples (across train, val and test)
 <input id="inspectSamples" type="number" min="1" max="100" step="1" value="24"></label>
@@ -232,7 +237,7 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <div id="trainPane" hidden>
 <div class="grid">
 <section class="card">
-<h2>3 · Fine-tune YOLO</h2>
+<h2>2 · Fine-tune YOLO</h2>
 <p class="muted">Runs the imported Ultralytics training script with saved epochs, batch and imgsz. Starts from the selected checkpoint, not random weights. Automatically stops Gazebo to free GPU capacity.</p>
 <label>Starting checkpoint<select id="trainModel"></select></label>
 <div class="buttons">
@@ -419,7 +424,7 @@ for(const key of ["robot_x","robot_y","robot_yaw"])
  $(key).addEventListener("input",paintRobot);
 const panes={
  camera:["cameraPane","tabCamera"],yolo:["yoloPane","tabYolo"],
- dataset:["datasetPane","tabDataset"],labels:["labelsPane","tabLabels"],
+ dataset:["datasetPane","tabDataset"],
  train:["trainPane","tabTrain"],validate:["validatePane","tabValidate"],
  live:["livePane","tabLive"]
 };
@@ -585,7 +590,7 @@ async function poll(){
   $("preview").src="/api/preview?t="+encodeURIComponent(stamp);
  }
 }
-let labelIndex=0,labelSetKey="",lastLiveStamp=0;
+let labelIndex=0,labelSetKey="",lastLiveStamp=0,lastCaptureKey="";
 function replaceSelectItems(id,items,selected){
  const node=$(id),current=node.value;
  const signature=JSON.stringify(items);
@@ -617,8 +622,9 @@ $("startDataset").onclick=()=>action(async()=>{
    " @ "+r.camera.color_fps+" FPS profile. Dataset: "+r.dataset);
 });
 $("cancelDataset").onclick=()=>action(async()=>{
- await post("/api/dataset/cancel",{});
- notify("Stopped capture. Any complete images/labels remain in this dataset.");
+ const result=await post("/api/dataset/cancel",{});
+ notify("Early finish requested for "+result.dataset+
+  ". Waiting for the collector to complete its current image/label transaction and write the partial dataset summary.");
 });
 $("datasetList").onchange=()=>action(async()=>{
  await post("/api/dataset/select",{dataset:$("datasetList").value});
@@ -628,7 +634,7 @@ $("datasetList").onchange=()=>action(async()=>{
 $("startInspect").onclick=()=>action(async()=>{
  const n=Number($("inspectSamples").value);
  const result=await post("/api/inspect/start",{samples:n});
- setTab("labels");notify("Inspecting "+result.dataset+
+ setTab("dataset");notify("Inspecting "+result.dataset+
    " with "+n+" bbox preview samples across the splits.");
 });
 $("stopInspect").onclick=()=>action(async()=>{
@@ -700,10 +706,13 @@ function renderWorkflow(s){
  const done=Number(progress.saved_images||summary.saved_this_run||0);
  $("datasetPercent").textContent=target?(100*done/target).toFixed(1)+"%":"—";
  const capture=w.tasks?.capture||{};
- $("datasetState").textContent=progress.state?
+ $("datasetState").textContent=w.stage==="finishing_early"&&capture.running?
+   "Early finish requested · waiting for partial dataset summary":
+   progress.state?
    progress.state+" · "+(capture.running?"capture running":"capture not running"):
    summary.status?"Last capture: "+summary.status:
    "Dataset generator idle.";
+ $("cancelDataset").disabled=!capture.running||w.stage==="finishing_early";
  $("datasetDirectory").textContent=summary.output_dir||
     (w.selected_dataset?"Saved dataset: "+w.selected_dataset:"No saved dataset yet.");
  $("datasetSplits").replaceChildren();
@@ -716,6 +725,26 @@ function renderWorkflow(s){
   }
   $("datasetSplits").append(tr);
  }
+ const liveCapture=w.capture_preview||{};
+ const captureKey=(w.selected_dataset||"")+":"+(liveCapture.saved_images||0);
+ if(liveCapture.saved_images&&captureKey!==lastCaptureKey){
+  lastCaptureKey=captureKey;
+  $("capturePreview").src="/api/capture-preview?seq="+
+    encodeURIComponent(captureKey);
+ }
+ if(!liveCapture.saved_images){
+  lastCaptureKey="";
+  $("capturePreview").removeAttribute("src");
+ }
+ $("capturePreviewInfo").textContent=liveCapture.saved_images?
+  "#"+liveCapture.saved_images+" · "+liveCapture.split+
+  " · "+liveCapture.boxes+" ground-truth boxes · "+liveCapture.frame:
+  "Waiting for a successfully saved image and label pair.";
+ const ms=progress.last_timings_ms||{};
+ $("captureTimings").textContent=Object.keys(ms).length?
+  Object.entries(ms).map(([k,v])=>k.replaceAll("_"," ")+": "+
+    Number(v).toFixed(1)+" ms").join("  |  "):
+  "No capture timing measurements yet.";
  $("captureLog").textContent=w.task_logs?.capture||"No capture logs yet";
  const approved=inspection.passed===true;
  $("labelStatus").textContent=inspection.dataset?
