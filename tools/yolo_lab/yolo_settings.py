@@ -27,6 +27,10 @@ DEFAULT = {
     "positive_fraction": 0.85,
     "epochs": 15,
     "learning_rate": 0.0001,
+    "optimizer": "AdamW",
+    "patience": 8,
+    "mosaic": 1.0,
+    "rect": False,
     "batch": 8,
     "imgsz": 640,
     "validation_imgsz": 640,
@@ -41,6 +45,10 @@ def validate(raw):
             set(DEFAULT) | LEGACY_GEOMETRY_FIELDS):
         raise ValueError("Invalid YOLO Lab YAML settings fields")
     result = {**DEFAULT, **{k: v for k, v in raw.items() if k in DEFAULT}}
+    if result["optimizer"] not in ("AdamW", "SGD", "Adam", "RMSProp", "auto"):
+        raise ValueError("Invalid YOLO optimizer")
+    if type(result["rect"]) is not bool:
+        raise ValueError("rect must be a boolean")
     if result["spawn_mode"] not in ("single", "random", "cluster", "mixed"):
         raise ValueError("Invalid spawn mode")
     if result["random_density"] not in ("uniform", "center", "net"):
@@ -65,6 +73,7 @@ def validate(raw):
         ("seed", 0, 2147483647),
         ("dataset_images", 50, 50000),
         ("epochs", 1, 300),
+        ("patience", 0, 300),
         ("batch", 1, 64),
         ("imgsz", 320, 1920),
         ("validation_imgsz", 320, 1920),
@@ -85,6 +94,7 @@ def validate(raw):
         ("robot_yaw", -360.0, 360.0),
         ("positive_fraction", 0.0, 1.0),
         ("learning_rate", 0.000001, 0.1),
+        ("mosaic", 0.0, 1.0),
         ("confidence", 0.001, 1.0),
     ):
         value = result[key]
