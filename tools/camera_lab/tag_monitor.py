@@ -85,6 +85,12 @@ class TagMonitor(Node):
         self.det_times = deque(maxlen=150)
         self.latencies_ms = deque(maxlen=300)
         self.latest_observed = None
+        self.tf_tag_messages = 0
+        self.tf_parent_rejected = 0
+        self.tf_last_parent = None
+        self.tf_last_child = None
+        self.tf_last_stamp = None
+        self.last_image_frame = None
         self.last_stamp = 0.0
         self.rgb.clear()
         self.detected.clear()
@@ -181,6 +187,7 @@ class TagMonitor(Node):
         if time.monotonic() - self.reset_wall > .35:
             self.rgb_count += 1
         self.rgb.append((stamp(out.header), out, time.monotonic()))
+        self.last_image_frame = out.header.frame_id
         # Before apriltag_ros starts publishing, still show a live frame.
         # Once it runs, draw from the matching detections/TF timestamps
         # instead of overwriting the overlay with an undecorated image.
@@ -252,11 +259,16 @@ class TagMonitor(Node):
             }
             self.latest_tfs[key] = sample
             stamp_for_preview = sample["stamp"]
+            self.tf_tag_messages += 1
+            self.tf_last_parent = tf.header.frame_id
+            self.tf_last_child = tf.child_frame_id
+            self.tf_last_stamp = sample["stamp"]
             if key != tag_id:
                 continue
             # Match only this camera optical frame. Comparing a different
             # TF parent would silently invalidate every position error.
             if tf.header.frame_id.lstrip("/") != "camera_color_optical_frame":
+                self.tf_parent_rejected += 1
                 continue
             err = comparison(cfg["tag"],(sample["x"],sample["y"],sample["z"]),
                              sample["quaternion"])
@@ -357,6 +369,12 @@ class TagMonitor(Node):
                    "info_subscribers":self.pub_info.get_subscription_count(),
                    "detector_frames":self.tag_frames,
                    "detected_frames":self.hits,"pose_frames":self.pose_count,
+                   "tf_tag_messages":self.tf_tag_messages,
+                   "tf_parent_rejected":self.tf_parent_rejected,
+                   "tf_last_parent":self.tf_last_parent,
+                   "tf_last_child":self.tf_last_child,
+                   "tf_last_stamp":self.tf_last_stamp,
+                   "last_image_frame":self.last_image_frame,
                    "detection_pct":round(100*self.hits/self.tag_frames,2)
                        if self.tag_frames else None,
                    "detector_fps":round(det_fps,2) if det_fps else None,
@@ -369,7 +387,8 @@ class TagMonitor(Node):
                    "bearing_rmse_deg":summarize(
                        [e["bearing_error_deg"] for e in self.errors]),
                    "normal_axis_rmse_deg":summarize(
-                       [e.get("normal_axis_error_deg",0) for e in self.errors]),
+                       [e["normal_axis_error_deg"] for e in self.errors
+                        if "normal_axis_error_deg" in e]),
                    "decision_margin_mean":round(sum(self.margins)/len(self.margins),2)
                         if self.margins else None,
                    "true_translation":list(expected_translation(self.control["tag"]))
