@@ -373,20 +373,30 @@ class Lab:
                     measured=self.tag_status()
                     if measured.get("epoch") != epoch:
                         measured={}
+                    enough_frames=measured.get("detector_frames",0)>=5
+                    enough_poses=measured.get("pose_frames",0)>=3
                     row={
+                        "quality":"ok" if enough_frames else "insufficient_detector_frames",
                         "value":value,
                         "pose":pose,
                         "tag_id":tag_id,
                         "detector_frames":measured.get("detector_frames",0),
                         "detected_frames":measured.get("detected_frames",0),
                         "pose_frames":measured.get("pose_frames",0),
-                        "detection_pct":measured.get("detection_pct"),
-                        "position_rmse_m":measured.get("position_rmse_m"),
-                        "range_rmse_m":measured.get("range_rmse_m"),
-                        "bearing_rmse_deg":measured.get("bearing_rmse_deg"),
+                        "detection_pct":measured.get("detection_pct")
+                            if enough_frames else None,
+                        "position_rmse_m":measured.get("position_rmse_m")
+                            if enough_poses else None,
+                        "range_rmse_m":measured.get("range_rmse_m")
+                            if enough_poses else None,
+                        "bearing_rmse_deg":measured.get("bearing_rmse_deg")
+                            if enough_poses else None,
                         "normal_axis_rmse_deg":
-                            measured.get("normal_axis_rmse_deg"),
+                            measured.get("normal_axis_rmse_deg")
+                            if enough_poses else None,
                         "detector_fps":measured.get("detector_fps"),
+                        "image_to_detection_p95_ms":
+                            measured.get("image_to_detection_p95_ms"),
                     }
                     self.sweep["rows"].append(row)
             with self.lock:
