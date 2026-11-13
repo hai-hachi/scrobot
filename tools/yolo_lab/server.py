@@ -436,6 +436,17 @@ class Handler(BaseHTTPRequestHandler):
                 if path.is_file():
                     return self.respond(200, path.read_bytes(), "image/jpeg")
                 return self.respond(404, {"error": "Live YOLO image not available"})
+            if route == "/api/capture-preview":
+                # Serve only the currently selected dataset's latest committed
+                # labelled frame; never accept a user-supplied filesystem path.
+                dataset = self.lab.workflow.current_dataset()
+                if dataset is None:
+                    raise ValueError("No dataset selected")
+                image = dataset / "capture_preview" / "latest.jpg"
+                meta = dataset / "capture_preview" / "latest.json"
+                if not (image.is_file() and meta.is_file()):
+                    return self.respond(404, {"error": "No captured label preview yet"})
+                return self.respond(200, image.read_bytes(), "image/jpeg")
             if route == "/api/label-preview":
                 name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
                 info = self.lab.workflow.progress()
@@ -531,7 +542,7 @@ def main():
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     httpd.RequestHandlerClass.lab = lab
     print(f"SCROBOT YOLO Lab: http://127.0.0.1:{args.port}", flush=True)
-    print("ROS_DOMAIN_ID=83 (isolated); Camera, Scene, Dataset, Labels, Train, Validate and Live tabs", flush=True)
+    print("ROS_DOMAIN_ID=83 (isolated); Camera, Scene, Dataset & Labels, Train, Validate and Live tabs", flush=True)
     print("Training requires Ultralytics; a checkpoint must be imported explicitly.", flush=True)
     try:
         httpd.serve_forever(poll_interval=0.2)
