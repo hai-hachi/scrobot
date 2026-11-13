@@ -25,6 +25,7 @@ from tag_math import (TAG_DEFAULT, VENUE, validate as validate_tag, mount_radius
                       head_on_pose, sweep_values, tag_pose)
 from tags_scene import (generate_tags, tag_world, detector_yaml,
                         camera_info_bridge_yaml)
+from tag_publish import publish as publish_tag_geometry, status as tag_publish_status
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -234,6 +235,20 @@ class Lab:
             return {"started": True, "mode": "apriltags",
                     "tag": self.tag, "tag_mount_radius": mount_radius(tag["size"]),
                     "world": path}
+
+    def publish_tag_configuration(self):
+        """Explicit publication of the *running* tag geometry, not UI sliders."""
+        with self.lock:
+            if self.mode != "apriltags" or self.phase != "streaming":
+                raise ValueError("Start AprilTags Lab and verify RGB streaming first")
+            if self.sweep.get("state") == "running":
+                raise ValueError("Finish or cancel the active sweep before publishing")
+            observation = self.tag_status()
+            if observation.get("detector_frames", 0) < 3:
+                raise ValueError(
+                    "Wait for at least 3 AprilTag detector frames before publishing"
+                )
+            return publish_tag_geometry(self.tag)
 
     def gz_set_robot_pose(self, tag):
         p = self.procs.get("gazebo")
@@ -573,6 +588,7 @@ class Lab:
                 "tags": {str(i): tag_pose(i, self.tag) for i in range(4)},
                 "tag_observation": tag_obs,
                 "tag_pipeline_hint": pipeline_hint,
+                "tag_publication": tag_publish_status(self.tag),
                 "sweep": dict(self.sweep),
                 "settings": self.settings,
                 "expected": expected_mb_s(self.settings),
@@ -719,6 +735,10 @@ class Handler(BaseHTTPRequestHandler):
                 result = lab.begin_sweep(data)
             elif route == "/api/tag/cancel":
                 result = lab.cancel_sweep()
+            elif route == "/api/tag/publish":
+                if data != {"confirm": True}:
+                    raise ValueError("Explicit confirmation is required to update production tags")
+                result = lab.publish_tag_configuration()
             elif route == "/api/stop":
                 result = lab.stop()
             elif route == "/api/save":
