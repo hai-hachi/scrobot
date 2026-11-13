@@ -316,8 +316,15 @@ class Lab:
                 raise ValueError("Wait for live AprilTag camera streaming first")
             if self.sweep.get("state") == "running":
                 raise ValueError("A sweep is already running")
-            if not self.tag_status().get("camera_info_valid"):
-                raise ValueError("Wait for CameraInfo before sweeping; detector needs intrinsics")
+            observed = self.tag_status()
+            if not observed.get("camera_info_valid"):
+                raise ValueError("CameraInfo is not ready; check AprilTags Lab pipeline status")
+            if observed.get("detector_frames", 0) < 3:
+                raise ValueError(
+                    "AprilTag detector has not processed at least 3 frames. "
+                    "Fix detector messages first; a distance sweep would "
+                    "otherwise contain only missing data."
+                )
             for value in xs:
                 head_on_pose(tag_id,
                              value if kind=="distance" else fixed,
@@ -355,7 +362,13 @@ class Lab:
                                   value if kind=="distance" else fixed,
                                   self.tag,
                                   0 if kind=="distance" else value)
-                self.place_robot({**pose, "tag_id":tag_id})
+                try:
+                    self.place_robot({**pose, "tag_id":tag_id})
+                except (OSError, ValueError, RuntimeError,
+                        subprocess.TimeoutExpired) as exc:
+                    raise RuntimeError(
+                        f"Cannot set robot pose at {kind}={value}: {exc}"
+                    ) from exc
                 with self.lock:
                     if session != self.sweep_id:
                         return
@@ -376,7 +389,10 @@ class Lab:
                     enough_frames=measured.get("detector_frames",0)>=5
                     enough_poses=measured.get("pose_frames",0)>=3
                     row={
-                        "quality":"ok" if enough_frames else "insufficient_detector_frames",
+                        "quality":("insufficient_detector_frames"
+                                   if not enough_frames else
+                                   "no_pose_estimate"
+                                   if not enough_poses else "ok"),
                         "value":value,
                         "pose":pose,
                         "tag_id":tag_id,
@@ -511,10 +527,31 @@ class Lab:
                         "but the detector has returned no messages. Inspect "
                         "detector.log and check ROS QoS/topic connectivity."
                     )
+                elif messages > 0 and (tag_obs.get("detected_frames") or 0) > 0 and not (tag_obs.get("pose_frames") or 0):
+                    if (tag_obs.get("tf_tag_messages") or 0) == 0:
+                        pipeline_hint = (
+                            "AprilTag IDs are detected, but no observed_tag_* TF "
+                            "poses arrived. Check detector pose estimation and "
+                            "CameraInfo P/intrinsics; RMSE needs measured 3D poses."
+                        )
+                    elif (tag_obs.get("tf_parent_rejected") or 0) > 0:
+                        pipeline_hint = (
+                            "AprilTag TF poses arrived but use a different parent "
+                            "frame than camera_color_optical_frame. Image frame: "
+                            + str(tag_obs.get("last_image_frame")) + "; TF parent: "
+                            + str(tag_obs.get("tf_last_parent"))
+                            + ". RMSE is withheld to avoid comparing unlike frames."
+                        )
+                    else:
+                        pipeline_hint = (
+                            "Tag IDs found but no valid target-tag TF samples. "
+                            "Check selected ID, TF child IDs and timestamps."
+                        )
                 elif messages > 10 and not (tag_obs.get("detected_frames") or 0):
                     pipeline_hint = (
                         "Detector is processing frames but finds no selected tag. "
-                        "Now check the camera POV, tag orientation/size and lighting."
+                        "RMSE is unavailable until a tag is actually detected. "
+                        "Check POV, orientation, tag size, and lighting."
                     )
                 elif messages > 0:
                     pipeline_hint = "AprilTag detector is processing synchronized frames."
