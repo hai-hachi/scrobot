@@ -6,6 +6,7 @@ A live simulator verification is still necessary after these offline tests.
 from __future__ import annotations
 
 from pathlib import Path
+from html.parser import HTMLParser
 from unittest import TestCase, mock
 from xml.etree import ElementTree as ET
 import math
@@ -165,6 +166,49 @@ class TagLabTests(TestCase):
             self.assertEqual(lab.tag_epoch,1)
         finally:
             lab.stop()
+
+    def test_camera_and_apriltags_tabs_are_siblings_at_full_width(self):
+        html=(LAB/"index.html").read_text()
+
+        class ElementParents(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.stack=[]
+                self.parents={}
+
+            def handle_starttag(self,tag,attrs):
+                attrs=dict(attrs)
+                element_id=attrs.get("id")
+                if element_id in ("cameraPane","tagPane"):
+                    self.parents[element_id]=tuple(self.stack)
+                if tag not in {"meta","link","input","img","hr","br"}:
+                    self.stack.append(tag)
+
+            def handle_endtag(self,tag):
+                if self.stack and self.stack[-1]==tag:
+                    self.stack.pop()
+                elif tag in self.stack:
+                    while self.stack and self.stack[-1]!=tag:
+                        self.stack.pop()
+                    if self.stack:
+                        self.stack.pop()
+
+        p=ElementParents()
+        p.feed(html)
+        self.assertEqual(p.parents["cameraPane"],("html","body","main"))
+        self.assertEqual(p.parents["tagPane"],("html","body","main"))
+        self.assertIn("[hidden]{display:none!important}",html)
+        self.assertIn('$("cameraPane").hidden=name!=="camera"',html)
+        self.assertIn('$("tagPane").hidden=name!=="apriltags"',html)
+        self.assertIn(
+            ".tag-layout{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr)",
+            html)
+
+    def test_server_does_not_launch_opera_or_any_browser_by_default(self):
+        source=(LAB/"server.py").read_text()
+        self.assertIn('parser.add_argument(\n        "--open-browser"',source)
+        self.assertIn("if args.open_browser and not args.no_browser:",source)
+        self.assertNotIn("if not args.no_browser:\n        webbrowser.open(url)",source)
 
     def test_ui_tag_controls_and_browser_js(self):
         html=(LAB/"index.html").read_text()
