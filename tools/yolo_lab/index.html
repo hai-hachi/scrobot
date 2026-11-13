@@ -40,12 +40,17 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 </header>
 <main>
 <div class="tabs" role="tablist" aria-label="Lab sections">
-  <button id="tabCamera" class="active" role="tab" aria-selected="true">Camera configuration</button>
-  <button id="tabYolo" role="tab" aria-selected="false">YOLO Lab</button>
+  <button id="tabCamera" class="active" role="tab" aria-selected="true">Camera</button>
+  <button id="tabYolo" role="tab" aria-selected="false">Scene</button>
+  <button id="tabDataset" role="tab" aria-selected="false">1 · Dataset Generator</button>
+  <button id="tabLabels" role="tab" aria-selected="false">2 · Label Inspector</button>
+  <button id="tabTrain" role="tab" aria-selected="false">3 · Training</button>
+  <button id="tabValidate" role="tab" aria-selected="false">4 · Validation</button>
+  <button id="tabLive" role="tab" aria-selected="false">5 · Live Detection</button>
 </div>
 <section class="card">
   <h2>Lab controls</h2>
-  <p class="muted">Generate a lightweight robot camera + real shuttle mesh inspection scene with the Lighting Lab's saved lights, colors and venue. No AprilTags, robot controllers, training or dataset capture runs in this first stage.</p>
+  <p class="muted">Calibrated camera + shuttle inspection, synchronized dataset collection, geometric auto-label QA, model fine-tuning, held-out validation and real YOLO bounding-box inspection. Each stage runs independently and uses saved Camera, Lighting and YOLO YAML.</p>
   <div class="buttons">
     <button id="startScene" class="primary">Start / restart YOLO inspection scene</button>
     <button id="stopScene" class="danger">Stop scene</button>
@@ -130,6 +135,158 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
   · <a href="https://github.com/hai-hachi/scrobot/blob/real-comparison/src/scrobot_debug/scripts/yolo_dataset_fast_capture.py" target="_blank" rel="noopener noreferrer">Open original Gazebo capture code</a></p>
 </section>
 </div>
+<!-- Workflow stages: each button invokes a real backend action. -->
+<div id="datasetPane" hidden>
+<div class="grid">
+<section class="card">
+<h2>1 · Synthetic dataset generator</h2>
+<p class="muted">Build a fresh Lighting Lab calibrated court, spawn the production shuttle meshes, reposition a triggered camera, and save synchronized RGB + mesh-projected YOLO labels. The old collector's changed/stable render check is retained.</p>
+<div class="buttons">
+<button class="primary" id="startDataset">Generate labelled dataset</button>
+<button id="cancelDataset" class="danger">Stop capture</button>
+</div>
+<label>Saved dataset
+<select id="datasetList"><option>None yet</option></select>
+</label>
+<p class="muted">Dataset config comes from the Camera tab's <code>camera_lab.yaml</code> and Scene tab's <code>yolo_lab.yaml</code>. A new timestamped dataset is created for each capture; old datasets are not overwritten.</p>
+</section>
+<section class="card">
+<h2>Collection progress</h2>
+<div class="metrics">
+<div class="metric"><small>Images saved</small><b id="datasetCount">—</b></div>
+<div class="metric"><small>Target images</small><b id="datasetTarget">—</b></div>
+<div class="metric"><small>Progress</small><b id="datasetPercent">—</b></div>
+</div>
+<p id="datasetState" class="muted">Not collecting.</p>
+<table><thead><tr><th>Split</th><th>Images</th><th>Labels</th></tr></thead><tbody id="datasetSplits"><tr><td colspan="3">No dataset yet</td></tr></tbody></table>
+<p id="datasetDirectory" class="muted">No dataset selected.</p>
+<details><summary>Capture logs</summary><pre id="captureLog">No capture process</pre></details>
+</section>
+</div>
+</div>
+
+<div id="labelsPane" hidden>
+<div class="grid">
+<section class="card">
+<h2>2 · Automatic label inspection</h2>
+<p class="muted">Uses the imported old dataset validator: checks image/label pairs, normalized coordinates, negative examples, duplicate image hashes, stale pose metadata and train/val/test splits. Generates bbox overlay previews for human review.</p>
+<label>Preview samples (across train, val and test)
+<input id="inspectSamples" type="number" min="1" max="100" step="1" value="24"></label>
+<div class="buttons">
+<button id="startInspect" class="primary">Validate labels & generate previews</button>
+<button id="stopInspect">Stop inspector</button>
+</div>
+<p id="labelStatus" class="muted">Select a completed dataset in Dataset Generator.</p>
+<details><summary>Inspector findings</summary><pre id="labelDetails">No inspection performed</pre></details>
+</section>
+<section class="card">
+<h2>Ground-truth bounding boxes</h2>
+<img id="labelImage" alt="Generated YOLO ground-truth bounding-box inspection preview" style="width:100%;max-height:460px;object-fit:contain;background:#08131c;border-radius:9px;min-height:220px">
+<div class="buttons">
+<button id="labelPrev">Previous</button>
+<button id="labelNext">Next</button>
+<span id="labelSample" class="muted">No previews</span>
+</div>
+<p class="note">An automatic geometric projection is not the same as a visibility mask. Inspect partially occluded and truncated shuttlecocks manually. Training is gated on a passing structural inspection, not claimed pixel-perfect annotation.</p>
+</section>
+</div>
+</div>
+
+<div id="trainPane" hidden>
+<div class="grid">
+<section class="card">
+<h2>3 · Fine-tune YOLO</h2>
+<p class="muted">Runs the imported Ultralytics training script with saved epochs, batch and imgsz. Starts from the selected checkpoint, not random weights. Automatically stops Gazebo to free GPU capacity.</p>
+<label>Starting checkpoint<select id="trainModel"></select></label>
+<div class="buttons">
+<label>Device<select id="trainDevice"><option value="0">CUDA GPU 0</option><option value="cpu">CPU</option></select></label>
+</div>
+<div class="buttons">
+<button id="startTraining" class="primary">Train on inspected dataset</button>
+<button id="stopTraining" class="danger">Stop training</button>
+</div>
+<h3>Original yoloshuttle baseline checkpoints</h3>
+<p class="muted">Binary weights are optional and aren't duplicated in Git. An explicit import checks the original repository's immutable Git blob hash before storing local files under <code>tools/yolo_lab/models/pretrained/</code>.</p>
+<div class="buttons">
+<select id="baselineChoice" style="max-width:220px">
+<option value="best.pt">best.pt</option>
+<option value="yolo11n_shuttle.pt">yolo11n_shuttle.pt</option>
+<option value="yolo11s-ball.pt">yolo11s-ball.pt</option>
+</select>
+<button id="importBaseline">Import verified baseline weights</button>
+</div>
+<p class="muted" id="modelStatus">No model selected.</p>
+</section>
+<section class="card">
+<h2>Training progress</h2>
+<div class="metrics">
+<div class="metric"><small>Epochs logged</small><b id="trainingEpoch">—</b></div>
+<div class="metric"><small>mAP@50</small><b id="trainingMap">—</b></div>
+<div class="metric"><small>Recall</small><b id="trainingRecall">—</b></div>
+</div>
+<p id="trainingState" class="muted">Training not started.</p>
+<details open><summary>Trainer / model import logs</summary><pre id="trainingLog">Awaiting training.</pre></details>
+</section>
+</div>
+</div>
+
+<div id="validatePane" hidden>
+<div class="grid">
+<section class="card">
+<h2>4 · Held-out model validation</h2>
+<p class="muted">Runs the imported <code>validate_model.py</code> on the selected inspected dataset. Metrics come from Ultralytics evaluation, not guessed ground truth. Run test after model selection.</p>
+<label>Trained or baseline checkpoint<select id="validateModel"></select></label>
+<div class="fields">
+<label>Dataset split<select id="validationSplit"><option value="test">Held-out test</option><option value="val">Validation</option></select></label>
+<label>Device<select id="validateDevice"><option value="0">CUDA GPU 0</option><option value="cpu">CPU</option></select></label>
+</div>
+<div class="buttons">
+<button id="startValidation" class="primary">Evaluate model</button>
+<button id="stopValidation">Stop evaluation</button>
+</div>
+<p id="validationState" class="muted">No validation report yet.</p>
+</section>
+<section class="card">
+<h2>Measured validation metrics</h2>
+<div class="metrics">
+<div class="metric"><small>Precision</small><b id="valPrecision">—</b></div>
+<div class="metric"><small>Recall</small><b id="valRecall">—</b></div>
+<div class="metric"><small>mAP@50</small><b id="valMap50">—</b></div>
+<div class="metric"><small>mAP@50–95</small><b id="valMap95">—</b></div>
+<div class="metric"><small>Model</small><b id="valModelName" style="font-size:12px;overflow-wrap:anywhere">—</b></div>
+<div class="metric"><small>Dataset</small><b id="valDatasetName" style="font-size:12px;overflow-wrap:anywhere">—</b></div>
+</div>
+<details><summary>Validation log</summary><pre id="validationLog">No validation yet.</pre></details>
+</section>
+</div>
+</div>
+
+<div id="livePane" hidden>
+<div class="grid">
+<section class="card">
+<h2>5 · Live YOLO detections</h2>
+<p class="muted">Runs the selected real Ultralytics model on the simulated RGB topic. Annotates actual model-predicted bounding boxes. The independent raw image monitor still measures ROS bridge FPS; model inference is capped to avoid image transport saturation.</p>
+<label>Checkpoint<select id="liveModel"></select></label>
+<div class="buttons">
+<button id="startLive" class="primary">Start live YOLO</button>
+<button id="stopLive" class="danger">Stop live YOLO</button>
+</div>
+<div class="metrics">
+<div class="metric"><small>YOLO processed FPS</small><b id="liveFps">—</b></div>
+<div class="metric"><small>Inference latency</small><b id="liveLatency">—</b><small>ms/frame</small></div>
+<div class="metric"><small>Boxes (last frame)</small><b id="liveBoxCount">—</b></div>
+</div>
+<p id="liveStatus" class="muted">Start a saved camera inspection scene and select a model.</p>
+</section>
+<section class="card">
+<h2>Actual detection bounding boxes</h2>
+<img id="liveImage" alt="Gazebo RGB annotated with YOLO's actual predicted shuttle bounding boxes" style="width:100%;max-height:500px;object-fit:contain;background:#08131c;border-radius:9px;min-height:220px">
+<p id="liveBoxes" class="muted">No detections.</p>
+<details><summary>YOLO inference logs</summary><pre id="liveLog">No inference process.</pre></details>
+</section>
+</div>
+</div>
+
 <section class="card">
   <h2>Gazebo / bridge logs</h2>
   <details><summary>Process status</summary><pre id="processLog">Waiting</pre></details>
@@ -145,17 +302,23 @@ let mode="camera",busy=false,last=null,options=null,lastPreview=0;
 const cameraKeys=["color","color_fps","depth","depth_fps","depth_enabled"];
 const yoloInt=["shuttle_count","seed","dataset_images","epochs","batch","imgsz"];
 const yoloFloat=["robot_x","robot_y","robot_yaw","positive_fraction","confidence"];
+const panes={
+ camera:["cameraPane","tabCamera"],yolo:["yoloPane","tabYolo"],
+ dataset:["datasetPane","tabDataset"],labels:["labelsPane","tabLabels"],
+ train:["trainPane","tabTrain"],validate:["validatePane","tabValidate"],
+ live:["livePane","tabLive"]
+};
 function setTab(value){
  mode=value;
- $("cameraPane").hidden=value!=="camera";
- $("yoloPane").hidden=value!=="yolo";
- $("tabCamera").classList.toggle("active",value==="camera");
- $("tabYolo").classList.toggle("active",value==="yolo");
- $("tabCamera").setAttribute("aria-selected",value==="camera");
- $("tabYolo").setAttribute("aria-selected",value==="yolo");
+ for(const [name,[pane,button]] of Object.entries(panes)){
+  $(pane).hidden=name!==value;
+  $(button).classList.toggle("active",name===value);
+  $(button).setAttribute("aria-selected",name===value?"true":"false");
+ }
 }
-$("tabCamera").onclick=()=>setTab("camera");
-$("tabYolo").onclick=()=>setTab("yolo");
+for(const [name,[pane,button]] of Object.entries(panes)){
+ $(button).onclick=()=>setTab(name);
+}
 function fillSelect(id,opts,value){
  const select=$(id);select.replaceChildren();
  for(const entry of opts){
