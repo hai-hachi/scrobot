@@ -431,6 +431,25 @@ class Handler(BaseHTTPRequestHandler):
                 if path.is_file() and self.lab.recent_json(OUTPUT / "preview.json"):
                     return self.respond(200, path.read_bytes(), "image/jpeg")
                 return self.respond(404, {"error": "Waiting for fresh RGB image"})
+            if route == "/api/compare-plot":
+                query = parse_qs(urlsplit(self.path).query)
+                slot = query.get("slot", [""])[0]
+                kind = query.get("kind", [""])[0]
+                plot_files = {
+                    "confusion": "confusion_matrix.png",
+                    "confusion_normalized": "confusion_matrix_normalized.png",
+                    "pr": "BoxPR_curve.png",
+                    "f1": "BoxF1_curve.png",
+                    "precision": "BoxP_curve.png",
+                    "recall": "BoxR_curve.png",
+                }
+                if slot not in ("a", "b") or kind not in plot_files:
+                    raise ValueError("Invalid comparison slot or plot kind")
+                folder = OUTPUT / "compare" / ("plots_" + slot)
+                image = folder / plot_files[kind]
+                if not image.is_file() or image.is_symlink():
+                    return self.respond(404, {"error": "Validation plot not generated"})
+                return self.respond(200, image.read_bytes(), "image/png")
             if route == "/api/compare-frame":
                 slot = parse_qs(urlsplit(self.path).query).get("slot", [""])[0]
                 if slot not in ("a", "b"):
