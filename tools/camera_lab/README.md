@@ -5,8 +5,11 @@ This version is **rebuilt from scratch**. It uses none of the former
 or YOLO files. It now includes a separate AprilTags test tab with only
 one authentic AprilTag detector and a stationary camera rig.
 
-The Gazebo world has only a floor, a box target and one stationary camera rig
-with independently configurable RGB and depth sensors.
+The Camera-only Gazebo world keeps a floor, target and camera rig but now
+uses the **saved Lighting Lab YAML** for its full light array, shadows,
+floor color and venue dimensions. AprilTags mode loads the same saved
+Lighting YAML for the complete court, materials and walls. The scene
+uses a frozen Lighting calibration snapshot until restarted.
 
 ## Start
 
@@ -86,11 +89,10 @@ Beside the live AprilTag camera image, the dashboard reports:
 - **Detector throughput:** independently measured from detection-array
   output, not the preview rate
 
-The new **Publish tag geometry to main simulation** button uses the
-currently *running* AprilTags scene, not un-applied sliders. It
-requires an active stream and at least three detector frames, and is
-disabled during a sweep or if size/height sliders differ from the
-running scene. On confirmation, it updates:
+**Save AprilTags Lab YAML** stores the selected shared tag geometry and
+test pose/noise at `src/scrobot_simulation/config/apriltags_lab.yaml`,
+without touching production. **Publish saved AprilTags YAML** reads this
+saved YAML only, never unsaved sliders. On confirmation, it updates:
 
 1. `src/scrobot_localization/config/court_landmarks.yaml`:
    `tag_edge_size`, `tag_height` and computed `tag_mount_radius`.
@@ -165,10 +167,11 @@ the same edge size.
   Gazebo's `/world/camera_lab/set_pose` service. The camera uses the
   calibrated SCROBOT mount and looks down 15 degrees.
   **Robot placement now extends outside the green court mat**, across the
-  calibrated Lighting Lab venue floor. The limits are loaded from
-  `src/scrobot_simulation/config/lighting_lab.yaml` and restricted by
-  the actual published `badminton_court.sdf` floor; a 0.30 m outer
-  margin remains for the robot proxy. With the current Lighting Lab
+  calibrated Lighting Lab venue floor. The limits are loaded directly from
+  `src/scrobot_simulation/config/lighting_lab.yaml`, independent of
+  whether they have been published to the main simulation SDF. The lab
+  regenerates the floor/walls using those dimensions and retains a 0.30 m
+  outer margin for the robot proxy. With the current Lighting Lab
   clearances (X=2.8 m, Y=2.4 m per side), the floor is 21 × 12 m
   and robot-center limits are ±10.2 m in X and ±5.7 m in Y.
   The overhead GUI displays both the mat and its surrounding clearance.
@@ -383,12 +386,17 @@ image encoding, avoiding extra CPU cost in the measurement process.
 CPU and RAM to `evaluation_results/camera_lab/benchmark_*.json`. At least
 30 frames per enabled stream must have arrived, with matching dimensions.
 
-**Save tested settings to simulation YAML** requires at least 80% of the
-requested *wall-clock* FPS (and 30 frames) for both enabled streams.
-After browser confirmation, it updates
-`src/scrobot_simulation/config/camera_calibration.yaml`, first preserving
-its previous contents under
-`evaluation_results/camera_lab/backups/`.
+**Save Camera Lab YAML** writes the chosen RGB/depth resolution and FPS
+to `src/scrobot_simulation/config/camera_lab.yaml`. It does not
+change the production camera. **Publish saved Camera YAML** reads that
+saved YAML only; after browser confirmation, it updates
+`src/scrobot_simulation/config/camera_calibration.yaml`, preserving
+the previous file in `evaluation_results/camera_lab/backups/`.
+This does not implicitly publish recent unsaved slider values.
+
+Use **Save benchmark JSON** independently for actual delivered
+wall-clock FPS, sim FPS, MB/s and CPU results; performance measurements
+remain separate from the saved camera configuration.
 
 The main Gazebo `simulation.launch.py` loads this simulation-only YAML
 after rebuilding or synchronizing the installed config. The physical D435i
