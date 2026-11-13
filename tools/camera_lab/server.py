@@ -463,6 +463,13 @@ class Lab:
                 rgb = obs.get("streams", {}).get("color") or {}
                 if rgb.get("last_age_s") is not None and rgb["last_age_s"] < 2:
                     self.phase = "streaming"
+            if self.mode=="apriltags":
+                dead=[name for name in ("image_bridge","info_bridge",
+                                       "tag_monitor","detector")
+                      if name in running and not running[name]]
+                if dead:
+                    self.phase="failed"
+                    self.error="AprilTag pipeline process exited: "+", ".join(dead)+". Inspect logs below."
             logs = {}
             for name in ("gazebo", "image_bridge", "info_bridge",
                          "monitor", "tag_monitor", "detector"):
