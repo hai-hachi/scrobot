@@ -1,0 +1,38 @@
+# Saved Yolo Lab settings, not main simulation params.
+# Use the separate Publish button to transfer to production.
+schema_version: 1
+lab: yolo
+settings:
+  shuttle_count: 50
+  spawn_mode: mixed
+  random_density: uniform
+  random_fraction: 0.3
+  cluster_weights:
+  - - 1.0
+    - 0.0
+  - - 0.0
+    - 1.0
+  - - 0.2
+    - 0.8
+  - - 1.0
+    - 0.3
+  - - 0.7
+    - 0.3
+  - - 0.1
+    - 1.0
+  - - 1.0
+    - 0.1
+  settle_seconds: 5.0
+  seed: 42
+  robot_x: 1.84
+  robot_y: -0.3
+  robot_yaw: -96.7
+  dataset_images: 1200
+  positive_fraction: 0.3
+  epochs: 15
+  batch: 8
+  imgsz: 640
+  validation_imgsz: 640
+  validation_batch: 8
+  live_imgsz: 640
+  confidence: 0.1
