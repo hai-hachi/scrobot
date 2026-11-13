@@ -314,9 +314,6 @@ class Lab:
             raise ValueError("Pose requires robot_x, robot_y, robot_yaw, tag_id")
         with self.lock:
             new = validate_tag({**self.tag, **data})
-            if self.sweep.get("state") == "running" and (
-                    threading.current_thread() is threading.main_thread()):
-                raise ValueError("Cannot move robot manually during an active sweep")
             self.gz_set_robot_pose(new)
             self.tag = new
             self.write_tag_control()
