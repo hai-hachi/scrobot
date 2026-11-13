@@ -295,6 +295,48 @@ class TagLabTests(TestCase):
             with self.assertRaisesRegex(ValueError,"detector has not processed"):
                 lab.begin_sweep(payload)
 
+    def test_distance_sweep_moves_robot_and_records_real_sample_fields(self):
+        class ClockOnlyWait:
+            def is_set(self):
+                return False
+            def wait(self, duration):
+                return False
+
+        lab=server.Lab()
+        lab.mode="apriltags"
+        lab.phase="streaming"
+        lab.sweep_id=1
+        lab.sweep={"state":"running","kind":"distance",
+                   "rows":[],"current":0,"total":3,"file":None}
+        poses=[]
+        def move(data):
+            poses.append(dict(data))
+            lab.tag_epoch += 1
+        def measured():
+            return {
+                "epoch":lab.tag_epoch,"detector_frames":12,
+                "detected_frames":9,"pose_frames":9,
+                "detection_pct":75.0,"position_rmse_m":.012,
+                "range_rmse_m":.006,"bearing_rmse_deg":.5,
+                "normal_axis_rmse_deg":1.0,"detector_fps":15.0,
+                "image_to_detection_p95_ms":20.0,
+            }
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.object(server,"RESULTS",Path(td)),\\
+                 mock.patch.object(lab,"place_robot",side_effect=move),\\
+                 mock.patch.object(lab,"tag_status",side_effect=measured):
+                lab._run_sweep(1,ClockOnlyWait(),"distance",0,
+                               [.6,1.0,1.4],2.0,1.0)
+            self.assertEqual(lab.sweep["state"],"complete")
+            self.assertEqual(len(poses),3)
+            self.assertEqual([r["value"] for r in lab.sweep["rows"]],
+                             [.6,1.0,1.4])
+            for row in lab.sweep["rows"]:
+                self.assertEqual(row["quality"],"ok")
+                self.assertEqual(row["detection_pct"],75)
+                self.assertEqual(row["position_rmse_m"],.012)
+            self.assertTrue(Path(lab.sweep["file"]).is_file())
+
     def test_apriltag_dashboard_reports_tf_rejections_and_sweep_errors(self):
         source=(LAB/"server.py").read_text()
         monitor=(LAB/"tag_monitor.py").read_text()
