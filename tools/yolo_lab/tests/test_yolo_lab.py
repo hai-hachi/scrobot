@@ -92,11 +92,11 @@ class YoloLabTests(unittest.TestCase):
                         if m.get("name", "").startswith("yolo_shuttle_")]
             self.assertEqual(len(shuttles), 7)
             for s in shuttles:
-                self.assertEqual(s.findtext("static"), "true")
+                self.assertEqual(s.findtext("static"), "false")
                 self.assertEqual(s.findtext(
                     ".//visual/geometry/mesh/uri"),
                     "model://shuttle/meshes/shuttle.STL")
-                self.assertIsNone(s.find(".//collision"))
+                self.assertIsNotNone(s.find(".//collision"))
             sensor = scene.find(
                 "./model[@name='camera_rig']/link/sensor[@name='color']")
             self.assertEqual(sensor.findtext("camera/image/width"),"1920")
@@ -112,6 +112,34 @@ class YoloLabTests(unittest.TestCase):
             self.assertEqual(len(manifest["shuttles"]),7)
             self.assertEqual(json.loads(
                 (Path(td)/"scene_manifest.json").read_text())["yolo"]["seed"],77)
+
+    def test_spawn_modes_weights_and_static_freeze(self):
+        from distribution import sample
+        from settle import parse_poses
+        for mode in ("single", "random", "cluster", "mixed"):
+            cfg = validate({**DEFAULT, "spawn_mode": mode, "shuttle_count": 13})
+            points = sample(cfg)
+            self.assertEqual(len(points), 1 if mode == "single" else 13)
+            self.assertEqual(points, sample(cfg))
+        cfg = validate({**DEFAULT, "spawn_mode": "cluster", "shuttle_count": 7})
+        with tempfile.TemporaryDirectory() as td:
+            placements = {f"yolo_shuttle_{i:03d}":(0.0,0.0,0.05,0.0,0.7071,0.0,0.7071)
+                          for i in range(7)}
+            _, manifest = world.build(modes.DEFAULT, cfg, Path(td)/"static.sdf",
+                                      lighting=calibration(), settled_poses=placements)
+            self.assertTrue(manifest["settled_static"])
+            doc = ET.parse(Path(td)/"static.sdf")
+            self.assertEqual(len(doc.findall(".//model[@static='true']")), 0)
+            shuttles = [m for m in doc.findall(".//model")
+                        if m.get("name", "").startswith("yolo_shuttle_")]
+            self.assertEqual(len(shuttles), 7)
+            self.assertTrue(all(m.findtext("static") == "true" for m in shuttles))
+        pose_payload = ('pose { name: "yolo_shuttle_000" '
+                        'position { x: 1.5 y: 2 z: 0.08 } '
+                        'orientation { w: 1 } }')
+        self.assertAlmostEqual(
+            parse_poses(pose_payload, {"yolo_shuttle_000"})["yolo_shuttle_000"][0],
+            1.5)
 
     def test_seed_reproducibility_and_independent_camera_fps(self):
         lights = calibration()
