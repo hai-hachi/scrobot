@@ -24,6 +24,9 @@ import yaml
 
 from core import DEFAULTS, RATE_NAMES, validate
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from lab_configs import path_for as lab_yaml_path, read as read_lab_yaml, save as save_lab_yaml
+
 HERE=Path(__file__).resolve().parent
 REPO=HERE.parents[1]
 OUT=Path.home()/"scrobot_ws/evaluation_results/odometry_lab"
@@ -38,6 +41,9 @@ from odometry_rate_config import (
 
 
 def saved_settings():
+    saved_yaml = read_lab_yaml("odometry")
+    if saved_yaml is not None:
+        return validate(saved_yaml)
     if not SETTINGS.is_file():
         return dict(DEFAULTS)
     return validate(json.loads(SETTINGS.read_text(encoding="utf-8")))
@@ -214,6 +220,13 @@ class Lab:
             persist(self.settings)
             return dict(self.settings)
 
+    def save_lab_yaml(self):
+        with self.lock:
+            if self.bridge.node.state in ("pre", "running"):
+                raise RuntimeError("Stop experiment before saving Odometry Lab YAML")
+            path = save_lab_yaml("odometry", self.settings, validator=validate)
+            return {"saved": str(path), "settings": dict(self.settings)}
+
     def run(self):
         with self.lock:
             if self.restarting:
@@ -236,7 +249,20 @@ class Lab:
                 "gazebo_alive":self.attach or
                     (self.proc is not None and self.proc.poll() is None),
                 "restarting":self.restarting,
-                "published_match":load_rates(PUBLISHED)==rates_of(self.settings),
+                "published_match":(
+                    read_lab_yaml("odometry") is not None and
+                    load_rates(PUBLISHED)==rates_of(validate(read_lab_yaml("odometry")))
+                ),
+                "lab_yaml": {
+                    "path": str(lab_yaml_path("odometry")),
+                    "saved": read_lab_yaml("odometry") is not None,
+                    "matches_live": read_lab_yaml("odometry") == self.settings,
+                },
+                "mobility_lab_yaml": {
+                    "path": str(lab_yaml_path("mobility")),
+                    "saved": read_lab_yaml("mobility") is not None,
+                    "note": "Live odometry simulator still uses PUBLISHED Mobility calibration until explicitly transferred and simulation restarted.",
+                },
                 "server_error":self.error,
                 "motor_model":self.motor_model,
                 "command_topic":self.command_topic,
@@ -247,9 +273,10 @@ class Lab:
         with self.lock:
             if self.bridge.node.state in ("pre","running"):
                 raise RuntimeError("Stop experiment before publishing")
-            if not SETTINGS.is_file() or saved_settings()!=self.settings:
-                raise RuntimeError("Save lab settings before publishing")
-            return publish_settings(self.settings)
+            saved = read_lab_yaml("odometry")
+            if saved is None:
+                raise RuntimeError("Save Odometry Lab YAML before publishing")
+            return publish_settings(validate(saved))
 
     def save(self):
         result=self.bridge.node.result()
@@ -324,6 +351,10 @@ class Handler(BaseHTTPRequestHandler):
                 result={"stopped":True}
             elif path=="/api/save":
                 result=lab.save()
+            elif path=="/api/config/save":
+                if body != {}:
+                    raise ValueError("Save Lab YAML uses current validated settings")
+                result=lab.save_lab_yaml()
             elif path=="/api/publish":
                 if body.get("confirm") is not True:
                     raise ValueError("Publishing requires explicit confirmation")
