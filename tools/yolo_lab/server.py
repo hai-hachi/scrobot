@@ -431,6 +431,15 @@ class Handler(BaseHTTPRequestHandler):
                 if path.is_file() and self.lab.recent_json(OUTPUT / "preview.json"):
                     return self.respond(200, path.read_bytes(), "image/jpeg")
                 return self.respond(404, {"error": "Waiting for fresh RGB image"})
+            if route == "/api/compare-frame":
+                slot = parse_qs(urlsplit(self.path).query).get("slot", [""])[0]
+                if slot not in ("a", "b"):
+                    raise ValueError("Select comparison slot a or b")
+                folder = OUTPUT / "compare" / ("live_" + slot)
+                image = folder / "live.jpg"
+                if not image.is_file():
+                    return self.respond(404, {"error":"Waiting for live model frame"})
+                return self.respond(200, image.read_bytes(), "image/jpeg")
             if route == "/api/live-frame":
                 path = OUTPUT / "live/live.jpg"
                 if path.is_file():
@@ -511,6 +520,40 @@ class Handler(BaseHTTPRequestHandler):
                 with self.lab.lock:
                     result = self.lab.workflow.delete_dataset(
                         body["dataset"], body["confirm"])
+            elif route == "/api/datasets/delete-selected":
+                if set(body) != {"datasets", "confirm"}:
+                    raise ValueError("Select dataset checkboxes and confirm")
+                with self.lab.lock:
+                    result = self.lab.workflow.delete_datasets(
+                        body["datasets"], body["confirm"])
+            elif route == "/api/model/rename":
+                if set(body) != {"model", "new_name"}:
+                    raise ValueError("Select one managed model and a new name")
+                with self.lab.lock:
+                    result = self.lab.workflow.rename_model(
+                        body["model"], body["new_name"])
+            elif route == "/api/models/delete-selected":
+                if set(body) != {"models", "confirm"}:
+                    raise ValueError("Select managed models and confirm")
+                with self.lab.lock:
+                    result = self.lab.workflow.delete_models(
+                        body["models"],body["confirm"])
+            elif route == "/api/compare/validate":
+                if set(body) != {"models","split","device"}:
+                    raise ValueError("Pick two models, split and device")
+                with self.lab.lock:
+                    result = self.lab.workflow.start_compare_validation(
+                        body["models"],body["split"],body["device"])
+            elif route == "/api/compare/live":
+                if set(body) != {"models"}:
+                    raise ValueError("Pick two live models")
+                with self.lab.lock:
+                    result = self.lab.workflow.start_compare_live(body["models"])
+            elif route == "/api/compare/stop":
+                if body:
+                    raise ValueError("Stop comparison takes no parameters")
+                with self.lab.lock:
+                    result = self.lab.workflow.stop_comparison()
             elif route == "/api/inspect/start":
                 if set(body) != {"samples"}:
                     raise ValueError("Specify label-preview sample count")
