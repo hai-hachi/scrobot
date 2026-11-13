@@ -35,6 +35,65 @@ does **not** import or launch any code from the old
 `tools/perception_labs/` directory. The original Camera Lab benchmarking
 mode is retained as a separate tab.
 
+### Camera range, live view rate and publishing
+
+Both Gazebo RGB and depth sensors in the independent Camera Lab now
+have a **20 m far clipping plane**; the standalone camera near plane
+remains 0.1 m. The main simulation's D435i RGB far clip was already
+20 m and its depth far clip is now 20 m as well. These are **simulated
+rendering limits**, not a claim of 20 m reliable depth accuracy for the
+physical D435i. Changing the far clip can increase rendering cost.
+
+Beside the live AprilTag camera image, the dashboard reports:
+- **RGB input resolution and measured FPS:** actual incoming ROS Image
+  width/height and wall-clock frame arrival rate (rolling three seconds)
+- **JPEG preview resolution and FPS:** actual dimensions after downsizing
+  to at most 960 px wide, and wall-clock overlay generation rate; the
+  browser requests an updated preview at most twice per second
+- **Detector throughput:** independently measured from detection-array
+  output, not the preview rate
+
+The new **Publish tag geometry to main simulation** button uses the
+currently *running* AprilTags scene, not un-applied sliders. It
+requires an active stream and at least three detector frames, and is
+disabled during a sweep or if size/height sliders differ from the
+running scene. On confirmation, it updates:
+
+1. `src/scrobot_localization/config/court_landmarks.yaml`:
+   `tag_edge_size`, `tag_height` and computed `tag_mount_radius`.
+   The main Gazebo `court_apriltags` model is generated from these values
+   at build time. The localization module uses the same tag geometry.
+2. `src/scrobot_perception/config/perception.yaml`:
+   the `apriltag` detector's `size` and all four `tag.sizes`, so
+   PnP pose estimation agrees with the rendered geometry.
+
+The original YAML files are backed up under
+`evaluation_results/camera_lab/tag_published_backups/<timestamp>/`.
+Changes are written via temporary files and verified; if a later write
+fails, previously modified files are restored from their backups.
+
+**Important:** `perception.yaml` is shared by the main simulator and
+the physical robot launch. Publishing therefore changes the real
+AprilTag detector's assumed physical tag edge size as well. Use this
+button for production only if the real printed tags match the size.
+The lab's Gaussian **RGB pixel noise is not published**; it is a
+test-only image effect, not a physical tag property.
+
+Rebuild the main simulation and production detector and restart Gazebo
+after publishing:
+
+```bash
+cd ~/scrobot_ws
+colcon build --symlink-install --packages-up-to scrobot_bringup
+source install/setup.bash
+ros2 launch scrobot_bringup sim.launch.py
+```
+
+The normal localizer's `max_tag_distance` is still 10 m, which is a
+**separate localization acceptance threshold**, not the camera's new
+20 m rendering far clip. The isolated AprilTags Lab can continue
+measuring detections and pose error beyond 10 m.
+
 ### Robot placement and live camera overlay
 
 - Set a robot pose with the **interactive overhead court** (click to
