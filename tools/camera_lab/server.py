@@ -221,8 +221,8 @@ class Lab:
                     "ros2", "run", "apriltag_ros", "apriltag_node",
                     "--ros-args", "--params-file", str(detector),
                     "-r", "__node:=apriltag",
-                    "-r", "image_rect:=/camera_lab/tag_color",
-                    "-r", "camera_info:=/camera_lab/color/camera_info",
+                    "-r", "image_rect:=/camera_lab/tag/image_rect",
+                    "-r", "camera_info:=/camera_lab/tag/camera_info",
                     "-r", "detections:=/camera_lab/detections"])
                 self.phase = "starting"
             except (OSError, ValueError, subprocess.CalledProcessError,
