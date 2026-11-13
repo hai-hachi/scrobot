@@ -64,9 +64,9 @@ def generate_tags(tag_config, output):
     return target, params
 
 
-def tag_world(cam_settings, tag_config, destination, tag_model):
+def tag_world(cam_settings, tag_config, destination, tag_model, lighting=None):
     """Camera-only world plus authentic court geometry, poles and 16h5 tags."""
-    path = Path(world(cam_settings, destination))
+    path = Path(world(cam_settings, destination, lighting=lighting))
     root = ET.parse(path)
     generated = root.getroot().find("world")
     source = ET.parse(COURT).getroot().find("world")
@@ -88,7 +88,7 @@ def tag_world(cam_settings, tag_config, destination, tag_model):
     generated.append(copy.deepcopy(tags))
     # Correctly reproduce the saved Lighting Lab geometry and 2x3 (or
     # user-specified) light array, not the old single directional sun.
-    apply_court_world(generated)
+    apply_court_world(generated, lighting)
     rig = generated.find("./model[@name='camera_rig']")
     rig.find("pose").text = (
         f'{tag_config["robot_x"]} {tag_config["robot_y"]} 0 0 0 '
