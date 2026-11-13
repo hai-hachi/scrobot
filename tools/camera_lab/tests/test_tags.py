@@ -181,6 +181,35 @@ class TagLabTests(TestCase):
             tags_scene.camera_info_bridge_yaml(bridge)
             self.assertIn("GZ_TO_ROS",bridge.read_text())
 
+    def test_shared_geometry_is_used_by_all_four_rendered_tag_mounts(self):
+        import yaml
+        with tempfile.TemporaryDirectory() as td:
+            cfg={**geom.TAG_DEFAULT, "size":0.15, "height":0.45}
+            model, params=tags_scene.generate_tags(cfg,Path(td))
+            self.assertAlmostEqual(params["tag_edge_size"],.15)
+            self.assertAlmostEqual(params["tag_mount_radius"],
+                                   geom.mount_radius(.15))
+            root=ET.parse(model/"model.sdf").getroot()
+            links=root.findall(".//model[@name='court_apriltags']/link")
+            self.assertEqual(len(links),4)
+            for ident,link in enumerate(links):
+                self.assertEqual(link.get("name"),f"tag_mount_{ident}")
+                coordinates=[float(x) for x in link.findtext("pose").split()]
+                self.assertAlmostEqual(coordinates[2],.45)
+                expected=geom.tag_pose(ident,cfg)
+                self.assertAlmostEqual(coordinates[0],expected["x"],places=6)
+                self.assertAlmostEqual(coordinates[1],expected["y"],places=6)
+                backing=link.find("./visual[@name='backing']/geometry/box/size")
+                self.assertIsNotNone(backing)
+                side_lengths=[float(x) for x in backing.text.split()][1:]
+                self.assertAlmostEqual(side_lengths[0],.15*8/6)
+                self.assertAlmostEqual(side_lengths[1],.15*8/6)
+            detector=Path(td)/"detector.yaml"
+            tags_scene.detector_yaml(cfg,detector)
+            sizes=yaml.safe_load(detector.read_text())[
+                "apriltag"]["ros__parameters"]["tag"]["sizes"]
+            self.assertEqual(sizes,[.15,.15,.15,.15])
+
     def test_server_tag_start_uses_no_previous_perception_labs(self):
         lab=server.Lab()
         jobs=[]
