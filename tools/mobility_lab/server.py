@@ -30,6 +30,9 @@ from reference import (
 )
 from publish import publish_saved_calibration, published_status
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from lab_configs import path_for as lab_yaml_path, read as read_lab_yaml, save as save_lab_yaml
+
 HERE = Path(__file__).resolve().parent
 OUTPUT = Path.home() / "scrobot_ws/evaluation_results/mobility_lab"
 SETTINGS_PATH = OUTPUT / "settings.json"
@@ -51,6 +54,9 @@ def time_label():
 
 
 def read_settings():
+    saved_yaml = read_lab_yaml("mobility")
+    if saved_yaml is not None:
+        return validate_settings(saved_yaml)
     if not SETTINGS_PATH.exists():
         return dict(DEFAULTS)
     try:
@@ -182,18 +188,23 @@ class Lab:
             write_settings(self.settings)
             return self.settings
 
+    def save_lab_yaml(self):
+        """One deliberate save action; interactive settings remain JSON drafts."""
+        with self.lock:
+            return {"saved": str(save_lab_yaml(
+                "mobility", self.settings, validator=validate_settings))}
+
     def publish(self):
-        # Publish only what the operator already saved, never unsaved browser
-        # sliders. No Gazebo/ROS state is modified until the normal sim restarts.
+        # Publish only explicitly saved YAML, not the JSON working draft.
+        # No Gazebo/ROS state is modified until the normal sim restarts.
         with self.lock:
             if self.bridge.node.stage in ("pre", "hold", "post"):
                 raise RuntimeError("Stop the wheel experiment before publishing")
-            if not SETTINGS_PATH.exists():
-                raise RuntimeError("Click Save Lab Settings before publishing")
-            current_saved = read_settings()
-            if current_saved != self.settings:
-                raise RuntimeError("Lab settings have changed since saving")
-            return publish_saved_calibration(SETTINGS_PATH)
+            current_saved = read_lab_yaml("mobility")
+            if current_saved is None:
+                raise RuntimeError("Click Save Mobility Lab YAML before publishing")
+            clean = validate_settings(current_saved)
+            return publish_saved_calibration(lab_yaml_path("mobility"))
 
     def run(self):
         with self.lock:
@@ -233,7 +244,13 @@ class Lab:
                 "reference_label": status_label(settings, self.reference_source),
                 "real_source_count": 903 if self.reference_source == "builtin" else None,
                 "reference_rmse": rmse,
-                "publication": published_status(self.settings),
+                "publication": published_status(
+                    read_lab_yaml("mobility") or self.settings),
+                "lab_yaml": {
+                    "path": str(lab_yaml_path("mobility")),
+                    "saved": read_lab_yaml("mobility") is not None,
+                    "matches_live": read_lab_yaml("mobility") == self.settings,
+                },
                 "server_error": self.error,
             })
             return data
@@ -361,6 +378,10 @@ class Handler(BaseHTTPRequestHandler):
                 result = self.lab.upload_reference(body.get("csv", ""))
             elif route == "/api/reference/reset":
                 result = self.lab.reset_reference()
+            elif route == "/api/config/save":
+                if body != {}:
+                    raise ValueError("Save Lab YAML uses current validated settings")
+                result = self.lab.save_lab_yaml()
             elif route == "/api/publish":
                 if body.get("confirm") is not True:
                     raise ValueError("Publishing requires explicit confirmation")
