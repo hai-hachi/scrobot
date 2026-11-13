@@ -226,7 +226,7 @@ writes to the production badminton court, the main robot URDF defaults,
 Lighting Lab calibration, or the normal control pipeline. Live JSON drafts
 still persist at `evaluation_results/mobility_lab/settings.json`, but
 **Save Mobility Lab YAML** writes the authoritative shared settings to
-`src/scrobot_simulation/config/mobility_lab.yaml`.
+`tools/configs/labs/mobility_lab.yaml`.
 
 ## Save vs Publish calibration to the NORMAL simulation
 
@@ -234,7 +234,7 @@ The dashboard now has **two distinct actions**:
 
 | Action | Writes | When values take effect |
 | --- | --- | --- |
-| **Save Mobility Lab YAML** | `~/scrobot_ws/src/scrobot_simulation/config/mobility_lab.yaml` | Changes motor surrogate settings on the next lab run; contact physics after restarting lab Gazebo |
+| **Save Mobility Lab YAML** | `~/scrobot_ws/tools/configs/labs/mobility_lab.yaml` | Changes motor surrogate settings on the next lab run; contact physics after restarting lab Gazebo |
 | **Publish to Simulation** | `~/scrobot_ws/src/scrobot_simulation/config/mobility_calibration.yaml` | After rebuilding/sourcing if needed and restarting NORMAL Gazebo |
 
 **Publish** only reads the saved Mobility Lab YAML, validates it and

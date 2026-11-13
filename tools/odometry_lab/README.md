@@ -205,7 +205,7 @@ convention, magnetic declination and hardware calibration.
 ## Save, restart, and Publish to Simulation
 
 Click **Save Odometry Lab YAML** to persist the authoritative GUI values at:
-`~/scrobot_ws/src/scrobot_simulation/config/odometry_lab.yaml`.
+`~/scrobot_ws/tools/configs/labs/odometry_lab.yaml`.
 The older `evaluation_results/odometry_lab/settings.json` remains
 an internal working draft / migration fallback, never the production
 publication source.

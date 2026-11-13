@@ -1,3 +1,10 @@
+# Legacy Perception Labs v3 (historical)
+
+> **Not the active perception workflow.** Use `tools/camera_lab/` for
+> camera/AprilTags and `tools/yolo_lab/` for shuttlecock detection.
+> This folder is retained because its benchmark data and historical
+> experiments may still be useful; it does not own lab YAML state.
+
 # SCROBOT Perception Labs v3 — clean, staged Gazebo recovery
 
 The previous Perception Lab was backed up and **perception-related simulation
