@@ -140,7 +140,7 @@ class Workflow:
                 f"config_file:={HERE/'assets/yolo_dataset_bridge.yaml'}"])
             capture = [
                 sys.executable, str(SCRIPTS / "dataset_capture.py"),
-                "--ros-args",
+                "--ros-args", "-p", "use_sim_time:=true",
             ]
             args = {
                 "output_dir":str(directory),
