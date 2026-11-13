@@ -41,6 +41,7 @@ class PublishTests(unittest.TestCase):
         candidate["lights"].update({
             "rows": 2, "cols": 2, "reach_x": 3.0, "reach_y": 4.0,
             "hsv": [0, 100, 70], "intensity": 2.5,
+            "shadow_count": 2,
         })
         candidate["colors"]["floor"] = [120, 100, 60]
         candidate["venue"] = {"clearance_x": 3.75, "clearance_y": 4.25}
