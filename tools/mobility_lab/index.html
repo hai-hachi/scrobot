@@ -34,7 +34,7 @@
   <h2>03 · Floor and drivetrain physics</h2>
   <div id="controls-physics"></div>
   <p class="hint"><b>Contact friction</b> acts at tire/caster-floor contacts. <b>Joint damping</b> is bearing-like viscous resistance—not ground friction. <b>Contact slip</b> adjusts force-dependent rolling/lateral slip (not a viscous damping coefficient). Wheel width affects contact geometry. Gazebo's default velocity interface can largely mask damping in wheel RPM; measure the separate ground-truth robot motion to assess contact changes.</p>
-  <div class="buttons"><button id="apply">Save Lab Settings</button><button id="restart">Restart Gazebo with physics</button></div>
+  <div class="buttons"><button id="apply">Save Mobility Lab YAML</button><button id="restart">Restart Gazebo with physics</button></div>
   <p class="hint" style="margin-top:9px" id="physicsStatus">Physics changes require respawning the floor-loaded robot.</p>
  </div>
  <div class="panel">
@@ -43,6 +43,7 @@
   <div class="note">Publishing does not change the real robot, main court scene, or live Gazebo process. Rebuild as needed and restart the normal simulation to apply. If the first-order motor model is selected, the main simulation inserts a <b>simulation-only</b> motor response between the collision monitor and differential-drive controller.</div>
   <div class="buttons"><button id="publish" class="primary">Publish to Simulation</button></div>
   <p id="publishStatus" class="hint" style="margin-top:10px">Checking published calibration...</p>
+<p id="labYamlStatus" class="hint">Shared Mobility Lab YAML: not saved yet.</p>
  </div>
 </section>
 <section>
@@ -114,7 +115,11 @@ function currentConfig(){const out={};for(const key of names)out[key]=["profile"
 function notify(msg,isError=false){$("actionError").textContent=msg;$("actionError").className=isError?"error":"hint"}
 async function api(path,body){let response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});let data=await response.json();if(!response.ok)throw Error(data.error||"Request failed");return data}
 async function invoke(fn){if(busy)return;busy=true;try{await fn()}catch(e){notify(e.message,true)}finally{busy=false}}
-$("apply").onclick=()=>invoke(async()=>{config=await api("/api/settings",currentConfig());notify("Saved. Restart Gazebo if physical parameters changed.")});
+$("apply").onclick=()=>invoke(async()=>{
+ config=await api("/api/settings",currentConfig());
+ const result=await api("/api/config/save",{});
+ notify("Saved "+result.saved+" as the shared Mobility Lab YAML. Restart Gazebo if physics changed.");
+});
 $("restart").onclick=()=>invoke(async()=>{await api("/api/settings",currentConfig());await api("/api/restart",{});notify("Gazebo restarted; wait for /joint_states.")});
 $("publish").onclick=()=>invoke(async()=>{
  if(!window.confirm("Publish SAVED Mobility Lab settings to the MAIN SIMULATION? This overwrites its mobility_calibration.yaml (with backup). Normal Gazebo must restart to apply. The real robot will not change."))return;
@@ -216,13 +221,18 @@ function display(data){
  const cfg=currentConfig();
  const unsaved=names.some(key=>cfg[key]!==data.settings?.[key]);
  const published=data.publication||{};
+const labYaml=data.lab_yaml||{};
+$("labYamlStatus").textContent=labYaml.saved?
+   "Saved Mobility Lab YAML: "+labYaml.path+
+   (labYaml.matches_live?" · matches live settings":" · live settings changed; save again"):
+   "Save Mobility Lab YAML before publishing to main simulation.";
  $("publishStatus").textContent=unsaved?
-  "Unsaved slider changes. Click Save Lab Settings before publishing.":
+  "Unsaved slider changes. Click Save Mobility Lab YAML before publishing.":
   published.error?"Publication unavailable: "+published.error:
   published.matches_saved?"Main simulation matches the saved calibration ("+published.published_motor_model+").":
   "Saved lab settings differ from main simulation. Publish when validated.";
  $("publishStatus").className=published.matches_saved&&!unsaved?"good hint":"warn hint";
- $("publish").disabled=busy||unsaved||!!published.error||["pre","hold","post"].includes(data.stage);
+ $("publish").disabled=busy||!labYaml.saved||!!published.error||["pre","hold","post"].includes(data.stage);
  $("run").disabled=busy||data.physics_dirty||!data.controller_ready||!data.gazebo_alive||["pre","hold","post"].includes(data.stage);
  $("abort").disabled=!["pre","hold","post"].includes(data.stage);
  $("save").disabled=!data.metrics;
