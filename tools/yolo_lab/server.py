@@ -597,7 +597,7 @@ def main():
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     httpd.RequestHandlerClass.lab = lab
     print(f"SCROBOT YOLO Lab: http://127.0.0.1:{args.port}", flush=True)
-    print("ROS_DOMAIN_ID=83 (isolated); Camera, Scene, Dataset & Labels, Train, Validate and Live tabs", flush=True)
+    print("ROS_DOMAIN_ID=83 (isolated); Camera, Scene, Dataset & Labels, Train, Compare Models", flush=True)
     print("Training requires Ultralytics; a checkpoint must be imported explicitly.", flush=True)
     try:
         httpd.serve_forever(poll_interval=0.2)
