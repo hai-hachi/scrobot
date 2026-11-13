@@ -23,7 +23,7 @@ from tf2_msgs.msg import TFMessage
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 
-from tag_math import comparison, expected_translation
+from tag_math import comparison, expected_translation, optical_frame_matches
 
 
 def stamp(header):
@@ -265,9 +265,12 @@ class TagMonitor(Node):
             self.tf_last_stamp = sample["stamp"]
             if key != tag_id:
                 continue
-            # Match only this camera optical frame. Comparing a different
-            # TF parent would silently invalidate every position error.
-            if tf.header.frame_id.lstrip("/") != "camera_color_optical_frame":
+            # In this Gazebo+bridge configuration the *actual* RGB frame
+            # is 'color_optical_frame', not the requested SDF name. Only
+            # accept pose TF in the exact RGB optical frame to avoid
+            # producing incorrect error values from unrelated coordinates.
+            if not optical_frame_matches(
+                    tf.header.frame_id, self.last_image_frame):
                 self.tf_parent_rejected += 1
                 continue
             err = comparison(cfg["tag"],(sample["x"],sample["y"],sample["z"]),
