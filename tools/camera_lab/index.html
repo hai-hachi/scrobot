@@ -172,6 +172,7 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
     <div class="stat"><small>Plane-normal error</small><strong id="tagNormalError">—</strong><small>degrees, unsigned axis</small></div>
    </div>
    <div id="tagMeasurements" class="status">Start the AprilTags scene to measure real detections and estimated tag-to-camera pose.</div>
+   <p id="tagPipeline" class="hint" role="status" aria-live="polite">Pipeline status: awaiting RGB and CameraInfo pairs.</p>
    <h3>Tag detector CPU and memory</h3>
    <div class="scroll"><table><thead><tr><th>Process</th><th>CPU % (per core)</th><th>RAM (MB)</th></tr></thead><tbody id="tagCpu"></tbody></table></div>
    <p class="hint">The detection process is separate from the image noise/preview process. Noise and preview overhead are not misattributed to the detector.</p>
@@ -505,12 +506,18 @@ function renderTag(s){
  const tf=obs.observed_translation;
  $("tagMeasurements").textContent=s.mode==="apriltags"?
  "Target ID "+(obs.tag_id??"—")+" · RGB received "+(obs.rgb_frames??0)+
+ " · synchronized image/info pairs "+(obs.paired_frames??0)+
+ " · rejected unpaired frames "+(obs.unpaired_frames??0)+
+ " · image subscribers "+(obs.image_subscribers??0)+
+ " · info subscribers "+(obs.info_subscribers??0)+
  " · detector messages "+(obs.detector_frames??0)+
  " · tag hits "+(obs.detected_frames??0)+
  " · measured 3D TF samples "+(obs.pose_frames??0)+
  " · CameraInfo "+(obs.camera_info_valid?"ready":"waiting")+
  " · Latest measured range "+(tf?fmt(Math.hypot(tf.x,tf.y,tf.z),2)+" m":"—")+
  ".": "Start the AprilTags scene to view measurements.";
+ $("tagPipeline").textContent=s.tag_pipeline_hint ||
+  "Pipeline status: waiting for camera and AprilTag stream diagnostics.";
  const tbody=$("tagCpu");tbody.replaceChildren();
  for(const name of ["detector","tag_monitor","image_bridge","info_bridge"]){
   const m=r[name];if(!m)continue;
