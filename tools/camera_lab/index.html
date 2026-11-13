@@ -228,7 +228,8 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
 <script>
 const $ = id => document.getElementById(id);
 let modes=null, started=false, busy=false, currentTab="camera",
-    live=null, tagImageUrl=null, sweepCache={distance:[],heading:[]};
+    live=null, tagImageUrl=null, sweepCache={distance:[],heading:[]},
+    venue={floor_x:21,floor_y:12,limit_x:10.2,limit_y:5.7,clearance_x:2.8,clearance_y:2.4};
 function setOptions(id,values,selected){
  const element=$(id);element.replaceChildren();
  for(const value of values){const option=document.createElement("option");option.value=value;option.textContent=value;element.append(option)}
@@ -268,12 +269,40 @@ function tagPosition(id){
  return {x:radius*Math.cos(a),y:(id%2===0?3.05:-3.05)+radius*Math.sin(a),
          z:cfg.height,yaw:a};
 }
+function mapX(x){return 350+x*315/(venue.floor_x/2)}
+function mapY(y){return 205-y*160/(venue.floor_y/2)}
 function drawCourt(){
  if(!$("courtMap"))return;
- const val=tagForm(),toX=x=>350+x*41.5,toY=y=>205-y*45.5;
+ const val=tagForm(),toX=mapX,toY=mapY;
+ const svgNS="http://www.w3.org/2000/svg";
+ const surface=$("courtSurface");surface.replaceChildren();
+ function shape(tag,attributes){
+  const e=document.createElementNS(svgNS,tag);
+  for(const [key,value] of Object.entries(attributes))e.setAttribute(key,String(value));
+  surface.append(e);return e;
+ }
+ const rect=(x0,y0,x1,y1,attributes={})=>shape("rect",{
+  x:toX(x0),y:toY(y1),width:toX(x1)-toX(x0),
+  height:toY(y0)-toY(y1),...attributes
+ });
+ const line=(x0,y0,x1,y1,color="#e9f6f2",sw=1.5)=>shape("line",{
+  x1:toX(x0),y1:toY(y0),x2:toX(x1),y2:toY(y1),
+  stroke:color,"stroke-width":sw
+ });
+ rect(-venue.floor_x/2,-venue.floor_y/2,venue.floor_x/2,venue.floor_y/2,{
+  fill:"#233944",stroke:"#b4d0c7","stroke-width":2,rx:4
+ });
+ rect(-7.7,-3.6,7.7,3.6,{
+  fill:"#197067",stroke:"#e8f3ef","stroke-width":2
+ });
+ for(const x of [-3.9,0,3.9])line(x,-3.6,x,3.6,"#d4efe4",1.4);
+ line(-7.7,0,7.7,0,"#d4efe4",1.4);
+ line(0,-3.6,0,3.6,"#f4ebac",2.5);
+ for(const y of [-3.05,3.05])shape("circle",{
+  cx:toX(0),cy:toY(y),r:5,fill:"#cbd5df"
+ });
  const marker=$("robotMarker");marker.replaceChildren();
  const group=$("courtTags");group.replaceChildren();
- const svgNS="http://www.w3.org/2000/svg";
  for(let id=0;id<4;id++){
   const p=tagPosition(id),dot=document.createElementNS(svgNS,"circle");
   dot.setAttribute("cx",toX(p.x));dot.setAttribute("cy",toY(p.y));
@@ -309,8 +338,10 @@ $("courtMap").onclick=evt=>{
  const rect=$("courtMap").getBoundingClientRect();
  const x=evt.clientX-rect.left,y=evt.clientY-rect.top;
  const vx=x/rect.width*700,vy=y/rect.height*410;
- $("robotX").value=Math.max(-7.2,Math.min(7.2,(vx-350)/41.5)).toFixed(2);
- $("robotY").value=Math.max(-3.6,Math.min(3.6,(205-vy)/45.5)).toFixed(2);
+ $("robotX").value=Math.max(-venue.limit_x,Math.min(venue.limit_x,
+    (vx-350)*(venue.floor_x/2)/315)).toFixed(2);
+ $("robotY").value=Math.max(-venue.limit_y,Math.min(venue.limit_y,
+    (205-vy)*(venue.floor_y/2)/160)).toFixed(2);
  drawCourt();
 };
 for(const id of ["tagId","tagSize","tagHeight","noiseSigma","robotX","robotY","robotYaw"]){
@@ -619,6 +650,19 @@ async function poll(){
 }
 async function initialize(){
  const response=await fetch("/api/modes");modes=await response.json();
+ if(modes.venue){
+   venue=modes.venue;
+   $("robotX").min=-venue.limit_x;$("robotX").max=venue.limit_x;
+   $("robotY").min=-venue.limit_y;$("robotY").max=venue.limit_y;
+   $("venueCaption").textContent="Lighting Lab clearance: X "+
+     venue.clearance_x.toFixed(2)+" m, Y "+venue.clearance_y.toFixed(2)+
+     " m per side · available floor "+venue.floor_x.toFixed(2)+" × "+
+     venue.floor_y.toFixed(2)+" m · robot center limits ±"+
+     venue.limit_x.toFixed(2)+" m X and ±"+venue.limit_y.toFixed(2)+
+     " m Y (includes 0.30 m edge margin)."+
+     (venue.lighting_config_matches_published_floor?"":
+      " Note: Lighting Lab YAML differs from published court SDF; using the smaller actual floor. Publish Lighting Lab venue changes before testing larger ranges.");
+ }
  for(const name of ["color","depth"]){
   setOptions(name,Object.keys(modes[name]),modes.default[name]);
   refreshFps(name,modes.default[name+"_fps"]);
