@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 import os
 from pathlib import Path
 import re
-import shutil
 import tempfile
 
 import yaml
@@ -55,6 +54,11 @@ def prepare(tag, landmarks_text, detector_text):
     ):
         landmarks_out = _replace_scalar(landmarks_out, field, value)
     detector_out = _replace_scalar(detector_text, "size", edge)
+    # Keep the human-readable description accurate for non-100 mm tags.
+    detector_out = detector_out.replace(
+        "# Final court fiducials: AprilTag 16h5, IDs 0-3, 100 mm active edge.",
+        "# Final court fiducials: AprilTag 16h5, IDs 0-3; size calibrated below."
+    )
     detector_out = _replace_scalar(
         detector_out, "sizes", "[" + ", ".join([edge] * 4) + "]")
     # Explicitly ensure producer and consumer share the exact same size.
