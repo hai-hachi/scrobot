@@ -13,6 +13,7 @@ import time
 import cv2
 import numpy as np
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
@@ -21,7 +22,7 @@ from ultralytics import YOLO
 
 class LiveDetection(Node):
     def __init__(self, model, output, confidence, imgsz, max_rate):
-        super().__init__("yolo_lab_live_detector")
+        super().__init__("yolo_lab_detector_" + Path(output).name.replace("-", "_"))
         self.model_path = Path(model).resolve()
         if not self.model_path.is_file():
             raise FileNotFoundError(self.model_path)
@@ -112,9 +113,11 @@ def main():
     node=LiveDetection(args.model,args.output,args.confidence,args.imgsz,args.max_rate)
     try:
         rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass  # normal stop/restart of the A/B comparison
     finally:
         node.destroy_node()
-        if rclpy.ok():rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__=="__main__":
