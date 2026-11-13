@@ -579,7 +579,28 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/status":
             self.respond(200, self.server.lab.status())
         elif route == "/api/modes":
-            self.respond(200, {"color": COLOR, "depth": DEPTH, "default": DEFAULT})
+            self.respond(200, {"color": COLOR, "depth": DEPTH,
+                               "default": DEFAULT, "tag_default": TAG_DEFAULT})
+        elif route == "/api/tag/image":
+            file = RESULTS / "tag_preview.jpg"
+            if not file.is_file() or time.time()-file.stat().st_mtime>4:
+                return self.respond(503, {"error": "No fresh AprilTag RGB overlay"})
+            payload = file.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            try:
+                self.wfile.write(payload)
+            except (BrokenPipeError,ConnectionResetError):
+                pass
+        elif route == "/api/tag/sweep/result":
+            with self.server.lab.lock:
+                file = self.server.lab.sweep.get("file")
+                if not file or not Path(file).is_file():
+                    return self.respond(404, {"error": "No completed sweep"})
+                self.respond(200, json.loads(Path(file).read_text()))
         else:
             self.respond(404, {"error": "Unknown endpoint"})
 
@@ -593,6 +614,16 @@ class Handler(BaseHTTPRequestHandler):
             lab = self.server.lab
             if route == "/api/start":
                 result = lab.start(data)
+            elif route == "/api/tag/start":
+                result = lab.start_tags(data)
+            elif route == "/api/tag/pose":
+                result = lab.place_robot(data)
+            elif route == "/api/tag/noise":
+                result = lab.set_noise(data)
+            elif route == "/api/tag/sweep":
+                result = lab.begin_sweep(data)
+            elif route == "/api/tag/cancel":
+                result = lab.cancel_sweep()
             elif route == "/api/stop":
                 result = lab.stop()
             elif route == "/api/save":
@@ -604,7 +635,8 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 return self.respond(404, {"error": "Unknown action"})
             self.respond(200, result)
-        except (OSError, ValueError, TypeError, KeyError) as exc:
+        except (OSError, ValueError, TypeError, KeyError, RuntimeError,
+                subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
             self.respond(400, {"error": str(exc)})
 
     def log_message(self, *args):
