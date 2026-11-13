@@ -823,10 +823,10 @@ function renderWorkflow(s){
        summary=w.dataset_summary||{},inspection=w.inspection||{};
  const dsOptions=(w.datasets||[]).map(n=>({value:n,label:n}));
  replaceSelectItems("datasetList",dsOptions,w.selected_dataset);
- const datasetBusy=["capture","inspect","train","validate","import"].some(
-  n=>w.tasks?.[n]?.running);
- $("renameDataset").disabled=datasetBusy||!w.selected_dataset;
- $("deleteDataset").disabled=datasetBusy||!w.selected_dataset;
+ const datasetBusy=["capture","inspect","train","validate","validate_a","validate_b","import","live_a","live_b"].some(n=>w.tasks?.[n]?.running);
+ renderCheckboxList("datasetChecks","datasetSelectAll",(w.datasets||[]).map(id=>({id,label:id})),checkedDatasets,()=>true);
+ $("renameDataset").disabled=datasetBusy||checkedDatasets.size!==1;
+ $("deleteDataset").disabled=datasetBusy||checkedDatasets.size===0;
  $("datasetCount").textContent=progress.saved_images??summary.saved_this_run??"—";
  $("datasetTarget").textContent=progress.target_images??summary.target_images??"—";
  const target=Number(progress.target_images||summary.target_images||0);
@@ -908,14 +908,21 @@ function renderWorkflow(s){
   labelIndex=0;labelSetKey=imageSet;showLabelSample(w.previews||[]);
  }
  const available=(w.models||[]).map(m=>({
-    value:m.id,label:m.name+" · "+(m.bytes/1e6).toFixed(1)+" MB · "+m.id
+    value:m.id,label:m.name+" · "+m.group+" · "+(m.bytes/1e6).toFixed(1)+" MB"
  }));
- for(const id of ["trainModel","validateModel","liveModel"]){
-  replaceSelectItems(id,available,w.selected_model);
- }
+ const previousA=$("compareModelA").value,previousB=$("compareModelB").value;
+ replaceSelectItems("trainModel",available,w.selected_model);
+ replaceSelectItems("compareModelA",available,previousA||w.selected_model);
+ const second=available.find(m=>m.value!==$("compareModelA").value);
+ replaceSelectItems("compareModelB",available,previousB||(second?.value||""));
+ renderCheckboxList("modelChecks","modelSelectAll",
+   (w.models||[]).map(m=>({id:m.id,label:m.name+" · "+m.group})),
+   checkedModels,rec=>(w.models||[]).some(m=>m.id===rec.id&&m.editable));
+ $("renameModel").disabled=datasetBusy||checkedModels.size!==1;
+ $("deleteModels").disabled=datasetBusy||checkedModels.size===0;
  $("modelStatus").textContent=available.length?
-  available.length+" local .pt checkpoint(s). Models stored under tools/yolo_lab/.":
-  "No checkpoints found. Import pinned best.pt from original yoloshuttle or copy weights into tools/yolo_lab/models/pretrained/.";
+   available.length+" checkpoints found. Original pretrains are protected.":
+   "No checkpoint: put your renamed .pt files in tools/yolo_lab/models/pretrains/.";
  const training=w.training||{},m=training.last_metrics||{};
  function metricRow(name){
    const x=Object.entries(m).find(([k])=>k.trim()===name);
