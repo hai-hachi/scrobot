@@ -141,6 +141,58 @@ class YoloLabTests(unittest.TestCase):
             parse_poses(pose_payload, {"yolo_shuttle_000"})["yolo_shuttle_000"][0],
             1.5)
 
+    def test_spawn_geometry_is_sourced_from_production_yaml(self):
+        import yaml
+        from distribution import geometry, sample
+        source = ROOT/"src/scrobot_simulation/config/shuttle_spawn.yaml"
+        documented = yaml.safe_load(source.read_text(encoding="utf-8"))
+        g = geometry()
+        self.assertEqual(g["court"]["length"], documented["court"]["length"])
+        self.assertEqual(g["court"]["width"], documented["court"]["width"])
+        self.assertEqual(g["court"]["margin"], documented["court"]["margin"])
+        self.assertEqual(g["cluster"]["sigma_x"], documented["cluster"]["sigma_x"])
+        self.assertEqual(g["cluster"]["sigma_y"], documented["cluster"]["sigma_y"])
+        self.assertEqual(g["cluster"]["line_x"],
+                         list(documented["cluster"]["line_x"].values()))
+        self.assertEqual(g["single"]["pitch"], documented["single"]["pitch"])
+        self.assertEqual(g["spawn"]["height"], documented["spawn"]["height"])
+        self.assertEqual(DEFAULT["cluster_weights"], documented["cluster"]["weights"])
+        # Old saved lab copies of dimensions are accepted, but ignored.
+        migrated = validate({**DEFAULT, "single_x": 5.0,
+                             "cluster_sigma_y": 3.0,
+                             "cluster_line_x": [0]*7})
+        self.assertNotIn("single_x", migrated)
+        self.assertNotIn("cluster_line_x", migrated)
+        self.assertNotIn("cluster_sigma_y", migrated)
+        self.assertEqual(sample({**migrated, "spawn_mode": "single"})[0][:2],
+                         (documented["single"]["x"], documented["single"]["y"]))
+        with tempfile.TemporaryDirectory() as td:
+            custom = dict(documented)
+            custom["single"] = {**custom["single"], "x": 1.2, "y": -0.5}
+            custom["court"] = {**custom["court"], "length": 14.0}
+            path = Path(td)/"spawn.yaml"
+            path.write_text(yaml.safe_dump(custom))
+            custom_geometry = geometry(path)
+            self.assertEqual(custom_geometry["court"]["length"], 14.0)
+            self.assertEqual(sample({**migrated,"spawn_mode":"single"},
+                                    custom_geometry)[0][:2], (1.2,-0.5))
+
+    def test_scene_layout_groups_only_editable_spawn_choices(self):
+        page = (LAB/"index.html").read_text()
+        start = page.index('<section class="card" id="shuttleSpawnCard">')
+        robot = page.index('<h2>Robot placement</h2>')
+        preview = page.index('<h2>Live simulated robot RGB</h2>')
+        options = page.index('<h2>Dataset, training and inference defaults</h2>')
+        self.assertLess(start, robot)
+        self.assertLess(robot, preview)
+        self.assertLess(preview, options)
+        self.assertIn('id="scenePosePreview"', page)
+        self.assertIn('id="spawnSourceInfo"', page)
+        self.assertNotIn('id="cluster_sigma_x"', page)
+        self.assertNotIn('id="cluster_line_x"', page)
+        self.assertNotIn('id="single_x"', page)
+        self.assertIn("renderSpawnGeometry(s.spawn_geometry)", page)
+
     def test_seed_reproducibility_and_independent_camera_fps(self):
         lights = calibration()
         with tempfile.TemporaryDirectory() as td:
