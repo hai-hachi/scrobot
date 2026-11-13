@@ -14,6 +14,7 @@ import time
 import cv2
 import numpy as np
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
@@ -77,12 +78,18 @@ def main():
     if len(sys.argv) != 2:
         raise SystemExit("Usage: preview.py /path/to/preview.jpg")
     rclpy.init()
-    node = Preview(sys.argv[1])
+    node = None
     try:
+        node = Preview(sys.argv[1])
         rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        # SIGINT/SIGTERM is expected during Gazebo lab restarts.
+        pass
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        if node is not None:
+            node.destroy_node()
+        # ROS 2's signal handler may have already shut down the context.
+        rclpy.try_shutdown()
 
 if __name__ == "__main__":
     main()
