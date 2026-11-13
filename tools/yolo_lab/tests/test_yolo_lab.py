@@ -58,6 +58,11 @@ class YoloLabTests(unittest.TestCase):
             {"imgsz": 650},
             {"confidence": float("nan")},
             {"seed": True},
+            {"rect": "true"},
+            {"mosaic": -0.1},
+            {"mosaic": 1.5},
+            {"optimizer": "untrusted"},
+            {"patience": -1},
             {"unknown": "unsafe"},
         ):
             with self.assertRaises(ValueError):
@@ -244,12 +249,13 @@ class YoloLabTests(unittest.TestCase):
         dataset=page.split('<div id="datasetPane" hidden>',1)[1].split(
             '<div id="trainPane" hidden>',1)[0]
         train=page.split('<div id="trainPane" hidden>',1)[1].split(
-            '<div id="validatePane" hidden>',1)[0]
+            '<div id="comparePane" hidden>',1)[0]
         comparison=page.split('<div id="comparePane" hidden>',1)[1]
         for setting in ("dataset_images","positive_fraction"):
             self.assertIn(f'id="{setting}"',dataset)
             self.assertNotIn(f'id="{setting}"',scene)
-        for setting in ("epochs","batch","imgsz","learning_rate"):
+        for setting in ("epochs","batch","imgsz","learning_rate",
+                        "optimizer","patience","mosaic","rect"):
             self.assertIn(f'id="{setting}"',train)
             self.assertNotIn(f'id="{setting}"',scene)
         for setting in ("validation_imgsz","validation_batch","confidence","live_imgsz"):
@@ -259,16 +265,20 @@ class YoloLabTests(unittest.TestCase):
                        "renameDataset","deleteDataset","datasetChecks",
                        "datasetSelectAll","modelChecks","modelSelectAll",
                        "renameModel","deleteModels","compareModelA","compareModelB",
-                       "compareValidate","compareStartLive","comparisonPlot"):
+                       "compareValidate","compareStartLive","comparisonPlot",
+                       "cmpMatrixA","cmpMatrixB","cmpCurveA","cmpCurveB",
+                       "confusionKind","curveKind"):
             self.assertIn(f'id="{button}"',page)
         self.assertNotIn("Dataset, training and inference defaults",page)
         self.assertNotIn('id="baselineChoice"',page)
         self.assertNotIn('id="tabLive"',page)
         self.assertNotIn('id="tabValidate"',page)
         self.assertIn('id="tabCompare"',page)
+        self.assertIn("#comparePane .grid{grid-template-columns:repeat(2,minmax(0,1fr))",page)
         for route in ("/api/datasets/delete-selected","/api/dataset/rename",
                       "/api/models/delete-selected","/api/model/rename",
-                      "/api/compare/live","/api/compare/validate"):
+                      "/api/compare/live","/api/compare/validate",
+                      "/api/compare-plot"):
             self.assertIn(route,page)
 
     def test_ui_tabs_and_browser_js_are_valid(self):
