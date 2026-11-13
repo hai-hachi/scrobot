@@ -27,6 +27,11 @@ from tags_scene import (generate_tags, tag_world, detector_yaml,
                         camera_info_bridge_yaml)
 from tag_publish import publish as publish_tag_geometry, status as tag_publish_status
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from lab_configs import (path_for as lab_yaml_path, read as read_lab_yaml,
+                         save as save_lab_yaml, matches as matches_lab_yaml)
+from lighting_source import calibration as lighting_calibration
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RESULTS = ROOT / "evaluation_results/camera_lab"
@@ -82,7 +87,7 @@ class Lab:
     def __init__(self):
         RESULTS.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
-        self.settings = dict(DEFAULT)
+        self.settings = validate(read_lab_yaml("camera") or dict(DEFAULT))
         self.procs = {}
         self.logs = {}
         self.previous_cpu = {}
@@ -90,7 +95,7 @@ class Lab:
         self.phase = "idle"
         self.error = None
         self.mode = "camera"
-        self.tag = dict(TAG_DEFAULT)
+        self.tag = validate_tag(read_lab_yaml("apriltags") or dict(TAG_DEFAULT))
         self.tag_epoch = 0
         self.tag_reset_wall = 0.0
         self.sweep_id = 0
@@ -313,19 +318,30 @@ class Lab:
                 "world": result["world"],
             }
 
-    def publish_tag_configuration(self):
-        """Explicit publication of the *running* tag geometry, not UI sliders."""
+    def save_lab_camera_yaml(self, data):
+        """Save the selected camera settings; never publish production here."""
         with self.lock:
-            if self.mode != "apriltags" or self.phase != "streaming":
-                raise ValueError("Start AprilTags Lab and verify RGB streaming first")
-            if self.sweep.get("state") == "running":
-                raise ValueError("Finish or cancel the active sweep before publishing")
-            observation = self.tag_status()
-            if observation.get("detector_frames", 0) < 3:
-                raise ValueError(
-                    "Wait for at least 3 AprilTag detector frames before publishing"
-                )
-            return publish_tag_geometry(self.tag)
+            cfg = validate(data)
+            path = save_lab_yaml("camera", cfg, validator=validate)
+            return {"saved": str(path), "settings": cfg}
+
+    def save_lab_apriltags_yaml(self, data):
+        """Save all four tags' COMMON geometry plus pose/noise test settings."""
+        with self.lock:
+            tag = validate_tag(data)
+            path = save_lab_yaml("apriltags", tag, validator=validate_tag)
+            return {"saved": str(path), "tag": tag,
+                    "shared_tag_ids": [0, 1, 2, 3]}
+
+    def publish_tag_configuration(self):
+        """Transfer ONLY saved AprilTags YAML into production tag calibration."""
+        with self.lock:
+            config = read_lab_yaml("apriltags")
+            if config is None:
+                raise ValueError("Save AprilTags Lab YAML before publishing to main simulation")
+            tag = validate_tag(config)
+            result = publish_tag_geometry(tag)
+            return {**result, "source_yaml": str(lab_yaml_path("apriltags"))}
 
     def gz_set_robot_pose(self, tag):
         p = self.procs.get("gazebo")
@@ -668,7 +684,21 @@ class Lab:
                     with path.open("rb") as f:
                         f.seek(max(0, path.stat().st_size - 1300))
                         logs[name] = f.read().decode("utf-8", "replace")
+            saved_camera = read_lab_yaml("camera")
+            saved_tags = read_lab_yaml("apriltags")
             return {
+                "lab_yaml": {
+                    "camera": {"path": str(lab_yaml_path("camera")),
+                               "saved": saved_camera is not None,
+                               "matches_running": saved_camera == self.settings},
+                    "apriltags": {"path": str(lab_yaml_path("apriltags")),
+                                  "saved": saved_tags is not None,
+                                  "matches_running": saved_tags == self.tag},
+                    "lighting": {"path": str(lab_yaml_path("lighting")),
+                                 "source": "Lighting Lab saved YAML",
+                                 "lights": lighting_calibration()["lights"]["rows"] *
+                                           lighting_calibration()["lights"]["cols"]},
+                },
                 "phase": self.phase,
                 "error": self.error,
                 "mode": self.mode,
@@ -717,21 +747,14 @@ class Lab:
             return {"file": str(path)}
 
     def publish(self):
-        """Deliberate YAML publication, without changing hardware configuration."""
+        """Transfer only the saved Camera Lab YAML to simulation calibration."""
         with self.lock:
-            if self.mode != "camera":
-                raise ValueError("Publish camera settings from Camera Lab, not AprilTags")
-            streams = self.check_measurement()
-            for name, fps in (("color", self.settings["color_fps"]),
-                              ("depth", self.settings["depth_fps"])):
-                if name == "depth" and not self.settings["depth_enabled"]:
-                    continue
-                obs = streams[name]
-                if not obs.get("wall_fps") or obs["wall_fps"] < fps * .8:
-                    raise ValueError(name + " wall FPS is less than 80% of target; choose a lighter profile")
+            cfg = read_lab_yaml("camera")
+            if cfg is None:
+                raise ValueError("Save Camera Lab YAML before publishing to main simulation")
+            cfg = validate(cfg)
             if not PUBLISHED.is_file():
                 raise FileNotFoundError("Missing main simulation camera YAML")
-            cfg = self.settings
             color_width, color_height = map(int, cfg["color"].split("x"))
             depth_width, depth_height = map(int, cfg["depth"].split("x"))
             new = (
@@ -744,7 +767,8 @@ class Lab:
             )
             old = PUBLISHED.read_text()
             if old == new:
-                return {"changed": False, "path": str(PUBLISHED)}
+                return {"changed": False, "path": str(PUBLISHED),
+                        "source_yaml": str(lab_yaml_path("camera"))}
             backup = RESULTS / "backups"
             backup.mkdir(parents=True, exist_ok=True)
             saved = backup / (
@@ -753,7 +777,9 @@ class Lab:
             temp = PUBLISHED.with_suffix(".tmp")
             temp.write_text(new)
             os.replace(temp, PUBLISHED)
-            return {"changed": True, "path": str(PUBLISHED), "backup": str(saved)}
+            return {"changed": True, "path": str(PUBLISHED),
+                    "backup": str(saved),
+                    "source_yaml": str(lab_yaml_path("camera"))}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -782,7 +808,9 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(200, self.server.lab.status())
         elif route == "/api/modes":
             self.respond(200, {"color": COLOR, "depth": DEPTH,
-                               "default": DEFAULT, "tag_default": TAG_DEFAULT,
+                               "default": validate(read_lab_yaml("camera") or dict(DEFAULT)),
+                               "tag_default": validate_tag(read_lab_yaml("apriltags") or dict(TAG_DEFAULT)),
+                               "lighting_yaml": str(lab_yaml_path("lighting")),
                                "venue": VENUE})
         elif route == "/api/tag/image":
             file = RESULTS / "tag_preview.jpg"
@@ -829,6 +857,10 @@ class Handler(BaseHTTPRequestHandler):
                 result = lab.begin_sweep(data)
             elif route == "/api/tag/cancel":
                 result = lab.cancel_sweep()
+            elif route == "/api/config/camera/save":
+                result = lab.save_lab_camera_yaml(data)
+            elif route == "/api/config/apriltags/save":
+                result = lab.save_lab_apriltags_yaml(data)
             elif route == "/api/tag/publish":
                 if data != {"confirm": True}:
                     raise ValueError("Explicit confirmation is required to update production tags")
