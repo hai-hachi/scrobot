@@ -597,13 +597,21 @@ class Workflow:
         for slot, model in zip(("a", "b"), models):
             path = output / ("validation_" + slot + ".json")
             path.unlink(missing_ok=True)
+            plots = output / ("plots_" + slot)
+            plots.mkdir(parents=True, exist_ok=True)
+            for filename in ("confusion_matrix.png",
+                             "confusion_matrix_normalized.png",
+                             "BoxPR_curve.png", "BoxF1_curve.png",
+                             "BoxP_curve.png", "BoxR_curve.png"):
+                (plots / filename).unlink(missing_ok=True)
             commands.append((slot, [
                 self.training_python, str(SCRIPTS / "validate_model.py"),
                 str(model), "--data", str(dataset / "data.yaml"),
                 "--device", device,
                 "--imgsz", str(settings["validation_imgsz"]),
                 "--batch", str(settings["validation_batch"]),
-                "--split", split, "--metrics-json", str(path)
+                "--split", split, "--metrics-json", str(path),
+                "--plots-dir", str(plots),
             ]))
         self.comparison = {"mode":"validation", "state":"starting",
                            "models":choices, "split":split, "dataset":str(dataset),
