@@ -6,7 +6,7 @@
 <title>SCROBOT Camera & AprilTags Labs</title>
 <style>
 :root{color-scheme:dark;--bg:#0d1721;--panel:#192837;--line:#3d5261;--ink:#edf4f5;--muted:#afc1c9;--good:#5bd9c8;--warn:#f3c27b}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px system-ui,sans-serif}
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:var(--bg);color:var(--ink);font:14px system-ui,sans-serif}
 main{max-width:1160px;margin:0 auto;padding:24px}
 h1{font-size:26px;margin:0 0 4px}h2{font-size:17px;margin:0 0 12px}
 h3{font-size:14px;margin:12px 0}.hint{font-size:12px;color:var(--muted);line-height:1.5}
@@ -29,14 +29,17 @@ th,td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--line);font-
 th{font-weight:500;color:var(--muted)}.scroll{overflow-x:auto}
 pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12px;border-radius:8px;white-space:pre-wrap}
  .tabs{display:flex;gap:9px;margin:18px 0 0}.tabs button.active{background:#08766b}
-.tag-layout{display:grid;grid-template-columns:minmax(300px,430px) minmax(0,1fr);gap:18px}
+#cameraPane,#tagPane{min-width:0;width:100%}
+.tag-layout{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:18px;align-items:start}
+.tag-layout>div{min-width:0}
 .tag-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .tag-columns label{margin-top:9px}
 .tag-columns input, .tag-columns select{width:100%;padding:9px;background:#10202d;color:var(--ink);border:1px solid var(--line);border-radius:7px}
 .tag-columns input[type=range]{padding:5px 0}
 #courtMap{display:block;width:100%;border:1px solid var(--line);border-radius:8px;background:#163f38;cursor:crosshair}
 #tagImage{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#0c161e;border:1px solid var(--line);border-radius:8px}
-#tagCharts{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+#tagCharts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+#tagCharts>div{min-width:0}
 #tagCharts canvas{width:100%;height:225px;background:#10202d;border:1px solid var(--line);border-radius:7px}
 .field-readout{font-size:12px;color:var(--good)}
 @media(max-width:1000px){.tag-layout,#tagCharts{grid-template-columns:1fr}}
@@ -52,7 +55,7 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
 <button id="cameraTab" class="active">Camera Lab</button>
 <button id="tagTab">AprilTags Lab</button>
 </div>
-<div class="grid">
+<div class="grid" id="cameraPane">
  <section class="card">
   <h2>Camera settings</h2>
   <label for="color">RGB resolution</label><select id="color"></select>
@@ -103,6 +106,7 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
    <details><summary>Monitor log</summary><pre id="monitorLog"></pre></details>
   </section>
  </div>
+</div>
 <section class="card" id="tagPane" hidden>
  <h2>AprilTags Lab — robot pose, physical tag geometry and real detections</h2>
  <p class="hint">Four real AprilTag 16h5 textures (IDs 0–3), mounted as two outward-facing plates on each badminton net pole. The scene uses the published court geometry and one lightweight light. AprilTag detections come from the actual <code>apriltag_ros</code> detector, not generated overlay boxes.</p>
@@ -294,6 +298,7 @@ function drawCourt(){
 }
 function setTab(name){
  currentTab=name;
+ $("cameraPane").hidden=name!=="camera";
  $("tagPane").hidden=name!=="apriltags";
  $("cameraTab").classList.toggle("active",name==="camera");
  $("tagTab").classList.toggle("active",name==="apriltags");
