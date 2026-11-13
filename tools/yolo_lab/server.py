@@ -499,6 +499,18 @@ class Handler(BaseHTTPRequestHandler):
                 if set(body) != {"dataset"}:
                     raise ValueError("Select a dataset name from the list")
                 result = self.lab.workflow.choose_dataset(body["dataset"])
+            elif route == "/api/dataset/rename":
+                if set(body) != {"dataset", "new_name"}:
+                    raise ValueError("Provide a selected dataset and a new short name")
+                with self.lab.lock:
+                    result = self.lab.workflow.rename_dataset(
+                        body["dataset"], body["new_name"])
+            elif route == "/api/dataset/delete":
+                if set(body) != {"dataset", "confirm"}:
+                    raise ValueError("Provide the exact dataset identifier as confirmation")
+                with self.lab.lock:
+                    result = self.lab.workflow.delete_dataset(
+                        body["dataset"], body["confirm"])
             elif route == "/api/inspect/start":
                 if set(body) != {"samples"}:
                     raise ValueError("Specify label-preview sample count")
