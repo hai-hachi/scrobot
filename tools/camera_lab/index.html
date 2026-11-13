@@ -238,6 +238,7 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
 const $ = id => document.getElementById(id);
 let modes=null, started=false, busy=false, currentTab="camera",
     live=null, tagImageUrl=null, sweepCache={distance:[],heading:[]},
+    minimumTagEpoch=0,
     venue={floor_x:21,floor_y:12,limit_x:10.2,limit_y:5.7,clearance_x:2.8,clearance_y:2.4};
 function setOptions(id,values,selected){
  const element=$(id);element.replaceChildren();
@@ -476,6 +477,7 @@ $("publish").onclick=()=>action(async()=>{
     "Simulation YAML already matches these camera settings.";
 });
 function clearPoseAccuracy(epoch){
+ if(typeof epoch==="number")minimumTagEpoch=Math.max(minimumTagEpoch,epoch);
  for(const id of ["tagHit","tagFps","tagP50","tagP95","tagPosError",
                   "tagRangeError","tagYawError","tagNormalError"]){
    $(id).textContent="—";
@@ -584,6 +586,9 @@ function renderSweep(sweep){
  $("downloadSweep").style.opacity=sweep?.file?1:.45;
 }
 function renderTag(s){
+ // An in-flight poll from before the robot relocation cannot repopulate
+ // the old pose's RMSE while the new measurement window is settling.
+ if((s.tag_epoch??0)<minimumTagEpoch)return;
  const obs=s.tag_observation||{},r=s.resources||{};
  function res(value){return Array.isArray(value)&&value.length===2?
    value[0]+"×"+value[1]:"—"}
