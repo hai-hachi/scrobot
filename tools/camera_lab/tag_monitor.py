@@ -83,6 +83,10 @@ class TagMonitor(Node):
         self.errors = []
         self.margins = []
         self.det_times = deque(maxlen=150)
+        self.rgb_times = deque(maxlen=150)
+        self.preview_times = deque(maxlen=50)
+        self.rgb_resolution = None
+        self.preview_resolution = None
         self.latencies_ms = deque(maxlen=300)
         self.latest_observed = None
         self.tf_tag_messages = 0
@@ -186,7 +190,10 @@ class TagMonitor(Node):
             self.rejected_info_frames += 1
         if time.monotonic() - self.reset_wall > .35:
             self.rgb_count += 1
-        self.rgb.append((stamp(out.header), out, time.monotonic()))
+        received_wall = time.monotonic()
+        self.rgb.append((stamp(out.header), out, received_wall))
+        self.rgb_times.append(received_wall)
+        self.rgb_resolution = [int(out.width), int(out.height)]
         self.last_image_frame = out.header.frame_id
         # Before apriltag_ros starts publishing, still show a live frame.
         # Once it runs, draw from the matching detections/TF timestamps
@@ -329,6 +336,8 @@ class TagMonitor(Node):
             tmp.write_bytes(jpg.tobytes())
             tmp.replace(self.preview_file)
             self.last_preview=now
+            self.preview_times.append(now)
+            self.preview_resolution = [int(image.shape[1]), int(image.shape[0])]
 
     def draw_axes(self,image,pose,scale):
         # Project TF coordinate axes (not a simulated or fabricated overlay).
@@ -357,6 +366,13 @@ class TagMonitor(Node):
     def write_status(self):
         now=time.monotonic()
         window=[t for t in self.det_times if now-t<=3]
+        rgb_window=[t for t in self.rgb_times if now-t<=3]
+        preview_window=[t for t in self.preview_times if now-t<=5]
+        def observed_fps(samples):
+            if len(samples) < 2:
+                return None
+            seconds = samples[-1] - samples[0]
+            return round((len(samples)-1)/seconds, 2) if seconds > 0 else None
         det_fps=((len(window)-1)/(window[-1]-window[0])
                  if len(window)>1 and window[-1]>window[0] else None)
         latencies=sorted(self.latencies_ms)
@@ -366,6 +382,10 @@ class TagMonitor(Node):
         summary = {"updated_wall":time.time(),"epoch":self.epoch,
                    "tag_id":self.control["tag"]["tag_id"] if self.control else None,
                    "rgb_frames":self.rgb_count,
+                   "rgb_resolution":self.rgb_resolution,
+                   "rgb_received_fps":observed_fps(rgb_window),
+                   "preview_resolution":self.preview_resolution,
+                   "preview_fps":observed_fps(preview_window),
                    "paired_frames":self.paired_frames,
                    "unpaired_frames":self.rejected_info_frames,
                    "image_subscribers":self.pub.get_subscription_count(),
