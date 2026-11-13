@@ -210,6 +210,37 @@ class TagLabTests(TestCase):
                 "apriltag"]["ros__parameters"]["tag"]["sizes"]
             self.assertEqual(sizes,[.15,.15,.15,.15])
 
+    def test_apriltags_start_uses_saved_camera_lab_yaml_not_browser_override(self):
+        lab=server.Lab()
+        saved={**modes.DEFAULT,"color":"1920x1080","color_fps":30,
+               "depth_enabled":False}
+        requested={**modes.DEFAULT,"color":"640x480","color_fps":15}
+        original_read=server.read_lab_yaml
+        def camera_source(name):
+            return saved if name=="camera" else original_read(name)
+        jobs=[]
+        try:
+            with (mock.patch.object(server,"read_lab_yaml",
+                                   side_effect=camera_source),
+                  mock.patch.object(server,"generate_tags",
+                                   return_value=(Path("/tmp/tags"),{})),
+                  mock.patch.object(server,"tag_world",
+                                   return_value="/tmp/lab_world.sdf") as builder,
+                  mock.patch.object(lab,"launch",
+                                   side_effect=lambda n,cmd:jobs.append((n,cmd)))):
+                result=lab.start_tags({
+                    "camera":requested,"tag":dict(geom.TAG_DEFAULT)
+                })
+            self.assertEqual(result["camera"],saved)
+            self.assertEqual(lab.settings,saved)
+            self.assertEqual(result["camera_source"],
+                             str(server.lab_yaml_path("camera")))
+            self.assertEqual(builder.call_args.args[0],saved)
+            self.assertEqual(result["lighting_source"],
+                             str(server.lab_yaml_path("lighting")))
+        finally:
+            lab.stop()
+
     def test_server_tag_start_uses_no_previous_perception_labs(self):
         lab=server.Lab()
         jobs=[]
