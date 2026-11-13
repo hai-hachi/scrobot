@@ -201,9 +201,18 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
    <div><div class="buttons"><button id="cancelSweep">Cancel sweep</button><a id="downloadSweep" href="/api/tag/sweep/result" target="_blank" rel="noopener">View saved sweep JSON</a></div></div>
   </div>
   <p class="status" id="sweepStatus">No sweep running.</p>
+  <div class="tag-columns" style="max-width:480px"><div>
+   <label for="chartMetric">Plot error metric</label>
+   <select id="chartMetric">
+    <option value="position_rmse_m">3D position RMSE (m)</option>
+    <option value="range_rmse_m">Range RMSE (m)</option>
+    <option value="bearing_rmse_deg">Camera bearing RMSE (°)</option>
+    <option value="normal_axis_rmse_deg">Tag plane normal-axis RMSE (°)</option>
+   </select>
+  </div></div>
   <div id="tagCharts">
-   <div><h3>Distance: pose RMSE and detection percentage</h3><canvas id="distanceChart" width="620" height="225"></canvas></div>
-   <div><h3>Heading offset: pose RMSE and detection percentage</h3><canvas id="headingChart" width="620" height="225"></canvas></div>
+   <div><h3>Distance: selected error and detection percentage</h3><canvas id="distanceChart" width="620" height="225"></canvas></div>
+   <div><h3>Heading offset: selected error and detection percentage</h3><canvas id="headingChart" width="620" height="225"></canvas></div>
   </div>
   <div class="scroll"><table><thead><tr><th>Distance / angle</th><th>Detector frames</th><th>Detection %</th><th>3D RMSE (m)</th><th>Bearing RMSE (°)</th><th>Detector FPS</th></tr></thead><tbody id="sweepRows"></tbody></table></div>
   <p class="hint">Each point is a static Gazebo pose. Empty or missed detections are recorded as missing, never zero error. All sweep JSON files are saved under <code>evaluation_results/camera_lab/tag_sweeps/</code>.</p>
@@ -389,12 +398,14 @@ $("publish").onclick=()=>action(async()=>{
 });
 function fmt(value,digits=1){return typeof value==="number"?value.toFixed(digits):"—"}
 function drawSweepPlot(id,rows,unit){
+ const metric=$("chartMetric").value;
+ const errorUnit=metric.endsWith("_deg")?"deg":"m";
  const c=$(id),ctx=c.getContext("2d"),w=c.width,h=c.height;
  ctx.fillStyle="#10202d";ctx.fillRect(0,0,w,h);
  const plot={left:55,right:w-60,top:26,bottom:h-40};
  ctx.font="12px sans-serif";
  ctx.fillStyle="#c6dce2";
- ctx.fillText("RMSE m",9,15);
+ ctx.fillText("RMSE "+errorUnit,9,15);
  ctx.fillStyle="#e9b96b";
  ctx.fillText("Hit %",w-53,15);
  ctx.strokeStyle="#526777";ctx.lineWidth=1;
@@ -406,8 +417,8 @@ function drawSweepPlot(id,rows,unit){
    return;
  }
  const xs=rows.map(r=>r.value),lo=Math.min(...xs),hi=Math.max(...xs);
- const finite=rows.map(r=>r.position_rmse_m).filter(x=>typeof x==="number");
- const ymax=Math.max(.025,...finite)*1.15;
+ const finite=rows.map(r=>r[metric]).filter(x=>typeof x==="number");
+ const ymax=Math.max(errorUnit==="m"?.025:.5,...finite)*1.15;
  const sx=v=>plot.left+(v-lo)/Math.max(1e-9,hi-lo)*(plot.right-plot.left);
  const syErr=v=>plot.bottom-v/ymax*(plot.bottom-plot.top);
  const syHit=v=>plot.bottom-v/100*(plot.bottom-plot.top);
@@ -415,7 +426,7 @@ function drawSweepPlot(id,rows,unit){
    const y=plot.bottom-i/4*(plot.bottom-plot.top);
    ctx.strokeStyle="#253f50";ctx.beginPath();ctx.moveTo(plot.left,y);
    ctx.lineTo(plot.right,y);ctx.stroke();
-   ctx.fillStyle="#c4d8db";ctx.fillText((ymax*i/4).toFixed(3),5,y+4);
+   ctx.fillStyle="#c4d8db";ctx.fillText((ymax*i/4).toFixed(errorUnit==="m"?3:1),5,y+4);
    ctx.fillStyle="#e9b96b";ctx.fillText(String(i*25),plot.right+6,y+4);
  }
  ctx.fillStyle="#c4d8db";
@@ -425,7 +436,7 @@ function drawSweepPlot(id,rows,unit){
  }
  ctx.fillText(unit,w/2,h-5);
  for(const series of [
-  {field:"position_rmse_m",color:"#59d8c7",scale:syErr},
+  {field:metric,color:"#59d8c7",scale:syErr},
   {field:"detection_pct",color:"#eebc78",scale:syHit}
  ]){
   ctx.strokeStyle=series.color;ctx.fillStyle=series.color;ctx.lineWidth=2.5;
@@ -577,6 +588,10 @@ async function initialize(){
   refreshFps(name,modes.default[name+"_fps"]);
  }
  $("depth_enabled").checked=modes.default.depth_enabled;
+ $("chartMetric").addEventListener("change",()=>{
+   drawSweepPlot("distanceChart",sweepCache.distance,"m");
+   drawSweepPlot("headingChart",sweepCache.heading,"deg");
+ });
  const t=modes.tag_default||{};
  for(const [id,key] of [
    ["tagSize","size"],["tagHeight","height"],["noiseSigma","noise_sigma"],
