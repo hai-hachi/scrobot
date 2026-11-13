@@ -20,6 +20,7 @@ import rclpy
 from apriltag_msgs.msg import AprilTagDetectionArray
 from sensor_msgs.msg import Image, CameraInfo
 from tf2_msgs.msg import TFMessage
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 
@@ -454,12 +455,17 @@ def main():
     if len(sys.argv)!=2:
         raise SystemExit("Usage: tag_monitor.py result_folder")
     rclpy.init()
-    node=TagMonitor(sys.argv[1])
+    node = None
     try:
+        node = TagMonitor(sys.argv[1])
         rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        # A lab stop/restart intentionally sends a shutdown signal.
+        pass
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        if node is not None:
+            node.destroy_node()
+        rclpy.try_shutdown()
 
 
 if __name__=="__main__":
