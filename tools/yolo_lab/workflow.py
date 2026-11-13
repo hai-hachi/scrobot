@@ -528,7 +528,9 @@ class Workflow:
         try:
             for slot, cmd in commands:
                 with self.lab.lock:
-                    if generation != self.compare_generation:
+                    if generation != self.compare_generation or self.lab.phase != "comparing_models":
+                        if generation == self.compare_generation and self.comparison:
+                            self.comparison["state"] = "stopped"
                         return
                     proc = self.lab.launch("validate_" + slot, cmd)
                     self.comparison["state"] = "running_" + slot
@@ -564,6 +566,7 @@ class Workflow:
         if counts and (counts.get(split) or {}).get("images", 0) < 1:
             raise ValueError("Selected dataset split has no images")
         self.lab.stop()
+        self.lab.phase = "comparing_models"
         self.compare_generation += 1
         generation = self.compare_generation
         settings = validate_yolo(read_lab("yolo") or {})
@@ -590,34 +593,70 @@ class Workflow:
                          daemon=True,name="YoloCompareValidation").start()
         return {"started":True, "models":choices, "split":split, "sequential":True}
 
+    def _wait_and_launch_live_pair(self, generation, models, settings):
+        """Wait for static-scene reload so it cannot kill live detector nodes."""
+        try:
+            for _ in range(120):
+                time.sleep(0.5)
+                with self.lab.lock:
+                    if generation != self.compare_generation:
+                        return
+                    if self.lab.phase in ("stopped","failed"):
+                        self.comparison.update(state="failed",error="Gazebo stopped")
+                        return
+                    gazebo = self.lab.processes.get("gazebo")
+                    ready = (getattr(self.lab,"manifest",None) is not None
+                             and self.lab.manifest.get("settled_static") is True
+                             and gazebo is not None and gazebo.poll() is None)
+                    if not ready:
+                        continue
+                    try:
+                        for slot, model in zip(("a","b"), models):
+                            folder = self.lab_output / "compare" / ("live_"+slot)
+                            folder.mkdir(parents=True,exist_ok=True)
+                            for file in ("live.jpg","live_status.json"):
+                                (folder / file).unlink(missing_ok=True)
+                            self.lab.launch("live_"+slot, [
+                                sys.executable,str(SCRIPTS/"live_detection.py"),
+                                "--model",str(model),"--output",str(folder),
+                                "--confidence",str(settings["confidence"]),
+                                "--imgsz",str(settings["live_imgsz"]),
+                                "--max-rate","8"])
+                    except Exception:
+                        for slot in ("a","b"):
+                            self.lab._terminate("live_"+slot)
+                        raise
+                    self.comparison["state"] = "running"
+                    return
+            with self.lab.lock:
+                if generation == self.compare_generation:
+                    self.comparison.update(state="failed",error="Static scene not ready")
+        except Exception as exc:
+            with self.lab.lock:
+                if generation == self.compare_generation:
+                    self.comparison.update(state="failed",error=str(exc))
+
     def start_compare_live(self, choices):
         self._ensure_idle()
-        if not isinstance(choices, list) or len(choices) != 2 or choices[0] == choices[1]:
+        if not isinstance(choices,list) or len(choices)!=2 or choices[0]==choices[1]:
             raise ValueError("Pick two different models for comparison")
-        models = [self.model_path(choice) for choice in choices]
-        current = self.lab.processes.get("gazebo")
-        if (current is None or current.poll() is not None or
-                self.lab.phase == "generating_dataset"):
+        models=[self.model_path(choice) for choice in choices]
+        gazebo=self.lab.processes.get("gazebo")
+        if gazebo is None or gazebo.poll() is not None or self.lab.phase=="generating_dataset":
             self.lab.start()
-        for name in ("live", "live_a", "live_b"):
+        for name in ("live","live_a","live_b"):
             self.lab._terminate(name)
-        output = self.lab_output / "compare"
-        settings = validate_yolo(read_lab("yolo") or {})
-        for slot, model in zip(("a", "b"), models):
-            folder = output / ("live_" + slot)
-            folder.mkdir(parents=True, exist_ok=True)
-            for name in ("live.jpg","live_status.json"):
-                (folder / name).unlink(missing_ok=True)
-            self.lab.launch("live_" + slot,[
-                sys.executable, str(SCRIPTS/"live_detection.py"),
-                "--model",str(model),"--output",str(folder),
-                "--confidence",str(settings["confidence"]),
-                "--imgsz",str(settings["live_imgsz"]),
-                "--max-rate","8"])
-        self.comparison = {"mode":"live","state":"running",
-                           "models":choices,"error":None}
-        self.stage = "compare_live"
-        return {"started":True, "models":choices, "max_rate_per_model":8}
+        self.compare_generation+=1
+        generation=self.compare_generation
+        settings=validate_yolo(read_lab("yolo") or {})
+        self.comparison={"mode":"live","state":"waiting_for_static_scene",
+                         "models":choices,"error":None}
+        self.stage="compare_live"
+        threading.Thread(target=self._wait_and_launch_live_pair,
+                         args=(generation,models,settings),daemon=True,
+                         name="YoloCompareLive").start()
+        return {"started":True,"models":choices,"waiting_for_static_scene":True,
+                "max_rate_per_model":8}
 
     def stop_comparison(self):
         self.compare_generation += 1
