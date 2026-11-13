@@ -94,6 +94,36 @@ The normal localizer's `max_tag_distance` is still 10 m, which is a
 20 m rendering far clip. The isolated AprilTags Lab can continue
 measuring detections and pose error beyond 10 m.
 
+### Reset pose errors and update all AprilTags together
+
+**Every successful robot relocation**, including each distance/heading sweep
+step, creates a new AprilTag measurement epoch. The lab clears prior
+translation/range/bearing/normal errors, detector counts, and the old
+camera preview immediately. The observer also discards delayed detection
+messages and TF poses belonging to image frames from the previous pose,
+and waits briefly for the static camera to settle before collecting
+new samples. During that interval, RMSE values display **—** instead
+of retaining the old location's error.
+
+**All four tags share one geometry**: the *Active tag edge* and *Tag
+center height* sliders apply to IDs 0–3, regardless of the selected
+target tag. Press **Apply geometry to all 4 tags** to regenerate the
+four physical plates and set all four detector size parameters in
+one operation. This restarts the isolated AprilTags scene (required
+for Gazebo mesh updates), but preserves the configured camera, robot
+X/Y/yaw, target selection and RGB noise. The scene's calculated pole
+radius continues to prevent tag-plate intersection. Errors are reset
+because the detector and court geometry have changed.
+
+**Publish all 4 tags to main simulation** is a *separate* explicitly
+confirmed action. It saves the shared tag edge, height and mount radius
+to production `court_landmarks.yaml` plus all four detector tag sizes
+in `perception.yaml`, preserving YAML backups. It does not publish
+the lab's simulated image noise. Rebuild and restart the main
+simulation to regenerate the production tag model; the production
+detector YAML is shared with the real robot, so printed tags must have
+the same edge size.
+
 ### Robot placement and live camera overlay
 
 - Set a robot pose with the **interactive overhead court** (click to
@@ -113,11 +143,12 @@ measuring detections and pose error beyond 10 m.
 - Adjust the active AprilTag edge size (40–250 mm), height above court
   (120–1500 mm), or RGB Gaussian pixel-noise standard deviation
   (0–50 out of 255).
-- **Restart AprilTags scene** after changing tag size or height. The four
-  authentic 16h5 textures and OBJ meshes are generated with the existing
-  canonical `scrobot_simulation/scripts/generate_court_apriltags.py`
-  utility, using temporary lab YAML. Production landmarks, tag textures
-  and localization parameters are **not** edited.
+- **Apply geometry to all 4 tags** after changing size or height. This
+  regenerates the four authentic 16h5 textures and OBJ meshes with
+  `scrobot_simulation/scripts/generate_court_apriltags.py` using temporary
+  lab YAML and restarts only the AprilTags test scene. Production
+  landmarks, tag textures and localization parameters are **not** edited
+  until the separate Publish button is explicitly confirmed.
 - **Apply noise live** applies the Gaussian intensity noise to RGB frames
   before `apriltag_ros` receives them. The noise and JPEG preview run
   in `tag_monitor`; the detector's CPU and memory are measured
