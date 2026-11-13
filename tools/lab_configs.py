@@ -21,6 +21,7 @@ FILES = {
     "apriltags": CONFIG_DIR / "apriltags_lab.yaml",
     "mobility": CONFIG_DIR / "mobility_lab.yaml",
     "odometry": CONFIG_DIR / "odometry_lab.yaml",
+    "yolo": CONFIG_DIR / "yolo_lab.yaml",
 }
 
 
