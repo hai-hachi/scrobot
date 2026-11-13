@@ -204,10 +204,19 @@ ignored by Git. The YOLO Lab server binds to localhost only.
 
 ## Scene debugging and logs
 
-Scene spawn settings are saved in the existing YOLO Lab YAML, including
-a deterministic seed, all 14 cluster weights, line offsets, cluster spread,
-and dynamic settling interval. Previously saved YAMLs are accepted, with
-missing new fields filled using production-compatible defaults.
+Scene spawn settings are saved in the existing YOLO Lab YAML: mode, shuttle
+count, deterministic seed, random density, mixed fraction, and the 14 editable
+left/right zone weights. The advanced physical settling interval is also a
+YOLO Lab choice. Court length/width/margin, all seven court-line X positions,
+cluster sigma X/Y, left/right cluster centers, fixed single-shuttle pose,
+and spawn height are read directly from
+`src/scrobot_simulation/config/shuttle_spawn.yaml` at scene generation
+(and presented read-only in the Scene tab). Changing that source YAML
+changes the next scene without copying dimensional values into YOLO YAML.
+Previously saved YOLO YAMLs with copied dimension fields are migrated
+safely: these legacy keys are ignored, and saving rewrites only the editable
+settings. The Scene tab now puts shuttle spawning in one box, with a separate
+robot pose map next to the actual robot camera preview.
 
 The browser strips ANSI terminal control sequences and truncated partial
 log lines using `tools/log_text.py`, while the original `*.log` files
