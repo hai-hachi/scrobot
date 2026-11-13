@@ -21,7 +21,7 @@ import time
 import webbrowser
 
 from modes import COLOR, DEPTH, DEFAULT, validate, expected_mb_s, world
-from tag_math import (TAG_DEFAULT, validate as validate_tag, mount_radius,
+from tag_math import (TAG_DEFAULT, VENUE, validate as validate_tag, mount_radius,
                       head_on_pose, sweep_values, tag_pose)
 from tags_scene import (generate_tags, tag_world, detector_yaml,
                         camera_info_bridge_yaml)
@@ -298,8 +298,8 @@ class Lab:
         if kind == "distance":
             xs = sweep_values(data["distance_min"], data["distance_max"],
                               data["distance_step"])
-            if not .4 <= xs[0] < xs[-1] <= 8:
-                raise ValueError("Distance sweep must stay within 0.4..8.0 m")
+            if not .4 <= xs[0] < xs[-1] <= 12:
+                raise ValueError("Distance sweep must stay within 0.4..12.0 m")
         else:
             xs = sweep_values(data["angle_min"],data["angle_max"],
                               data["angle_step"])
@@ -307,8 +307,8 @@ class Lab:
                 raise ValueError("Angle offset sweep must stay within ±90°")
         fixed = data["fixed_distance"]
         dwell = data["dwell_s"]
-        if not isinstance(fixed,(int,float)) or not .4 <= fixed <= 8:
-            raise ValueError("Fixed heading-sweep distance must be 0.4..8 m")
+        if not isinstance(fixed,(int,float)) or not .4 <= fixed <= 12:
+            raise ValueError("Fixed heading-sweep distance must be 0.4..12 m")
         if not isinstance(dwell,(int,float)) or not 1.0 <= dwell <= 6.0:
             raise ValueError("Sampling time must be 1..6 seconds per pose")
         with self.lock:
@@ -569,6 +569,7 @@ class Lab:
                 "mode": self.mode,
                 "tag": dict(self.tag),
                 "tag_mount_radius": mount_radius(self.tag["size"]),
+                "venue": dict(VENUE),
                 "tags": {str(i): tag_pose(i, self.tag) for i in range(4)},
                 "tag_observation": tag_obs,
                 "tag_pipeline_hint": pipeline_hint,
@@ -673,7 +674,8 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(200, self.server.lab.status())
         elif route == "/api/modes":
             self.respond(200, {"color": COLOR, "depth": DEPTH,
-                               "default": DEFAULT, "tag_default": TAG_DEFAULT})
+                               "default": DEFAULT, "tag_default": TAG_DEFAULT,
+                               "venue": VENUE})
         elif route == "/api/tag/image":
             file = RESULTS / "tag_preview.jpg"
             if not file.is_file() or time.time()-file.stat().st_mtime>4:
