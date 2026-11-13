@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCROBOT YOLO Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#101822;--panel:#1c2a38;--line:#415365;--ink:#e5eff6;--sub:#b8c9d5;--accent:#34c8b2;--alert:#efbc75}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px system-ui,"Segoe UI",sans-serif;line-height:1.5}
+header{padding:17px clamp(16px,3vw,40px);background:#162432;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+h1{font-size:22px;margin:0}h2{font-size:17px;margin:0 0 13px}h3{font-size:14px;margin:17px 0 8px}p{margin:7px 0 11px}
+.muted,small{color:var(--sub)}.muted{font-size:12px}.chip{border:1px solid var(--line);padding:4px 9px;border-radius:20px;font-size:12px;color:var(--sub)}
+main{max-width:1320px;margin:auto;padding:20px 24px}
+.tabs,.buttons{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:11px 0}
+button{padding:9px 15px;background:#30465a;color:var(--ink);border:1px solid #607789;border-radius:7px;cursor:pointer;font:inherit;font-weight:600}
+button:hover{background:#3d5366}button:disabled{opacity:.5;cursor:not-allowed}
+button.primary,button.active{background:#136c61;border-color:#249c8b}
+button.danger{background:#74444a;border-color:#97565a}
+section.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:17px;margin:12px 0}
+.grid{display:grid;grid-template-columns:minmax(280px,440px) minmax(0,1fr);gap:16px;align-items:start}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+label{display:block;color:var(--sub);font-size:12px;margin:4px 0}
+select,input{width:100%;padding:9px;border-radius:7px;background:#0f1c29;color:var(--ink);border:1px solid var(--line);font:inherit;margin-top:4px}
+input[type=checkbox]{width:auto;vertical-align:middle;margin-right:8px}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.metric{background:#142330;border-radius:8px;padding:12px;border:1px solid #374d5f}
+.metric b{font-size:21px;display:block;margin:4px 0;font-variant-numeric:tabular-nums}
+.metric small{font-size:11px}
+#preview{width:100%;border-radius:8px;background:#080f15;display:block;min-height:225px;max-height:520px;object-fit:contain}
+#message{border-left:3px solid var(--accent);padding:8px 12px;min-height:34px;font-size:13px;white-space:pre-wrap}
+#message.error{border-left-color:#df7777;color:#ffbbbb}
+pre{font:11px ui-monospace,monospace;background:#0a1620;color:#b7c5d0;padding:14px;border-radius:7px;overflow:auto;white-space:pre-wrap}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:8px;border-bottom:1px solid var(--line);text-align:left}
+a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color:var(--sub);font-size:12px}
+[hidden]{display:none!important}
+@media(max-width:850px){main{padding:12px}.grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style></head><body>
+<header>
+<div><h1>SCROBOT <span style="color:var(--accent)">YOLO Lab</span></h1>
+<div class="muted">Standalone shuttlecock perception lab · Gazebo Harmonic · ROS 2 Jazzy</div></div>
+<span class="chip">LOCAL · ROS 83 · 127.0.0.1:8770</span>
+</header>
+<main>
+<div class="tabs" role="tablist" aria-label="Lab sections">
+  <button id="tabCamera" class="active" role="tab" aria-selected="true">Camera configuration</button>
+  <button id="tabYolo" role="tab" aria-selected="false">YOLO Lab</button>
+</div>
+<section class="card">
+  <h2>Lab controls</h2>
+  <p class="muted">Generate a lightweight robot camera + real shuttle mesh inspection scene with the Lighting Lab's saved lights, colors and venue. No AprilTags, robot controllers, training or dataset capture runs in this first stage.</p>
+  <div class="buttons">
+    <button id="startScene" class="primary">Start / restart YOLO inspection scene</button>
+    <button id="stopScene" class="danger">Stop scene</button>
+    <button id="toggleGui">Open Gazebo UI</button>
+  </div>
+  <div id="message" role="status">Loading shared lab YAMLs…</div>
+  <p class="muted" id="configStatus">Loading configuration status…</p>
+</section>
+
+<div id="cameraPane">
+<div class="grid">
+  <section class="card">
+    <h2>Shared D435i camera modes</h2>
+    <p class="muted">Same supported RGB/depth modes and validation as Camera Lab. Saving writes the shared <code>camera_lab.yaml</code> (not the main simulator). YOLO Lab reads it on scene start.</p>
+    <div class="fields">
+      <label>RGB resolution<select id="color"></select></label>
+      <label>RGB frame rate<select id="color_fps"></select></label>
+      <label>Depth resolution<select id="depth"></select></label>
+      <label>Depth frame rate<select id="depth_fps"></select></label>
+    </div>
+    <label><input type="checkbox" id="depth_enabled"> Enable simulated depth</label>
+    <div class="buttons"><button id="saveCamera" class="primary">Save Camera Lab YAML</button></div>
+    <p class="muted" id="cameraFile">Loading Camera Lab YAML…</p>
+    <p class="note">YOLO 2D bounding boxes only need RGB. Depth can be enabled later for 3D detections. Raw image throughput is measured after the ROS bridge, without Gaussian noise processing.</p>
+  </section>
+  <section class="card">
+    <h2>Actual ROS camera throughput</h2>
+    <div class="metrics">
+      <div class="metric"><small>RGB wall FPS</small><b id="rgbWall">—</b><small>Received after bridge</small></div>
+      <div class="metric"><small>RGB sim FPS</small><b id="rgbSim">—</b><small>Based on timestamps</small></div>
+      <div class="metric"><small>RGB payload</small><b id="rgbMb">—</b><small>MB/s raw ROS bytes</small></div>
+      <div class="metric"><small>Depth wall FPS</small><b id="depthWall">—</b><small>Received after bridge</small></div>
+      <div class="metric"><small>Depth payload</small><b id="depthMb">—</b><small>MB/s raw ROS bytes</small></div>
+      <div class="metric"><small>Requested raw rate</small><b id="expectedMb">—</b><small>MB/s, RGB + depth</small></div>
+    </div>
+    <p class="muted" id="bridgeStatus">Start the scene for actual FPS.</p>
+  </section>
+</div>
+</div>
+
+<div id="yoloPane" hidden>
+<div class="grid">
+  <section class="card">
+    <h2>YOLO scene settings</h2>
+    <p class="muted">Saved separately in <code>yolo_lab.yaml</code>. This sets a reproducible initial scene and records proposed dataset/training parameters; it does not produce labels yet.</p>
+    <div class="fields">
+      <label>Static shuttles<input id="shuttle_count" type="number" min="1" max="60" step="1"></label>
+      <label>Random seed<input id="seed" type="number" min="0" max="2147483647" step="1"></label>
+      <label>Robot X (m)<input id="robot_x" type="number" step="0.1"></label>
+      <label>Robot Y (m)<input id="robot_y" type="number" step="0.1"></label>
+      <label>Robot yaw (°)<input id="robot_yaw" type="number" step="5"></label>
+      <label>Planned dataset images<input id="dataset_images" type="number" min="50" step="50"></label>
+      <label>Positive view fraction<input id="positive_fraction" type="number" min="0" max="1" step="0.05"></label>
+      <label>Planned epochs<input id="epochs" type="number" min="1" step="1"></label>
+      <label>Planned batch<input id="batch" type="number" min="1" step="1"></label>
+      <label>YOLO training imgsz<input id="imgsz" type="number" min="320" step="32"></label>
+      <label>Detection confidence<input id="confidence" type="number" min="0.001" max="1" step="0.01"></label>
+    </div>
+    <div class="buttons"><button id="saveYolo" class="primary">Save YOLO Lab YAML</button></div>
+    <p class="muted" id="yoloFile">Loading YOLO Lab YAML…</p>
+    <h3>Shared Lighting Lab</h3>
+    <p class="muted" id="lightingInfo">Loading saved lighting…</p>
+  </section>
+  <section class="card">
+    <h2>Live simulated robot RGB</h2>
+    <img id="preview" alt="Live Gazebo camera preview, or blank until RGB arrives">
+    <p class="muted" id="previewStatus">JPEG preview is deliberately throttled to approximately 2 FPS. Actual RGB is measured separately.</p>
+    <p class="muted" id="sceneStatus">Start the scene to inspect the shuttle models and court.</p>
+  </section>
+</div>
+<section class="card">
+  <h2>Old <code>yoloshuttle</code> workflow — review before integration</h2>
+  <p class="note"><strong>Not yet connected to buttons:</strong> the older dataset capture, automatic mesh projection labels, training and validation pipelines. They are documented here so we can design the new stages without accidentally training against stale camera frames.</p>
+  <table><thead><tr><th>Stage</th><th>Original implementation</th><th>Key check</th></tr></thead><tbody>
+    <tr><td>Generate images</td><td><code>scrobot_debug/yolo_dataset_fast_capture.py</code></td><td>Camera pose, deterministic shuttles and fresh Ogre render</td></tr>
+    <tr><td>Label automatically</td><td>Same capture script, exact shuttle STL projected using CameraInfo</td><td>One YOLO <code>.txt</code> per image; empty negative frames</td></tr>
+    <tr><td>Validate dataset</td><td><code>yoloshuttle/scripts/validate_generated_dataset.py</code></td><td>Train/val/test pairs, duplicates, bbox previews</td></tr>
+    <tr><td>Train</td><td><code>yoloshuttle/scripts/train_finetune.py</code></td><td>Fine-tune baseline <code>best.pt</code>; export stable model</td></tr>
+    <tr><td>Validate</td><td><code>yoloshuttle/scripts/validate_model.py</code></td><td>Precision, recall and mAP; compare on real D435i</td></tr>
+  </tbody></table>
+  <p class="muted"><a href="https://github.com/hai-hachi/yoloshuttle" target="_blank" rel="noopener noreferrer">Open original yoloshuttle repository</a>
+  · <a href="https://github.com/hai-hachi/scrobot/blob/real-comparison/src/scrobot_debug/scripts/yolo_dataset_fast_capture.py" target="_blank" rel="noopener noreferrer">Open original Gazebo capture code</a></p>
+</section>
+</div>
+<section class="card">
+  <h2>Gazebo / bridge logs</h2>
+  <details><summary>Process status</summary><pre id="processLog">Waiting</pre></details>
+  <details><summary>Gazebo server</summary><pre id="gazeboLog">Waiting</pre></details>
+  <details><summary>Image bridge / preview</summary><pre id="sensorLog">Waiting</pre></details>
+  <details><summary>GUI client</summary><pre id="guiLog">Not opened</pre></details>
+</section>
+</main>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+let mode="camera",busy=false,last=null,options=null,lastPreview=0;
+const cameraKeys=["color","color_fps","depth","depth_fps","depth_enabled"];
+const yoloInt=["shuttle_count","seed","dataset_images","epochs","batch","imgsz"];
+const yoloFloat=["robot_x","robot_y","robot_yaw","positive_fraction","confidence"];
+function setTab(value){
+ mode=value;
+ $("cameraPane").hidden=value!=="camera";
+ $("yoloPane").hidden=value!=="yolo";
+ $("tabCamera").classList.toggle("active",value==="camera");
+ $("tabYolo").classList.toggle("active",value==="yolo");
+ $("tabCamera").setAttribute("aria-selected",value==="camera");
+ $("tabYolo").setAttribute("aria-selected",value==="yolo");
+}
+$("tabCamera").onclick=()=>setTab("camera");
+$("tabYolo").onclick=()=>setTab("yolo");
+function fillSelect(id,opts,value){
+ const select=$(id);select.replaceChildren();
+ for(const entry of opts){
+  const opt=document.createElement("option");
+  opt.value=String(entry);opt.textContent=String(entry);select.append(opt);
+ }
+ if(value!=null&&opts.map(String).includes(String(value)))select.value=String(value);
+}
+function loadCamera(camera){
+ for(const s of ["color","depth"]){
+  fillSelect(s,Object.keys(options[s]),camera[s]);
+  fillSelect(s+"_fps",options[s][camera[s]],camera[s+"_fps"]);
+ }
+ $("depth_enabled").checked=camera.depth_enabled;
+}
+function updateFps(stream){
+ const selected=$(stream).value;
+ const old=Number($(stream+"_fps").value);
+ fillSelect(stream+"_fps",options[stream][selected],
+   options[stream][selected].includes(old)?old:options[stream][selected][0]);
+}
+$("color").onchange=()=>updateFps("color");
+$("depth").onchange=()=>updateFps("depth");
+function cameraForm(){
+ return {color:$("color").value,color_fps:Number($("color_fps").value),
+         depth:$("depth").value,depth_fps:Number($("depth_fps").value),
+         depth_enabled:$("depth_enabled").checked};
+}
+function loadYolo(cfg){
+ for(const key of yoloInt.concat(yoloFloat))$(key).value=cfg[key];
+}
+function yoloForm(){
+ const config={};
+ for(const key of yoloInt.concat(yoloFloat))config[key]=Number($(key).value);
+ return config;
+}
+async function post(route,body){
+ const response=await fetch(route,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+ const payload=await response.json();
+ if(!response.ok)throw Error(payload.error||"Request failed");
+ return payload;
+}
+function notify(text,error=false){
+ $("message").textContent=text;$("message").classList.toggle("error",error);
+}
+async function action(fn){
+ if(busy)return;
+ busy=true;
+ try{await fn();await poll()}
+ catch(error){notify(error.message,true)}
+ finally{busy=false}
+}
+$("saveCamera").onclick=()=>action(async()=>{
+ const result=await post("/api/config/camera/save",cameraForm());
+ notify("Saved "+result.saved+". Main simulation camera calibration is unchanged.");
+});
+$("saveYolo").onclick=()=>action(async()=>{
+ const result=await post("/api/config/yolo/save",yoloForm());
+ notify("Saved "+result.saved+". No production YOLO model was changed.");
+});
+$("startScene").onclick=()=>action(async()=>{
+ if(!last?.saved_camera||JSON.stringify(last.saved_camera)!==JSON.stringify(cameraForm())){
+  throw Error("Camera controls differ from saved YAML. Use Camera tab → Save Camera Lab YAML first.");
+ }
+ if(!last?.saved_yolo||JSON.stringify(last.saved_yolo)!==JSON.stringify(yoloForm())){
+  throw Error("YOLO controls differ from saved YAML. Use YOLO Lab → Save YOLO Lab YAML first.");
+ }
+ const result=await post("/api/scene/start",{});
+ notify("Started YOLO inspection scene: "+result.shuttles+" real shuttle meshes, camera "+result.camera.color+
+ " @ "+result.camera.color_fps+" FPS. No datasets or labels have been generated.");
+});
+$("stopScene").onclick=()=>action(async()=>{
+ await post("/api/scene/stop",{});
+ notify("Stopped YOLO inspection scene; saved YAMLs remain unchanged.");
+});
+$("toggleGui").onclick=()=>action(async()=>{
+ const running=last?.processes?.gui?.alive===true;
+ await post(running?"/api/gui/close":"/api/gui/open",{});
+ notify(running?"Closed Gazebo GUI; headless Gazebo keeps running.":"Opening GUI-only Gazebo client attached to YOLO Lab world.");
+});
+function fmt(value,digits=1){return value==null?"—":Number(value).toFixed(digits)}
+async function poll(){
+ const response=await fetch("/api/status",{cache:"no-store"});
+ if(!response.ok)throw Error("YOLO Lab server unavailable");
+ const s=await response.json();last=s;
+ const streams=s.meter?.streams||{},rgb=streams.color||{},depth=streams.depth||{};
+ $("rgbWall").textContent=fmt(rgb.wall_fps);
+ $("rgbSim").textContent=fmt(rgb.sim_fps);
+ $("rgbMb").textContent=fmt(rgb.mb_s,2);
+ $("depthWall").textContent=fmt(depth.wall_fps);
+ $("depthMb").textContent=fmt(depth.mb_s,2);
+ $("expectedMb").textContent=fmt(s.expected_mb_s?.total,1);
+ $("bridgeStatus").textContent=
+  "Measured at ROS image subscriber after ros_gz_image; not native Gazebo FPS. "+(
+  rgb.resolution?"RGB "+rgb.resolution.join("×")+", "+rgb.frames+" received frames.":"No RGB frames yet.");
+ $("configStatus").textContent="State: "+s.phase+
+  (s.error?" · ERROR: "+s.error:"")+
+  " · Camera YAML: "+(s.saved_camera?"saved":"missing")+
+  " · YOLO YAML: "+(s.saved_yolo?"saved":"missing")+
+  (s.scene_matches_saved===false&&s.manifest?
+   " · saved values changed since this scene started":"");
+ $("cameraFile").textContent=s.saved_paths.camera+
+  (s.saved_camera?" · saved":" · not saved");
+ $("yoloFile").textContent=s.saved_paths.yolo+
+  (s.saved_yolo?" · saved":" · not saved");
+ $("lightingInfo").textContent=s.saved_paths.lighting+
+  " · "+s.lighting.lights+" lights, "+s.lighting.shadow_count+
+  " shadow casters requested, venue clearance X="+s.lighting.venue.clearance_x+
+  " m, Y="+s.lighting.venue.clearance_y+" m (per side).";
+ $("sceneStatus").textContent=s.manifest?
+  "Generated "+s.manifest.shuttles.length+" static visual shuttle models from the production STL. This is an inspection scene only, not a labelled dataset.":
+  "No YOLO inspection scene generated.";
+ $("previewStatus").textContent=s.preview?.input_resolution?
+  "Actual RGB input "+s.preview.input_resolution.join("×")+
+  " · previews generated: "+s.preview.generated_previews+
+  ". Preview throttled, raw frame rate shown in Camera tab.":
+  "Waiting for robot RGB. Preview is throttled independently of raw ROS FPS.";
+ $("toggleGui").textContent=s.processes?.gui?.alive?"Close Gazebo UI":"Open Gazebo UI";
+ $("toggleGui").disabled=!s.processes?.gazebo?.alive;
+ $("processLog").textContent=Object.entries(s.processes||{}).map(
+  ([k,v])=>k+": "+(v.alive?"running":"exited "+v.exit_code)+" (PID "+v.pid+")").join("\n")||"No simulation processes";
+ $("gazeboLog").textContent=s.logs?.gazebo||"No Gazebo log";
+ $("sensorLog").textContent="[bridge]\n"+(s.logs?.image_bridge||"")+"\n[preview]\n"+(s.logs?.preview||"");
+ $("guiLog").textContent=s.logs?.gui||"No GUI log";
+ const stamp=s.preview?.updated_wall||0;
+ if(stamp>lastPreview){
+  lastPreview=stamp;
+  $("preview").src="/api/preview?t="+encodeURIComponent(stamp);
+ }
+}
+async function init(){
+ const r=await fetch("/api/options",{cache:"no-store"});
+ if(!r.ok)throw Error("Could not load camera options");
+ options=await r.json();
+ const status=options.status;
+ loadCamera(status.saved_camera||status.camera||options.camera_default);
+ loadYolo(status.saved_yolo||status.yolo||options.yolo_default);
+ await poll();notify("Ready. Save camera settings and YOLO scene settings separately, then Start YOLO inspection scene.");
+ setInterval(()=>poll().catch(e=>notify(e.message,true)),1100);
+}
+init().catch(e=>notify(e.message,true));
+</script>
+</body></html>
