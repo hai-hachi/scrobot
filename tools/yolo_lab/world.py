@@ -21,12 +21,13 @@ from lighting_source import apply_court_world, calibration as load_lighting
 from tag_math import CAMERA_OFFSET, CAMERA_PITCH
 
 from yolo_settings import validate as validate_yolo
+from distribution import sample as sample_shuttles
 
 COURT = ROOT / "src/scrobot_simulation/worlds/badminton_court.sdf"
 STATIC_MODELS = ("court_floor", "court_markings", "net_assembly",
                  "simulation_safety_boundary")
 
-def build(camera, yolo, destination, lighting=None):
+def build(camera, yolo, destination, lighting=None, settled_poses=None):
     """Build real court + calibrated lights + independent RGB/depth + shuttles."""
     camera = validate_camera(camera)
     yolo = validate_yolo(yolo)
@@ -82,28 +83,44 @@ def build(camera, yolo, destination, lighting=None):
 
     rng = random.Random(yolo["seed"])
     placed = []
-    for i in range(yolo["shuttle_count"]):
-        x = rng.uniform(-6.3, 6.3)
-        y = rng.uniform(-2.8, 2.8)
-        yaw = rng.uniform(-math.pi, math.pi)
-        z = 0.05
-        model = ET.SubElement(world, "model", name=f"yolo_shuttle_{i:03d}")
-        ET.SubElement(model, "static").text = "true"
-        ET.SubElement(model, "pose").text = f"{x:.8f} {y:.8f} {z:.8f} 0 0 {yaw:.8f}"
-        shuttle_link = ET.SubElement(model, "link", name="shuttle_link")
-        shuttle_visual = ET.SubElement(shuttle_link, "visual", name="shuttle_visual")
-        geometry = ET.SubElement(shuttle_visual, "geometry")
-        mesh = ET.SubElement(geometry, "mesh")
-        ET.SubElement(mesh, "uri").text = "model://shuttle/meshes/shuttle.STL"
-        material = ET.SubElement(shuttle_visual, "material")
-        ET.SubElement(material, "ambient").text = "0.78 0.78 0.78 1"
-        ET.SubElement(material, "diffuse").text = "0.92 0.92 0.92 1"
-        placed.append({"name": model.get("name"), "x": round(x, 7),
-                       "y": round(y, 7), "z": z, "yaw_rad": round(yaw, 7)})
+    production = ET.parse(ROOT / "src/scrobot_simulation/models/shuttle/model.sdf")
+    source_model = production.getroot().find("model")
+    if source_model is None or source_model.find(".//collision") is None:
+        raise ValueError("Production shuttle has no collision physics")
+    for i, (x, y, zone) in enumerate(sample_shuttles(yolo)):
+        name = f"yolo_shuttle_{i:03d}"
+        initial_yaw = rng.uniform(-math.pi, math.pi)
+        # A modest initial tilt prevents perfectly upright, balanced shuttles.
+        roll = rng.uniform(-0.50, 0.50)
+        pitch = rng.uniform(-0.50, 0.50)
+        initial = (x, y, 0.11, roll, pitch, initial_yaw)
+        pose = tuple(settled_poses[name]) if settled_poses is not None else initial
+        if len(pose) != 7 and len(pose) != 6:
+            raise ValueError("Settled shuttle pose must be xyz + RPY or quaternion")
+        if len(pose) == 7:
+            px, py, pz, qx, qy, qz, qw = pose
+            # Gazebo accepts normalized quaternion in Pose messages, but SDF
+            # model poses require RPY. Convert once on static scene generation.
+            sinr = 2 * (qw*qx + qy*qz)
+            cosr = 1 - 2 * (qx*qx + qy*qy)
+            rr = math.atan2(sinr, cosr)
+            pp = math.asin(max(-1.0, min(1.0, 2*(qw*qy-qz*qx))))
+            yy = math.atan2(2*(qw*qz+qx*qy), 1-2*(qy*qy+qz*qz))
+            pose = (px, py, pz, rr, pp, yy)
+        model = copy.deepcopy(source_model)
+        model.set("name", name)
+        model.find("static").text = "true" if settled_poses is not None else "false"
+        ET.SubElement(model, "pose").text = " ".join(f"{v:.9f}" for v in pose)
+        world.append(model)
+        placed.append({"name":name,"x":round(pose[0],7),"y":round(pose[1],7),
+                       "z":round(pose[2],7),"roll_rad":round(pose[3],7),
+                       "pitch_rad":round(pose[4],7),"yaw_rad":round(pose[5],7),
+                       "zone":zone})
     ET.indent(root, space="  ")
     generated.write(dest, encoding="utf-8", xml_declaration=True)
     manifest = {
-        "schema_version": 1, "world": "yolo_lab",
+        "schema_version": 2, "world": "yolo_lab",
+        "settled_static": settled_poses is not None,
         "camera": camera, "yolo": yolo,
         "lighting_source": str(ROOT / "src/scrobot_simulation/config/lighting_lab.yaml"),
         "camera_source": str(ROOT / "src/scrobot_simulation/config/camera_lab.yaml"),
