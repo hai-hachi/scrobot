@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime, timezone
 import json
+import math
 import os
 import shutil
 import signal
@@ -20,6 +21,10 @@ import time
 import webbrowser
 
 from modes import COLOR, DEPTH, DEFAULT, validate, expected_mb_s, world
+from tag_math import (TAG_DEFAULT, validate as validate_tag, mount_radius,
+                      head_on_pose, sweep_values, tag_pose)
+from tags_scene import (generate_tags, tag_world, detector_yaml,
+                        camera_info_bridge_yaml)
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -83,6 +88,12 @@ class Lab:
         self.previous_time = None
         self.phase = "idle"
         self.error = None
+        self.mode = "camera"
+        self.tag = dict(TAG_DEFAULT)
+        self.tag_epoch = 0
+        self.sweep_id = 0
+        self.sweep_cancel = threading.Event()
+        self.sweep = {"state": "idle", "kind": None, "rows": []}
 
     def environment(self):
         env = os.environ.copy()
@@ -90,6 +101,11 @@ class Lab:
         env["ROS_AUTOMATIC_DISCOVERY_RANGE"] = "LOCALHOST"
         env["GZ_PARTITION"] = f"scrobot_camera_lab_{os.getuid()}_82"
         env["GZ_IP"] = "127.0.0.1"
+        # Generated plate textures, built by the canonical SCROBOT tag model
+        # generator, resolve as model://court_apriltags/... in the lab only.
+        extra = str(RESULTS / "tag_models")
+        env["GZ_SIM_RESOURCE_PATH"] = (extra + os.pathsep +
+            env.get("GZ_SIM_RESOURCE_PATH", ""))
         env.pop("ROS_LOCALHOST_ONLY", None)
         return env
 
@@ -107,13 +123,18 @@ class Lab:
 
     def stop(self):
         with self.lock:
+            self.sweep_cancel.set()
+            self.sweep_id += 1
             for name in reversed(list(self.procs)):
                 stop_process(self.procs.pop(name))
                 self.logs.pop(name).close()
             (RESULTS / "meter.json").unlink(missing_ok=True)
+            (RESULTS / "tag_status.json").unlink(missing_ok=True)
+            (RESULTS / "tag_preview.jpg").unlink(missing_ok=True)
             self.previous_cpu.clear()
             self.previous_time = None
             self.phase = "stopped"
+            self.sweep = {"state": "idle", "kind": None, "rows": []}
             return {"stopped": True}
 
     def start(self, data):
@@ -121,6 +142,7 @@ class Lab:
         with self.lock:
             self.stop()
             self.settings = cfg
+            self.mode = "camera"
             self.error = None
             try:
                 path = world(cfg, RESULTS / "world.sdf")
@@ -145,6 +167,16 @@ class Lab:
                 self.phase = "failed"
                 raise
             return {"started": True, "settings": dict(cfg)}
+
+    def tag_status(self):
+        path = RESULTS / "tag_status.json"
+        try:
+            data = json.loads(path.read_text())
+            if time.time()-data.get("updated_wall",0)>3:
+                return {}
+            return data
+        except (OSError, ValueError, TypeError):
+            return {}
 
     def monitor(self):
         path = RESULTS / "meter.json"
@@ -187,7 +219,8 @@ class Lab:
                 if rgb.get("last_age_s") is not None and rgb["last_age_s"] < 2:
                     self.phase = "streaming"
             logs = {}
-            for name in ("gazebo", "image_bridge", "monitor"):
+            for name in ("gazebo", "image_bridge", "info_bridge",
+                         "monitor", "tag_monitor", "detector"):
                 path = RESULTS / (name + ".log")
                 if path.is_file():
                     with path.open("rb") as f:
@@ -196,6 +229,12 @@ class Lab:
             return {
                 "phase": self.phase,
                 "error": self.error,
+                "mode": self.mode,
+                "tag": dict(self.tag),
+                "tag_mount_radius": mount_radius(self.tag["size"]),
+                "tags": {str(i): tag_pose(i, self.tag) for i in range(4)},
+                "tag_observation": self.tag_status() if self.mode=="apriltags" else {},
+                "sweep": dict(self.sweep),
                 "settings": self.settings,
                 "expected": expected_mb_s(self.settings),
                 "monitor": obs,
@@ -233,6 +272,8 @@ class Lab:
     def publish(self):
         """Deliberate YAML publication, without changing hardware configuration."""
         with self.lock:
+            if self.mode != "camera":
+                raise ValueError("Publish camera settings from Camera Lab, not AprilTags")
             streams = self.check_measurement()
             for name, fps in (("color", self.settings["color_fps"]),
                               ("depth", self.settings["depth_fps"])):
