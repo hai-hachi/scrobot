@@ -96,6 +96,7 @@ class Lab:
         self.error = None
         self.mode = "camera"
         self.tag = validate_tag(read_lab_yaml("apriltags") or dict(TAG_DEFAULT))
+        self.lighting_used = None
         self.tag_epoch = 0
         self.tag_reset_wall = 0.0
         self.sweep_id = 0
@@ -195,7 +196,9 @@ class Lab:
             self.mode = "camera"
             self.error = None
             try:
-                path = world(cfg, RESULTS / "world.sdf")
+                light_settings = lighting_calibration()
+                path = world(cfg, RESULTS / "world.sdf", lighting=light_settings)
+                self.lighting_used = light_settings
                 # Gazebo is headless; no GUI, controllers, tags or YOLO.
                 self.launch("gazebo", ["gz", "sim", "-r", "-s", "-v", "3", path])
                 topics = ["/camera_lab/color"]
@@ -250,8 +253,11 @@ class Lab:
             try:
                 # Generate current genuine 16h5 tag textures and meshes. Never
                 # change production model files or court_landmarks.yaml.
+                light_settings = lighting_calibration()
                 model, params = generate_tags(tag, RESULTS)
-                path = tag_world(cfg, tag, RESULTS / "world.sdf", model)
+                path = tag_world(cfg, tag, RESULTS / "world.sdf", model,
+                                 lighting=light_settings)
+                self.lighting_used = light_settings
                 detector = detector_yaml(
                     tag, RESULTS / "tag_detector.yaml")
                 bridge_cfg = camera_info_bridge_yaml(
@@ -696,8 +702,15 @@ class Lab:
                                   "matches_running": saved_tags == self.tag},
                     "lighting": {"path": str(lab_yaml_path("lighting")),
                                  "source": "Lighting Lab saved YAML",
-                                 "lights": lighting_calibration()["lights"]["rows"] *
-                                           lighting_calibration()["lights"]["cols"]},
+                                 "lights": (
+                                     self.lighting_used["lights"]["rows"] *
+                                     self.lighting_used["lights"]["cols"]
+                                 ) if self.lighting_used else None,
+                                 "loaded": self.lighting_used is not None,
+                                 "saved_changed_since_start": (
+                                     self.lighting_used is not None and
+                                     self.lighting_used != lighting_calibration()
+                                 )},
                 },
                 "phase": self.phase,
                 "error": self.error,
