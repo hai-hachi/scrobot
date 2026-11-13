@@ -407,6 +407,110 @@ class TagLabTests(TestCase):
         self.assertNotIn('Distance sweep must stay within 0.4..8.0 m',
                          server_code)
 
+    def test_publish_tags_updates_model_and_detector_without_noise(self):
+        import yaml
+        import tag_publish
+        with tempfile.TemporaryDirectory() as td:
+            folder=Path(td)
+            landmark=folder/"court_landmarks.yaml"
+            detector=folder/"perception.yaml"
+            originals=(
+                tag_publish.LANDMARKS.read_bytes(),
+                tag_publish.DETECTOR.read_bytes(),
+            )
+            landmark.write_bytes(originals[0])
+            detector.write_bytes(originals[1])
+            tag={**geom.TAG_DEFAULT, "size":0.165, "height":0.35,
+                 "noise_sigma":42}
+            self.assertFalse(
+                tag_publish.status(tag,landmark,detector)["matches_lab"])
+            result=tag_publish.publish(tag,landmark,detector,folder/"backups")
+            self.assertTrue(result["changed"])
+            self.assertFalse(result["noise_published"])
+            self.assertTrue(result["rebuild_required"])
+            self.assertEqual(result["tag_edge_size_m"],.165)
+            self.assertAlmostEqual(result["tag_mount_radius_m"],
+                                   geom.mount_radius(.165))
+            new_landmark=yaml.safe_load(landmark.read_text())
+            new_detector=yaml.safe_load(detector.read_text())
+            p=new_landmark["tag_global_localizer"]["ros__parameters"]
+            a=new_detector["apriltag"]["ros__parameters"]
+            self.assertAlmostEqual(p["tag_edge_size"],.165)
+            self.assertAlmostEqual(p["tag_height"],.35)
+            self.assertAlmostEqual(p["tag_mount_radius"],
+                                   geom.mount_radius(.165))
+            self.assertEqual(a["size"],.165)
+            self.assertEqual(a["tag"]["sizes"],[.165]*4)
+            self.assertEqual(a["family"],"16h5")
+            self.assertEqual(a["tag"]["ids"],[0,1,2,3])
+            self.assertEqual(p["max_tag_distance"],10.0)
+            self.assertEqual(
+                (Path(result["backup"])/"court_landmarks.yaml").read_bytes(),
+                originals[0])
+            self.assertEqual(
+                (Path(result["backup"])/"perception.yaml").read_bytes(),
+                originals[1])
+            self.assertNotIn("noise_sigma",landmark.read_text()+detector.read_text())
+            self.assertIn("#",landmark.read_text()) # preserve original comments
+            self.assertTrue(
+                tag_publish.status(tag,landmark,detector)["matches_lab"])
+            unchanged=tag_publish.publish(tag,landmark,detector,folder/"backups")
+            self.assertFalse(unchanged["changed"])
+
+    def test_publish_requires_active_apriltags_and_finished_sweep(self):
+        lab=server.Lab()
+        try:
+            with self.assertRaisesRegex(ValueError,"Start AprilTags Lab"):
+                lab.publish_tag_configuration()
+            lab.mode="apriltags"
+            lab.phase="streaming"
+            lab.sweep={"state":"running"}
+            with self.assertRaisesRegex(ValueError,"Finish or cancel"):
+                lab.publish_tag_configuration()
+            lab.sweep={"state":"idle"}
+            with mock.patch.object(lab,"tag_status",return_value={
+                    "detector_frames":0}):
+                with self.assertRaisesRegex(ValueError,
+                                            "3 AprilTag detector frames"):
+                    lab.publish_tag_configuration()
+            with (mock.patch.object(lab,"tag_status",
+                         return_value={"detector_frames":40}),
+                  mock.patch.object(server,"publish_tag_geometry",
+                         return_value={"changed":True}) as publish):
+                self.assertEqual(lab.publish_tag_configuration(),
+                                 {"changed":True})
+                publish.assert_called_once_with(lab.tag)
+        finally:
+            lab.stop()
+
+    def test_camera_range_and_live_resolution_fps_are_distinct(self):
+        import modes
+        with tempfile.TemporaryDirectory() as td:
+            path=Path(td)/"camera.sdf"
+            modes.world(modes.DEFAULT,path)
+            root=ET.parse(path).getroot()
+            sensors=root.findall(".//sensor")
+            self.assertEqual(len(sensors),2)
+            self.assertTrue(all(
+                x.findtext("camera/clip/far")=="20" for x in sensors))
+        prod=(ROOT/"src/scrobot_simulation/urdf/sensors_gazebo.xacro").read_text()
+        self.assertEqual(prod.count("<far>20.0</far>"),2)
+        monitor=(LAB/"tag_monitor.py").read_text()
+        for token in (
+            '"rgb_resolution":self.rgb_resolution',
+            '"rgb_received_fps":observed_fps(rgb_window)',
+            '"preview_resolution":self.preview_resolution',
+            '"preview_fps":observed_fps(preview_window)',
+        ):
+            self.assertIn(token,monitor)
+        html=(LAB/"index.html").read_text()
+        self.assertIn('id="tagViewMeta"',html)
+        self.assertIn("obs.rgb_received_fps",html)
+        self.assertIn("obs.preview_fps",html)
+        self.assertIn('id="publishTags"',html)
+        self.assertIn('/api/tag/publish',html)
+        self.assertIn('"/api/tag/publish"',(LAB/"server.py").read_text())
+
     def test_ui_tag_controls_and_browser_js(self):
         html=(LAB/"index.html").read_text()
         for key in ("tagPane","courtMap","tagSize","tagHeight","noiseSigma",
