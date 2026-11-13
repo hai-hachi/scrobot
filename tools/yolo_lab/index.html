@@ -140,7 +140,7 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
   </section>
   <section class="card">
     <h2>Live simulated robot RGB</h2>
-    <p class="muted">Viewpoint: actual robot-mounted camera (base position + camera offset 0.19 m forward, 0.287 m high, pitched 15° downward). Camera moves with robot yaw, not a free-fly camera.</p>
+    <p class="muted">Viewpoint: actual robot-mounted camera (base position + camera offset 0.1206 m forward, 0.0325 m sideways and 0.240 m high, pitched 15° downward). Camera moves with robot yaw, not a free-fly camera.</p>
     <img id="preview" alt="Live Gazebo camera preview, or blank until RGB arrives">
     <p class="muted" id="previewStatus">JPEG preview is deliberately throttled to approximately 2 FPS. Actual RGB is measured separately.</p>
     <p class="muted" id="sceneStatus">Start the scene to inspect the shuttle models and court.</p>
@@ -436,7 +436,7 @@ function yoloForm(){
  return config;
 }
 function sameFields(a,b){
- return !!a&&!!b&&Object.keys(b).every(k=>a[k]===b[k]);
+ return !!a&&!!b&&Object.keys(b).every(k=>JSON.stringify(a[k])===JSON.stringify(b[k]));
 }
 async function post(route,body){
  const response=await fetch(route,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
