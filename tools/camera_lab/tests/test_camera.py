@@ -93,7 +93,7 @@ class CameraLabTests(TestCase):
         finally:
             lab.stop()
 
-    def test_yaml_publication_only_when_live_samples_and_safe_wall_rate(self):
+    def test_yaml_publication_only_from_saved_lab_yaml(self):
         lab=server.Lab()
         lab.phase="streaming"
         record={
@@ -108,16 +108,18 @@ class CameraLabTests(TestCase):
                 production.write_text("old camera calibration")
                 with mock.patch.object(server,"PUBLISHED",production),\
                      mock.patch.object(server,"RESULTS",Path(tmp)),\
-                     mock.patch.object(lab,"check_measurement",return_value=record):
+                     mock.patch.object(server,"read_lab_yaml",
+                                       return_value=dict(modes.DEFAULT)):
                     result=lab.publish()
                     self.assertTrue(result["changed"])
                     self.assertEqual(Path(result["backup"]).read_text(),"old camera calibration")
                     self.assertIn("schema_version: 1",production.read_text())
                     self.assertIn("width: 1280",production.read_text())
                     self.assertIn("enabled: true",production.read_text())
-                    record["color"]["wall_fps"]=5
-                    with self.assertRaisesRegex(ValueError,"wall FPS"):
-                        lab.publish()
+                    with mock.patch.object(server,"read_lab_yaml",
+                                           return_value=None):
+                        with self.assertRaisesRegex(ValueError,"Save Camera Lab YAML"):
+                            lab.publish()
         finally:
             lab.stop()
 
