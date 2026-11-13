@@ -4,6 +4,8 @@ on:
   push:
     branches: [real-comparison]
     paths:
+      - "tools/shared/**"
+      - "tools/configs/labs/**"
       - 'tools/camera_lab/**'
       - 'src/scrobot_simulation/config/camera_calibration.yaml'
       - 'src/scrobot_simulation/launch/simulation.launch.py'

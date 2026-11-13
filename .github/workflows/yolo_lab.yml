@@ -3,6 +3,8 @@ on:
   push:
     branches: [real-comparison]
     paths:
+      - "tools/shared/**"
+      - "tools/configs/labs/**"
       - "tools/yolo_lab/**"
       - "tools/camera_lab/modes.py"
       - "tools/camera_lab/lighting_source.py"
@@ -12,6 +14,8 @@ on:
       - ".github/workflows/yolo_lab.yml"
   pull_request:
     paths:
+      - "tools/shared/**"
+      - "tools/configs/labs/**"
       - "tools/yolo_lab/**"
       - "tools/lab_configs.py"
       - ".github/workflows/yolo_lab.yml"

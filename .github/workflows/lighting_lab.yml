@@ -5,6 +5,8 @@ on:
     branches:
       - real-comparison
     paths:
+      - "tools/shared/**"
+      - "tools/configs/labs/**"
       - "tools/lighting_lab/**"
       - "src/scrobot_description/urdf/**"
       - "src/scrobot_simulation/urdf/**"

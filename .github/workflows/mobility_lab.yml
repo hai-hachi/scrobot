@@ -4,6 +4,8 @@ on:
   push:
     branches: [real-comparison]
     paths:
+      - "tools/shared/**"
+      - "tools/configs/labs/**"
       - 'tools/mobility_lab/**'
       - 'src/scrobot_description/urdf/scrobot.urdf.xacro'
       - 'src/scrobot_description/urdf/wheels.xacro'
