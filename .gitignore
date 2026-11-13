@@ -1,37 +1,58 @@
-# ROS 2 / colcon
-build/
-install/
-log/
+# ROS 2 / colcon build and runtime logs
+/build/
+/install/
+/log/
 
-# Evaluation outputs (kept beside src/ locally, never tracked)
+# Generated evaluation results and local lab sessions
 /evaluation_results/
+/reports/
 
-# Python
+# Python bytecode, test caches, virtualenvs and packaging output
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.venv/
+venv/
+*.egg-info/
 
-# IDE/editor
+# IDEs / OS
 .vscode/
 .idea/
-
-# Temporary files
+.DS_Store
+Thumbs.db
 *.swp
 *.swo
 *~
 
-# OS files
-.DS_Store
-Thumbs.db
+# Intermediate, generated and backed-up files (not source YAML)
+*.tmp
+*.bak
+*.bak.*
+*.orig
+*.rej
 
-# ML models / datasets
+# ML weight binaries, export formats and large generated datasets
 *.pt
 *.pth
 *.engine
 *.onnx
-datasets/
+*.tflite
+*.torchscript
+*.safetensors
+/datasets/
+**/wandb/
 
 # ROS bags
 *.db3
 *.mcap
 rosbag2_*/
+
+# IMPORTANT: never ignore tools/configs/labs/*.yaml; these are the
+# intentional lab-owned saved configurations. Production YAMLs in src/
+# remain tracked separately.
