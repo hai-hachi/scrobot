@@ -240,6 +240,76 @@ class TagLabTests(TestCase):
         self.assertIn('id="tagPipeline"',ui)
         self.assertIn('"tag_pipeline_hint": pipeline_hint',server_text)
 
+    def test_pose_service_request_and_explicit_gazebo_rejection(self):
+        # A sweep must move the real Gazebo camera model, not just change
+        # UI coordinates. Mock only the Gazebo service executable.
+        from types import SimpleNamespace
+        lab=server.Lab()
+        class Alive:
+            pid=12345
+            def poll(self):
+                return None
+        lab.mode="apriltags"
+        lab.procs["gazebo"]=Alive()
+        pose={**geom.TAG_DEFAULT, **geom.head_on_pose(
+            0, 2, geom.TAG_DEFAULT)}
+        try:
+            with mock.patch.object(server.subprocess,"run",
+                    return_value=SimpleNamespace(
+                        returncode=0,stdout="data: true\\n",stderr="")
+                    ) as command:
+                lab.gz_set_robot_pose(pose)
+                args=command.call_args.args[0]
+                self.assertIn("/world/camera_lab/set_pose",args)
+                self.assertIn("gz.msgs.Pose",args)
+                req=args[args.index("--req")+1]
+                self.assertIn('name: "camera_rig"',req)
+                self.assertIn("position:",req)
+                self.assertIn("orientation:",req)
+            with mock.patch.object(server.subprocess,"run",
+                    return_value=SimpleNamespace(
+                        returncode=0,stdout="data: false\\n",stderr="")):
+                with self.assertRaisesRegex(RuntimeError,
+                                            "did not accept camera rig pose"):
+                    lab.gz_set_robot_pose(pose)
+        finally:
+            lab.procs.clear()
+            lab.stop()
+
+    def test_sweep_rejects_missing_camera_info_and_detector_frames(self):
+        lab=server.Lab()
+        lab.mode="apriltags"
+        lab.phase="streaming"
+        payload={
+            "kind":"distance","tag_id":0,
+            "distance_min":.6,"distance_max":1.0,"distance_step":.2,
+            "fixed_distance":2.0,
+            "angle_min":-30,"angle_max":30,"angle_step":15,
+            "dwell_s":1.0,
+        }
+        with mock.patch.object(lab,"tag_status",return_value={}):
+            with self.assertRaisesRegex(ValueError,"CameraInfo is not ready"):
+                lab.begin_sweep(payload)
+        with mock.patch.object(lab,"tag_status",
+                    return_value={"camera_info_valid":True,"detector_frames":0}):
+            with self.assertRaisesRegex(ValueError,"detector has not processed"):
+                lab.begin_sweep(payload)
+
+    def test_apriltag_dashboard_reports_tf_rejections_and_sweep_errors(self):
+        source=(LAB/"server.py").read_text()
+        monitor=(LAB/"tag_monitor.py").read_text()
+        html=(LAB/"index.html").read_text()
+        for key in ("tf_tag_messages","tf_parent_rejected","tf_last_parent",
+                    "last_image_frame"):
+            self.assertIn(key,monitor)
+            self.assertIn(key,html if key != "tf_last_parent" else source+html)
+        self.assertIn("no observed_tag_* TF",source)
+        self.assertIn("Cannot set robot pose at",source)
+        self.assertIn('id="tagActionStatus"',html)
+        self.assertIn('id="sweepReadiness"',html)
+        self.assertIn("notify(err.message,true)",html)
+        self.assertIn("detectorFrames>=3",html)
+
     def test_ui_tag_controls_and_browser_js(self):
         html=(LAB/"index.html").read_text()
         for key in ("tagPane","courtMap","tagSize","tagHeight","noiseSigma",
