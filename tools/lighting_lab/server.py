@@ -910,7 +910,7 @@ class Lab:
         # every control first; the writer performs one atomic file replacement.
         path = write_lab_config(LAB_CONFIG, raw)
         self.adapter.last_action = (
-            f"Updated {path}. Restart Lighting Lab to load these defaults; "
+            f"Updated {path}. Restart Lighting, Camera or AprilTags Lab to load these saved defaults; "
             "running Gazebo is unchanged."
         )
         return self.adapter.last_action
