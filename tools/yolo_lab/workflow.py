@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import json
 import os
 from pathlib import Path
@@ -25,10 +26,14 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SCRIPTS = HERE / "scripts"
 MODELS = HERE / "models/pretrained"
+PRETRAINS = HERE / "models/pretrains"  # User-renamed immutable originals
+TRAINED = HERE / "models/trained"
 ARTIFACTS = HERE / "artifacts/models"
 RUNS = HERE / "runs/detect"
 DATAROOT = ROOT / "evaluation_results/yolo_lab/datasets"
-DATASET_ID = re.compile(r"^dataset_[0-9]{8}T[0-9]{12}Z(?:__[a-z0-9][a-z0-9_-]{0,39})?$")
+DATASET_ID = re.compile(
+    r"^(?:dataset_[0-9]{8}T[0-9]{12}Z|[A-Z][a-z]{2}(?:0[1-9]|[12][0-9]|3[01])_[0-9]{2,3})(?:__[a-z0-9][a-z0-9_-]{0,39})?$"
+)
 DATASET_SLUG = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 MODEL_CHOICE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,128}$")
 BASELINE_LABELS = {
@@ -71,13 +76,27 @@ class Workflow:
         self.selected_model = None
         self.run_name = None
         self.capture_directory = None
+        self.comparison = None
 
     def datasets(self):
         if not DATAROOT.exists():
             return []
-        return sorted([p.name for p in DATAROOT.iterdir()
-                       if p.is_dir() and DATASET_ID.fullmatch(p.name)
-                       and (p / "data.yaml").is_file()], reverse=True)[:100]
+        return [p.name for p in sorted(
+            (p for p in DATAROOT.iterdir()
+             if p.is_dir() and not p.is_symlink() and DATASET_ID.fullmatch(p.name)
+             and (p / "data.yaml").is_file()),
+            key=lambda p: p.stat().st_mtime, reverse=True)][:100]
+
+    def _next_dataset_name(self):
+        # Use workstation location's calendar date; never depend on UTC day.
+        prefix = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).strftime("%b%d")
+        occupied = {p.name.split("__", 1)[0]
+                    for p in DATAROOT.iterdir()} if DATAROOT.is_dir() else set()
+        for number in range(1, 1000):
+            candidate = f"{prefix}_{number:02d}"
+            if candidate not in occupied:
+                return candidate
+        raise ValueError("Too many datasets generated on this calendar day")
 
     def choose_dataset(self, name):
         if not isinstance(name, str) or name not in self.datasets():
@@ -185,6 +204,26 @@ class Workflow:
         return {"renamed": True, "previous": name, "dataset": proposed,
                 "directory": new_path}
 
+    def delete_datasets(self, names, confirmation):
+        """Validate the complete selection before deleting any dataset."""
+        self._ensure_idle()
+        if confirmation is not True or not isinstance(names, list) or (
+                not 1 <= len(names) <= 100) or len(set(map(str, names))) != len(names):
+            raise ValueError("Select datasets and confirm deletion")
+        targets = [self._managed_dataset(n) for n in names]
+        for target in targets:
+            # Recheck the target is still managed at the time of deletion.
+            if target.is_symlink() or target.resolve().parent != DATAROOT.resolve():
+                raise ValueError("Unsafe dataset folder")
+        for target in targets:
+            shutil.rmtree(target)
+        if self.dataset in names:
+            self.dataset = None
+        if self.capture_directory in targets:
+            self.capture_directory = None
+        self.current_dataset()
+        return {"deleted": names, "selected_dataset": self.dataset}
+
     def delete_dataset(self, name, confirmation):
         """Permanently remove a selected generated dataset, never a parent."""
         self._ensure_idle()
@@ -205,33 +244,87 @@ class Workflow:
             self.dataset = choices[0] if choices else None
         return DATAROOT / self.dataset if self.dataset else None
 
+    def _managed_model(self, choice):
+        """Only user-trained/copied models can be changed; pretrains are immutable."""
+        if not isinstance(choice, str) or choice not in {
+                m["id"] for m in self.models() if m["editable"]}:
+            raise ValueError("Only managed trained/artifact models may be changed")
+        target = HERE / choice
+        if (target.is_symlink() or not target.is_file()
+                or target.resolve().parent not in
+                (ARTIFACTS.resolve(), TRAINED.resolve())):
+            raise ValueError("Cannot modify original or unmanaged models")
+        return target
+
+    def rename_model(self, choice, new_name):
+        self._ensure_idle()
+        target = self._managed_model(choice)
+        if not isinstance(new_name, str):
+            raise ValueError("Enter a new model name")
+        stem = new_name.strip().removesuffix(".pt")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}", stem):
+            raise ValueError("Use 1-80 letters, digits, underscore or hyphen")
+        destination = target.with_name(stem + ".pt")
+        if destination == target:
+            return {"renamed":False,"model":choice}
+        if destination.exists() or destination.is_symlink():
+            raise ValueError("A model with that name already exists")
+        target.rename(destination)
+        pointer = HERE / "artifacts/latest_model.txt"
+        if pointer.is_file() and not pointer.is_symlink():
+            if pointer.read_text(encoding="utf-8").strip() == str(target.resolve()):
+                pointer.write_text(str(destination.resolve()) + "\n", encoding="utf-8")
+        return {"renamed":True, "previous":choice,
+                "model":str(destination.relative_to(HERE))}
+
+    def delete_models(self, choices, confirmation):
+        self._ensure_idle()
+        if confirmation is not True or not isinstance(choices,list) or (
+                not 1 <= len(choices) <= 100) or len(set(map(str,choices))) != len(choices):
+            raise ValueError("Select models and confirm deletion")
+        targets = [self._managed_model(c) for c in choices]
+        if self.selected_model in choices:
+            self.selected_model = None
+        pointer = HERE / "artifacts/latest_model.txt"
+        pointed = pointer.read_text(encoding="utf-8").strip() if pointer.is_file() and not pointer.is_symlink() else ""
+        for target in targets:
+            target.unlink()
+        if pointed in [str(p.resolve()) for p in targets]:
+            pointer.unlink(missing_ok=True)
+        return {"deleted":choices}
+
     def models(self):
         files = []
-        for directory in (MODELS, ARTIFACTS):
+        for directory in (PRETRAINS, MODELS, TRAINED, ARTIFACTS):
             if directory.is_dir():
                 files.extend(sorted(directory.glob("*.pt")))
         if RUNS.is_dir():
             files.extend(sorted(RUNS.glob("*/weights/best.pt")))
-        return [{"id": str(p.resolve().relative_to(HERE.resolve())),
-                 "name": (BASELINE_LABELS.get(p.name, p.name)
-                          if p.parent == MODELS
-                          else (p.stem if p.parent == ARTIFACTS else p.name)),
+        return [{"id": str(p.relative_to(HERE)),
+                 "name": (BASELINE_LABELS.get(p.name, p.stem)
+                          if p.parent in (MODELS, PRETRAINS)
+                          else p.stem),
+                 "group": ("Original pretrains (protected)" if p.parent in (PRETRAINS, MODELS)
+                           else "Managed trained models" if p.parent in (TRAINED, ARTIFACTS)
+                           else "Training-run weights (read-only)"),
+                 "editable": p.parent in (TRAINED, ARTIFACTS),
                  "bytes": p.stat().st_size}
-                for p in files if p.is_file() and HERE.resolve() in p.resolve().parents]
+                for p in files if p.is_file() and not p.is_symlink()
+                and HERE.resolve() in p.resolve().parents]
 
     def model_path(self, choice):
         if not isinstance(choice, str):
             raise ValueError("Select a model from the model picker")
         available = {entry["id"] for entry in self.models()}
         if choice not in available:
-            raise ValueError("Model not found. Import original baseline weights first")
+            raise ValueError("Model not found. Put pretrained .pt files into models/pretrains or train a model")
         file = (HERE / choice).resolve()
         if file.suffix != ".pt" or HERE.resolve() not in file.parents:
             raise ValueError("Invalid YOLO model selection")
         return file
 
     def _ensure_idle(self):
-        for name in ("capture", "inspect", "train", "validate", "import"):
+        for name in ("capture", "inspect", "train", "validate", "validate_a", "validate_b", "import", "live_a", "live_b", "live"):
             p = self.lab.processes.get(name)
             if p is not None and p.poll() is None:
                 raise ValueError(f"{name} is already running; finish or stop it first")
@@ -245,7 +338,7 @@ class Workflow:
         camera = validate_camera(selected_camera)
         yolo = validate_yolo(selected_yolo)
         self.lab.stop()
-        run_id = "dataset_" + _timestamp()
+        run_id = self._next_dataset_name()
         directory = DATAROOT / run_id
         directory.mkdir(parents=True, exist_ok=False)
         self.capture_directory = directory
