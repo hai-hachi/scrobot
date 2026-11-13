@@ -471,7 +471,7 @@ class Workflow:
                "--model", str(model), "--data", str(dataset / "data.yaml"),
                "--device", device, "--epochs", str(yolo["epochs"]),
                "--batch", str(yolo["batch"]), "--imgsz", str(yolo["imgsz"]),
-               "--optimizer", "AdamW", "--lr0", "0.0001",
+               "--optimizer", "AdamW", "--lr0", str(yolo["learning_rate"]),
                "--patience", "8",
                "--name", self.run_name,
                "--project", str(RUNS),
