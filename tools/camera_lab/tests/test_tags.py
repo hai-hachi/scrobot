@@ -54,6 +54,41 @@ class TagLabTests(TestCase):
                 p["robot_y"]-geom.tag_pose(tag_id,cfg)["y"]),2.0,delta=.0001)
             self.assertNotEqual(p["robot_yaw"],q["robot_yaw"])
 
+    def test_lighting_lab_clearance_and_published_venue_bounds(self):
+        venue=geom.venue_bounds()
+        self.assertEqual(venue["clearance_x"],2.8)
+        self.assertEqual(venue["clearance_y"],2.4)
+        self.assertAlmostEqual(venue["floor_x"],21.0)
+        self.assertAlmostEqual(venue["floor_y"],12.0)
+        self.assertAlmostEqual(venue["limit_x"],10.2)
+        self.assertAlmostEqual(venue["limit_y"],5.7)
+        self.assertTrue(venue["lighting_config_matches_published_floor"])
+        cfg=dict(geom.TAG_DEFAULT)
+        cfg.update({"robot_x":9.8,"robot_y":5.4})
+        self.assertEqual(geom.validate(cfg)["robot_x"],9.8)
+        with self.assertRaisesRegex(ValueError,"robot_x"):
+            geom.validate({**cfg,"robot_x":10.3})
+        with self.assertRaisesRegex(ValueError,"robot_y"):
+            geom.validate({**cfg,"robot_y":5.9})
+
+    def test_use_real_image_frame_for_tag_tf_and_preserve_frame_safety(self):
+        self.assertTrue(geom.optical_frame_matches(
+            "color_optical_frame","color_optical_frame"))
+        self.assertTrue(geom.optical_frame_matches(
+            "/color_optical_frame","color_optical_frame"))
+        self.assertFalse(geom.optical_frame_matches(
+            "camera_color_optical_frame","color_optical_frame"))
+        self.assertFalse(geom.optical_frame_matches(
+            "map","color_optical_frame"))
+        self.assertFalse(geom.optical_frame_matches(
+            "color_optical_frame",None))
+        script=(LAB/"tag_monitor.py").read_text()
+        self.assertIn("optical_frame_matches(",script)
+        self.assertIn("self.last_image_frame",script)
+        self.assertNotIn(
+            'tf.header.frame_id.lstrip("/") != "camera_color_optical_frame"',
+            script)
+
     def test_ground_truth_zero_error_and_no_fabricated_detection(self):
         cfg=geom.validate(dict(geom.TAG_DEFAULT))
         pose=geom.head_on_pose(0,2,cfg)
@@ -73,8 +108,12 @@ class TagLabTests(TestCase):
         for args in ((0,8,.01),(2,1,.1),(1,1,.2)):
             with self.assertRaises(ValueError):
                 geom.sweep_values(*args)
+        for tag_id in range(4):
+            pose = geom.head_on_pose(tag_id,12.0,geom.TAG_DEFAULT)
+            self.assertLessEqual(abs(pose["robot_x"]),geom.VENUE["limit_x"])
+            self.assertLessEqual(abs(pose["robot_y"]),geom.VENUE["limit_y"])
         with self.assertRaises(ValueError):
-            geom.head_on_pose(0,8.1,geom.TAG_DEFAULT)
+            geom.head_on_pose(0,12.1,geom.TAG_DEFAULT)
 
     def test_tag_scene_copy_only_static_court_and_actual_tag_model(self):
         with tempfile.TemporaryDirectory() as td:
@@ -351,6 +390,22 @@ class TagLabTests(TestCase):
         self.assertIn('id="sweepReadiness"',html)
         self.assertIn("notify(err.message,true)",html)
         self.assertIn("detectorFrames>=3",html)
+
+    def test_apriltag_gui_venue_map_and_twelve_meter_sliders(self):
+        html=(LAB/"index.html").read_text()
+        server_code=(LAB/"server.py").read_text()
+        for name in ("distanceMin","distanceMax","fixedDistance"):
+            self.assertRegex(html,
+                rf'id="{name}" type="number"[^>]+max="12"')
+        self.assertIn('id="courtSurface"',html)
+        self.assertIn('id="venueCaption"',html)
+        self.assertIn("venue=modes.venue",html)
+        self.assertIn("(venue.floor_x/2)/315",html)
+        self.assertIn("(venue.floor_y/2)/160",html)
+        self.assertIn('"venue": VENUE',server_code)
+        self.assertIn('<= 12',server_code)
+        self.assertNotIn('Distance sweep must stay within 0.4..8.0 m',
+                         server_code)
 
     def test_ui_tag_controls_and_browser_js(self):
         html=(LAB/"index.html").read_text()
