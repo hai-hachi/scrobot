@@ -1,0 +1,8 @@
+# Train / validate / live YOLO. Gazebo collector additionally requires
+# ROS 2 Jazzy and Gazebo Harmonic sourced via start.sh.
+ultralytics>=8.3
+opencv-python>=4.8
+numpy>=1.26
+matplotlib>=3.8
+PyYAML>=6.0
+roboflow>=1.1
