@@ -536,8 +536,8 @@ class Lab:
                         )
                     elif (tag_obs.get("tf_parent_rejected") or 0) > 0:
                         pipeline_hint = (
-                            "AprilTag TF poses arrived but use a different parent "
-                            "frame than camera_color_optical_frame. Image frame: "
+                            "AprilTag TF poses arrived, but their parent frame "
+                            "does not match the actual RGB optical image frame. Image frame: "
                             + str(tag_obs.get("last_image_frame")) + "; TF parent: "
                             + str(tag_obs.get("tf_last_parent"))
                             + ". RMSE is withheld to avoid comparing unlike frames."
