@@ -44,8 +44,7 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
   <button id="tabYolo" role="tab" aria-selected="false">Scene</button>
   <button id="tabDataset" role="tab" aria-selected="false">1 · Dataset &amp; Labels</button>
   <button id="tabTrain" role="tab" aria-selected="false">2 · Training</button>
-  <button id="tabValidate" role="tab" aria-selected="false">3 · Validation</button>
-  <button id="tabLive" role="tab" aria-selected="false">4 · Live Detection</button>
+  <button id="tabCompare" role="tab" aria-selected="false">3 · Compare Models</button>
 </div>
 <section class="card">
   <h2>Lab controls</h2>
@@ -180,17 +179,16 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <select id="datasetList"><option>None yet</option></select>
 </label>
 <details id="datasetManager">
-  <summary>Manage saved datasets (rename / delete)</summary>
-  <p class="muted">Renaming preserves the capture timestamp and updates data.yaml plus saved summary paths. No active capture, inspection, training or validation task may be running.</p>
-  <label>Readable dataset name (1–40 letters, numbers, spaces, underscores or hyphens)
-    <input id="datasetRename" type="text" maxlength="40" placeholder="e.g. 720p_mixed_50_shuttles">
-  </label>
-  <div class="buttons"><button id="renameDataset">Rename selected dataset</button></div>
-  <p class="note">Deletion is permanent and removes all saved JPEGs, labels, preview files and inspection reports inside the selected dataset folder.</p>
-  <label>Confirm permanent deletion: type the exact selected dataset identifier
-    <input id="datasetDeleteConfirm" type="text" autocomplete="off" placeholder="Type selected dataset ID">
-  </label>
-  <div class="buttons"><button id="deleteDataset" class="danger">Permanently delete selected dataset</button></div>
+  <summary>Manage saved datasets (select, rename, delete)</summary>
+  <p class="muted">Select datasets using checkboxes below. Rename exactly one, or remove multiple datasets at once. Running capture, training or evaluation must be stopped first.</p>
+  <label><input id="datasetSelectAll" type="checkbox"> Select all saved datasets</label>
+  <div id="datasetChecks" style="max-height:180px;overflow-y:auto;padding:8px;border:1px solid #35505b;border-radius:8px"></div>
+  <label>New name for the single selected dataset<input id="datasetRename" type="text" maxlength="40" placeholder="e.g. 720p_mixed"></label>
+  <div class="buttons">
+    <button id="renameDataset">Rename one selected</button>
+    <button id="deleteDataset" class="danger">Delete checked datasets</button>
+  </div>
+  <p class="muted">Only selected datasets are affected. Deleting requires one final browser confirmation.</p>
 </details>
 <p class="muted">Dataset config comes from the Camera tab's <code>camera_lab.yaml</code> and Scene tab's <code>yolo_lab.yaml</code>. A new timestamped dataset is created for each capture; old datasets are not overwritten.</p>
 </section>
@@ -251,6 +249,7 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <div class="fields">
   <label>Training epochs<input id="epochs" type="number" min="1" max="300" step="1"></label>
   <label>Training batch size<input id="batch" type="number" min="1" max="64" step="1"></label>
+  <label>Initial learning rate<input id="learning_rate" type="number" min="0.000001" max="0.1" step="0.00001"></label>
   <label>Training input size (pixels)<input id="imgsz" type="number" min="320" max="1920" step="32"></label>
 </div>
 <div class="buttons"><button id="saveTrainingSettings" class="primary">Save training settings</button></div>
@@ -261,17 +260,19 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <button id="startTraining" class="primary">Train on inspected dataset</button>
 <button id="stopTraining" class="danger">Stop training</button>
 </div>
-<h3>Original yoloshuttle baseline checkpoints</h3>
-<p class="muted">Binary weights are optional and aren't duplicated in Git. An explicit import checks the original repository's immutable Git blob hash before storing local files under <code>tools/yolo_lab/models/pretrained/</code>.</p>
-<div class="buttons">
-<select id="baselineChoice" style="max-width:100%;min-width:280px">
-<option value="best.pt">Original best.pt — legacy shuttle baseline (architecture not specified)</option>
-<option value="yolo11n_shuttle.pt">YOLO11n Nano — shuttlecock-specific</option>
-<option value="yolo11s-ball.pt">YOLO11s Small — ball detector (different target)</option>
-</select>
-<button id="importBaseline">Import verified baseline weights</button>
-</div>
-<p class="muted">Import labels are descriptive only; the original .pt filenames and pinned checksums remain unchanged.</p>
+<h3>Available starting models</h3>
+<p class="muted">The Starting checkpoint dropdown above automatically discovers your three renamed originals in <code>tools/yolo_lab/models/pretrains/</code> (or the older <code>models/pretrained/</code> location), plus trained checkpoints and artifacts. Pretrained files are protected and will never be renamed or deleted here.</p>
+<details id="modelManager">
+  <summary>Manage user-trained models and artifacts</summary>
+  <p class="muted">Checkboxes are only available for files in <code>models/trained/</code> and <code>artifacts/models/</code>. Original pretrains and training-run checkpoints are read-only.</p>
+  <label><input id="modelSelectAll" type="checkbox"> Select all manageable models</label>
+  <div id="modelChecks" style="max-height:210px;overflow-y:auto;padding:8px;border:1px solid #35505b;border-radius:8px"></div>
+  <label>New name for the single selected model<input id="modelRename" type="text" maxlength="80" placeholder="e.g. nano_720p_v2"></label>
+  <div class="buttons">
+    <button id="renameModel">Rename one selected model</button>
+    <button id="deleteModels" class="danger">Delete checked models</button>
+  </div>
+</details>
 <p class="muted" id="modelStatus">No model selected.</p>
 </section>
 <section class="card">
@@ -287,81 +288,80 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 </div>
 </div>
 
-<div id="validatePane" hidden>
-<div class="grid">
+<div id="comparePane" hidden>
 <section class="card">
-<h2>3 · Held-out model validation</h2>
-<p class="muted">Runs the imported <code>validate_model.py</code> on the selected inspected dataset. Metrics come from Ultralytics evaluation, not guessed ground truth. Run test after model selection.</p>
-<label>Trained or baseline checkpoint<select id="validateModel"></select></label>
+<h2>3 · Validation &amp; Live Detection — A/B model comparison</h2>
+<p class="muted">Choose two different local checkpoints. Validation evaluates both <strong>sequentially</strong> on the same selected inspected dataset and split. Live mode runs two detectors on the same robot camera topic, displaying their predictions side by side.</p>
+<div class="grid">
+  <section class="card">
+    <h3>Model A</h3>
+    <label>Checkpoint A<select id="compareModelA"></select></label>
+  </section>
+  <section class="card">
+    <h3>Model B</h3>
+    <label>Checkpoint B<select id="compareModelB"></select></label>
+  </section>
+</div>
 <div class="fields">
-  <label>Validation image size (pixels)<input id="validation_imgsz" type="number" min="320" max="1920" step="32"></label>
+  <label>Evaluation split<select id="validationSplit"><option value="test">Held-out test</option><option value="val">Validation</option></select></label>
+  <label>Device<select id="validateDevice"><option value="0">CUDA GPU 0</option><option value="cpu">CPU</option></select></label>
+  <label>Validation image size<input id="validation_imgsz" type="number" min="320" max="1920" step="32"></label>
   <label>Validation batch size<input id="validation_batch" type="number" min="1" max="64" step="1"></label>
 </div>
-<div class="buttons"><button id="saveValidationSettings" class="primary">Save validation settings</button></div>
+<div class="buttons">
+  <button id="saveValidationSettings">Save validation settings</button>
+  <button id="compareValidate" class="primary">Run A/B validation</button>
+</div>
 <div class="fields">
-<label>Dataset split<select id="validationSplit"><option value="test">Held-out test</option><option value="val">Validation</option></select></label>
-<label>Device<select id="validateDevice"><option value="0">CUDA GPU 0</option><option value="cpu">CPU</option></select></label>
+  <label>Live detection confidence<input id="confidence" type="number" min="0.001" max="1" step="0.01"></label>
+  <label>Live inference image size<input id="live_imgsz" type="number" min="320" max="1920" step="32"></label>
 </div>
 <div class="buttons">
-<button id="startValidation" class="primary">Evaluate model</button>
-<button id="stopValidation">Stop evaluation</button>
+  <button id="saveLiveSettings">Save live settings</button>
+  <button id="compareStartLive" class="primary">Start side-by-side live detection</button>
+  <button id="compareStop" class="danger">Stop comparison</button>
 </div>
-<p id="validationState" class="muted">No validation report yet.</p>
+<p id="comparisonState" class="muted">Select two checkpoints to compare.</p>
 </section>
 <section class="card">
-<h2>Measured validation metrics</h2>
-<div class="metrics">
-<div class="metric"><small>Precision</small><b id="valPrecision">—</b></div>
-<div class="metric"><small>Recall</small><b id="valRecall">—</b></div>
-<div class="metric"><small>mAP@50</small><b id="valMap50">—</b></div>
-<div class="metric"><small>mAP@50–95</small><b id="valMap95">—</b></div>
-<div class="metric"><small>Model</small><b id="valModelName" style="font-size:12px;overflow-wrap:anywhere">—</b></div>
-<div class="metric"><small>Dataset</small><b id="valDatasetName" style="font-size:12px;overflow-wrap:anywhere">—</b></div>
-</div>
-<details><summary>Validation log</summary><pre id="validationLog">No validation yet.</pre></details>
+<h2>Validation metrics comparison</h2>
+<p class="muted">The chart uses measured Ultralytics metrics, not model predictions or estimates. Blank bars indicate no evaluation for the selected model.</p>
+<svg id="comparisonPlot" viewBox="0 0 760 270" style="width:100%;background:#0f202b;border-radius:9px" aria-label="Grouped A and B validation metric bar plot"></svg>
 </section>
-</div>
-</div>
-
-<div id="livePane" hidden>
 <div class="grid">
-<section class="card">
-<h2>4 · Live YOLO detections</h2>
-<p class="muted">Runs the selected real Ultralytics model on the simulated RGB topic. Annotates actual model-predicted bounding boxes. The independent raw image monitor still measures ROS bridge FPS; model inference is capped to avoid image transport saturation.</p>
-<label>Checkpoint<select id="liveModel"></select></label>
-<div class="fields">
-  <label>Inference confidence<input id="confidence" type="number" min="0.001" max="1" step="0.01"></label>
-  <label>Live inference input size (pixels)<input id="live_imgsz" type="number" min="320" max="1920" step="32"></label>
+  <section class="card">
+    <h3 id="compareTitleA">Model A</h3>
+    <div class="metrics">
+      <div class="metric"><small>Precision</small><b id="cmpAPrecision">—</b></div>
+      <div class="metric"><small>Recall</small><b id="cmpARecall">—</b></div>
+      <div class="metric"><small>mAP@50</small><b id="cmpAMap50">—</b></div>
+      <div class="metric"><small>mAP@50–95</small><b id="cmpAMap95">—</b></div>
+      <div class="metric"><small>Live processed FPS</small><b id="cmpAFps">—</b></div>
+      <div class="metric"><small>Inference ms</small><b id="cmpALatency">—</b></div>
+      <div class="metric"><small>Live boxes</small><b id="cmpABoxes">—</b></div>
+    </div>
+    <img id="cmpAImage" alt="Model A predicted shuttle boxes" style="width:100%;max-height:420px;object-fit:contain;min-height:200px;background:#08131c;border-radius:9px">
+    <p id="cmpAStatus" class="muted">Waiting for model A.</p>
+    <details><summary>Model A diagnostic log</summary><pre id="cmpALog"></pre></details>
+  </section>
+  <section class="card">
+    <h3 id="compareTitleB">Model B</h3>
+    <div class="metrics">
+      <div class="metric"><small>Precision</small><b id="cmpBPrecision">—</b></div>
+      <div class="metric"><small>Recall</small><b id="cmpBRecall">—</b></div>
+      <div class="metric"><small>mAP@50</small><b id="cmpBMap50">—</b></div>
+      <div class="metric"><small>mAP@50–95</small><b id="cmpBMap95">—</b></div>
+      <div class="metric"><small>Live processed FPS</small><b id="cmpBFps">—</b></div>
+      <div class="metric"><small>Inference ms</small><b id="cmpBLatency">—</b></div>
+      <div class="metric"><small>Live boxes</small><b id="cmpBBoxes">—</b></div>
+    </div>
+    <img id="cmpBImage" alt="Model B predicted shuttle boxes" style="width:100%;max-height:420px;object-fit:contain;min-height:200px;background:#08131c;border-radius:9px">
+    <p id="cmpBStatus" class="muted">Waiting for model B.</p>
+    <details><summary>Model B diagnostic log</summary><pre id="cmpBLog"></pre></details>
+  </section>
 </div>
-<div class="buttons"><button id="saveLiveSettings" class="primary">Save live detection settings</button></div>
-<div class="buttons">
-<button id="startLive" class="primary">Start live YOLO</button>
-<button id="stopLive" class="danger">Stop live YOLO</button>
+<p class="muted">Both live detectors subscribe to the same robot RGB topic, but their displayed frames may be slightly different in time. Use the held-out validation plot for an apples-to-apples accuracy comparison.</p>
 </div>
-<div class="metrics">
-<div class="metric"><small>YOLO processed FPS</small><b id="liveFps">—</b></div>
-<div class="metric"><small>Inference latency</small><b id="liveLatency">—</b><small>ms/frame</small></div>
-<div class="metric"><small>Boxes (last frame)</small><b id="liveBoxCount">—</b></div>
-</div>
-<p id="liveStatus" class="muted">Start a saved camera inspection scene and select a model.</p>
-</section>
-<section class="card">
-<h2>Actual detection bounding boxes</h2>
-<img id="liveImage" alt="Gazebo RGB annotated with YOLO's actual predicted shuttle bounding boxes" style="width:100%;max-height:500px;object-fit:contain;background:#08131c;border-radius:9px;min-height:220px">
-<p id="liveBoxes" class="muted">No detections.</p>
-<details><summary>YOLO inference logs</summary><pre id="liveLog">No inference process.</pre></details>
-</section>
-</div>
-</div>
-
-<section class="card">
-  <h2>Gazebo / bridge logs</h2>
-  <details><summary>Process status</summary><pre id="processLog">Waiting</pre></details>
-  <details><summary>Gazebo server</summary><pre id="gazeboLog">Waiting</pre></details>
-  <details><summary>Image bridge / preview</summary><pre id="sensorLog">Waiting</pre></details>
-  <details><summary>GUI client</summary><pre id="guiLog">Not opened</pre></details>
-</section>
-</main>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
