@@ -741,18 +741,38 @@ function renderWorkflow(s){
   " · "+liveCapture.boxes+" ground-truth boxes · "+liveCapture.frame:
   "Waiting for a successfully saved image and label pair.";
  const ms=progress.last_timings_ms||{};
- $("captureTimings").textContent=Object.keys(ms).length?
-  Object.entries(ms).map(([k,v])=>k.replaceAll("_"," ")+": "+
-    Number(v).toFixed(1)+" ms").join("  |  "):
+ const stages=Object.entries(ms).filter(([,v])=>Number.isFinite(Number(v)));
+ const slowest=stages.reduce((a,b)=>Number(a[1])>Number(b[1])?a:b,["",0]);
+ const hints={
+  wait_rgb_ms:"Rendering/transport dominates: lower RGB resolution or reduce Gazebo graphics load; keep the fresh/stable CRC check enabled.",
+  write_ms:"JPEG/disk writes dominate: consider lower JPEG quality or faster storage.",
+  preview_ms:"Dashboard overlay encoding dominates: use a smaller preview or preview less often.",
+  label_ms:"Mesh projection dominates: reduce shuttle count or optimize projected candidate culling.",
+  teleport_ms:"Gazebo pose service dominates: investigate Gazebo load and service response.",
+  trigger_ms:"Gazebo trigger delivery dominates: investigate sensor load and transport."
+ };
+ $("captureTimings").textContent=stages.length?
+  stages.map(([k,v])=>k.replaceAll("_"," ")+": "+
+    Number(v).toFixed(1)+" ms").join("  |  ")+
+   (slowest[0]?"  |  Largest measured stage: "+slowest[0].replaceAll("_"," ")+
+    ". "+(hints[slowest[0]]||""):""):
   "No capture timing measurements yet.";
  $("captureLog").textContent=w.task_logs?.capture||"No capture logs yet";
+ $("startInspect").disabled=!!capture.running||
+   summary.training_ready!==true||!!w.tasks?.inspect?.running;
+ $("stopInspect").disabled=!w.tasks?.inspect?.running;
  const approved=inspection.passed===true;
  $("labelStatus").textContent=inspection.dataset?
   (approved?"Structural PASS · ":"Structural FAIL · ")+
   Object.entries(inspection.splits||{}).map(([name,x])=>
     name+" "+x.images+" images / "+x.boxes+" boxes").join(" · ")+
   " · "+(inspection.negative_images??0)+" negatives":
-  "Run the Label Inspector on a completed dataset before training or validation.";
+  summary.status&&summary.training_ready?
+    "Capture finalized ("+summary.status+"). Ready for structural label inspection.":
+  summary.status?
+    "Capture finalized ("+summary.status+
+    "), but usable training requires paired images/labels and at least one train and val image.":
+    "Generate a dataset, finish capture, then inspect labels before training.";
  $("labelDetails").textContent=(inspection.stdout_tail||"")+
     (inspection.stderr_tail?"\n"+inspection.stderr_tail:"")+
     "\n"+(w.task_logs?.inspect||"");
