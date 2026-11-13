@@ -6,7 +6,7 @@ import subprocess
 
 
 def _section(source, label):
-    match = re.search(r"\\b" + re.escape(label) + r"\\s*\\{", source)
+    match = re.search(r"\b" + re.escape(label) + r"\s*\{", source)
     if not match:
         return None
     pos, level = match.end(), 1
@@ -21,7 +21,7 @@ def _section(source, label):
 
 
 def _number(text, field, default):
-    match = re.search(r"\\b" + field + r"\\s*:\\s*([-+0-9.eE]+)", text)
+    match = re.search(r"\b" + field + r"\s*:\s*([-+0-9.eE]+)", text)
     return float(match.group(1)) if match else default
 
 
@@ -30,7 +30,7 @@ def parse_poses(text, names):
     poses = {}
     cursor = 0
     while True:
-        found = re.search(r"\\bpose\\s*\\{", text[cursor:])
+        found = re.search(r"\bpose\s*\{", text[cursor:])
         if not found:
             break
         start = cursor + found.start()
@@ -38,7 +38,7 @@ def parse_poses(text, names):
         if body is None:
             break
         cursor = start + found.end() + len(body) + 1
-        name_match = re.search(r'\\bname\\s*:\\s*"([^"]+)"', body)
+        name_match = re.search(r'\bname\s*:\s*"([^"]+)"', body)
         if not name_match or name_match.group(1) not in names:
             continue
         p = _section(body, "position")
