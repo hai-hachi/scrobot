@@ -6,10 +6,13 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import signal
 import sys
 import threading
 import time
+
+import yaml
 
 from dataset_world import build_dataset
 from lab_configs import read as read_lab
@@ -25,8 +28,15 @@ MODELS = HERE / "models/pretrained"
 ARTIFACTS = HERE / "artifacts/models"
 RUNS = HERE / "runs/detect"
 DATAROOT = ROOT / "evaluation_results/yolo_lab/datasets"
-DATASET_ID = re.compile(r"^dataset_[0-9]{8}T[0-9]{6}[0-9]{6}Z$")
+DATASET_ID = re.compile(r"^dataset_[0-9]{8}T[0-9]{12}Z(?:__[a-z0-9][a-z0-9_-]{0,39})?$")
+DATASET_SLUG = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
 MODEL_CHOICE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,128}$")
+BASELINE_LABELS = {
+    "best.pt": "Legacy YOLO shuttle baseline (best.pt; architecture unverified)",
+    "yolo11n_shuttle.pt": "YOLO11n Nano - shuttlecock detector",
+    "yolo11s-ball.pt": "YOLO11s Small - ball detector (not shuttle-specific)",
+}
+
 
 
 def _timestamp():
@@ -89,7 +99,9 @@ class Workflow:
         if RUNS.is_dir():
             files.extend(sorted(RUNS.glob("*/weights/best.pt")))
         return [{"id": str(p.resolve().relative_to(HERE.resolve())),
-                 "name": p.name if p.parent != ARTIFACTS else p.stem,
+                 "name": (BASELINE_LABELS.get(p.name, p.name)
+                          if p.parent == MODELS
+                          else (p.stem if p.parent == ARTIFACTS else p.name)),
                  "bytes": p.stat().st_size}
                 for p in files if p.is_file() and HERE.resolve() in p.resolve().parents]
 
@@ -293,8 +305,8 @@ class Workflow:
         self.lab.launch("validate", [
             self.training_python, str(SCRIPTS / "validate_model.py"),
             str(model), "--data", str(dataset / "data.yaml"),
-            "--device",device, "--imgsz",str(yolo["imgsz"]),
-            "--batch",str(yolo["batch"]), "--split",split,
+            "--device",device, "--imgsz",str(yolo["validation_imgsz"]),
+            "--batch",str(yolo["validation_batch"]), "--split",split,
             "--metrics-json",str(report)])
         self.lab.phase = "validating"
         self.stage = "validate"
@@ -319,7 +331,7 @@ class Workflow:
             sys.executable, str(SCRIPTS / "live_detection.py"),
             "--model",str(model), "--output",str(live_dir),
             "--confidence",str(settings["confidence"]),
-            "--imgsz",str(settings["imgsz"]), "--max-rate","15"])
+            "--imgsz",str(settings["live_imgsz"]), "--max-rate","15"])
         self.stage = "live"
         self.selected_model = model_choice
         return {"started": True,"model":str(model)}
