@@ -122,14 +122,14 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
   </section>
 </div>
 <section class="card">
-  <h2>Old <code>yoloshuttle</code> workflow — review before integration</h2>
-  <p class="note"><strong>Not yet connected to buttons:</strong> the older dataset capture, automatic mesh projection labels, training and validation pipelines. They are documented here so we can design the new stages without accidentally training against stale camera frames.</p>
+  <h2>Integrated workflow from the original <code>yoloshuttle</code> repository</h2>
+  <p class="muted">The scripts below have been consolidated under <code>tools/yolo_lab/</code> and are now connected to the five workflow tabs. The dataset label inspector is required before training. The original training scripts remain available for reproducible direct command-line use.</p>
   <table><thead><tr><th>Stage</th><th>Original implementation</th><th>Key check</th></tr></thead><tbody>
-    <tr><td>Generate images</td><td><code>scrobot_debug/yolo_dataset_fast_capture.py</code></td><td>Camera pose, deterministic shuttles and fresh Ogre render</td></tr>
+    <tr><td>Generate images</td><td><code>tools/yolo_lab/scripts/dataset_capture.py</code></td><td>Camera pose, deterministic shuttles and fresh Ogre render</td></tr>
     <tr><td>Label automatically</td><td>Same capture script, exact shuttle STL projected using CameraInfo</td><td>One YOLO <code>.txt</code> per image; empty negative frames</td></tr>
-    <tr><td>Validate dataset</td><td><code>yoloshuttle/scripts/validate_generated_dataset.py</code></td><td>Train/val/test pairs, duplicates, bbox previews</td></tr>
-    <tr><td>Train</td><td><code>yoloshuttle/scripts/train_finetune.py</code></td><td>Fine-tune baseline <code>best.pt</code>; export stable model</td></tr>
-    <tr><td>Validate</td><td><code>yoloshuttle/scripts/validate_model.py</code></td><td>Precision, recall and mAP; compare on real D435i</td></tr>
+    <tr><td>Validate dataset</td><td><code>tools/yolo_lab/scripts/validate_generated_dataset.py</code></td><td>Train/val/test pairs, duplicates, bbox previews</td></tr>
+    <tr><td>Train</td><td><code>tools/yolo_lab/scripts/train_finetune.py</code></td><td>Fine-tune baseline <code>best.pt</code>; export stable model</td></tr>
+    <tr><td>Validate</td><td><code>tools/yolo_lab/scripts/validate_model.py</code></td><td>Precision, recall and mAP; compare on real D435i</td></tr>
   </tbody></table>
   <p class="muted"><a href="https://github.com/hai-hachi/yoloshuttle" target="_blank" rel="noopener noreferrer">Open original yoloshuttle repository</a>
   · <a href="https://github.com/hai-hachi/scrobot/blob/real-comparison/src/scrobot_debug/scripts/yolo_dataset_fast_capture.py" target="_blank" rel="noopener noreferrer">Open original Gazebo capture code</a></p>
