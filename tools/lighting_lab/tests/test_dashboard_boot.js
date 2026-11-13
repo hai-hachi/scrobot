@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const path = require("node:path");
 
-const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
 const match = html.match(/<script>([\s\S]*?)<\/script>/);
 assert(match, "Missing inline application script");
 

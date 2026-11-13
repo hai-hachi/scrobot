@@ -15,7 +15,7 @@ from scene import (
 )
 from config import read_lab_config
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 WORLD = ROOT / "src/scrobot_simulation/worlds/badminton_court.sdf"
 XACRO = "{http://www.ros.org/wiki/xacro}"
 

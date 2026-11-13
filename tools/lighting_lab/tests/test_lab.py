@@ -18,7 +18,7 @@ from performance import (
 )
 from server import configure_warp_safe_network
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 SOURCE = ROOT / "src/scrobot_simulation/worlds/badminton_court.sdf"
 HTML = ROOT / "tools/lighting_lab/index.html"
 
