@@ -160,6 +160,8 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
    <div class="stats">
     <div class="stat"><small>Detection success</small><strong id="tagHit">—</strong><small>% of processed detector frames</small></div>
     <div class="stat"><small>Detector throughput</small><strong id="tagFps">—</strong><small>frames/s, wall time</small></div>
+    <div class="stat"><small>Image → detection P50</small><strong id="tagP50">—</strong><small>ms, end-to-end ROS stages</small></div>
+    <div class="stat"><small>Image → detection P95</small><strong id="tagP95">—</strong><small>ms, end-to-end ROS stages</small></div>
     <div class="stat"><small>3D position RMSE</small><strong id="tagPosError">—</strong><small>m versus true pose</small></div>
     <div class="stat"><small>Range RMSE</small><strong id="tagRangeError">—</strong><small>m in camera frame</small></div>
     <div class="stat"><small>Bearing RMSE</small><strong id="tagYawError">—</strong><small>degrees of camera bearing</small></div>
@@ -214,7 +216,7 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
    <div><h3>Distance: selected error and detection percentage</h3><canvas id="distanceChart" width="620" height="225"></canvas></div>
    <div><h3>Heading offset: selected error and detection percentage</h3><canvas id="headingChart" width="620" height="225"></canvas></div>
   </div>
-  <div class="scroll"><table><thead><tr><th>Distance / angle</th><th>Detector frames</th><th>Detection %</th><th>3D RMSE (m)</th><th>Bearing RMSE (°)</th><th>Detector FPS</th></tr></thead><tbody id="sweepRows"></tbody></table></div>
+  <div class="scroll"><table><thead><tr><th>Distance / angle</th><th>Detector frames</th><th>Detection %</th><th>3D RMSE (m)</th><th>Bearing RMSE (°)</th><th>Detector FPS</th><th>P95 latency (ms)</th></tr></thead><tbody id="sweepRows"></tbody></table></div>
   <p class="hint">Each point is a static Gazebo pose. Empty or missed detections are recorded as missing, never zero error. All sweep JSON files are saved under <code>evaluation_results/camera_lab/tag_sweeps/</code>.</p>
  </section>
 </section>
@@ -468,7 +470,7 @@ function renderSweep(sweep){
   const cells=[fmt(row.value,2)+" "+(sweep.unit||""),
       row.detector_frames||0,fmt(row.detection_pct,1),
       fmt(row.position_rmse_m,4),fmt(row.bearing_rmse_deg,2),
-      fmt(row.detector_fps,1)];
+      fmt(row.detector_fps,1),fmt(row.image_to_detection_p95_ms,1)];
   for(const text of cells){
     const td=document.createElement("td");td.textContent=text;tr.append(td);
   }
@@ -489,6 +491,8 @@ function renderTag(s){
  const obs=s.tag_observation||{},r=s.resources||{};
  $("tagHit").textContent=fmt(obs.detection_pct,1);
  $("tagFps").textContent=fmt(obs.detector_fps,1);
+ $("tagP50").textContent=fmt(obs.image_to_detection_p50_ms,1);
+ $("tagP95").textContent=fmt(obs.image_to_detection_p95_ms,1);
  $("tagPosError").textContent=fmt(obs.position_rmse_m,4);
  $("tagRangeError").textContent=fmt(obs.range_rmse_m,4);
  $("tagYawError").textContent=fmt(obs.bearing_rmse_deg,2);
