@@ -161,7 +161,8 @@ class TagLabTests(TestCase):
                 "gazebo","image_bridge","info_bridge",
                 "monitor","tag_monitor","detector"])
             self.assertIn("apriltag_ros",jobs[-1][1])
-            self.assertIn("tag_color",str(jobs[-1][1]))
+            self.assertIn("image_rect:=/camera_lab/tag/image_rect",str(jobs[-1][1]))
+            self.assertIn("camera_info:=/camera_lab/tag/camera_info",str(jobs[-1][1]))
             self.assertNotIn("perception_labs",str(jobs))
             self.assertEqual(lab.tag_epoch,1)
         finally:
@@ -220,8 +221,8 @@ class TagLabTests(TestCase):
         # from Gazebo caused zero detection-array messages even with RGB.
         self.assertIn('"/camera_lab/tag/image_rect"',monitor)
         self.assertIn('"/camera_lab/tag/camera_info"',monitor)
-        self.assertIn('"/camera_lab/tag/image_rect"',server_text)
-        self.assertIn('"/camera_lab/tag/camera_info"',server_text)
+        self.assertIn('"image_rect:=/camera_lab/tag/image_rect"',server_text)
+        self.assertIn('"camera_info:=/camera_lab/tag/camera_info"',server_text)
         self.assertNotIn("image_rect:=/camera_lab/tag_color",server_text)
         self.assertNotIn("camera_info:=/camera_lab/color/camera_info",
                          server_text)
