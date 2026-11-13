@@ -322,9 +322,9 @@ class TagLabTests(TestCase):
                 "image_to_detection_p95_ms":20.0,
             }
         with tempfile.TemporaryDirectory() as td:
-            with mock.patch.object(server,"RESULTS",Path(td)),\\
-                 mock.patch.object(lab,"place_robot",side_effect=move),\\
-                 mock.patch.object(lab,"tag_status",side_effect=measured):
+            with (mock.patch.object(server,"RESULTS",Path(td)),
+                  mock.patch.object(lab,"place_robot",side_effect=move),
+                  mock.patch.object(lab,"tag_status",side_effect=measured)):
                 lab._run_sweep(1,ClockOnlyWait(),"distance",0,
                                [.6,1.0,1.4],2.0,1.0)
             self.assertEqual(lab.sweep["state"],"complete")
