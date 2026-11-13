@@ -30,7 +30,7 @@ def validate(tag):
         raise ValueError("Unexpected AprilTag settings keys")
     result = {}
     for key, low, high in (
-        ("size", 0.04, 0.25), ("height", 0.12, 2.50),
+        ("size", 0.04, 0.25), ("height", 0.12, 1.50),
         ("noise_sigma", 0.0, 50.0), ("robot_x", -7.2, 7.2),
         ("robot_y", -3.6, 3.6), ("robot_yaw", -180.0, 180.0),
     ):
@@ -41,6 +41,8 @@ def validate(tag):
         if not math.isfinite(value) or not low <= value <= high:
             raise ValueError(key + f" must be in [{low}, {high}]")
         result[key] = value
+    if result["height"] < result["size"] * PLATE_QUIET_BORDER_FACTOR / 2 + 0.008:
+        raise ValueError("Tag height must clear the court floor by 8 mm at the selected plate size")
     if type(tag["tag_id"]) is not int or tag["tag_id"] not in POLES:
         raise ValueError("Tag ID must be 0..3")
     result["tag_id"] = tag["tag_id"]
