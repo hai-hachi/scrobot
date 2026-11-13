@@ -30,6 +30,11 @@ def stamp(header):
     return header.stamp.sec + header.stamp.nanosec * 1e-9
 
 
+def stamp_key(header):
+    """Exact sensor timestamp, avoiding float-rounding between image and TF."""
+    return (int(header.stamp.sec), int(header.stamp.nanosec))
+
+
 def summarize(values):
     if not values:
         return None
@@ -88,6 +93,11 @@ class TagMonitor(Node):
         self.rgb_resolution = None
         self.preview_resolution = None
         self.latencies_ms = deque(maxlen=300)
+        # Only data derived from RGB frames received AFTER a pose-change
+        # epoch and the short settling period may contribute to accuracy.
+        # This prevents in-flight pre-relocation detections/TF from leaking
+        # into the freshly reset RMSE.
+        self.fresh_image_stamps = deque(maxlen=250)
         self.latest_observed = None
         self.tf_tag_messages = 0
         self.tf_parent_rejected = 0
@@ -99,6 +109,7 @@ class TagMonitor(Node):
         self.rgb.clear()
         self.detected.clear()
         self.latest_tfs.clear()
+        self.last_preview = 0.0
 
     def read_control(self):
         try:
@@ -192,6 +203,8 @@ class TagMonitor(Node):
             self.rgb_count += 1
         received_wall = time.monotonic()
         self.rgb.append((stamp(out.header), out, received_wall))
+        if info is not None and received_wall - self.reset_wall >= .35:
+            self.fresh_image_stamps.append(stamp_key(out.header))
         self.rgb_times.append(received_wall)
         self.rgb_resolution = [int(out.width), int(out.height)]
         self.last_image_frame = out.header.frame_id
@@ -206,6 +219,8 @@ class TagMonitor(Node):
             return
         now = time.monotonic()
         if now - self.reset_wall < .35:
+            return
+        if stamp_key(msg.header) not in self.fresh_image_stamps:
             return
         self.tag_frames += 1
         self.det_times.append(now)
@@ -255,6 +270,8 @@ class TagMonitor(Node):
             if tf.child_frame_id not in {
                 f"observed_tag_{i}" for i in range(4)
             }:
+                continue
+            if stamp_key(tf.header) not in self.fresh_image_stamps:
                 continue
             t = tf.transform.translation
             q = tf.transform.rotation
