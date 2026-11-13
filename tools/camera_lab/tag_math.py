@@ -198,6 +198,18 @@ def rotate_quaternion(q, v):
             v[2] + w*tz + x*ty - y*tx)
 
 
+def optical_frame_matches(tf_parent, image_frame):
+    """Only compare TF translation directly when its frame matches the image.
+
+    Gazebo Harmonic's ros_gz_image bridge can publish 'color_optical_frame'
+    even if the sensor SDF requests 'camera_color_optical_frame'.
+    We must use the ACTUAL incoming image frame, not a hard-coded alias.
+    """
+    a = str(tf_parent or "").lstrip("/")
+    b = str(image_frame or "").lstrip("/")
+    return bool(a and b and a == b and a.endswith("_optical_frame"))
+
+
 def comparison(config, position, quaternion=None):
     """Pose error vs known Gazebo geometry at the commanded static base pose.
 
