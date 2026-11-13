@@ -9,13 +9,15 @@ import xml.etree.ElementTree as ET
 
 import yaml
 from modes import world
+from lighting_source import apply_court_world
 from tag_math import CAMERA_OFFSET, CAMERA_PITCH, mount_radius
 
 ROOT = Path(__file__).resolve().parents[2]
 LANDMARKS = ROOT / "src/scrobot_localization/config/court_landmarks.yaml"
 COURT = ROOT / "src/scrobot_simulation/worlds/badminton_court.sdf"
 GENERATOR = ROOT / "src/scrobot_simulation/scripts/generate_court_apriltags.py"
-COURT_MODELS = ("court_floor", "court_markings", "net_assembly")
+COURT_MODELS = ("court_floor", "court_markings", "net_assembly",
+                "simulation_safety_boundary")
 
 
 def detector_yaml(settings, destination):
@@ -84,6 +86,9 @@ def tag_world(cam_settings, tag_config, destination, tag_model):
     if tags is None:
         raise RuntimeError("Generated tag model is missing")
     generated.append(copy.deepcopy(tags))
+    # Correctly reproduce the saved Lighting Lab geometry and 2x3 (or
+    # user-specified) light array, not the old single directional sun.
+    apply_court_world(generated)
     rig = generated.find("./model[@name='camera_rig']")
     rig.find("pose").text = (
         f'{tag_config["robot_x"]} {tag_config["robot_y"]} 0 0 0 '
