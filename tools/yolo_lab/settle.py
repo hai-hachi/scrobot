@@ -37,7 +37,7 @@ def parse_poses(text, names):
         body = _section(text[start:], "pose")
         if body is None:
             break
-        cursor = start + found.end() + len(body) + 1
+        cursor = start + (found.end() - found.start()) + len(body) + 1
         name_match = re.search(r'\bname\s*:\s*"([^"]+)"', body)
         if not name_match or name_match.group(1) not in names:
             continue
