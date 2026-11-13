@@ -231,6 +231,9 @@ class Workflow:
         if name not in ("capture", "inspect", "train", "validate", "live", "import"):
             raise ValueError("Unsupported task to stop")
         self.lab._terminate(name)
+        if name == "live":
+            for item in ("live.jpg","live_status.json"):
+                (self.lab_output / "live" / item).unlink(missing_ok=True)
         if name == "capture":
             self.stage = "dataset_stopped"
         else:
@@ -301,6 +304,11 @@ class Workflow:
     def progress(self):
         directory=self.current_dataset()
         status = _read_json(self.lab_output / "capture_progress.json")
+        # This file describes only the most recent collector process.
+        # When inspecting an older dataset, never mix its summary with
+        # the live progress of a different dataset.
+        if directory is None or status.get("output_dir") != str(directory):
+            status = {}
         summary = _read_json(directory/"dataset_summary.json") if directory else {}
         inspection = _read_json(directory/"inspection.json") if directory else {}
         live = _read_json(self.lab_output/"live/live_status.json")
