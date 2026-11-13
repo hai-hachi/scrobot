@@ -41,6 +41,30 @@ class LabYamlContracts(unittest.TestCase):
                      validator=lambda x: (_ for _ in ()).throw(ValueError("bad")))
             self.assertEqual(camera.read_bytes(),old)
 
+    def test_lab_yaml_ownership_is_outside_production_ros_packages(self):
+        import lab_configs
+        expected={"lighting","camera","apriltags","mobility","odometry","yolo"}
+        self.assertEqual(set(lab_configs.FILES),expected)
+        labdir=ROOT/"tools/configs/labs"
+        for lab in expected:
+            with self.subTest(lab=lab):
+                saved=path_for(lab)
+                self.assertEqual(saved.parent,labdir)
+                self.assertTrue(saved.name.endswith("_lab.yaml"))
+                self.assertFalse(
+                    (ROOT/"src/scrobot_simulation/config"/saved.name).exists())
+        for name in ("camera_calibration.yaml","mobility_calibration.yaml",
+                     "odometry_calibration.yaml","shuttle_spawn.yaml"):
+            self.assertTrue(
+                (ROOT/"src/scrobot_simulation/config"/name).is_file())
+
+    def test_shared_config_compatibility_reexports_same_registry(self):
+        import shared.lab_configs as shared
+        import lab_configs as legacy
+        self.assertIs(legacy.FILES,shared.FILES)
+        for lab in shared.FILES:
+            self.assertEqual(shared.path_for(lab),legacy.path_for(lab))
+
     def test_cross_lab_yaml_rejects_cross_label_and_bad_schema(self):
         with tempfile.TemporaryDirectory() as d:
             file=Path(d)/"shared.yaml"
