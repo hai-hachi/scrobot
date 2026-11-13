@@ -1,22 +1,23 @@
-"""Pure, validated per-lab configuration (camera settings belong to Camera Lab)."""
+"""Validated YOLO Lab choices; shuttle geometry belongs to shuttle_spawn.yaml."""
 from __future__ import annotations
 
 import math
+
+from distribution import geometry
+
+# These geometry keys were previously copied into YOLO Lab YAML. Accept but
+# ignore them so old saved labs cannot silently override production geometry.
+LEGACY_GEOMETRY_FIELDS = frozenset({
+    "single_x", "single_y", "cluster_sigma_x", "cluster_sigma_y",
+    "cluster_left_y", "cluster_right_y", "cluster_line_x",
+})
 
 DEFAULT = {
     "shuttle_count": 12,
     "spawn_mode": "random",
     "random_density": "uniform",
     "random_fraction": 0.10,
-    "single_x": 0.0,
-    "single_y": 0.0,
-    "cluster_sigma_x": 0.10,
-    "cluster_sigma_y": 0.90,
-    "cluster_left_y": 1.525,
-    "cluster_right_y": -1.525,
-    "cluster_line_x": [6.70, 5.94, 1.98, 0.0, -1.98, -5.94, -6.70],
-    "cluster_weights": [[1.0,0.0],[0.0,1.0],[0.2,0.8],[1.0,0.3],
-                        [0.7,0.3],[0.0,1.0],[1.0,0.0]],
+    "cluster_weights": geometry()["cluster"]["weights"],
     "settle_seconds": 3.0,
     "seed": 42,
     "robot_x": 2.0,
@@ -30,10 +31,12 @@ DEFAULT = {
     "confidence": 0.10,
 }
 
+
 def validate(raw):
-    if not isinstance(raw, dict) or set(raw) - set(DEFAULT):
+    if not isinstance(raw, dict) or set(raw) - (
+            set(DEFAULT) | LEGACY_GEOMETRY_FIELDS):
         raise ValueError("Invalid YOLO Lab YAML settings fields")
-    result = {**DEFAULT, **raw}
+    result = {**DEFAULT, **{k: v for k, v in raw.items() if k in DEFAULT}}
     if result["spawn_mode"] not in ("single", "random", "cluster", "mixed"):
         raise ValueError("Invalid spawn mode")
     if result["random_density"] not in ("uniform", "center", "net"):
@@ -53,13 +56,7 @@ def validate(raw):
     if not any(v > 0 for row in parsed for v in row):
         raise ValueError("At least one cluster weight must be positive")
     result["cluster_weights"] = parsed
-    line_x = result["cluster_line_x"]
-    if not isinstance(line_x, list) or len(line_x) != 7 or any(
-            type(v) not in (int, float) or not math.isfinite(v) or abs(v) > 7
-            for v in line_x):
-        raise ValueError("Invalid cluster line coordinates")
-    result["cluster_line_x"] = [float(v) for v in line_x]
-    for key, lo, hi in (
+    for key, low, high in (
         ("shuttle_count", 1, 60),
         ("seed", 0, 2147483647),
         ("dataset_images", 50, 50000),
@@ -68,18 +65,12 @@ def validate(raw):
         ("imgsz", 320, 1920),
     ):
         value = result[key]
-        if type(value) is not int or not lo <= value <= hi:
-            raise ValueError(f"{key} must be an integer in [{lo}, {hi}]")
+        if type(value) is not int or not low <= value <= high:
+            raise ValueError(f"{key} must be an integer in [{low}, {high}]")
     if result["imgsz"] % 32:
         raise ValueError("imgsz must be a multiple of 32")
-    for key, lo, hi in (
+    for key, low, high in (
         ("random_fraction", 0, 1),
-        ("single_x", -6.7, 6.7),
-        ("single_y", -3.05, 3.05),
-        ("cluster_sigma_x", 0, 4),
-        ("cluster_sigma_y", 0, 4),
-        ("cluster_left_y", 0, 3.05),
-        ("cluster_right_y", -3.05, 0),
         ("settle_seconds", 0.5, 15.0),
         ("robot_x", -15.0, 15.0),
         ("robot_y", -12.0, 12.0),
@@ -88,7 +79,7 @@ def validate(raw):
         ("confidence", 0.001, 1.0),
     ):
         value = result[key]
-        if type(value) not in (float, int) or not math.isfinite(value) or not lo <= value <= hi:
-            raise ValueError(f"{key} must be a finite number in [{lo}, {hi}]")
+        if type(value) not in (float, int) or not math.isfinite(value) or not low <= value <= high:
+            raise ValueError(f"{key} must be a finite number in [{low}, {high}]")
         result[key] = float(value)
     return result
