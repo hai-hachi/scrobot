@@ -626,6 +626,79 @@ class TagLabTests(TestCase):
         self.assertIn('/api/tag/geometry',html)
         self.assertIn('result.updated_tag_ids.length',html)
 
+    def test_gazebo_gui_only_client_lifecycle_keeps_server_running(self):
+        lab=server.Lab()
+        gazebo=mock.Mock(pid=40001)
+        gazebo.poll.return_value=None
+        lab.procs["gazebo"]=gazebo
+        gui=mock.Mock(pid=40002)
+        gui.poll.return_value=None
+        handle=mock.Mock()
+        def launch(name,args):
+            self.assertEqual(name,"gazebo_gui")
+            self.assertEqual(args,["gz","sim","-g","-v","3"])
+            self.assertNotIn("-s",args)
+            self.assertNotIn("world.sdf",args)
+            lab.procs[name]=gui
+            lab.logs[name]=handle
+        with (mock.patch.dict(server.os.environ,{"DISPLAY":":0"}),
+              mock.patch.object(lab,"launch",side_effect=launch) as spawned):
+            result=lab.open_gazebo_gui()
+            self.assertTrue(result["open"])
+            self.assertFalse(result["already_open"])
+            self.assertTrue(result["open"] and lab.procs["gazebo"] is gazebo)
+            self.assertEqual(lab.environment()["GZ_PARTITION"],
+                             f"scrobot_camera_lab_{server.os.getuid()}_82")
+            again=lab.open_gazebo_gui()
+            self.assertTrue(again["already_open"])
+            spawned.assert_called_once()
+        with mock.patch.object(server,"stop_process") as terminate:
+            closed=lab.close_gazebo_gui()
+            self.assertFalse(closed["open"])
+            terminate.assert_called_once_with(gui)
+            self.assertTrue(handle.close.called)
+            self.assertIs(lab.procs["gazebo"],gazebo)
+            self.assertNotIn("gazebo_gui",lab.procs)
+            self.assertTrue(lab.close_gazebo_gui()["already_closed"])
+
+    def test_gazebo_gui_requires_existing_simulation_and_display(self):
+        lab=server.Lab()
+        with self.assertRaisesRegex(ValueError,"Start the Camera or AprilTags"):
+            lab.open_gazebo_gui()
+        gazebo=mock.Mock(pid=45001)
+        gazebo.poll.return_value=None
+        lab.procs["gazebo"]=gazebo
+        with mock.patch.dict(server.os.environ,
+                             {"DISPLAY":"","WAYLAND_DISPLAY":""}):
+            with self.assertRaisesRegex(ValueError,"No graphical desktop display"):
+                lab.open_gazebo_gui()
+        self.assertNotIn("gazebo_gui",lab.procs)
+
+    def test_lab_stop_closes_gui_before_gazebo_server(self):
+        lab=server.Lab()
+        gazebo=mock.Mock(pid=46001)
+        gui=mock.Mock(pid=46002)
+        lab.procs={"gazebo":gazebo,"gazebo_gui":gui}
+        lab.logs={"gazebo":mock.Mock(),"gazebo_gui":mock.Mock()}
+        with mock.patch.object(server,"stop_process") as terminate:
+            lab.stop()
+            self.assertEqual(terminate.call_args_list,
+                             [mock.call(gui),mock.call(gazebo)])
+        self.assertFalse(lab.procs)
+
+    def test_gazebo_ui_button_uses_independent_host_endpoints(self):
+        html=(LAB/"index.html").read_text()
+        source=(LAB/"server.py").read_text()
+        for required in ('id="toggleGazeboGui"','id="gazeboGuiStatus"',
+                         'id="gazeboGuiLog"'):
+            self.assertIn(required,html)
+        for endpoint in ("/api/gazebo-gui/open","/api/gazebo-gui/close"):
+            self.assertIn(endpoint,html)
+            self.assertIn(endpoint,source)
+        self.assertIn('"gazebo_gui": gui_state',source)
+        self.assertIn('["gz", "sim", "-g", "-v", "3"]',source)
+        self.assertIn('stop_process(client)',source)
+
     def test_ui_tag_controls_and_browser_js(self):
         html=(LAB/"index.html").read_text()
         for key in ("tagPane","courtMap","tagSize","tagHeight","noiseSigma",
