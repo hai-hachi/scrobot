@@ -64,8 +64,15 @@ start a fresh dataset to take the new snapshot.
 and image throughput *after* the `ros_gz_image` bridge.
 
 **Scene.** Generates a full Lighting Lab-calibrated court and deterministic
-production shuttle STL models at sampled positions; useful for visually
-checking the court, shuttle scale, lighting and robot camera. It is only
+production shuttle models using their real collision meshes. The scene
+supports single, random (uniform/center/net), seven-line weighted clusters
+(14 independent left/right weights), and mixed distributions. After an
+adjustable dynamic interval, Gazebo poses must stabilize; the world is then
+reloaded with all shuttle models static at their actual settled 3D poses.
+If pose collection or stability checks fail, the scene stays dynamic and
+shows a settling error rather than inventing static poses. The overhead
+robot pose selector supports click-to-place and drag-to-set-yaw, and the
+camera uses the real robot camera mount transform. It is only
 a scene preview, **not an automatically labelled dataset**.
 
 **1 · Dataset Generator.** Launches a fresh triggered-sensor Gazebo world
@@ -193,3 +200,28 @@ python3 -m unittest discover -s tools/yolo_lab/tests -p 'test_*.py' -v
 
 Generated images, `.pt` imports, run logs and artifacts remain local and
 ignored by Git. The YOLO Lab server binds to localhost only.
+
+
+## Scene debugging and logs
+
+Scene spawn settings are saved in the existing YOLO Lab YAML, including
+a deterministic seed, all 14 cluster weights, line offsets, cluster spread,
+and dynamic settling interval. Previously saved YAMLs are accepted, with
+missing new fields filled using production-compatible defaults.
+
+The browser strips ANSI terminal control sequences and truncated partial
+log lines using `tools/log_text.py`, while the original `*.log` files
+remain untouched for full diagnostics. The same shared sanitizer is used
+by the Camera Lab and the YOLO workflow task logs.
+
+**Caveat:** Static freezing is an intentional Gazebo server reload. The
+camera preview briefly disconnects; the Gazebo GUI is reopened if previously
+active. Run on the workstation to verify physical settling and camera pose:
+
+```bash
+cd ~/scrobot_ws
+git switch real-comparison
+git pull --ff-only
+python3 -m unittest discover -s tools/yolo_lab/tests -p 'test_*.py' -v
+bash tools/yolo_lab/start.sh
+```
