@@ -120,7 +120,7 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
        <input id="tagSize" type="range" min="0.04" max="0.25" step="0.005" value="0.1"/>
        <span id="sizeValue" class="field-readout"></span></div>
     <div><label for="tagHeight">Tag center height</label>
-       <input id="tagHeight" type="range" min="0.12" max="2.50" step="0.02" value="0.15"/>
+       <input id="tagHeight" type="range" min="0.12" max="1.50" step="0.02" value="0.15"/>
        <span id="heightValue" class="field-readout"></span></div>
     <div><label for="noiseSigma">RGB Gaussian pixel noise σ</label>
        <input id="noiseSigma" type="range" min="0" max="50" step="1" value="0"/>
@@ -305,7 +305,6 @@ $("headOn").onclick=()=>{
  const distance=2.0;
  $("robotX").value=(p.x+distance*Math.cos(p.yaw)).toFixed(2);
  $("robotY").value=(p.y+distance*Math.sin(p.yaw)).toFixed(2);
- $("robotYaw").value=((p.yaw*180/Math.PI+360)%360-180).toFixed(0);
  // normalized yaw from tag normal + 180°
  $("robotYaw").value=(((p.yaw*180/Math.PI+180+180)%360)-180).toFixed(0);
  tagGeometry();
