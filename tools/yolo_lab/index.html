@@ -192,6 +192,9 @@ function yoloForm(){
  for(const key of yoloInt.concat(yoloFloat))config[key]=Number($(key).value);
  return config;
 }
+function sameFields(a,b){
+ return !!a&&!!b&&Object.keys(b).every(k=>a[k]===b[k]);
+}
 async function post(route,body){
  const response=await fetch(route,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
  const payload=await response.json();
@@ -217,10 +220,10 @@ $("saveYolo").onclick=()=>action(async()=>{
  notify("Saved "+result.saved+". No production YOLO model was changed.");
 });
 $("startScene").onclick=()=>action(async()=>{
- if(!last?.saved_camera||JSON.stringify(last.saved_camera)!==JSON.stringify(cameraForm())){
+ if(!sameFields(last?.saved_camera,cameraForm())){
   throw Error("Camera controls differ from saved YAML. Use Camera tab → Save Camera Lab YAML first.");
  }
- if(!last?.saved_yolo||JSON.stringify(last.saved_yolo)!==JSON.stringify(yoloForm())){
+ if(!sameFields(last?.saved_yolo,yoloForm())){
   throw Error("YOLO controls differ from saved YAML. Use YOLO Lab → Save YOLO Lab YAML first.");
  }
  const result=await post("/api/scene/start",{});
