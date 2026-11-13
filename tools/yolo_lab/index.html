@@ -685,6 +685,15 @@ $("datasetList").onchange=()=>action(async()=>{
 const checkedDatasets=new Set(),checkedModels=new Set();
 let lastDatasetListSignature="",lastModelListSignature="";
 function selectedItems(group){return Array.from(group);}
+function updateManageButtons(){
+ const running=["capture","inspect","train","validate","validate_a",
+  "validate_b","import","live_a","live_b"].some(n=>
+   last?.workflow?.tasks?.[n]?.running);
+ $("renameDataset").disabled=running||checkedDatasets.size!==1;
+ $("deleteDataset").disabled=running||checkedDatasets.size===0;
+ $("renameModel").disabled=running||checkedModels.size!==1;
+ $("deleteModels").disabled=running||checkedModels.size===0;
+}
 function renderCheckboxList(container,master,records,checked,editable){
  const signature=JSON.stringify(records);
  const isData=container==="datasetChecks";
@@ -703,6 +712,7 @@ function renderCheckboxList(container,master,records,checked,editable){
   input.addEventListener("change",()=>{
    if(input.checked)checked.add(record.id);else checked.delete(record.id);
    $(master).checked=checked.size===records.filter(editable).length&&checked.size>0;
+   updateManageButtons();
   });
   label.append(input,document.createTextNode(" "+record.label));
   area.append(label);
@@ -715,6 +725,7 @@ $("datasetSelectAll").onchange=()=>{
   node.checked=target;
   if(target)checkedDatasets.add(node.value);else checkedDatasets.delete(node.value);
  }
+ updateManageButtons();
 };
 $("modelSelectAll").onchange=()=>{
  const target=$("modelSelectAll").checked;
@@ -723,6 +734,7 @@ $("modelSelectAll").onchange=()=>{
   node.checked=target;
   if(target)checkedModels.add(node.value);else checkedModels.delete(node.value);
  }
+ updateManageButtons();
 };
 $("renameDataset").onclick=()=>action(async()=>{
  const selected=selectedItems(checkedDatasets);
