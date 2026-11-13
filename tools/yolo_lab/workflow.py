@@ -678,11 +678,11 @@ class Workflow:
         comparison["validation"] = {
             slot:_read_json(cmp_root/("validation_"+slot+".json"))
             for slot in ("a","b")
-        } if comparison.get("mode") == "validation" else {}
+        }
         comparison["live"] = {
             slot:_read_json(cmp_root/("live_"+slot)/"live_status.json")
             for slot in ("a","b")
-        } if comparison.get("mode") == "live" else {}
+        }
         tasks={}
         for name in ("capture","inspect","train","validate","live","import","validate_a","validate_b","live_a","live_b"):
             proc=self.lab.processes.get(name)
