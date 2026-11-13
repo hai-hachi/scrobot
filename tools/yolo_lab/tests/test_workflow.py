@@ -282,7 +282,10 @@ class WorkflowTests(unittest.TestCase):
     def test_simple_date_index_dataset_name_preserves_legacy(self):
         from datetime import datetime
         from zoneinfo import ZoneInfo
-        prefix=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).strftime("%b%d")
+        local_day=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
+        months=("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug",
+                "Sep","Oct","Nov","Dec")
+        prefix=f"{months[local_day.month-1]}{local_day.day:02d}"
         with tempfile.TemporaryDirectory() as td:
             root=pathlib.Path(td)
             for suffix in ("01","02"):
