@@ -20,7 +20,7 @@ from modes import validate as validate_camera, world as camera_world
 from lighting_source import apply_court_world, calibration as load_lighting
 from tag_math import CAMERA_OFFSET, CAMERA_PITCH
 
-from config import validate as validate_yolo
+from yolo_settings import validate as validate_yolo
 
 COURT = ROOT / "src/scrobot_simulation/worlds/badminton_court.sdf"
 STATIC_MODELS = ("court_floor", "court_markings", "net_assembly",
