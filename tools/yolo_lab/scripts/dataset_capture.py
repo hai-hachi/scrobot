@@ -16,7 +16,6 @@ from pathlib import Path
 import cv2
 import numpy as np
 import rclpy
-from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
@@ -170,6 +169,7 @@ class FastYoloDatasetCapture(Node):
         self.declare_parameter('position_group_m', 0.50)
         self.declare_parameter('yaw_group_deg', 30.0)
         self.declare_parameter('session_name', '')
+        self.declare_parameter('status_json', '')
 
         self.output_dir = Path(
             str(self.get_parameter('output_dir').value)
@@ -230,8 +230,11 @@ class FastYoloDatasetCapture(Node):
         requested_session = str(self.get_parameter('session_name').value).strip()
         self.session_name = requested_session or time.strftime('s%Y%m%d_%H%M%S')
 
-        sim_share = Path(get_package_share_directory('scrobot_simulation'))
-        debug_share = Path(get_package_share_directory('scrobot_debug'))
+        # Source-of-truth for YOLO resources now lives in tools/yolo_lab,
+        # rather than relying on installed legacy scrobot_debug resources.
+        repo_root = Path(__file__).resolve().parents[3]
+        sim_share = repo_root / 'src/scrobot_simulation'
+        debug_share = repo_root / 'tools/yolo_lab'
 
         # Use the exact visual mesh for labels, but deduplicate its triangle
         # vertices and keep all projection math vectorized. We first reject
@@ -280,6 +283,8 @@ class FastYoloDatasetCapture(Node):
         self.last_saved_boxes = 0
         self.last_saved_focus_boxes = 0
         self.last_reported_state = None
+        requested_status = str(self.get_parameter('status_json').value).strip()
+        self.status_json = Path(requested_status).expanduser() if requested_status else None
         self.last_timings = {
             'teleport_ms': 0.0,
             'trigger_ms': 0.0,
@@ -1046,6 +1051,9 @@ class FastYoloDatasetCapture(Node):
         (self.output_dir / 'dataset_summary.json').write_text(
             json.dumps(summary, indent=2, sort_keys=True) + '\n'
         )
+        if self.status_json is not None:
+            self.state = 'COMPLETE' if reason == 'complete' else 'STOPPED'
+            self.publish_status(force=True)
 
         self.get_logger().info(
             'DATASET_FINALIZED '
@@ -1076,6 +1084,21 @@ class FastYoloDatasetCapture(Node):
         msg = String()
         msg.data = line
         self.status_pub.publish(msg)
+        if self.status_json is not None:
+            payload = {
+                'updated_wall': time.time(),
+                'state': self.state, 'saved_images': self.saved_images,
+                'target_images': self.target_images,
+                'pose_attempts': self.pose_attempts,
+                'last_split': self.last_saved_split,
+                'last_boxes': self.last_saved_boxes,
+                'last_focus_boxes': self.last_saved_focus_boxes,
+                'output_dir': str(self.output_dir),
+            }
+            self.status_json.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.status_json.with_suffix('.tmp')
+            tmp.write_text(json.dumps(payload) + '\n')
+            tmp.replace(self.status_json)
 
         # Console only on state changes / saved frames. No sim-time heartbeat,
         # so unlimited simulation time cannot flood repeated identical logs.
