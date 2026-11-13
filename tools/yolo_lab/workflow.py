@@ -1,0 +1,333 @@
+"""YOLO Lab stage controller. No dataset/model task runs in the HTTP thread."""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import json
+import os
+from pathlib import Path
+import re
+import sys
+
+from dataset_world import build_dataset
+from lab_configs import read as read_lab
+from modes import validate as validate_camera
+from yolo_settings import validate as validate_yolo
+from lighting_source import calibration as lighting_calibration
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
+SCRIPTS = HERE / "scripts"
+MODELS = HERE / "models/pretrained"
+ARTIFACTS = HERE / "artifacts/models"
+RUNS = HERE / "runs/detect"
+DATAROOT = ROOT / "evaluation_results/yolo_lab/datasets"
+DATASET_ID = re.compile(r"^dataset_[0-9]{8}T[0-9]{6}[0-9]{6}Z$")
+MODEL_CHOICE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,128}$")
+
+
+def _timestamp():
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+
+
+def _read_json(path):
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+class Workflow:
+    def __init__(self, lab):
+        self.lab = lab
+        self.dataset = None
+        self.stage = "idle"
+        self.selected_model = None
+        self.run_name = None
+
+    def datasets(self):
+        if not DATAROOT.exists():
+            return []
+        return sorted([p.name for p in DATAROOT.iterdir()
+                       if p.is_dir() and DATASET_ID.fullmatch(p.name)
+                       and (p / "data.yaml").is_file()], reverse=True)[:100]
+
+    def choose_dataset(self, name):
+        if not isinstance(name, str) or name not in self.datasets():
+            raise ValueError("Choose a generated dataset shown in the Dataset tab")
+        self.dataset = name
+        return {"dataset": name}
+
+    def current_dataset(self):
+        choices = self.datasets()
+        if self.dataset not in choices:
+            self.dataset = choices[0] if choices else None
+        return DATAROOT / self.dataset if self.dataset else None
+
+    def models(self):
+        files = []
+        for directory in (MODELS, ARTIFACTS):
+            if directory.is_dir():
+                files.extend(sorted(directory.glob("*.pt")))
+        if RUNS.is_dir():
+            files.extend(sorted(RUNS.glob("*/weights/best.pt")))
+        return [{"id": str(p.resolve().relative_to(HERE.resolve())),
+                 "name": p.name if p.parent != ARTIFACTS else p.stem,
+                 "bytes": p.stat().st_size}
+                for p in files if p.is_file() and HERE.resolve() in p.resolve().parents]
+
+    def model_path(self, choice):
+        if not isinstance(choice, str):
+            raise ValueError("Select a model from the model picker")
+        available = {entry["id"] for entry in self.models()}
+        if choice not in available:
+            raise ValueError("Model not found. Import original baseline weights first")
+        file = (HERE / choice).resolve()
+        if file.suffix != ".pt" or HERE.resolve() not in file.parents:
+            raise ValueError("Invalid YOLO model selection")
+        return file
+
+    def _ensure_idle(self):
+        for name in ("capture", "inspect", "train", "validate", "import"):
+            p = self.lab.processes.get(name)
+            if p is not None and p.poll() is None:
+                raise ValueError(f"{name} is already running; finish or stop it first")
+
+    def start_dataset(self):
+        self._ensure_idle()
+        selected_camera = read_lab("camera")
+        selected_yolo = read_lab("yolo")
+        if selected_camera is None or selected_yolo is None:
+            raise ValueError("Save Camera Lab YAML and YOLO Lab YAML first")
+        camera = validate_camera(selected_camera)
+        yolo = validate_yolo(selected_yolo)
+        self.lab.stop()
+        run_id = "dataset_" + _timestamp()
+        directory = DATAROOT / run_id
+        directory.mkdir(parents=True, exist_ok=False)
+        self.dataset = run_id
+        self.stage = "dataset"
+        (self.lab_output / "capture_progress.json").unlink(missing_ok=True)
+        try:
+            generated = build_dataset(
+                camera, yolo, self.lab_output / "dataset_world.sdf",
+                lighting=lighting_calibration())
+            self.lab.camera = camera
+            self.lab.yolo = yolo
+            self.lab.phase = "generating_dataset"
+            self.lab.launch("gazebo", [
+                "gz", "sim", "-r", "-s", "-v", "3", generated])
+            self.lab.launch("image_bridge", [
+                "ros2", "run", "ros_gz_image", "image_bridge",
+                "/yolo/camera/color", "--ros-args",
+                "-p", "qos:=sensor_data",
+                "-r", "/yolo/camera/color:=/camera/camera/color/image_raw"])
+            self.lab.launch("info_bridge", [
+                "ros2", "run", "ros_gz_bridge", "parameter_bridge",
+                "--ros-args", "-p",
+                f"config_file:={HERE/'assets/yolo_dataset_bridge.yaml'}"])
+            capture = [
+                sys.executable, str(SCRIPTS / "dataset_capture.py"),
+                "--ros-args",
+            ]
+            args = {
+                "output_dir":str(directory),
+                "target_images":int(yolo["dataset_images"]),
+                "shuttle_count":int(yolo["shuttle_count"]),
+                "positive_pose_fraction":float(yolo["positive_fraction"]),
+                "random_seed":int(yolo["seed"]),
+                "status_json":str(self.lab_output / "capture_progress.json"),
+            }
+            for key, value in args.items():
+                capture.extend(["-p", f"{key}:={value}"])
+            self.lab.launch("capture", capture)
+        except Exception:
+            self.lab.stop()
+            self.stage = "failed"
+            raise
+        return {"started": True, "dataset": run_id,
+                "output_dir": str(directory), "images_target": yolo["dataset_images"],
+                "camera": camera, "lighting_source": "saved lighting_lab.yaml"}
+
+    @property
+    def lab_output(self):
+        return ROOT / "evaluation_results/yolo_lab"
+
+    def cancel_dataset(self):
+        self.lab._terminate("capture")
+        # Keep the dataset world available for Gazebo GUI inspection.
+        self.stage = "dataset_stopped"
+        return {"cancelled": True, "dataset": self.dataset}
+
+    def start_inspect(self, sample_count=24):
+        self._ensure_idle()
+        if type(sample_count) is not int or not 1<=sample_count<=100:
+            raise ValueError("Label preview count must be from 1 to 100")
+        directory = self.current_dataset()
+        if directory is None:
+            raise ValueError("Generate or select a dataset first")
+        summary = _read_json(directory / "dataset_summary.json")
+        if not summary or not summary.get("training_ready"):
+            raise ValueError("Dataset generation must finish with nonempty train and val splits")
+        # Regenerating previews invalidates previous inspector approval.
+        (directory / "inspection.json").unlink(missing_ok=True)
+        self.lab._terminate("inspect")
+        self.lab.launch("inspect", [
+            sys.executable, str(SCRIPTS / "inspect_dataset.py"),
+            "--dataset", str(directory), "--samples", str(sample_count)])
+        self.stage = "inspect"
+        return {"started": True, "dataset": self.dataset, "samples": sample_count}
+
+    def _approved_dataset(self):
+        directory = self.current_dataset()
+        if directory is None:
+            raise ValueError("Select a dataset first")
+        inspection = _read_json(directory / "inspection.json")
+        if inspection.get("passed") is not True:
+            raise ValueError("Run Label Inspector successfully before using this dataset")
+        summary = _read_json(directory / "dataset_summary.json")
+        if summary.get("training_ready") is not True:
+            raise ValueError("Dataset train/val splits are empty or collection unfinished")
+        return directory
+
+    def start_train(self, model_choice, device="0"):
+        self._ensure_idle()
+        dataset = self._approved_dataset()
+        model = self.model_path(model_choice)
+        if not isinstance(device,str) or device not in ("0", "cpu"):
+            raise ValueError("Training device must be 0 (CUDA) or cpu")
+        yolo = validate_yolo(read_lab("yolo") or {})
+        self.lab.stop()  # avoid Gazebo taking GPU capacity during training
+        self.run_name = "lab_" + _timestamp()
+        self.selected_model = model_choice
+        cmd = [self.training_python, str(SCRIPTS / "train_finetune.py"),
+               "--model", str(model), "--data", str(dataset / "data.yaml"),
+               "--device", device, "--epochs", str(yolo["epochs"]),
+               "--batch", str(yolo["batch"]), "--imgsz", str(yolo["imgsz"]),
+               "--optimizer", "AdamW", "--lr0", "0.0001",
+               "--patience", "8",
+               "--name", self.run_name,
+               "--project", str(RUNS),
+               "--artifacts-dir", str(ARTIFACTS)]
+        self.lab.launch("train", cmd)
+        self.lab.phase = "training"
+        self.stage = "train"
+        return {"started": True, "run": self.run_name,
+                "dataset": self.dataset, "model": str(model)}
+
+    def stop_task(self, name):
+        if name not in ("capture", "inspect", "train", "validate", "live", "import"):
+            raise ValueError("Unsupported task to stop")
+        self.lab._terminate(name)
+        if name == "capture":
+            self.stage = "dataset_stopped"
+        else:
+            self.stage = name + "_stopped"
+        return {"stopped": True, "task": name}
+
+    def start_validate(self, model_choice, split="test", device="0"):
+        self._ensure_idle()
+        dataset = self._approved_dataset()
+        model = self.model_path(model_choice)
+        if split not in ("val","test") or device not in ("0","cpu"):
+            raise ValueError("Invalid dataset split or device")
+        self.lab.stop()
+        report = self.lab_output / "validation_metrics.json"
+        report.unlink(missing_ok=True)
+        yolo = validate_yolo(read_lab("yolo") or {})
+        self.lab.launch("validate", [
+            self.training_python, str(SCRIPTS / "validate_model.py"),
+            str(model), "--data", str(dataset / "data.yaml"),
+            "--device",device, "--imgsz",str(yolo["imgsz"]),
+            "--batch",str(yolo["batch"]), "--split",split,
+            "--metrics-json",str(report)])
+        self.lab.phase = "validating"
+        self.stage = "validate"
+        self.selected_model = model_choice
+        return {"started": True, "model": str(model), "split": split}
+
+    def start_live(self, model_choice):
+        self._ensure_idle()
+        model = self.model_path(model_choice)
+        current = self.lab.processes.get("gazebo")
+        # Triggered dataset camera does not stream continuously. Restart with
+        # the saved inspection camera if the current scene is a dataset world.
+        if current is None or current.poll() is not None or self.lab.phase == "generating_dataset":
+            self.lab.start()
+        self.lab._terminate("live")
+        live_dir = self.lab_output / "live"
+        live_dir.mkdir(parents=True, exist_ok=True)
+        for name in ("live_status.json", "live.jpg"):
+            (live_dir / name).unlink(missing_ok=True)
+        settings = validate_yolo(read_lab("yolo") or {})
+        self.lab.launch("live", [
+            sys.executable, str(SCRIPTS / "live_detection.py"),
+            "--model",str(model), "--output",str(live_dir),
+            "--confidence",str(settings["confidence"]),
+            "--imgsz",str(settings["imgsz"]), "--max-rate","15"])
+        self.stage = "live"
+        self.selected_model = model_choice
+        return {"started": True,"model":str(model)}
+
+    def import_model(self, name):
+        self._ensure_idle()
+        if name not in ("best.pt","yolo11n_shuttle.pt","yolo11s-ball.pt"):
+            raise ValueError("Choose one of the three original checkpoints")
+        self.lab._terminate("import")
+        self.lab.launch("import", [
+            sys.executable, str(SCRIPTS / "import_baselines.py"),name])
+        self.stage = "import"
+        return {"started": True,"model":name}
+
+    @property
+    def training_python(self):
+        path=os.environ.get("SCROBOT_YOLO_PYTHON",sys.executable)
+        if not Path(path).is_file():
+            raise ValueError("SCROBOT_YOLO_PYTHON must point to an existing Python executable")
+        return path
+
+    def progress(self):
+        directory=self.current_dataset()
+        status = _read_json(self.lab_output / "capture_progress.json")
+        summary = _read_json(directory/"dataset_summary.json") if directory else {}
+        inspection = _read_json(directory/"inspection.json") if directory else {}
+        live = _read_json(self.lab_output/"live/live_status.json")
+        metrics = _read_json(self.lab_output/"validation_metrics.json")
+        tasks={}
+        for name in ("capture","inspect","train","validate","live","import"):
+            proc=self.lab.processes.get(name)
+            tasks[name]= {
+                "running":proc is not None and proc.poll() is None,
+                "exit_code":proc.poll() if proc is not None else None,
+            }
+        if tasks["capture"]["running"] is False and tasks["capture"]["exit_code"] == 0 and summary:
+            status["state"]="COMPLETE"
+        training={}
+        if self.run_name:
+            run=RUNS/self.run_name
+            csv=run/"results.csv"
+            if csv.is_file():
+                import csv as csvlib
+                with csv.open(newline="") as f:
+                    rows=list(csvlib.DictReader(f))
+                if rows:
+                    training={"last_epoch":rows[-1].get("epoch"),
+                              "last_metrics":rows[-1],
+                              "total_epochs":len(rows),
+                              "run":str(run)}
+        return {
+            "stage":self.stage,"datasets":self.datasets(),
+            "selected_dataset":self.dataset,
+            "dataset_progress":status,
+            "dataset_summary":summary,
+            "inspection":inspection,
+            "previews":inspection.get("previews",[]),
+            "models":self.models(),
+            "selected_model":self.selected_model,
+            "tasks":tasks,
+            "training":training,"validation":metrics,
+            "live":live,
+            "run":self.run_name,
+            "task_logs": {n:(self.lab_output/f"{n}.log").read_text(errors="replace")[-3500:]
+                          if (self.lab_output/f"{n}.log").is_file() else ""
+                          for n in ("capture","inspect","train","validate","live","import")},
+        }
