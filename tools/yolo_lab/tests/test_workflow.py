@@ -131,7 +131,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('write_labeled_preview(bgr, boxes, self.output_dir, split, stem,',source)
         self.assertIn('self.finalize_partial_dataset(reason="early_stop")',source)
         self.assertIn('rclpy.try_shutdown()',source)
-        self.assertIn('"last_timings_ms"',source)
+        self.assertRegex(source, r"""['"]last_timings_ms['"]\s*:\s*dict\(self\.last_timings\)""")
         page=(LAB/"index.html").read_text()
         self.assertIn('id="capturePreview"',page)
         self.assertIn('id="startInspect"',page)
