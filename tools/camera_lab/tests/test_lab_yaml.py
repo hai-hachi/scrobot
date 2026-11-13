@@ -20,7 +20,7 @@ from lighting_source import calibration
 
 class LabYamlContracts(unittest.TestCase):
     def test_five_independent_yaml_paths_and_atomic_reload(self):
-        expected={"lighting","camera","apriltags","mobility","odometry"}
+        expected={"lighting","camera","apriltags","mobility","odometry","yolo"}
         self.assertEqual(set(__import__("lab_configs").FILES),expected)
         self.assertEqual(path_for("lighting").name,"lighting_lab.yaml")
         with tempfile.TemporaryDirectory() as d:
