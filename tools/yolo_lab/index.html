@@ -446,10 +446,215 @@ async function poll(){
  $("gazeboLog").textContent=s.logs?.gazebo||"No Gazebo log";
  $("sensorLog").textContent="[bridge]\n"+(s.logs?.image_bridge||"")+"\n[preview]\n"+(s.logs?.preview||"");
  $("guiLog").textContent=s.logs?.gui||"No GUI log";
+ renderWorkflow(s);
  const stamp=s.preview?.updated_wall||0;
  if(stamp>lastPreview){
   lastPreview=stamp;
   $("preview").src="/api/preview?t="+encodeURIComponent(stamp);
+ }
+}
+let labelIndex=0,labelSetKey="",lastLiveStamp=0;
+function replaceSelectItems(id,items,selected){
+ const node=$(id),current=node.value;
+ const signature=JSON.stringify(items);
+ if(node.dataset.signature!==signature){
+  node.dataset.signature=signature;
+  node.replaceChildren();
+  for(const item of items){
+   const opt=document.createElement("option");
+   opt.value=item.value;opt.textContent=item.label;
+   node.append(opt);
+  }
+ }
+ if(items.some(item=>item.value===current))node.value=current;
+ else if(items.some(item=>item.value===selected))node.value=selected;
+ else if(items.length)node.value=items[0].value;
+}
+function currentModel(id){
+ const model=$(id).value;
+ if(!model)throw Error("No checkpoint imported. Use Training → Import verified baseline weights.");
+ return model;
+}
+$("startDataset").onclick=()=>action(async()=>{
+ if(!sameFields(last?.saved_camera,cameraForm())||
+    !sameFields(last?.saved_yolo,yoloForm()))
+  throw Error("Save Camera Lab YAML and YOLO Lab YAML before generating a dataset.");
+ const r=await post("/api/dataset/start",{});
+ setTab("dataset");
+ notify("Started synchronized capture: "+r.images_target+" images, "+r.camera.color+
+   " @ "+r.camera.color_fps+" FPS profile. Dataset: "+r.dataset);
+});
+$("cancelDataset").onclick=()=>action(async()=>{
+ await post("/api/dataset/cancel",{});
+ notify("Stopped capture. Any complete images/labels remain in this dataset.");
+});
+$("datasetList").onchange=()=>action(async()=>{
+ await post("/api/dataset/select",{dataset:$("datasetList").value});
+ labelIndex=0;labelSetKey="";
+ notify("Selected dataset: "+$("datasetList").value);
+});
+$("startInspect").onclick=()=>action(async()=>{
+ const n=Number($("inspectSamples").value);
+ const result=await post("/api/inspect/start",{samples:n});
+ setTab("labels");notify("Inspecting "+result.dataset+
+   " with "+n+" bbox preview samples across the splits.");
+});
+$("stopInspect").onclick=()=>action(async()=>{
+ await post("/api/task/stop",{name:"inspect"});
+ notify("Label inspector stopped. Dataset remains unchanged.");
+});
+function showLabelSample(items){
+ if(!items.length){
+  $("labelImage").removeAttribute("src");
+  $("labelSample").textContent="No label previews yet";
+  return;
+ }
+ labelIndex=(labelIndex+items.length)%items.length;
+ const name=items[labelIndex];
+ $("labelSample").textContent=(labelIndex+1)+"/"+items.length+" · "+name;
+ const w=last?.workflow||{};
+ $("labelImage").src="/api/label-preview?name="+encodeURIComponent(name)+
+    "&v="+encodeURIComponent(w.selected_dataset||"");
+}
+$("labelPrev").onclick=()=>{
+ labelIndex--;showLabelSample(last?.workflow?.previews||[]);
+};
+$("labelNext").onclick=()=>{
+ labelIndex++;showLabelSample(last?.workflow?.previews||[]);
+};
+$("importBaseline").onclick=()=>action(async()=>{
+ const r=await post("/api/model/import",{model:$("baselineChoice").value});
+ notify("Importing original "+r.model+" with pinned Git blob checksum. See trainer logs.");
+ setTab("train");
+});
+$("startTraining").onclick=()=>action(async()=>{
+ const result=await post("/api/train/start",{
+    model:currentModel("trainModel"),device:$("trainDevice").value});
+ notify("Training started: "+result.run+" on "+result.dataset+
+   ". Gazebo was stopped to free GPU resources.");
+});
+$("stopTraining").onclick=()=>action(async()=>{
+ await post("/api/task/stop",{name:"train"});
+ notify("Stopped training. Check run weights and artifacts before validation.");
+});
+$("startValidation").onclick=()=>action(async()=>{
+ const r=await post("/api/validate/start",{
+   model:currentModel("validateModel"),
+   split:$("validationSplit").value,device:$("validateDevice").value});
+ notify("Validating "+r.model+" on "+r.split+" split. Actual Ultralytics metrics appear below.");
+});
+$("stopValidation").onclick=()=>action(async()=>{
+ await post("/api/task/stop",{name:"validate"});
+ notify("Validation stopped.");
+});
+$("startLive").onclick=()=>action(async()=>{
+ const r=await post("/api/live/start",{model:currentModel("liveModel")});
+ notify("Started YOLO inference on actual Gazebo RGB with model "+r.model+
+   ". Inference FPS is separate from raw bridge FPS.");
+ setTab("live");
+});
+$("stopLive").onclick=()=>action(async()=>{
+ await post("/api/task/stop",{name:"live"});
+ notify("Live YOLO inference stopped. Camera scene remains available.");
+});
+function renderWorkflow(s){
+ const w=s.workflow||{},progress=w.dataset_progress||{},
+       summary=w.dataset_summary||{},inspection=w.inspection||{};
+ const dsOptions=(w.datasets||[]).map(n=>({value:n,label:n}));
+ replaceSelectItems("datasetList",dsOptions,w.selected_dataset);
+ $("datasetCount").textContent=progress.saved_images??summary.saved_this_run??"—";
+ $("datasetTarget").textContent=progress.target_images??summary.target_images??"—";
+ const target=Number(progress.target_images||summary.target_images||0);
+ const done=Number(progress.saved_images||summary.saved_this_run||0);
+ $("datasetPercent").textContent=target?(100*done/target).toFixed(1)+"%":"—";
+ const capture=w.tasks?.capture||{};
+ $("datasetState").textContent=progress.state?
+   progress.state+" · "+(capture.running?"capture running":"capture not running"):
+   summary.status?"Last capture: "+summary.status:
+   "Dataset generator idle.";
+ $("datasetDirectory").textContent=summary.output_dir||
+    (w.selected_dataset?"Saved dataset: "+w.selected_dataset:"No saved dataset yet.");
+ $("datasetSplits").replaceChildren();
+ for(const key of ["train","val","test"]){
+  const counts=summary.counts?.[key]||{};
+  const tr=document.createElement("tr");
+  for(const value of [key,counts.images??"—",counts.labels??"—"]){
+   const td=document.createElement("td");
+   td.textContent=String(value);tr.append(td);
+  }
+  $("datasetSplits").append(tr);
+ }
+ $("captureLog").textContent=w.task_logs?.capture||"No capture logs yet";
+ const approved=inspection.passed===true;
+ $("labelStatus").textContent=inspection.dataset?
+  (approved?"Structural PASS · ":"Structural FAIL · ")+
+  Object.entries(inspection.splits||{}).map(([name,x])=>
+    name+" "+x.images+" images / "+x.boxes+" boxes").join(" · ")+
+  " · "+(inspection.negative_images??0)+" negatives":
+  "Run the Label Inspector on a completed dataset before training or validation.";
+ $("labelDetails").textContent=(inspection.stdout_tail||"")+
+    (inspection.stderr_tail?"\n"+inspection.stderr_tail:"")+
+    "\n"+(w.task_logs?.inspect||"");
+ const imageSet=(w.selected_dataset||"")+"|"+(w.previews||[]).join("|");
+ if(imageSet!==labelSetKey){
+  labelIndex=0;labelSetKey=imageSet;showLabelSample(w.previews||[]);
+ }
+ const available=(w.models||[]).map(m=>({
+    value:m.id,label:m.name+" · "+(m.bytes/1e6).toFixed(1)+" MB · "+m.id
+ }));
+ for(const id of ["trainModel","validateModel","liveModel"]){
+  replaceSelectItems(id,available,w.selected_model);
+ }
+ $("modelStatus").textContent=available.length?
+  available.length+" local .pt checkpoint(s). Models stored under tools/yolo_lab/.":
+  "No checkpoints found. Import pinned best.pt from original yoloshuttle or copy weights into tools/yolo_lab/models/pretrained/.";
+ const training=w.training||{},m=training.last_metrics||{};
+ function metricRow(name){
+   const x=Object.entries(m).find(([k])=>k.trim()===name);
+   return x?Number(x[1]):null;
+ }
+ $("trainingEpoch").textContent=training.total_epochs||"—";
+ $("trainingMap").textContent=fmt(metricRow("metrics/mAP50(B)"),3);
+ $("trainingRecall").textContent=fmt(metricRow("metrics/recall(B)"),3);
+ const trainState=w.tasks?.train||{};
+ $("trainingState").textContent=trainState.running?
+  "Fine-tuning active · "+(w.run||"run"):
+  trainState.exit_code===0?
+  "Training completed; best.pt copied to artifacts/models (refresh model list).":
+  trainState.exit_code!=null?"Training exited "+trainState.exit_code:
+  "No active training run.";
+ $("trainingLog").textContent=(w.task_logs?.import||"")+
+  "\n"+(w.task_logs?.train||"");
+ const val=w.validation||{};
+ $("valPrecision").textContent=fmt(val.precision,3);
+ $("valRecall").textContent=fmt(val.recall,3);
+ $("valMap50").textContent=fmt(val.map50,3);
+ $("valMap95").textContent=fmt(val.map5095,3);
+ $("valModelName").textContent=val.model?val.model.split("/").pop():"—";
+ $("valDatasetName").textContent=val.dataset?val.dataset.split("/").slice(-2,-1)[0]:"—";
+ $("validationState").textContent=val.split?
+  "Completed "+val.split+" evaluation using model "+val.model:
+  w.tasks?.validate?.running?"Ultralytics validation running…":
+  "No completed Ultralytics metrics report.";
+ $("validationLog").textContent=w.task_logs?.validate||"No validation log yet";
+ const live=w.live||{};
+ $("liveFps").textContent=fmt(live.processed_fps,1);
+ $("liveLatency").textContent=fmt(live.inference_ms,1);
+ $("liveBoxCount").textContent=live.detections??"—";
+ $("liveStatus").textContent=live.model?
+  "Model "+live.model+" · RGB "+(live.input_resolution||[]).join("×")+
+  " · processed frames "+live.processed_frames+
+  " · received callbacks "+live.received_frames:
+  w.tasks?.live?.running?"Loading model / waiting for Gazebo RGB…":
+  "Start live YOLO on the saved camera inspection scene.";
+ $("liveBoxes").textContent=(live.boxes||[]).length?
+  (live.boxes||[]).map(x=>"bbox ["+[x.x0,x.y0,x.x1,x.y1].join(", ")+
+    "] confidence "+x.confidence).join(" · "):
+  "No shuttle bbox in last processed frame.";
+ $("liveLog").textContent=w.task_logs?.live||"No inference process yet";
+ if(live.updated_wall&&live.updated_wall>lastLiveStamp){
+  lastLiveStamp=live.updated_wall;
+  $("liveImage").src="/api/live-frame?t="+encodeURIComponent(live.updated_wall);
  }
 }
 async function init(){
