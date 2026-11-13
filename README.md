@@ -74,6 +74,19 @@ current range so the robot aligns in place instead of requesting a pose behind
 it. After a stable pre-pose, collection is a straight 0.30 m/s pass plus a
 0.10 m overrun.
 
+## Development labs and configuration
+
+The optional developer dashboards and scripts are organized by module under
+[tools/](tools/README.md). Each lab owns its own launcher, source and tests.
+
+- **Lab-only saved YAML:** `tools/configs/labs/*_lab.yaml`
+- **Production ROS/simulation config:** `src/*/config/*.yaml`
+- **Shared lab code:** `tools/shared/`
+
+Saving a lab configuration does not change the main simulation. Publishing
+selected, validated lab values is an explicit separate operation; see
+[configuration ownership](tools/LAB_CONFIGS.md).
+
 ## Build
 
 ```bash
