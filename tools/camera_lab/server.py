@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lab_configs import (path_for as lab_yaml_path, read as read_lab_yaml,
                          save as save_lab_yaml, matches as matches_lab_yaml)
 from lighting_source import calibration as lighting_calibration
-from log_text import clean as clean_log
+from log_text import tail as clean_tail
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -697,9 +697,7 @@ class Lab:
                          "monitor", "tag_monitor", "detector"):
                 path = RESULTS / (name + ".log")
                 if path.is_file():
-                    with path.open("rb") as f:
-                        f.seek(max(0, path.stat().st_size - 1300))
-                        logs[name] = clean_log(f.read().decode("utf-8", "replace"))
+                    logs[name] = clean_tail(path, 1800)
             saved_camera = read_lab_yaml("camera")
             saved_tags = read_lab_yaml("apriltags")
             return {
