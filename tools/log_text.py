@@ -25,6 +25,10 @@ def tail(path, max_bytes=3500):
     if not path.is_file():
         return ""
     with path.open("rb") as stream:
-        stream.seek(max(0, stream.seek(0, 2) - max_bytes))
+        size = stream.seek(0, 2)
+        start = max(0, size - max_bytes)
+        stream.seek(start)
         data = stream.read()
+        if start and b"\n" in data:
+            data = data.split(b"\n", 1)[1]
     return clean(data.decode("utf-8", errors="replace"))
