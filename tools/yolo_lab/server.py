@@ -115,6 +115,24 @@ class Lab:
         self.handles[name] = handle
         return proc
 
+    def _launch_camera_scene(self, path, camera):
+        """Start the identical camera/bridge pipeline for dynamic or frozen worlds."""
+        self.launch("gazebo", [
+            "gz", "sim", "-r", "-s", "-v", "3", str(path)])
+        topics = ["/camera_lab/color"]
+        if camera["depth_enabled"]:
+            topics.append("/camera_lab/depth")
+        self.launch("image_bridge", [
+            "ros2", "run", "ros_gz_image", "image_bridge", *topics,
+            "--ros-args", "-p", "qos:=sensor_data"])
+        self.launch("meter", [
+            sys.executable, str(CAMERA_METER),
+            str(OUTPUT / "meter.json"),
+            "true" if camera["depth_enabled"] else "false"])
+        self.launch("preview", [
+            sys.executable, str(HERE / "preview.py"),
+            str(OUTPUT / "preview.jpg")])
+
     def _terminate(self, name):
         proc = self.processes.pop(name, None)
         terminate(proc)
