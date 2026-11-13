@@ -13,6 +13,7 @@ from lab_configs import read as read_lab
 from modes import validate as validate_camera
 from yolo_settings import validate as validate_yolo
 from lighting_source import calibration as lighting_calibration
+from log_text import tail as clean_tail
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -44,7 +45,7 @@ def _tail(path, max_bytes=3500):
         with path.open("rb") as f:
             f.seek(0, 2)
             f.seek(max(0, f.tell()-max_bytes))
-            return f.read().decode("utf-8", errors="replace")
+            return clean_tail(path, max_bytes)
     except OSError:
         return ""
 
