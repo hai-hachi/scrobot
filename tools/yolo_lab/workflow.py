@@ -85,6 +85,120 @@ class Workflow:
         self.dataset = name
         return {"dataset": name}
 
+    def _managed_dataset(self, name):
+        """Reject traversal, symlinked datasets, and unindexed folders."""
+        if not isinstance(name, str) or not DATASET_ID.fullmatch(name):
+            raise ValueError("Invalid dataset identifier")
+        root = DATAROOT.resolve()
+        target = DATAROOT / name
+        if (name not in self.datasets() or target.is_symlink()
+                or not target.is_dir() or target.resolve().parent != root):
+            raise ValueError("Dataset is not a managed YOLO dataset")
+        return target
+
+    @staticmethod
+    def _write_atomic(path, raw):
+        import tempfile
+        path = Path(path)
+        if path.is_symlink():
+            raise ValueError("Dataset metadata must not be a symlink")
+        temp = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".metadata_",
+                                             delete=False) as stream:
+                temp = Path(stream.name)
+                stream.write(raw)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp, path)
+            temp = None
+        finally:
+            if temp is not None:
+                temp.unlink(missing_ok=True)
+
+    def rename_dataset(self, name, new_name):
+        """Rename a saved dataset directory, keeping its timestamp and links."""
+        self._ensure_idle()
+        old = self._managed_dataset(name)
+        if not isinstance(new_name, str):
+            raise ValueError("Enter a dataset name")
+        slug = re.sub(r"[-_]+", "_",
+                      re.sub(r"\s+", "_", new_name.strip().lower()))
+        if not DATASET_SLUG.fullmatch(slug):
+            raise ValueError("Name must use 1-40 lowercase letters, numbers, _ or -")
+        base = name.split("__", 1)[0]
+        proposed = base + "__" + slug
+        new = DATAROOT / proposed
+        if new == old:
+            return {"renamed": False, "dataset": name}
+        if new.exists() or new.is_symlink():
+            raise ValueError("A dataset with this name already exists")
+        old_path, new_path = str(old), str(new)
+
+        # Read and validate metadata before moving anything. These files are
+        # maintained by this lab and must not point through symlinks.
+        replacements = {}
+        yaml_path = old / "data.yaml"
+        if yaml_path.is_symlink():
+            raise ValueError("Dataset data.yaml must not be a symlink")
+        data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("Invalid dataset data.yaml")
+        data["path"] = new_path
+        replacements["data.yaml"] = yaml.safe_dump(
+            data, sort_keys=False).encode("utf-8")
+        for filename, field in (("dataset_summary.json", "output_dir"),
+                                ("inspection.json", "dataset")):
+            source = old / filename
+            if source.exists():
+                if source.is_symlink():
+                    raise ValueError("Dataset metadata must not be a symlink")
+                doc = json.loads(source.read_text(encoding="utf-8"))
+                if not isinstance(doc, dict):
+                    raise ValueError("Invalid dataset metadata: " + filename)
+                doc[field] = new_path
+                replacements[filename] = (
+                    json.dumps(doc, indent=2) + "\n").encode("utf-8")
+        originals = {name: (old / name).read_bytes() for name in replacements}
+        old.rename(new)
+        try:
+            for filename, payload in replacements.items():
+                self._write_atomic(new / filename, payload)
+        except Exception:
+            for filename, raw in originals.items():
+                self._write_atomic(new / filename, raw)
+            new.rename(old)
+            raise
+
+        if self.dataset == name:
+            self.dataset = proposed
+        if self.capture_directory == old:
+            self.capture_directory = new
+        # Capture progress is a disposable process-status cache, not the
+        # authoritative saved dataset summary.
+        progress_path = self.lab_output / "capture_progress.json"
+        progress = _read_json(progress_path)
+        if progress.get("output_dir") == old_path:
+            progress["output_dir"] = new_path
+            self._write_atomic(progress_path, (
+                json.dumps(progress) + "\n").encode("utf-8"))
+        return {"renamed": True, "previous": name, "dataset": proposed,
+                "directory": new_path}
+
+    def delete_dataset(self, name, confirmation):
+        """Permanently remove a selected generated dataset, never a parent."""
+        self._ensure_idle()
+        target = self._managed_dataset(name)
+        if confirmation != name:
+            raise ValueError("Type the exact dataset identifier to confirm deletion")
+        shutil.rmtree(target)
+        if self.dataset == name:
+            self.dataset = None
+        if self.capture_directory == target:
+            self.capture_directory = None
+        self.current_dataset()
+        return {"deleted": name, "selected_dataset": self.dataset}
+
     def current_dataset(self):
         choices = self.datasets()
         if self.dataset not in choices:
