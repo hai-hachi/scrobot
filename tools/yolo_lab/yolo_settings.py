@@ -28,6 +28,9 @@ DEFAULT = {
     "epochs": 15,
     "batch": 8,
     "imgsz": 640,
+    "validation_imgsz": 640,
+    "validation_batch": 8,
+    "live_imgsz": 640,
     "confidence": 0.10,
 }
 
@@ -63,12 +66,16 @@ def validate(raw):
         ("epochs", 1, 300),
         ("batch", 1, 64),
         ("imgsz", 320, 1920),
+        ("validation_imgsz", 320, 1920),
+        ("validation_batch", 1, 64),
+        ("live_imgsz", 320, 1920),
     ):
         value = result[key]
         if type(value) is not int or not low <= value <= high:
             raise ValueError(f"{key} must be an integer in [{low}, {high}]")
-    if result["imgsz"] % 32:
-        raise ValueError("imgsz must be a multiple of 32")
+    for name in ("imgsz", "validation_imgsz", "live_imgsz"):
+        if result[name] % 32:
+            raise ValueError(f"{name} must be a multiple of 32")
     for key, low, high in (
         ("random_fraction", 0, 1),
         ("settle_seconds", 0.5, 15.0),
