@@ -77,6 +77,7 @@ class Workflow:
         self.run_name = None
         self.capture_directory = None
         self.comparison = None
+        self.compare_generation = 0
 
     def datasets(self):
         if not DATAROOT.exists():
@@ -520,6 +521,105 @@ class Workflow:
         self.selected_model = model_choice
         return {"started": True, "model": str(model), "split": split}
 
+    def _validate_pair_worker(self, generation, commands):
+        """Evaluate A then B sequentially to keep GPU use bounded."""
+        for slot, cmd in commands:
+            with self.lab.lock:
+                if generation != self.compare_generation:
+                    return
+                proc = self.lab.launch("validate_" + slot, cmd)
+                if self.comparison is not None:
+                    self.comparison["state"] = "running_" + slot
+            code = proc.wait()
+            with self.lab.lock:
+                if generation != self.compare_generation:
+                    return
+                self.lab._terminate("validate_" + slot)
+                if code != 0:
+                    self.comparison["state"] = "failed_" + slot
+                    self.comparison["error"] = "Model " + slot.upper() + " evaluation exited " + str(code)
+                    return
+                self.comparison["state"] = "completed_" + slot
+        with self.lab.lock:
+            if generation == self.compare_generation:
+                self.comparison["state"] = "complete"
+
+    def start_compare_validation(self, choices, split="test", device="0"):
+        self._ensure_idle()
+        if not isinstance(choices, list) or len(choices) != 2 or choices[0] == choices[1]:
+            raise ValueError("Pick two different models for comparison")
+        dataset = self._approved_dataset()
+        models = [self.model_path(choice) for choice in choices]
+        if split not in ("test", "val") or device not in ("0", "cpu"):
+            raise ValueError("Invalid comparison split or device")
+        counts = _read_json(dataset / "dataset_summary.json").get("counts", {})
+        if counts and (counts.get(split) or {}).get("images", 0) < 1:
+            raise ValueError("Selected dataset split has no images")
+        self.lab.stop()
+        self.compare_generation += 1
+        generation = self.compare_generation
+        settings = validate_yolo(read_lab("yolo") or {})
+        output = self.lab_output / "compare"
+        output.mkdir(parents=True, exist_ok=True)
+        commands = []
+        for slot, model in zip(("a", "b"), models):
+            path = output / ("validation_" + slot + ".json")
+            path.unlink(missing_ok=True)
+            commands.append((slot, [
+                self.training_python, str(SCRIPTS / "validate_model.py"),
+                str(model), "--data", str(dataset / "data.yaml"),
+                "--device", device,
+                "--imgsz", str(settings["validation_imgsz"]),
+                "--batch", str(settings["validation_batch"]),
+                "--split", split, "--metrics-json", str(path)
+            ]))
+        self.comparison = {"mode":"validation", "state":"starting",
+                           "models":choices, "split":split, "dataset":str(dataset),
+                           "error":None}
+        self.stage = "compare_validation"
+        threading.Thread(target=self._validate_pair_worker,
+                         args=(generation,commands),
+                         daemon=True,name="YoloCompareValidation").start()
+        return {"started":True, "models":choices, "split":split, "sequential":True}
+
+    def start_compare_live(self, choices):
+        self._ensure_idle()
+        if not isinstance(choices, list) or len(choices) != 2 or choices[0] == choices[1]:
+            raise ValueError("Pick two different models for comparison")
+        models = [self.model_path(choice) for choice in choices]
+        current = self.lab.processes.get("gazebo")
+        if (current is None or current.poll() is not None or
+                self.lab.phase == "generating_dataset"):
+            self.lab.start()
+        for name in ("live", "live_a", "live_b"):
+            self.lab._terminate(name)
+        output = self.lab_output / "compare"
+        settings = validate_yolo(read_lab("yolo") or {})
+        for slot, model in zip(("a", "b"), models):
+            folder = output / ("live_" + slot)
+            folder.mkdir(parents=True, exist_ok=True)
+            for name in ("live.jpg","live_status.json"):
+                (folder / name).unlink(missing_ok=True)
+            self.lab.launch("live_" + slot,[
+                sys.executable, str(SCRIPTS/"live_detection.py"),
+                "--model",str(model),"--output",str(folder),
+                "--confidence",str(settings["confidence"]),
+                "--imgsz",str(settings["live_imgsz"]),
+                "--max-rate","8"])
+        self.comparison = {"mode":"live","state":"running",
+                           "models":choices,"error":None}
+        self.stage = "compare_live"
+        return {"started":True, "models":choices, "max_rate_per_model":8}
+
+    def stop_comparison(self):
+        self.compare_generation += 1
+        for name in ("validate_a","validate_b","live_a","live_b"):
+            self.lab._terminate(name)
+        if self.comparison:
+            self.comparison["state"]="stopped"
+        self.stage="comparison_stopped"
+        return {"stopped":True}
+
     def start_live(self, model_choice):
         self._ensure_idle()
         model = self.model_path(model_choice)
@@ -573,8 +673,18 @@ class Workflow:
         capture_preview = _read_json(directory/"capture_preview"/"latest.json") if directory else {}
         live = _read_json(self.lab_output/"live/live_status.json")
         metrics = _read_json(self.lab_output/"validation_metrics.json")
+        comparison = dict(self.comparison) if self.comparison else {}
+        cmp_root = self.lab_output / "compare"
+        comparison["validation"] = {
+            slot:_read_json(cmp_root/("validation_"+slot+".json"))
+            for slot in ("a","b")
+        } if comparison.get("mode") == "validation" else {}
+        comparison["live"] = {
+            slot:_read_json(cmp_root/("live_"+slot)/"live_status.json")
+            for slot in ("a","b")
+        } if comparison.get("mode") == "live" else {}
         tasks={}
-        for name in ("capture","inspect","train","validate","live","import"):
+        for name in ("capture","inspect","train","validate","live","import","validate_a","validate_b","live_a","live_b"):
             proc=self.lab.processes.get(name)
             tasks[name]= {
                 "running":proc is not None and proc.poll() is None,
@@ -608,9 +718,10 @@ class Workflow:
             "tasks":tasks,
             "training":training,"validation":metrics,
             "live":live,
+            "comparison":comparison,
             "run":self.run_name,
             "task_logs": {
                 n: _tail(self.lab_output/f"{n}.log")
-                for n in ("capture","inspect","train","validate","live","import")
+                for n in ("capture","inspect","train","validate","live","import","validate_a","validate_b","live_a","live_b")
             },
         }
