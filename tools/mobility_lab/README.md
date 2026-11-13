@@ -223,8 +223,10 @@ investigate load-dependent dynamics if the measured data justifies it.
 The GUI marks all physical parameter edits as **restart required**.
 A restart respawns the robot using the supplied Xacro parameters. It never
 writes to the production badminton court, the main robot URDF defaults,
-Lighting Lab calibration, or the normal control pipeline. User settings
-persist in `evaluation_results/mobility_lab/settings.json`.
+Lighting Lab calibration, or the normal control pipeline. Live JSON drafts
+still persist at `evaluation_results/mobility_lab/settings.json`, but
+**Save Mobility Lab YAML** writes the authoritative shared settings to
+`src/scrobot_simulation/config/mobility_lab.yaml`.
 
 ## Save vs Publish calibration to the NORMAL simulation
 
@@ -232,11 +234,12 @@ The dashboard now has **two distinct actions**:
 
 | Action | Writes | When values take effect |
 | --- | --- | --- |
-| **Save Lab Settings** | `~/scrobot_ws/evaluation_results/mobility_lab/settings.json` | Changes motor surrogate settings on the next lab run; contact physics after restarting lab Gazebo |
+| **Save Mobility Lab YAML** | `~/scrobot_ws/src/scrobot_simulation/config/mobility_lab.yaml` | Changes motor surrogate settings on the next lab run; contact physics after restarting lab Gazebo |
 | **Publish to Simulation** | `~/scrobot_ws/src/scrobot_simulation/config/mobility_calibration.yaml` | After rebuilding/sourcing if needed and restarting NORMAL Gazebo |
 
-**Publish** only reads previously saved settings, validates all values and
-asks for a browser confirmation; unsaved slider changes prevent publishing.
+**Publish** only reads the saved Mobility Lab YAML, validates it and
+asks for confirmation. Unsaved live slider changes and the JSON
+working draft are never used for production publication.
 The publication is an atomic single-file replacement and first creates a
 byte-for-byte backup under
 `~/scrobot_ws/evaluation_results/mobility_lab/published_backups/`.
