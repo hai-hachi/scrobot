@@ -36,7 +36,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--patience", type=int, default=15)
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--name", default="scrobot_finetune")
-    p.add_argument("--optimizer", default="AdamW", help="AdamW, SGD, auto, ...")
+    p.add_argument("--optimizer", default="AdamW",
+                   choices=["AdamW", "SGD", "Adam", "RMSProp", "auto"])
+    p.add_argument("--mosaic", type=float, default=1.0,
+                   help="Mosaic augmentation probability (0-1)")
+    p.add_argument("--rect", action="store_true",
+                   help="Use aspect-ratio-based rectangular training batches")
     p.add_argument("--cos-lr", action="store_true", help="Use cosine LR schedule")
     p.add_argument(
         "--project",
@@ -71,6 +76,10 @@ def print_validation(metrics) -> None:
 
 def main() -> None:
     args = parse_args()
+    if not 0.0 <= args.mosaic <= 1.0:
+        raise ValueError("mosaic must be in [0, 1]")
+    if args.patience < 0 or args.lr0 <= 0:
+        raise ValueError("patience must be nonnegative and lr0 positive")
 
     model_path = repo_path(args.model)
     data_path = repo_path(args.data)
@@ -93,6 +102,9 @@ def main() -> None:
     print(f"batch      : {args.batch}")
     print(f"optimizer  : {args.optimizer}")
     print(f"lr0        : {args.lr0}")
+    print(f"patience   : {args.patience}")
+    print(f"mosaic     : {args.mosaic}")
+    print(f"rect       : {args.rect}")
     print(f"cos_lr     : {args.cos_lr}")
     print(f"device     : {args.device or 'auto'}")
     print(f"project    : {project_dir}")
@@ -107,6 +119,8 @@ def main() -> None:
         batch=args.batch,
         lr0=args.lr0,
         patience=args.patience,
+        mosaic=args.mosaic,
+        rect=args.rect,
         workers=args.workers,
         project=str(project_dir),
         name=args.name,
