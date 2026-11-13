@@ -24,9 +24,42 @@ ROS 2 Jazzy, Gazebo Harmonic, `ros_gz_image`, `rclpy` and
 `/opt/ros/jazzy/setup.bash` and, if present, the workspace
 `install/setup.bash`. A ROS package build is not required for this lab.
 
-The lab uses ROS domain 82, isolated Gazebo partition
-`scrobot_camera_lab_<uid>_82`, and no Gazebo GUI. Do not run concurrent
-Gazebo benchmarks while measuring CPU.
+The lab uses ROS domain 82 and the isolated Gazebo partition
+`scrobot_camera_lab_<uid>_82`. It starts headless by default. Do not run
+concurrent Gazebo benchmarks while measuring CPU.
+
+### Optional Gazebo desktop UI
+
+Both **Camera Lab** and **AprilTags Lab** have an **Open Gazebo UI /
+Close Gazebo UI** toggle above the tabs. First start the selected lab,
+then click **Open Gazebo UI**. It launches a separate, GUI-only process:
+
+```bash
+gz sim -g -v 3
+```
+
+The button launches the command from the same environment as the
+existing `gz sim -s` server, including the matching `GZ_PARTITION`,
+`GZ_IP`, and `GZ_SIM_RESOURCE_PATH`, so it attaches to the
+**current running world**, not a second simulator.
+
+In the Gazebo desktop 3D scene, use the normal orbit/pan/zoom controls
+to explore the court geometry, tag mounting, lighting and robot proxy.
+**Close Gazebo UI** terminates only this GUI process and does
+**not** stop the server, image bridge, AprilTag detector or sweep.
+Closing the main lab simulation automatically closes its GUI as well.
+You can also close the desktop Gazebo window normally; the dashboard
+then reflects the client process status.
+
+This requires a graphical desktop (`DISPLAY` or `WAYLAND_DISPLAY`).
+If the GUI exits without a window, expand **Gazebo UI diagnostics** in
+the dashboard; the separate client log is also written to
+`evaluation_results/camera_lab/gazebo_gui.log`.
+
+**Performance:** Opening a 3D view increases GPU and sometimes CPU
+rendering work. To compare true transport or detector FPS, close the
+Gazebo GUI before running a benchmark. If it is closed, the headless
+Gazebo server and camera sensors keep running.
 
 ## AprilTags Lab — appended to this same standalone dashboard
 
