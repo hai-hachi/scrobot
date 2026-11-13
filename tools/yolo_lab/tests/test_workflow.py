@@ -174,6 +174,111 @@ class WorkflowTests(unittest.TestCase):
                 self.assertIn("validate_model.py"," ".join(fake.events[-1][1]))
                 self.assertIn("--metrics-json",fake.events[-1][1])
 
+    def test_dataset_rename_preserves_internal_paths_and_inspection(self):
+        import yaml
+        fake = FakeLab()
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            datasets = root/"datasets"
+            name = "dataset_20261114T100000123456Z"
+            folder = datasets/name
+            (folder/"images/train").mkdir(parents=True)
+            (folder/"labels/train").mkdir(parents=True)
+            (folder/"images/train/a.jpg").write_bytes(b"image")
+            (folder/"labels/train/a.txt").write_text("0 0.5 0.5 0.1 0.1\\n")
+            (folder/"data.yaml").write_text(
+                yaml.safe_dump({"path":str(folder),"train":"images/train",
+                                "val":"images/val","names":{0:"Shuttlecock"}}))
+            (folder/"dataset_summary.json").write_text(
+                json.dumps({"output_dir":str(folder),"training_ready":True}))
+            (folder/"inspection.json").write_text(
+                json.dumps({"dataset":str(folder),"passed":True}))
+            w = workflow.Workflow(fake)
+            w.dataset = name
+            with (mock.patch.object(workflow,"DATAROOT",datasets),
+                  mock.patch.object(workflow.Workflow,"lab_output",
+                                    new_callable=mock.PropertyMock,return_value=root)):
+                renamed = w.rename_dataset(name,"  720p Mixed Sample ")
+                newname = name + "__720p_mixed_sample"
+                self.assertEqual(renamed["dataset"],newname)
+                self.assertFalse(folder.exists())
+                self.assertEqual(w.dataset,newname)
+                newfolder=datasets/newname
+                self.assertEqual(yaml.safe_load(
+                    (newfolder/"data.yaml").read_text())["path"],str(newfolder))
+                self.assertEqual(json.loads(
+                    (newfolder/"dataset_summary.json").read_text())["output_dir"],
+                    str(newfolder))
+                self.assertEqual(json.loads(
+                    (newfolder/"inspection.json").read_text())["dataset"],str(newfolder))
+                self.assertTrue((newfolder/"images/train/a.jpg").is_file())
+                self.assertEqual(w.datasets(),[newname])
+                self.assertEqual(w.choose_dataset(newname)["dataset"],newname)
+                with self.assertRaisesRegex(ValueError,"exact dataset identifier"):
+                    w.delete_dataset(newname, "wrong")
+                self.assertTrue(newfolder.exists())
+                result=w.delete_dataset(newname,newname)
+                self.assertEqual(result["deleted"],newname)
+                self.assertFalse(newfolder.exists())
+
+    def test_dataset_manager_rejects_traversal_symlinks_and_busy_tasks(self):
+        fake=FakeLab()
+        w=workflow.Workflow(fake)
+        with tempfile.TemporaryDirectory() as td:
+            root=pathlib.Path(td)
+            dataset_dir=root/"datasets"
+            name="dataset_20261114T120000123456Z"
+            (dataset_dir/name).mkdir(parents=True)
+            (dataset_dir/name/"data.yaml").write_text("path: .\\n")
+            outside=root/"outside"
+            outside.mkdir()
+            symlink=dataset_dir/"dataset_20261114T120001123456Z"
+            symlink.symlink_to(outside, target_is_directory=True)
+            with mock.patch.object(workflow,"DATAROOT",dataset_dir):
+                with self.assertRaisesRegex(ValueError,"Invalid dataset identifier"):
+                    w.rename_dataset("../outside","bad")
+                with self.assertRaisesRegex(ValueError,"managed YOLO dataset"):
+                    w.delete_dataset(symlink.name,symlink.name)
+                with self.assertRaisesRegex(ValueError,"Name must"):
+                    w.rename_dataset(name,"unsafe/../name")
+                with self.assertRaisesRegex(ValueError,"exact dataset identifier"):
+                    w.delete_dataset(name,"DELETE")
+                fake.processes["train"]=mock.Mock(poll=lambda:None)
+                with self.assertRaisesRegex(ValueError,"already running"):
+                    w.delete_dataset(name,name)
+                fake.processes.clear()
+                self.assertTrue((dataset_dir/name).is_dir())
+                self.assertTrue(outside.is_dir())
+
+    def test_separate_validation_and_live_model_labels(self):
+        self.assertIn("YOLO11n", workflow.BASELINE_LABELS["yolo11n_shuttle.pt"])
+        self.assertIn("ball", workflow.BASELINE_LABELS["yolo11s-ball.pt"])
+        self.assertIn("unverified", workflow.BASELINE_LABELS["best.pt"])
+        settings = {**YOLO_DEFAULT,"validation_imgsz":768,
+                    "validation_batch":2,"live_imgsz":512}
+        from yolo_settings import validate as checked
+        self.assertEqual(checked(settings)["validation_imgsz"],768)
+        fake=FakeLab()
+        w=workflow.Workflow(fake)
+        with tempfile.TemporaryDirectory() as td:
+            root=pathlib.Path(td)
+            folder=root/"datasets"/"dataset_20261114T120000123456Z"
+            folder.mkdir(parents=True)
+            (folder/"data.yaml").write_text("path: .\\n")
+            (folder/"dataset_summary.json").write_text(
+                json.dumps({"training_ready":True,"counts":{"val":{"images":2}}}))
+            (folder/"inspection.json").write_text(json.dumps({"passed":True}))
+            w.dataset=folder.name
+            with (mock.patch.object(workflow,"DATAROOT",root/"datasets"),
+                  mock.patch.object(workflow.Workflow,"lab_output",
+                      new_callable=mock.PropertyMock,return_value=root),
+                  mock.patch.object(workflow,"read_lab",return_value=settings),
+                  mock.patch.object(w,"model_path",return_value=root/"baseline.pt")):
+                w.start_validate("models/pretrained/baseline.pt",split="val")
+                cmd=fake.events[-1][1]
+                self.assertEqual(cmd[cmd.index("--imgsz")+1],"768")
+                self.assertEqual(cmd[cmd.index("--batch")+1],"2")
+
     def test_original_validator_wrapper_produces_inspection_and_previews(self):
         with tempfile.TemporaryDirectory() as td:
             root=pathlib.Path(td)
