@@ -76,7 +76,7 @@ a scene preview, **not an automatically labelled dataset**.
 
 **1 · Dataset & Labels.** Launches a fresh triggered-sensor Gazebo world
 and the migrated `scripts/dataset_capture.py`, which previously lived
-under `scrobot_debug`. It generates `dataset_<UTC timestamp>` under
+under `scrobot_debug`. It generates `dataset_Nov14_01`-style folders (Vietnam local day + index) under
 `evaluation_results/yolo_lab/datasets/`; datasets are never silently
 overwritten. The captured world has camera resolution and rate from the
 saved Camera YAML, calibrated Lighting Lab court visuals, and static
@@ -89,7 +89,7 @@ The captured frames include valid empty-label negative examples.
 Data layout:
 
 ```text
-evaluation_results/yolo_lab/datasets/dataset_<timestamp>/
+evaluation_results/yolo_lab/datasets/dataset_Nov14_01/
     data.yaml
     metadata.csv                   # Pose, split, group, image CRC
     dataset_summary.json
@@ -117,7 +117,7 @@ visually reviewed.
 **2 · Training.** Runs the migrated Ultralytics
 `scripts/train_finetune.py`; uses saved epochs/batch/imgsz and an
 explicitly selected model checkpoint. Default training recipe uses
-AdamW with a user-configurable learning rate (default 0.0001) and patience 8. It saves raw experiments
+AdamW with a configurable initial learning rate (`lr0`), optimizer (AdamW, SGD, Adam, RMSProp or auto), early-stopping patience, mosaic augmentation and rectangular batches (`rect`). Defaults are lr0=0.0001, AdamW, patience=8, mosaic=1.0 and rect disabled. It saves raw experiments
 under `tools/yolo_lab/runs/detect/<run_name>/` and copies the
 best checkpoint to `tools/yolo_lab/artifacts/models/<run_name>.pt`,
 updating `artifacts/latest_model.txt`. Training stops Gazebo to avoid
@@ -130,7 +130,7 @@ stages' saved parameters:
 
 - **Scene:** spawn distribution, robot pose and shuttle settling
 - **Dataset & Labels:** target images and positive camera-pose fraction
-- **Training:** epochs, training batch size and training input size
+- **Training:** epochs, batch, image size, lr0, optimizer, patience, mosaic, rect
 - **Compare Models:** separate validation batch/input size and live confidence/input size
 
 Previously saved YOLO YAMLs are accepted. Missing validation/live
@@ -153,14 +153,14 @@ For user-trained checkpoints stored under `models/trained/` or
 `artifacts/models/`, check their boxes under **Manage user-trained models
 and artifacts** to rename one or delete several at once. A browser
 confirmation is required before deletion. If an artifact is renamed,
-`artifacts/latest_model.txt` is updated when it points to that file.
+`artifacts/latest_model.txt` is updated when it points to that file. The `lab_` prefix is mandatory on renamed trained model files (for example, `lab_nano_720p.pt`). New training runs and copied artifacts likewise start with `lab_` and use a local day/index, e.g. `lab_Nov14_01`.
 
 ### Dataset names and management
 
 New dataset folders use the **local Vietnam calendar day and a per-day
-index**, e.g. `Nov14_01`, `Nov14_02`. Existing timestamp-style folders
+index**, e.g. `dataset_Nov14_01`, `dataset_Nov14_02`. Existing timestamp-style folders
 remain supported. A renamed dataset gets a readable suffix such as
-`Nov14_01__evening_720p`. Use checkboxes in **Dataset & Labels** to
+`dataset_evening_720p` (the `dataset_` prefix is mandatory). Use checkboxes in **Dataset & Labels** to
 rename one or permanently delete one or more. Confirmation is required,
 and actions are blocked during data capture and training/evaluation.
 
@@ -173,7 +173,12 @@ different checkpoints A/B from local models.
   inspected dataset, split, resolution, batch and CPU/GPU device. Both
   reports are stored separately in `evaluation_results/yolo_lab/compare/`,
   and the page renders a bar plot of precision, recall, mAP@50 and
-  mAP@50–95, plus side-by-side measured metrics.
+  mAP@50–95, plus side-by-side measured metrics. Each validation runs with
+  Ultralytics `plots=True`, saving its real confusion matrix, normalized
+  confusion matrix, PR curve, F1-confidence, precision-confidence and
+  recall-confidence curves in separate `compare/plots_a` and `compare/plots_b`
+  directories. The UI displays the two matrices and selectable curves
+  side by side when those image files actually exist.
 - **Start side-by-side live detection** runs two independent inference
   processes subscribed to the same `/camera_lab/color` ROS stream, up to
   8 processed FPS per model. Their annotated frames, frame counts,
