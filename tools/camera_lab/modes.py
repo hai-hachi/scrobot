@@ -130,7 +130,7 @@ def world(settings, destination):
         node(image, "format", image_format)
         clip = node(cam, "clip")
         node(clip, "near", "0.1")
-        node(clip, "far", "10")
+        node(clip, "far", "20")
         node(cam, "optical_frame_id", name + "_optical_frame")
 
     sensor("color", "camera", cfg["color"], cfg["color_fps"],
