@@ -151,6 +151,7 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
    </div>
    <p id="tagYamlStatus" class="hint">Save the AprilTags Lab YAML before publishing. Shared camera/light settings come from their own lab YAMLs.</p>
    <p id="lightingYamlStatus" class="hint">Scene lighting is pulled from Lighting Lab YAML at startup.</p>
+   <p id="cameraSourceStatus" class="hint">AprilTags pulls camera settings from saved Camera Lab YAML when available.</p>
    <p id="tagSharedStatus" class="hint">One shared geometry. Applying updates all 4 tag plates and matching detector sizes, restarting only the AprilTags scene.</p>
    <p id="tagPublishStatus" class="hint">Publish running tag size, height and calculated mount radius to the main court and detector configuration. Lab-only RGB noise will not be published.</p>
    <p class="hint">After changing tag size or height, press <b>Apply geometry to all 4 tags</b> (the lab scene restarts). Gaussian noise modifies RGB pixels <b>before detection</b> without restarting Gazebo.</p>
@@ -430,8 +431,17 @@ $("saveCameraYaml").onclick=()=>action(async()=>{
 });
 $("startTag").onclick=()=>action(async()=>{
  const result=await request("/api/tag/start",{camera:form(),tag:tagForm()});
- notify("AprilTags court scene starting. Wait for live image + detections before moving robot.");
+ if(result.camera){
+   for(const stream of ["color","depth"]){
+     $(stream).value=result.camera[stream];
+     refreshFps(stream,String(result.camera[stream+"_fps"]));
+   }
+   $("depth_enabled").checked=result.camera.depth_enabled;
+ }
  setTab("apriltags");
+ notify("AprilTags scene starting with camera from "+result.camera_source+
+   " and lights/venue from "+result.lighting_source+
+   ". Wait for live images before moving the robot.");
 });
 $("moveRobot").onclick=()=>action(async()=>{
  const c=tagForm();
@@ -682,6 +692,10 @@ function renderTag(s){
    (tagYaml.matches_running?"AprilTags Lab YAML matches running settings. ":
       "AprilTags Lab YAML differs from running settings. Save to update. ")+
    tagYaml.path:"No AprilTags Lab YAML saved yet.";
+ $("cameraSourceStatus").textContent="AprilTags camera input: "+
+   (s.lab_yaml?.camera?.saved?s.lab_yaml.camera.path:
+    "Camera Lab live controls (no saved Camera Lab YAML yet).")+
+   ". Save Camera Lab YAML to make this cross-lab handoff reproducible.";
  $("lightingYamlStatus").textContent="Loaded Lighting Lab config: "+
    (s.lab_yaml?.lighting?.path||"—")+" · "+
    (s.lab_yaml?.lighting?.lights??"—")+" calibrated lights"+
