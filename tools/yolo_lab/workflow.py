@@ -492,8 +492,11 @@ class Workflow:
                "--model", str(model), "--data", str(dataset / "data.yaml"),
                "--device", device, "--epochs", str(yolo["epochs"]),
                "--batch", str(yolo["batch"]), "--imgsz", str(yolo["imgsz"]),
-               "--optimizer", "AdamW", "--lr0", str(yolo["learning_rate"]),
-               "--patience", "8",
+               "--optimizer", yolo["optimizer"],
+               "--lr0", str(yolo["learning_rate"]),
+               "--patience", str(yolo["patience"]),
+               "--mosaic", str(yolo["mosaic"]),
+               *(["--rect"] if yolo["rect"] else []),
                "--name", self.run_name,
                "--project", str(RUNS),
                "--artifacts-dir", str(ARTIFACTS)]
