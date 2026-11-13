@@ -245,27 +245,30 @@ class YoloLabTests(unittest.TestCase):
             '<div id="trainPane" hidden>',1)[0]
         train=page.split('<div id="trainPane" hidden>',1)[1].split(
             '<div id="validatePane" hidden>',1)[0]
-        validation=page.split('<div id="validatePane" hidden>',1)[1].split(
-            '<div id="livePane" hidden>',1)[0]
-        live=page.split('<div id="livePane" hidden>',1)[1]
+        comparison=page.split('<div id="comparePane" hidden>',1)[1]
         for setting in ("dataset_images","positive_fraction"):
             self.assertIn(f'id="{setting}"',dataset)
             self.assertNotIn(f'id="{setting}"',scene)
-        for setting in ("epochs","batch","imgsz"):
+        for setting in ("epochs","batch","imgsz","learning_rate"):
             self.assertIn(f'id="{setting}"',train)
             self.assertNotIn(f'id="{setting}"',scene)
-        for setting in ("validation_imgsz","validation_batch"):
-            self.assertIn(f'id="{setting}"',validation)
-        for setting in ("confidence","live_imgsz"):
-            self.assertIn(f'id="{setting}"',live)
+        for setting in ("validation_imgsz","validation_batch","confidence","live_imgsz"):
+            self.assertIn(f'id="{setting}"',comparison)
         for button in ("saveDatasetSettings","saveTrainingSettings",
                        "saveValidationSettings","saveLiveSettings",
-                       "renameDataset","deleteDataset","datasetDeleteConfirm"):
+                       "renameDataset","deleteDataset","datasetChecks",
+                       "datasetSelectAll","modelChecks","modelSelectAll",
+                       "renameModel","deleteModels","compareModelA","compareModelB",
+                       "compareValidate","compareStartLive","comparisonPlot"):
             self.assertIn(f'id="{button}"',page)
         self.assertNotIn("Dataset, training and inference defaults",page)
-        for model in ("best.pt","yolo11n_shuttle.pt","yolo11s-ball.pt"):
-            self.assertIn(f'value="{model}"',train)
-        for route in ("/api/dataset/delete","/api/dataset/rename"):
+        self.assertNotIn('id="baselineChoice"',page)
+        self.assertNotIn('id="tabLive"',page)
+        self.assertNotIn('id="tabValidate"',page)
+        self.assertIn('id="tabCompare"',page)
+        for route in ("/api/datasets/delete-selected","/api/dataset/rename",
+                      "/api/models/delete-selected","/api/model/rename",
+                      "/api/compare/live","/api/compare/validate"):
             self.assertIn(route,page)
 
     def test_ui_tabs_and_browser_js_are_valid(self):
