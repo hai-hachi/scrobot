@@ -18,9 +18,13 @@ import yaml
 
 from core import DEFAULTS, validate_settings
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from lab_configs import path_for as lab_yaml_path, read as read_lab_yaml
+
 REPO = Path(__file__).resolve().parents[2]
 SIM_CONFIG = REPO / "src/scrobot_simulation/config/mobility_calibration.yaml"
-LAB_SETTINGS = Path.home() / "scrobot_ws/evaluation_results/mobility_lab/settings.json"
+LAB_SETTINGS = lab_yaml_path("mobility")
 BACKUPS = Path.home() / "scrobot_ws/evaluation_results/mobility_lab/published_backups"
 
 PHYSICS = (
@@ -99,7 +103,11 @@ def publish_saved_calibration(settings_path=LAB_SETTINGS, dest_path=SIM_CONFIG,
     backup_dir = Path(backup_dir)
     if not settings_path.is_file():
         raise ValueError("Save Mobility Lab settings before publishing")
-    raw = json.loads(settings_path.read_text(encoding="utf-8"))
+    if settings_path.suffix == ".json":
+        # Backwards compatibility with archived direct unit tests and scripts.
+        raw = json.loads(settings_path.read_text(encoding="utf-8"))
+    else:
+        raw = read_lab_yaml("mobility", settings_path)
     clean = validate_settings(raw)
     read_production_config(dest_path)  # Strict target-file verification.
     previous = dest_path.read_text(encoding="utf-8")
