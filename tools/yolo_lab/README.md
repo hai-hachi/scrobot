@@ -1,8 +1,7 @@
 # SCROBOT YOLO Lab — all stages in one repository
 
-Standalone, localhost-only shuttlecock detection laboratory with **seven
-tabs**: Camera, Scene, Dataset Generator, Label Inspector, Training,
-Validation, and Live Detection.
+Standalone, localhost-only shuttlecock detection laboratory with **six
+tabs**: Camera, Scene, Dataset & Labels, Training, Validation, and Live Detection.
 
 Old research code is consolidated here from
 [hai-hachi/yoloshuttle](https://github.com/hai-hachi/yoloshuttle)
@@ -75,7 +74,7 @@ robot pose selector supports click-to-place and drag-to-set-yaw, and the
 camera uses the real robot camera mount transform. It is only
 a scene preview, **not an automatically labelled dataset**.
 
-**1 · Dataset Generator.** Launches a fresh triggered-sensor Gazebo world
+**1 · Dataset & Labels.** Launches a fresh triggered-sensor Gazebo world
 and the migrated `scripts/dataset_capture.py`, which previously lived
 under `scrobot_debug`. It generates `dataset_<UTC timestamp>` under
 `evaluation_results/yolo_lab/datasets/`; datasets are never silently
@@ -104,7 +103,7 @@ Train/val/test splitting uses a deterministic hash of camera position and
 yaw groups (~70/15/15), not naive consecutive frame splitting. This
 reduces viewpoint leakage and exact duplicates.
 
-**2 · Label Inspector.** Runs the migrated
+**Dataset QA in the same tab.** Runs the migrated
 `scripts/validate_generated_dataset.py` via a dedicated background process.
 Checks image-label pairing, all class IDs and normalized boxes, empty
 negative labels, duplicate SHA1 hashes, old camera pose metadata and
@@ -115,7 +114,7 @@ train/val split. This is structural QA only: exact mesh projections
 can still include occluded/truncated geometry, which should be
 visually reviewed.
 
-**3 · Training.** Runs the migrated Ultralytics
+**2 · Training.** Runs the migrated Ultralytics
 `scripts/train_finetune.py`; uses saved epochs/batch/imgsz and an
 explicitly selected model checkpoint. Default training recipe uses
 AdamW with learning rate 0.0001 and patience 8. It saves raw experiments
@@ -134,13 +133,13 @@ SHA-1 and byte size. This requires network access. Alternatively
 copy your original `.pt` files there manually. Neither action
 modifies the normal robot's deployed weights.
 
-**4 · Validation.** Runs the migrated `scripts/validate_model.py` on
+**3 · Validation.** Runs the migrated `scripts/validate_model.py` on
 the same inspected dataset using either validation or held-out
 test split. The modified script exports *actual* measured precision,
 recall, mAP@50, mAP@75, mAP@50–95, and per-image speed to
 `evaluation_results/yolo_lab/validation_metrics.json`.
 
-**5 · Live Detection.** Uses the selected trained/baseline `.pt` with
+**4 · Live Detection.** Uses the selected trained/baseline `.pt` with
 real Ultralytics predictions on the simulated RGB topic. Its ROS
 subscriber runs in a **separate** Python process; it publishes
 thumbnail JPEGs with detected bounding boxes and records inference
@@ -234,3 +233,30 @@ git pull --ff-only
 python3 -m unittest discover -s tools/yolo_lab/tests -p 'test_*.py' -v
 bash tools/yolo_lab/start.sh
 ```
+
+
+## Live label preview and early finish
+
+Dataset capture writes the training JPEG, YOLO text labels, and metadata row
+before generating an **independent, small annotated JPEG** in
+`<dataset>/capture_preview/latest.jpg` (with `latest.json` metadata).
+It is not part of the train/val/test data and is not a detector prediction.
+The Dataset & Labels tab polls it to show the most recently saved frame,
+with geometric ground-truth boxes or a NEGATIVE marker for empty labels.
+
+**Finish early & keep dataset** writes `.finish_early.request` to the
+active dataset directory. The capture ROS node notices this request at the
+next capture timer step, finalizes `dataset_summary.json`, and exits without
+discarding the completed image/label pairs. A partial dataset becomes
+eligible for structural inspection when it contains matched images and labels
+and has nonempty training and validation splits. Run **Validate labels &
+generate previews** in the same tab to approve it before training.
+
+The capture diagnostics show elapsed times for the Gazebo pose request,
+image triggering, waiting for a changed and repeated-stable RGB render,
+mesh-projected labels, JPEG/metadata writing, and live preview creation.
+The changed/stable CRC safeguard remains active to avoid stale-image labels.
+For faster collection, start by reducing RGB resolution and keeping Gazebo
+GUI closed. Dataset originals are still saved with JPEG quality 95; a lower
+quality preset could reduce disk/encoding time, but should be validated
+against small-object label quality before adopting.
