@@ -1,14 +1,11 @@
-# Simulation-only D435i RGB/depth camera configuration.
-# Baseline values from the existing SCROBOT Gazebo sensors.
-# Camera Lab publishes new values here only after explicit validation.
-# Physical RealSense camera settings are NOT changed by this file.
+# Camera Lab calibrated Gazebo camera; not the physical D435i.
 schema_version: 1
 color:
+  width: 1920
+  height: 1080
+  fps: 30
+depth:
   width: 1280
   height: 720
-  fps: 15
-depth:
-  width: 848
-  height: 480
-  fps: 15
+  fps: 30
   enabled: true

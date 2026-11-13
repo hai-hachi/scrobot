@@ -13,10 +13,10 @@ tag_global_localizer:
     pole_x: 0.0
     left_pole_y: 3.05
     right_pole_y: -3.05
-    tag_height: 0.150
-    tag_mount_radius: 0.075
+    tag_height: 0.200
+    tag_mount_radius: 0.110000
     inward_angle_deg: 45.0
-    tag_edge_size: 0.100
+    tag_edge_size: 0.150
     active_grid_cells: 6
     quiet_border_cells: 1
     texture_pixels: 1024

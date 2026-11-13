@@ -3,9 +3,9 @@ apriltag:
     image_transport: raw
     qos_profile: sensor_data
 
-    # Final court fiducials: AprilTag 16h5, IDs 0-3, 100 mm active edge.
+    # Final court fiducials: AprilTag 16h5, IDs 0-3; size calibrated below.
     family: "16h5"
-    size: 0.100
+    size: 0.150
     max_hamming: 0
     profile: false
 
@@ -26,7 +26,7 @@ apriltag:
         - observed_tag_1
         - observed_tag_2
         - observed_tag_3
-      sizes: [0.100, 0.100, 0.100, 0.100]
+      sizes: [0.150, 0.150, 0.150, 0.150]
 
 
 depth_scan_self_filter:

@@ -1,0 +1,12 @@
+# Saved Apriltags Lab settings, not main simulation params.
+# Use the separate Publish button to transfer to production.
+schema_version: 1
+lab: apriltags
+settings:
+  size: 0.15
+  height: 0.2
+  noise_sigma: 0.0
+  robot_x: 1.47
+  robot_y: 1.58
+  robot_yaw: 135.0
+  tag_id: 0

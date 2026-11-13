@@ -1,0 +1,10 @@
+# Saved Camera Lab settings, not main simulation params.
+# Use the separate Publish button to transfer to production.
+schema_version: 1
+lab: camera
+settings:
+  color: 1920x1080
+  color_fps: 30
+  depth: 1280x720
+  depth_fps: 30
+  depth_enabled: true
