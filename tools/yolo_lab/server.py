@@ -104,7 +104,9 @@ class Lab:
     def launch(self, name, cmd):
         if name in self.processes:
             raise RuntimeError("Process already launched: " + name)
-        handle = (OUTPUT / f"{name}.log").open("ab")
+        # Keep only the latest process run. Otherwise intentional restarts
+        # repeatedly append stale SIGINT diagnostics to the dashboard.
+        handle = (OUTPUT / f"{name}.log").open("wb")
         try:
             proc = subprocess.Popen(
                 cmd, stdout=handle, stderr=subprocess.STDOUT,
