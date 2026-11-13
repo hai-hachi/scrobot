@@ -79,6 +79,7 @@ class Lab:
         self.workflow = Workflow(self)
         self.scene_generation = 0
         self.settle_error = None
+        self.runtime_robot_pose = None
 
     def environment(self):
         env = os.environ.copy()
@@ -162,6 +163,7 @@ class Lab:
             self.stop()
             self.camera = camera
             self.yolo = yolo
+            self.runtime_robot_pose = None
             self.phase = "generating"
             try:
                 lighting = lighting_calibration()
@@ -232,8 +234,9 @@ class Lab:
                     return
                 # Keep the dynamic scene and report an error if any step fails.
                 static_path = OUTPUT / "world_static.sdf"
+                final_yolo = {**yolo, **(self.runtime_robot_pose or {})}
                 frozen_path, frozen = build(
-                    camera, yolo, static_path, lighting=lighting,
+                    camera, final_yolo, static_path, lighting=lighting,
                     settled_poses=poses)
                 gui_was_open = (self.processes.get("gui") is not None and
                                 self.processes["gui"].poll() is None)
@@ -273,7 +276,7 @@ class Lab:
             if result.returncode or "data: true" not in result.stdout.lower():
                 raise RuntimeError("Gazebo rejected robot pose: " +
                                    (result.stderr or result.stdout)[-350:])
-            self.yolo = {**self.yolo, "robot_x":x,"robot_y":y,"robot_yaw":yaw}
+            self.runtime_robot_pose = {"robot_x":x,"robot_y":y,"robot_yaw":yaw}
             return {"x":x,"y":y,"yaw":yaw,"applied":True}
 
     def open_gui(self):
