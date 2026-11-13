@@ -123,6 +123,49 @@ class Lab:
         self.procs[name] = p
         self.logs[name] = handle
 
+    def open_gazebo_gui(self):
+        """Attach a GUI-only Gazebo client to the existing headless server.
+
+        Use the exact environment (notably GZ_PARTITION and model paths)
+        of the lab's server. This does not restart or reload the world.
+        """
+        with self.lock:
+            server = self.procs.get("gazebo")
+            if server is None or server.poll() is not None:
+                raise ValueError(
+                    "Start the Camera or AprilTags simulation before opening Gazebo UI"
+                )
+            client = self.procs.get("gazebo_gui")
+            if client is not None and client.poll() is None:
+                return {"open": True, "already_open": True}
+            env = self.environment()
+            if not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
+                raise ValueError(
+                    "No graphical desktop display found. Launch the lab from "
+                    "the local desktop session, or configure X11/Wayland forwarding."
+                )
+            if client is not None:
+                self.procs.pop("gazebo_gui", None)
+                log = self.logs.pop("gazebo_gui", None)
+                if log is not None:
+                    log.close()
+            # -g means GUI only. In particular do not pass the world SDF,
+            # as that could launch a second Gazebo server.
+            self.launch("gazebo_gui", ["gz", "sim", "-g", "-v", "3"])
+            return {"open": True, "already_open": False}
+
+    def close_gazebo_gui(self):
+        """Close only the GUI client; camera, Gazebo server and ROS nodes stay up."""
+        with self.lock:
+            client = self.procs.pop("gazebo_gui", None)
+            if client is not None:
+                stop_process(client)
+            log = self.logs.pop("gazebo_gui", None)
+            if log is not None:
+                log.close()
+            self.previous_cpu.pop("gazebo_gui", None)
+            return {"open": False, "already_closed": client is None}
+
     def stop(self):
         with self.lock:
             self.sweep_cancel.set()
@@ -556,6 +599,13 @@ class Lab:
                     self.phase="failed"
                     self.error="AprilTag pipeline process exited: "+", ".join(dead)+". Inspect logs below."
             tag_obs = self.tag_status() if self.mode == "apriltags" else {}
+            gui = self.procs.get("gazebo_gui")
+            gui_state = {
+                "running": gui is not None and gui.poll() is None,
+                "exit_code": gui.poll() if gui is not None else None,
+                "display_available": bool(os.environ.get("DISPLAY")
+                                          or os.environ.get("WAYLAND_DISPLAY")),
+            }
             pipeline_hint = None
             if self.mode == "apriltags" and self.phase == "streaming":
                 received = tag_obs.get("rgb_frames") or 0
@@ -611,7 +661,7 @@ class Lab:
                 elif messages > 0:
                     pipeline_hint = "AprilTag detector is processing synchronized frames."
             logs = {}
-            for name in ("gazebo", "image_bridge", "info_bridge",
+            for name in ("gazebo", "gazebo_gui", "image_bridge", "info_bridge",
                          "monitor", "tag_monitor", "detector"):
                 path = RESULTS / (name + ".log")
                 if path.is_file():
@@ -636,6 +686,7 @@ class Lab:
                 "monitor": obs,
                 "resources": self.resources(),
                 "processes": running,
+                "gazebo_gui": gui_state,
                 "logs": logs,
             }
 
@@ -784,6 +835,14 @@ class Handler(BaseHTTPRequestHandler):
                 result = lab.publish_tag_configuration()
             elif route == "/api/stop":
                 result = lab.stop()
+            elif route == "/api/gazebo-gui/open":
+                if data != {}:
+                    raise ValueError("Gazebo GUI open requires an empty request")
+                result = lab.open_gazebo_gui()
+            elif route == "/api/gazebo-gui/close":
+                if data != {}:
+                    raise ValueError("Gazebo GUI close requires an empty request")
+                result = lab.close_gazebo_gui()
             elif route == "/api/save":
                 result = lab.save()
             elif route == "/api/publish":
