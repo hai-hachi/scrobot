@@ -279,6 +279,100 @@ class WorkflowTests(unittest.TestCase):
                 self.assertEqual(cmd[cmd.index("--imgsz")+1],"768")
                 self.assertEqual(cmd[cmd.index("--batch")+1],"2")
 
+    def test_simple_date_index_dataset_name_preserves_legacy(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        prefix=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).strftime("%b%d")
+        with tempfile.TemporaryDirectory() as td:
+            root=pathlib.Path(td)
+            for suffix in ("01","02"):
+                folder=root/(prefix+"_"+suffix)
+                folder.mkdir()
+                (folder/"data.yaml").write_text("path: .\\n")
+            w=workflow.Workflow(FakeLab())
+            with mock.patch.object(workflow,"DATAROOT",root):
+                self.assertEqual(w._next_dataset_name(),prefix+"_03")
+                self.assertIn(prefix+"_01",w.datasets())
+                self.assertTrue(workflow.DATASET_ID.fullmatch(
+                    "dataset_20261113T000000000000Z"))
+
+    def test_protected_pretrains_and_managed_artifacts(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=pathlib.Path(td)
+            protected=root/"models/pretrains"
+            custom=root/"models/trained"
+            artifacts=root/"artifacts/models"
+            for folder in (protected,custom,artifacts):
+                folder.mkdir(parents=True,exist_ok=True)
+            original=protected/"my_renamed_original.pt"
+            original.write_bytes(b"protected checkpoint")
+            trained=custom/"candidate.pt"
+            trained.write_bytes(b"custom model")
+            artifact=artifacts/"lab_1.pt"
+            artifact.write_bytes(b"artifact checkpoint")
+            pointer=root/"artifacts/latest_model.txt"
+            pointer.write_text(str(artifact.resolve())+"\\n")
+            with (mock.patch.object(workflow,"HERE",root),
+                  mock.patch.object(workflow,"MODELS",root/"models/pretrained"),
+                  mock.patch.object(workflow,"PRETRAINS",protected),
+                  mock.patch.object(workflow,"TRAINED",custom),
+                  mock.patch.object(workflow,"ARTIFACTS",artifacts),
+                  mock.patch.object(workflow,"RUNS",root/"runs/detect")):
+                w=workflow.Workflow(FakeLab())
+                found={m["id"]:m for m in w.models()}
+                self.assertFalse(found["models/pretrains/my_renamed_original.pt"]["editable"])
+                self.assertTrue(found["models/trained/candidate.pt"]["editable"])
+                with self.assertRaisesRegex(ValueError,"Only managed"):
+                    w.rename_model("models/pretrains/my_renamed_original.pt","bad")
+                with self.assertRaisesRegex(ValueError,"Only managed"):
+                    w.delete_models(["models/pretrains/my_renamed_original.pt"],True)
+                renamed=w.rename_model("artifacts/models/lab_1.pt","shuttle_v2")
+                self.assertEqual(renamed["model"],"artifacts/models/shuttle_v2.pt")
+                self.assertEqual(pointer.read_text().strip(),str(
+                    (artifacts/"shuttle_v2.pt").resolve()))
+                w.delete_models(["artifacts/models/shuttle_v2.pt",
+                                 "models/trained/candidate.pt"],True)
+                self.assertFalse(pointer.exists())
+                self.assertTrue(original.is_file())
+
+    def test_compare_models_use_same_split_without_concurrent_gpu_validation(self):
+        fake=FakeLab()
+        with tempfile.TemporaryDirectory() as td:
+            root=pathlib.Path(td)
+            folder=root/"datasets"/"Nov14_01"
+            folder.mkdir(parents=True)
+            (folder/"data.yaml").write_text("path: .\\n")
+            (folder/"dataset_summary.json").write_text(
+                json.dumps({"training_ready":True,"counts":{"test":{"images":2}}}))
+            (folder/"inspection.json").write_text(json.dumps({"passed":True}))
+            w=workflow.Workflow(fake)
+            w.dataset=folder.name
+            config={**YOLO_DEFAULT,"validation_imgsz":768,
+                    "validation_batch":2,"learning_rate":0.0002}
+            with (mock.patch.object(workflow,"DATAROOT",root/"datasets"),
+                  mock.patch.object(workflow.Workflow,"lab_output",
+                      new_callable=mock.PropertyMock,return_value=root),
+                  mock.patch.object(workflow,"read_lab",return_value=config),
+                  mock.patch.object(w,"model_path",
+                      side_effect=lambda value:root/"weights"/pathlib.Path(value).name),
+                  mock.patch.object(workflow.threading,"Thread") as fake_thread):
+                models=["models/pretrains/A.pt","artifacts/models/B.pt"]
+                result=w.start_compare_validation(models,"test","cpu")
+                self.assertTrue(result["sequential"])
+                self.assertEqual(fake_thread.call_count,1)
+                commands=fake_thread.call_args.kwargs["args"][1]
+                self.assertEqual([slot for slot,_ in commands],["a","b"])
+                self.assertNotEqual(commands[0][1][-1],commands[1][1][-1])
+                for _,cmd in commands:
+                    self.assertEqual(cmd[cmd.index("--imgsz")+1],"768")
+                    self.assertEqual(cmd[cmd.index("--batch")+1],"2")
+                    self.assertEqual(cmd[cmd.index("--split")+1],"test")
+                result=w.start_compare_live(models)
+                self.assertTrue(result["started"])
+                self.assertIn("live_a",[event[0] for event in fake.events])
+                self.assertIn("live_b",[event[0] for event in fake.events])
+                self.assertTrue(w.stop_comparison()["stopped"])
+
     def test_original_validator_wrapper_produces_inspection_and_previews(self):
         with tempfile.TemporaryDirectory() as td:
             root=pathlib.Path(td)
