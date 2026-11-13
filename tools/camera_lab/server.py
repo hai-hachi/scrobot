@@ -242,7 +242,10 @@ class Lab:
     def start_tags(self, data):
         if not isinstance(data, dict) or set(data) != {"camera", "tag"}:
             raise ValueError("Specify camera and tag configurations")
-        cfg = validate(data["camera"])
+        saved_camera = read_lab_yaml("camera")
+        # AprilTags Lab consumes the Camera Lab's explicit saved YAML. Live
+        # unsaved camera controls cannot silently override a calibrated handoff.
+        cfg = validate(saved_camera if saved_camera is not None else data["camera"])
         tag = validate_tag(data["tag"])
         with self.lock:
             self.stop()
@@ -295,7 +298,13 @@ class Lab:
                 self.phase = "failed"
                 raise
             return {"started": True, "mode": "apriltags",
-                    "tag": self.tag, "tag_mount_radius": mount_radius(tag["size"]),
+                    "tag": self.tag, "camera": dict(cfg),
+                    "camera_source": (
+                        str(lab_yaml_path("camera")) if saved_camera is not None
+                        else "selected camera controls (no Camera Lab YAML saved)"
+                    ),
+                    "lighting_source": str(lab_yaml_path("lighting")),
+                    "tag_mount_radius": mount_radius(tag["size"]),
                     "world": path}
 
     def update_all_tag_geometry(self, data):
