@@ -1,7 +1,7 @@
 # SCROBOT YOLO Lab — all stages in one repository
 
-Standalone, localhost-only shuttlecock detection laboratory with **six
-tabs**: Camera, Scene, Dataset & Labels, Training, Validation, and Live Detection.
+Standalone, localhost-only shuttlecock detection laboratory with **five
+tabs**: Camera, Scene, Dataset & Labels, Training, and Compare Models.
 
 Old research code is consolidated here from
 [hai-hachi/yoloshuttle](https://github.com/hai-hachi/yoloshuttle)
@@ -56,7 +56,7 @@ This does not change production perception YAML or deployed model weights.
 If another lab saves lighting or camera settings, restart the YOLO scene or
 start a fresh dataset to take the new snapshot.
 
-## The six tabs
+## The five tabs
 
 **Camera.** Reuses the same D435i RGB/depth mode table and validator as
 `tools/camera_lab/modes.py`. Measures raw ROS wall FPS, timestamp/sim FPS,
@@ -117,7 +117,7 @@ visually reviewed.
 **2 · Training.** Runs the migrated Ultralytics
 `scripts/train_finetune.py`; uses saved epochs/batch/imgsz and an
 explicitly selected model checkpoint. Default training recipe uses
-AdamW with learning rate 0.0001 and patience 8. It saves raw experiments
+AdamW with a user-configurable learning rate (default 0.0001) and patience 8. It saves raw experiments
 under `tools/yolo_lab/runs/detect/<run_name>/` and copies the
 best checkpoint to `tools/yolo_lab/artifacts/models/<run_name>.pt`,
 updating `artifacts/latest_model.txt`. Training stops Gazebo to avoid
@@ -131,50 +131,60 @@ stages' saved parameters:
 - **Scene:** spawn distribution, robot pose and shuttle settling
 - **Dataset & Labels:** target images and positive camera-pose fraction
 - **Training:** epochs, training batch size and training input size
-- **Validation:** independent validation batch and input size
-- **Live Detection:** prediction confidence and live inference input size
+- **Compare Models:** separate validation batch/input size and live confidence/input size
 
 Previously saved YOLO YAMLs are accepted. Missing validation/live
 parameters receive their current defaults when saved.
 
-The Dataset & Labels tab also allows renaming and permanently deleting old
-captured datasets. Rename preserves the timestamp and appends a name, e.g.
-`dataset_20261114T010203123456Z__720p_mixed`, while updating its
-`data.yaml`, capture summary and inspection references. A rename cannot
-operate while capture, inspection, training, validation or model import
-is running. Deletion also requires typing the complete selected dataset
-identifier and confirming the browser warning; the operation is irreversible.
-Historical training logs referencing the original dataset path are not rewritten.
+The Dataset & Labels tab supports checkbox selection, readable suffixes and
+confirmed batch deletion. Historical training logs are not rewritten.
 
-The imported checkpoint choices are displayed as **Legacy best.pt (unknown
-architecture)**, **YOLO11n Nano shuttle**, and **YOLO11s Small ball**,
-but preserve their original filenames and SHA-1 pinning for verified imports.
-The naming of a checkpoint does not verify its training classes or accuracy.
+## Model selection and management
 
-The original `best.pt`, `yolo11n_shuttle.pt` and `yolo11s-ball.pt`
-are **binary** weights, not Python code. They are intentionally not
-duplicated as large Git objects in `scrobot`. Click **Import verified
-baseline weights** to download them from the original repository into
-`tools/yolo_lab/models/pretrained/`, checking the exact Git blob
-SHA-1 and byte size. This requires network access. Alternatively
-copy your original `.pt` files there manually. Neither action
-modifies the normal robot's deployed weights.
+The **Starting checkpoint** picker automatically discovers local `.pt`
+files under `models/pretrains/` (user-renamed originals), the legacy
+`models/pretrained/`, `models/trained/`, `artifacts/models/`, and
+`runs/detect/*/weights/best.pt`. No import-button or original filename is
+required. **All contents of the pretrains/pretrained folders are immutable
+from the dashboard**; original checkpoints are never renamed/deleted.
+Training-run checkpoints are likewise read-only.
 
-**3 · Validation.** Runs the migrated `scripts/validate_model.py` on
-the same inspected dataset using either validation or held-out
-test split. The modified script exports *actual* measured precision,
-recall, mAP@50, mAP@75, mAP@50–95, and per-image speed to
-`evaluation_results/yolo_lab/validation_metrics.json`.
+For user-trained checkpoints stored under `models/trained/` or
+`artifacts/models/`, check their boxes under **Manage user-trained models
+and artifacts** to rename one or delete several at once. A browser
+confirmation is required before deletion. If an artifact is renamed,
+`artifacts/latest_model.txt` is updated when it points to that file.
 
-**4 · Live Detection.** Uses the selected trained/baseline `.pt` with
-real Ultralytics predictions on the simulated RGB topic. Its ROS
-subscriber runs in a **separate** Python process; it publishes
-thumbnail JPEGs with detected bounding boxes and records inference
-latency, processed FPS, count and confidence. Raw camera FPS remains
-independently measured by the Camera tab. Inference is intentionally
-limited to at most 15 FPS; this is not a camera FPS benchmark.
-Starting live detection will create a continuous-stream inspection
-scene if a triggered dataset scene was running.
+### Dataset names and management
+
+New dataset folders use the **local Vietnam calendar day and a per-day
+index**, e.g. `Nov14_01`, `Nov14_02`. Existing timestamp-style folders
+remain supported. A renamed dataset gets a readable suffix such as
+`Nov14_01__evening_720p`. Use checkboxes in **Dataset & Labels** to
+rename one or permanently delete one or more. Confirmation is required,
+and actions are blocked during data capture and training/evaluation.
+
+## 3 · Compare Models
+
+The former Validation and Live Detection tabs are consolidated. Pick two
+different checkpoints A/B from local models.
+
+- **Run A/B validation** evaluates A then B *sequentially* with the same
+  inspected dataset, split, resolution, batch and CPU/GPU device. Both
+  reports are stored separately in `evaluation_results/yolo_lab/compare/`,
+  and the page renders a bar plot of precision, recall, mAP@50 and
+  mAP@50–95, plus side-by-side measured metrics.
+- **Start side-by-side live detection** runs two independent inference
+  processes subscribed to the same `/camera_lab/color` ROS stream, up to
+  8 processed FPS per model. Their annotated frames, frame counts,
+  inference latency and throughput are shown side by side. Frames are
+  **not guaranteed to be timestamp-synchronized**. This is a qualitative
+  live comparison; use held-out dataset metrics for fair accuracy ranking.
+- **Stop comparison** stops active A/B evaluation or inference. Running
+  both detectors concurrently costs more GPU memory than a single model.
+
+Validation and live inference keep separate tunable image sizes, with
+shared saved YOLO Lab YAML and stage-specific Save buttons.
 
 ## Original source migration map
 
