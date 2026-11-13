@@ -389,6 +389,144 @@ $("publish").onclick=()=>action(async()=>{
     "Simulation YAML already matches these camera settings.";
 });
 function fmt(value,digits=1){return typeof value==="number"?value.toFixed(digits):"—"}
+function drawSweepPlot(id,rows,unit){
+ const c=$(id),ctx=c.getContext("2d"),w=c.width,h=c.height;
+ ctx.fillStyle="#10202d";ctx.fillRect(0,0,w,h);
+ const plot={left:55,right:w-60,top:26,bottom:h-40};
+ ctx.font="12px sans-serif";
+ ctx.fillStyle="#c6dce2";
+ ctx.fillText("RMSE m",9,15);
+ ctx.fillStyle="#e9b96b";
+ ctx.fillText("Hit %",w-53,15);
+ ctx.strokeStyle="#526777";ctx.lineWidth=1;
+ ctx.beginPath();ctx.moveTo(plot.left,plot.top);
+ ctx.lineTo(plot.left,plot.bottom);ctx.lineTo(plot.right,plot.bottom);
+ ctx.stroke();
+ if(!rows||!rows.length){
+   ctx.fillStyle="#b3c7d0";ctx.fillText("Run a sweep to display measured errors",85,100);
+   return;
+ }
+ const xs=rows.map(r=>r.value),lo=Math.min(...xs),hi=Math.max(...xs);
+ const finite=rows.map(r=>r.position_rmse_m).filter(x=>typeof x==="number");
+ const ymax=Math.max(.025,...finite)*1.15;
+ const sx=v=>plot.left+(v-lo)/Math.max(1e-9,hi-lo)*(plot.right-plot.left);
+ const syErr=v=>plot.bottom-v/ymax*(plot.bottom-plot.top);
+ const syHit=v=>plot.bottom-v/100*(plot.bottom-plot.top);
+ for(let i=0;i<=4;i++){
+   const y=plot.bottom-i/4*(plot.bottom-plot.top);
+   ctx.strokeStyle="#253f50";ctx.beginPath();ctx.moveTo(plot.left,y);
+   ctx.lineTo(plot.right,y);ctx.stroke();
+   ctx.fillStyle="#c4d8db";ctx.fillText((ymax*i/4).toFixed(3),5,y+4);
+   ctx.fillStyle="#e9b96b";ctx.fillText(String(i*25),plot.right+6,y+4);
+ }
+ ctx.fillStyle="#c4d8db";
+ for(let i=0;i<=4;i++){
+  const value=lo+(hi-lo)*i/4;
+  ctx.fillText(value.toFixed(unit==="m"?1:0),sx(value)-8,h-20);
+ }
+ ctx.fillText(unit,w/2,h-5);
+ for(const series of [
+  {field:"position_rmse_m",color:"#59d8c7",scale:syErr},
+  {field:"detection_pct",color:"#eebc78",scale:syHit}
+ ]){
+  ctx.strokeStyle=series.color;ctx.fillStyle=series.color;ctx.lineWidth=2.5;
+  let previous=null;
+  for(const row of rows){
+    const v=row[series.field];
+    if(typeof v!=="number"||!Number.isFinite(v)){previous=null;continue}
+    const p={x:sx(row.value),y:series.scale(v)};
+    if(previous){ctx.beginPath();ctx.moveTo(previous.x,previous.y);
+      ctx.lineTo(p.x,p.y);ctx.stroke();}
+    ctx.beginPath();ctx.arc(p.x,p.y,3,0,2*Math.PI);ctx.fill();
+    previous=p;
+  }
+ }
+}
+function renderSweep(sweep){
+ const status=$("sweepStatus");
+ if(sweep?.kind){
+   const count=sweep.current||0,total=sweep.total||0;
+   status.textContent="Sweep "+sweep.kind+" · "+sweep.state+
+      " · "+count+"/"+total+" pose commands"+
+      (sweep.error?" · "+sweep.error:"")+
+      (sweep.file?" · saved: "+sweep.file:"");
+   if(Array.isArray(sweep.rows))sweepCache[sweep.kind]=sweep.rows;
+ }else status.textContent="No sweep running. Configure a range and press Run.";
+ const table=$("sweepRows");table.replaceChildren();
+ for(const row of sweep?.rows||[]){
+  const tr=document.createElement("tr");
+  const cells=[fmt(row.value,2)+" "+(sweep.unit||""),
+      row.detector_frames||0,fmt(row.detection_pct,1),
+      fmt(row.position_rmse_m,4),fmt(row.bearing_rmse_deg,2),
+      fmt(row.detector_fps,1)];
+  for(const text of cells){
+    const td=document.createElement("td");td.textContent=text;tr.append(td);
+  }
+  table.append(tr);
+ }
+ drawSweepPlot("distanceChart",sweepCache.distance,"m");
+ drawSweepPlot("headingChart",sweepCache.heading,"deg");
+ const running=sweep?.state==="running";
+ const ready=live?.mode==="apriltags"&&live?.phase==="streaming";
+ $("distanceRun").disabled=!ready||running;
+ $("headingRun").disabled=!ready||running;
+ $("cancelSweep").disabled=!running;
+ $("moveRobot").disabled=!ready||running;
+ $("downloadSweep").style.pointerEvents=sweep?.file?"auto":"none";
+ $("downloadSweep").style.opacity=sweep?.file?1:.45;
+}
+function renderTag(s){
+ const obs=s.tag_observation||{},r=s.resources||{};
+ $("tagHit").textContent=fmt(obs.detection_pct,1);
+ $("tagFps").textContent=fmt(obs.detector_fps,1);
+ $("tagPosError").textContent=fmt(obs.position_rmse_m,4);
+ $("tagRangeError").textContent=fmt(obs.range_rmse_m,4);
+ $("tagYawError").textContent=fmt(obs.bearing_rmse_deg,2);
+ $("tagNormalError").textContent=fmt(obs.normal_axis_rmse_deg,2);
+ const tf=obs.observed_translation;
+ $("tagMeasurements").textContent=s.mode==="apriltags"?
+ "Target ID "+(obs.tag_id??"—")+" · RGB received "+(obs.rgb_frames??0)+
+ " · detector messages "+(obs.detector_frames??0)+
+ " · tag hits "+(obs.detected_frames??0)+
+ " · measured 3D TF samples "+(obs.pose_frames??0)+
+ " · CameraInfo "+(obs.camera_info_valid?"ready":"waiting")+
+ " · Latest measured range "+(tf?fmt(Math.hypot(tf.x,tf.y,tf.z),2)+" m":"—")+
+ ".": "Start the AprilTags scene to view measurements.";
+ const tbody=$("tagCpu");tbody.replaceChildren();
+ for(const name of ["detector","tag_monitor","image_bridge","info_bridge"]){
+  const m=r[name];if(!m)continue;
+  const tr=document.createElement("tr");
+  for(const value of [name,fmt(m.cpu_pct),fmt(m.memory_mb)]){
+   const td=document.createElement("td");td.textContent=value;tr.append(td);
+  }
+  tbody.append(tr);
+ }
+ const configured=s.tag||{},ui=tagForm();
+ const geometryPending=s.mode==="apriltags"&&(
+  Math.abs(ui.size-configured.size)>.0001||
+  Math.abs(ui.height-configured.height)>.001);
+ $("robotStatus").textContent=geometryPending?
+  "Tag size/height changed: press Start / Restart AprilTags scene to apply the new geometry.":
+  (s.mode==="apriltags"?
+   "Live simulated robot pose: ("+fmt(configured.robot_x,2)+", "+
+      fmt(configured.robot_y,2)+") m, yaw "+fmt(configured.robot_yaw,1)+"°.":
+   "Click the court to choose a robot position, then start the AprilTags scene.");
+ $("applyNoise").disabled=s.mode!=="apriltags"||s.phase!=="streaming";
+ renderSweep(s.sweep);
+}
+async function showTagFrame(){
+ if(currentTab!=="apriltags"||live?.mode!=="apriltags"||
+    live?.phase!=="streaming")return;
+ try{
+  const res=await fetch("/api/tag/image",{cache:"no-store"});
+  if(!res.ok)return;
+  const uri=URL.createObjectURL(await res.blob());
+  const img=$("tagImage"),previous=tagImageUrl;
+  img.onload=()=>{if(previous)URL.revokeObjectURL(previous)};
+  img.onerror=()=>{URL.revokeObjectURL(uri);if(previous)URL.revokeObjectURL(previous)};
+  img.src=uri;tagImageUrl=uri;
+ }catch(e){}
+}
 function update(s){
  $("health").textContent="State: "+s.phase+(s.error?" · "+s.error:"");
  const stream=s.monitor?.streams||{}, settings=s.settings||form();
@@ -424,8 +562,10 @@ function update(s){
  $("gazeboLog").textContent=s.logs?.gazebo||"";
  $("bridgeLog").textContent=s.logs?.image_bridge||"";
  $("monitorLog").textContent=s.logs?.monitor||"";
- $("save").disabled=s.phase!=="streaming";
- $("publish").disabled=s.phase!=="streaming";
+ $("save").disabled=s.phase!=="streaming"||s.mode!=="camera";
+ $("publish").disabled=s.phase!=="streaming"||s.mode!=="camera";
+ live=s;
+ renderTag(s);
 }
 async function poll(){
  try{const response=await fetch("/api/status",{cache:"no-store"});if(response.ok)update(await response.json())}
@@ -438,8 +578,17 @@ async function initialize(){
   refreshFps(name,modes.default[name+"_fps"]);
  }
  $("depth_enabled").checked=modes.default.depth_enabled;
+ const t=modes.tag_default||{};
+ for(const [id,key] of [
+   ["tagSize","size"],["tagHeight","height"],["noiseSigma","noise_sigma"],
+   ["tagId","tag_id"],["robotX","robot_x"],["robotY","robot_y"],
+   ["robotYaw","robot_yaw"]]){
+   if(t[key]!==undefined)$(id).value=t[key];
+ }
+ tagGeometry();
  await poll();
  setInterval(poll,1000);
+ setInterval(showTagFrame,500);
 }
 initialize().catch(err=>{$("health").textContent=err.message});
 </script>
