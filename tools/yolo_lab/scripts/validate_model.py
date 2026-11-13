@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import time
 
 from ultralytics import YOLO
 
@@ -92,6 +93,8 @@ def main() -> None:
     p.add_argument("--split", choices=["val", "test"], default="val")
     p.add_argument("--metrics-json", default=None,
                    help="Write a machine-readable YOLO Lab metrics report")
+    p.add_argument("--plots-dir", default=None,
+                   help="Specific directory for Ultralytics confusion matrices and curves")
     args = p.parse_args()
 
     model_path = resolve_model(args.model)
@@ -104,14 +107,38 @@ def main() -> None:
     print(f"Dataset : {data_path}")
 
     model = YOLO(str(model_path))
-    metrics = model.val(
-        data=str(data_path),
-        split=args.split,
-        device=args.device,
-        imgsz=args.imgsz,
-        batch=args.batch,
-        verbose=True,
+    validation_options = {
+        "data": str(data_path), "split": args.split, "device": args.device,
+        "imgsz": args.imgsz, "batch": args.batch,
+        "verbose": True, "plots": True,
+    }
+    requested_plots_dir = None
+    if args.plots_dir:
+        requested_plots_dir = Path(args.plots_dir).expanduser().resolve()
+        requested_plots_dir.mkdir(parents=True, exist_ok=True)
+        validation_options.update(
+            project=str(requested_plots_dir.parent),
+            name=requested_plots_dir.name,
+            exist_ok=True,
+        )
+    metrics = model.val(**validation_options)
+    actual_plots_dir = Path(
+        getattr(metrics, "save_dir", None) or
+        requested_plots_dir or Path("runs/detect/val")
     )
+    # Only report genuinely generated files; do not invent model curves.
+    plot_candidates = {
+        "confusion": "confusion_matrix.png",
+        "confusion_normalized": "confusion_matrix_normalized.png",
+        "pr": "BoxPR_curve.png",
+        "f1": "BoxF1_curve.png",
+        "precision": "BoxP_curve.png",
+        "recall": "BoxR_curve.png",
+    }
+    plot_files = {
+        key: filename for key, filename in plot_candidates.items()
+        if (actual_plots_dir / filename).is_file()
+    }
 
     print("\n" + "=" * 64)
     print(f"VALIDATION RESULT: {model_path}")
@@ -135,7 +162,9 @@ def main() -> None:
                  "split":args.split,"precision":float(metrics.box.mp),
                  "recall":float(metrics.box.mr),"map50":float(metrics.box.map50),
                  "map75":float(metrics.box.map75),"map5095":float(metrics.box.map),
-                 "speed_ms":dict(getattr(metrics,"speed",None) or {})}
+                 "speed_ms":dict(getattr(metrics,"speed",None) or {}),
+                 "updated_wall":time.time(),
+                 "plots":plot_files}
         temporary=output.with_suffix(".tmp")
         temporary.write_text(json.dumps(payload,indent=2)+"\n")
         temporary.replace(output)
