@@ -21,7 +21,7 @@ MIN_DISTANCE, MAX_DISTANCE = 0.4, 8.0
 
 TAG_DEFAULT = {
     "size": 0.10, "height": 0.15, "noise_sigma": 0.0,
-    "tag_id": 0, "robot_x": 2.0, "robot_y": 0.0, "robot_yaw": 135.0,
+    "tag_id": 0, "robot_x": 1.47, "robot_y": 1.58, "robot_yaw": 135.0,
 }
 
 
