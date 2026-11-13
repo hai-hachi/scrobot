@@ -76,6 +76,42 @@ height must also leave at least 8 mm clearance above the floor at the
 bottom of the rendered plate. These dimensions are only used in the
 **AprilTags Lab test world**.
 
+### If RGB arrives but AprilTag detector messages stay at zero
+
+An operating `apriltag_ros` node publishes a detection-array message for
+**every synchronized image/CameraInfo pair**, even if the array is empty.
+Zero **detector messages** with many received RGB frames is therefore a
+camera pipeline / timestamp / QoS issue, **not** proof that the tags are
+out of range.
+
+The lab explicitly republishes **synchronized** RGB and CameraInfo to
+`/camera_lab/tag/image_rect` and `/camera_lab/tag/camera_info`,
+preserving an identical image timestamp for each pair. CameraInfo intrinsics
+are copied from the bridged Gazebo color sensor, with a projection matrix
+filled from K if the bridge supplies no valid P. The detector subscribes
+to these matching camera-namespace topics, not raw unmatched CameraInfo.
+RGB noise is applied only to the image before this paired publication.
+
+Check the browser's pipeline health and these counters:
+`RGB received`, `synchronized image/info pairs`, `image subscribers`,
+`info subscribers`, and `detector messages`. In a new terminal:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ~/scrobot_ws/install/setup.bash
+export ROS_DOMAIN_ID=82
+ros2 node info /apriltag
+ros2 topic info --verbose /camera_lab/tag/image_rect
+ros2 topic info --verbose /camera_lab/tag/camera_info
+ros2 topic info --verbose /camera_lab/detections
+tail -n 60 ~/scrobot_ws/evaluation_results/camera_lab/detector.log
+```
+
+Expected: matching image and CameraInfo topic subscriptions, steadily
+increasing synchronized pair and detector message counters. Only after
+that should tag visibility, geometry, noise or detection range be assessed.
+To rule out image quality, first use sigma=0 and the 2 m head-on preset.
+
 ### Detector metrics and ground truth
 
 The lab starts the real `apriltag_ros/apriltag_node` configured for
