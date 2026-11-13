@@ -210,6 +210,35 @@ class TagLabTests(TestCase):
         self.assertIn("if args.open_browser and not args.no_browser:",source)
         self.assertNotIn("if not args.no_browser:\n        webbrowser.open(url)",source)
 
+    def test_apriltag_detector_receives_exact_timestamp_camera_pair(self):
+        monitor=(LAB/"tag_monitor.py").read_text()
+        server_text=(LAB/"server.py").read_text()
+        ui=(LAB/"index.html").read_text()
+
+        # image_transport::CameraSubscriber resolves camera_info from the
+        # image_rect camera namespace. Sending unpaired CameraInfo direct
+        # from Gazebo caused zero detection-array messages even with RGB.
+        self.assertIn('"/camera_lab/tag/image_rect"',monitor)
+        self.assertIn('"/camera_lab/tag/camera_info"',monitor)
+        self.assertIn('"/camera_lab/tag/image_rect"',server_text)
+        self.assertIn('"/camera_lab/tag/camera_info"',server_text)
+        self.assertNotIn("image_rect:=/camera_lab/tag_color",server_text)
+        self.assertNotIn("camera_info:=/camera_lab/color/camera_info",
+                         server_text)
+
+        # Crucially, do not publish CameraInfo with independent Gazebo stamp:
+        # paired_info() uses image.header and publishes both from on_image().
+        self.assertIn("result.header = image.header",monitor)
+        self.assertIn("info = self.paired_info(out)",monitor)
+        self.assertIn("self.pub_info.publish(info)",monitor)
+        self.assertIn("self.pub.publish(out)",monitor)
+        self.assertLess(monitor.index("self.pub_info.publish(info)"),
+                        monitor.index("self.pub.publish(out)"))
+        self.assertIn("self.paired_frames += 1",monitor)
+        self.assertIn('"paired_frames":self.paired_frames',monitor)
+        self.assertIn('id="tagPipeline"',ui)
+        self.assertIn('"tag_pipeline_hint": pipeline_hint',server_text)
+
     def test_ui_tag_controls_and_browser_js(self):
         html=(LAB/"index.html").read_text()
         for key in ("tagPane","courtMap","tagSize","tagHeight","noiseSigma",
