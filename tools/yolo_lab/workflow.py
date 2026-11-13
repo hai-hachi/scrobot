@@ -6,7 +6,10 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import sys
+import threading
+import time
 
 from dataset_world import build_dataset
 from lab_configs import read as read_lab
@@ -168,6 +171,19 @@ class Workflow:
     def lab_output(self):
         return ROOT / "evaluation_results/yolo_lab"
 
+    def _early_finish_fallback(self, process, directory):
+        """SIGINT fallback if Gazebo/sim-time prevents the collector timer firing."""
+        time.sleep(15)
+        if (self.lab.processes.get("capture") is not process
+                or process.poll() is not None
+                or not (directory / ".finish_early.request").exists()
+                or (directory / "dataset_summary.json").exists()):
+            return
+        try:
+            os.killpg(process.pid, signal.SIGINT)
+        except (ProcessLookupError, PermissionError):
+            pass
+
     def cancel_dataset(self):
         """Request a clean early finish, preserving complete image/label pairs."""
         process = self.lab.processes.get("capture")
@@ -177,10 +193,16 @@ class Workflow:
         if directory is None or not directory.is_dir():
             raise ValueError("Active capture directory is missing")
         marker = directory / ".finish_early.request"
-        pending = directory / ".finish_early.request.tmp"
-        pending.write_text("Finish after the current image-label transaction\\n",
-                           encoding="utf-8")
-        pending.replace(marker)
+        if not marker.exists():
+            pending = directory / ".finish_early.request.tmp"
+            pending.write_text("Finish after the current image-label transaction\\n",
+                               encoding="utf-8")
+            pending.replace(marker)
+            # The normal path finishes inside capture_step; the fallback is
+            # only for a frozen sim clock or a blocked ROS callback.
+            threading.Thread(
+                target=self._early_finish_fallback, args=(process, directory),
+                daemon=True, name="YoloCaptureFinishFallback").start()
         self.stage = "finishing_early"
         return {"stop_requested": True, "dataset": directory.name,
                 "message": "Finishing current image/label pair and finalizing partial dataset"}
