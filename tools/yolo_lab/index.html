@@ -24,6 +24,8 @@ input[type=checkbox]{width:auto;vertical-align:middle;margin-right:8px}
 .metric{background:#142330;border-radius:8px;padding:12px;border:1px solid #374d5f}
 .metric b{font-size:21px;display:block;margin:4px 0;font-variant-numeric:tabular-nums}
 .metric small{font-size:11px}
+#comparePane .plot-image{display:block;width:100%;min-height:220px;max-height:440px;object-fit:contain;background:#091622;border:1px solid #375064;border-radius:8px}
+#comparePane .plot-note{min-height:32px}
 #comparePane .grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
 #comparePane .grid>section.card{min-width:0;align-self:stretch;height:100%}
 #comparePane .metrics{grid-auto-rows:minmax(92px,auto)}
@@ -344,6 +346,52 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 <h2>Validation metrics comparison</h2>
 <p class="muted">The chart uses measured Ultralytics metrics, not model predictions or estimates. Blank bars indicate no evaluation for the selected model.</p>
 <svg id="comparisonPlot" viewBox="0 0 760 270" style="width:100%;background:#0f202b;border-radius:9px" aria-label="Grouped A and B validation metric bar plot"></svg>
+</section>
+<section class="card">
+<h2>Confusion matrices &amp; detection curves</h2>
+<p class="muted">Actual plots from the A/B Ultralytics validation runs on the selected dataset. No images are invented; unavailable plots stay blank until evaluation completes.</p>
+<div class="fields">
+  <label>Confusion matrix view
+    <select id="confusionKind">
+      <option value="confusion">Counts</option>
+      <option value="confusion_normalized">Normalized</option>
+    </select>
+  </label>
+  <label>Curve to compare
+    <select id="curveKind">
+      <option value="pr">Precision–Recall (PR)</option>
+      <option value="f1">F1 vs confidence</option>
+      <option value="precision">Precision vs confidence</option>
+      <option value="recall">Recall vs confidence</option>
+    </select>
+  </label>
+</div>
+<h3>Confusion matrix comparison</h3>
+<div class="grid">
+  <section class="card">
+    <h3>Model A</h3>
+    <img id="cmpMatrixA" class="plot-image" alt="Model A validation confusion matrix">
+    <p id="cmpMatrixAStatus" class="muted plot-note">Run A/B validation to generate this plot.</p>
+  </section>
+  <section class="card">
+    <h3>Model B</h3>
+    <img id="cmpMatrixB" class="plot-image" alt="Model B validation confusion matrix">
+    <p id="cmpMatrixBStatus" class="muted plot-note">Run A/B validation to generate this plot.</p>
+  </section>
+</div>
+<h3>Curve comparison</h3>
+<div class="grid">
+  <section class="card">
+    <h3>Model A</h3>
+    <img id="cmpCurveA" class="plot-image" alt="Model A precision-recall or confidence curve">
+    <p id="cmpCurveAStatus" class="muted plot-note">Run A/B validation to generate this curve.</p>
+  </section>
+  <section class="card">
+    <h3>Model B</h3>
+    <img id="cmpCurveB" class="plot-image" alt="Model B precision-recall or confidence curve">
+    <p id="cmpCurveBStatus" class="muted plot-note">Run A/B validation to generate this curve.</p>
+  </section>
+</div>
 </section>
 <div class="grid">
   <section class="card">
@@ -859,6 +907,41 @@ $("compareStop").onclick=()=>action(async()=>{
  notify("Stopped A/B comparison. Saved validation reports remain available.");
 });
 const lastCompareStamps={a:0,b:0};
+const lastPlotKeys={};
+function renderComparisonPlots(w){
+ const cmp=w.comparison||{},reports=cmp.validation||{};
+ const selected=[$("compareModelA").value,$("compareModelB").value];
+ const specs=[["Matrix",$("confusionKind").value],
+              ["Curve",$("curveKind").value]];
+ for(const [i,slot,upper] of [[0,"a","A"],[1,"b","B"]]){
+  const report=reports[slot]||{},id=selected[i];
+  const matching=!!(report.model&&report.dataset&&id&&w.selected_dataset&&
+    String(report.model).endsWith("/"+id)&&
+    String(report.dataset).includes("/"+w.selected_dataset+"/"));
+  for(const [imageType,kind] of specs){
+   const imageId="cmp"+imageType+upper,element=$(imageId),
+         label=$(imageId+"Status");
+   const exists=matching&&typeof report.plots?.[kind]==="string";
+   const cacheKey=exists?[slot,id,w.selected_dataset,kind,
+     report.updated_wall||"unknown"].join(":"):"";
+   if(exists){
+    if(lastPlotKeys[imageId]!==cacheKey){
+     element.src="/api/compare-plot?slot="+slot+"&kind="+kind+
+       "&v="+encodeURIComponent(report.updated_wall||0);
+     lastPlotKeys[imageId]=cacheKey;
+    }
+    label.textContent="Measured "+kind.replaceAll("_"," ")+" · "+report.split+
+      " · "+(report.model.split("/").pop()||id);
+   }else{
+    element.removeAttribute("src");lastPlotKeys[imageId]="";
+    label.textContent=matching?"Ultralytics did not generate this plot.":
+      "Validate the selected model and dataset to display its plot.";
+   }
+  }
+ }
+}
+$("confusionKind").onchange=()=>renderComparisonPlots(last?.workflow||{});
+$("curveKind").onchange=()=>renderComparisonPlots(last?.workflow||{});
 function drawComparisonPlot(values){
  const svg=$("comparisonPlot"),ns="http://www.w3.org/2000/svg";
  svg.replaceChildren();
@@ -1050,6 +1133,7 @@ function renderWorkflow(s){
   }
  }
  drawComparisonPlot(values);
+ renderComparisonPlots(w);
 }
 async function init(){
  const r=await fetch("/api/options",{cache:"no-store"});
