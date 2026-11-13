@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import shutil
 import time
 
 from ultralytics import YOLO
@@ -135,6 +136,15 @@ def main() -> None:
         "precision": "BoxP_curve.png",
         "recall": "BoxR_curve.png",
     }
+    if (requested_plots_dir is not None
+            and actual_plots_dir.resolve() != requested_plots_dir.resolve()):
+        # Ultralytics versions can choose an incremented save directory.
+        # Copy only genuine plots into the Lab's stable per-model location.
+        for filename in plot_candidates.values():
+            source = actual_plots_dir / filename
+            if source.is_file():
+                shutil.copy2(source, requested_plots_dir / filename)
+        actual_plots_dir = requested_plots_dir
     plot_files = {
         key: filename for key, filename in plot_candidates.items()
         if (actual_plots_dir / filename).is_file()
