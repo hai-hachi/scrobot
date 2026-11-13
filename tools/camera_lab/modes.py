@@ -62,7 +62,7 @@ def expected_mb_s(settings):
             "total": round(rgb + depth, 3)}
 
 
-def world(settings, destination):
+def world(settings, destination, lighting=None):
     """Two independent Gazebo sensors and two primitives: floor + cube."""
     cfg = validate(settings)
     root = ET.Element("sdf", version="1.10")
@@ -141,7 +141,7 @@ def world(settings, destination):
     # Camera-only transport benchmark stays minimal in geometry but uses
     # exactly the saved Lighting Lab light array, venue and floor color.
     from lighting_source import apply_simple_world
-    apply_simple_world(scene)
+    apply_simple_world(scene, lighting)
     dest = Path(destination)
     dest.parent.mkdir(parents=True, exist_ok=True)
     ET.indent(root, space="  ")
