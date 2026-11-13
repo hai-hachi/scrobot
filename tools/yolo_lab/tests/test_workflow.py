@@ -316,7 +316,7 @@ class WorkflowTests(unittest.TestCase):
             artifact=artifacts/"lab_1.pt"
             artifact.write_bytes(b"artifact checkpoint")
             pointer=root/"artifacts/latest_model.txt"
-            pointer.write_text(str(artifact.resolve())+"\\n")
+            pointer.write_text(str(artifact.resolve())+"\n")
             with (mock.patch.object(workflow,"HERE",root),
                   mock.patch.object(workflow,"MODELS",root/"models/pretrained"),
                   mock.patch.object(workflow,"PRETRAINS",protected),
