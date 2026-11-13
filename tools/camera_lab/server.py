@@ -484,6 +484,40 @@ class Lab:
                 if dead:
                     self.phase="failed"
                     self.error="AprilTag pipeline process exited: "+", ".join(dead)+". Inspect logs below."
+            tag_obs = self.tag_status() if self.mode == "apriltags" else {}
+            pipeline_hint = None
+            if self.mode == "apriltags" and self.phase == "streaming":
+                received = tag_obs.get("rgb_frames") or 0
+                paired = tag_obs.get("paired_frames") or 0
+                messages = tag_obs.get("detector_frames") or 0
+                if received > 10 and paired == 0:
+                    pipeline_hint = (
+                        "RGB frames are received, but no paired CameraInfo "
+                        "is being published. Check CameraInfo dimensions and bridge."
+                    )
+                elif paired > 10 and not tag_obs.get("image_subscribers"):
+                    pipeline_hint = (
+                        "No AprilTag subscriber on /camera_lab/tag/image_rect. "
+                        "Check detector remappings and detector.log."
+                    )
+                elif paired > 10 and not tag_obs.get("info_subscribers"):
+                    pipeline_hint = (
+                        "No AprilTag subscriber on /camera_lab/tag/camera_info. "
+                        "Check detector remappings and detector.log."
+                    )
+                elif paired > 10 and messages == 0:
+                    pipeline_hint = (
+                        "RGB and CameraInfo are being published as stamped pairs "
+                        "but the detector has returned no messages. Inspect "
+                        "detector.log and check ROS QoS/topic connectivity."
+                    )
+                elif messages > 10 and not (tag_obs.get("detected_frames") or 0):
+                    pipeline_hint = (
+                        "Detector is processing frames but finds no selected tag. "
+                        "Now check the camera POV, tag orientation/size and lighting."
+                    )
+                elif messages > 0:
+                    pipeline_hint = "AprilTag detector is processing synchronized frames."
             logs = {}
             for name in ("gazebo", "image_bridge", "info_bridge",
                          "monitor", "tag_monitor", "detector"):
@@ -499,7 +533,8 @@ class Lab:
                 "tag": dict(self.tag),
                 "tag_mount_radius": mount_radius(self.tag["size"]),
                 "tags": {str(i): tag_pose(i, self.tag) for i in range(4)},
-                "tag_observation": self.tag_status() if self.mode=="apriltags" else {},
+                "tag_observation": tag_obs,
+                "tag_pipeline_hint": pipeline_hint,
                 "sweep": dict(self.sweep),
                 "settings": self.settings,
                 "expected": expected_mb_s(self.settings),
