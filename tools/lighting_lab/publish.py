@@ -25,7 +25,7 @@ from scene import (
 
 REPO = Path(__file__).resolve().parents[2]
 PRODUCTION_WORLD = REPO / "src/scrobot_simulation/worlds/badminton_court.sdf"
-LAB_CONFIG = REPO / "src/scrobot_simulation/config/lighting_lab.yaml"
+LAB_CONFIG = REPO / "tools/configs/labs/lighting_lab.yaml"
 
 # Only world-level light tags (four-space indentation) may be replaced.
 LIGHT_BLOCK = re.compile(r"(?ms)^    <light\b[^>]*>.*?^    </light>\n")

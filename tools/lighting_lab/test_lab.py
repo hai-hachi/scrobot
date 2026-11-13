@@ -147,7 +147,7 @@ class SceneTests(unittest.TestCase):
 
     def test_lab_config_yaml_roundtrip_and_validation(self):
         source_bytes = SOURCE.read_bytes()
-        config_file = ROOT / "src/scrobot_simulation/config/lighting_lab.yaml"
+        config_file = ROOT / "tools/configs/labs/lighting_lab.yaml"
         defaults = read_lab_config(config_file)
         self.assertEqual(defaults["lights"]["hsv"], [55.0, 3.0, 95.0])
         # Production/light-lab presets are user-calibrated, not immutable

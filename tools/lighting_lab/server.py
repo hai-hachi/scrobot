@@ -45,7 +45,7 @@ SOURCE = Path(__file__).resolve().parents[2] / (
     "src/scrobot_simulation/worlds/badminton_court.sdf"
 )
 HTML = Path(__file__).with_name("index.html")
-LAB_CONFIG = SOURCE.parent.parent / "config/lighting_lab.yaml"
+LAB_CONFIG = Path(__file__).resolve().parents[1] / "configs/labs/lighting_lab.yaml"
 PRESSTS = Path.home() / "scrobot_ws/evaluation_results/lighting_lab/presets"
 CAMERAS = {
     "robot": "/camera/color",
