@@ -205,7 +205,28 @@ class Lab:
                     return
                 names = [entry["name"] for entry in self.manifest["shuttles"]]
                 env = self.environment()
+            import math
             poses = snapshot(names, env)
+            stable = False
+            for _ in range(12):
+                time.sleep(0.8)
+                with self.lock:
+                    if generation != self.scene_generation:
+                        return
+                next_poses = snapshot(names, env)
+                def not_moving(a, b):
+                    translation = math.dist(a[:3], b[:3])
+                    qa, qb = a[3:], b[3:]
+                    dot = abs(sum(x*y for x, y in zip(qa, qb)))
+                    angular_change = 2 * math.acos(max(-1, min(1, dot)))
+                    return translation < 0.006 and angular_change < 0.08
+                stable = all(not_moving(poses[name], next_poses[name])
+                             for name in names)
+                poses = next_poses
+                if stable:
+                    break
+            if not stable:
+                raise RuntimeError("Shuttles still moving; increase settling time")
             with self.lock:
                 if generation != self.scene_generation:
                     return
@@ -214,9 +235,13 @@ class Lab:
                 frozen_path, frozen = build(
                     camera, yolo, static_path, lighting=lighting,
                     settled_poses=poses)
+                gui_was_open = (self.processes.get("gui") is not None and
+                                self.processes["gui"].poll() is None)
                 for name in reversed(list(self.processes)):
                     self._terminate(name)
                 self._launch_camera_scene(frozen_path, camera)
+                if gui_was_open:
+                    self.launch("gui", ["gz", "sim", "-g", "-v", "3"])
                 self.manifest = frozen
                 self.phase = "starting"
         except Exception as exc:
