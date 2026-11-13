@@ -91,8 +91,8 @@ def build(camera, yolo, destination, lighting=None, settled_poses=None):
         name = f"yolo_shuttle_{i:03d}"
         initial_yaw = rng.uniform(-math.pi, math.pi)
         # A modest initial tilt prevents perfectly upright, balanced shuttles.
-        roll = rng.uniform(-0.50, 0.50)
-        pitch = rng.uniform(-0.50, 0.50)
+        roll = rng.choice((-1, 1)) * rng.uniform(1.05, 1.35)
+        pitch = rng.uniform(-0.25, 0.25)
         initial = (x, y, 0.11, roll, pitch, initial_yaw)
         pose = tuple(settled_poses[name]) if settled_poses is not None else initial
         if len(pose) != 7 and len(pose) != 6:
