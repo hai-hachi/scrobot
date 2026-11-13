@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SCROBOT Camera Lab</title>
+<title>SCROBOT Camera & AprilTags Labs</title>
 <style>
 :root{color-scheme:dark;--bg:#0d1721;--panel:#192837;--line:#3d5261;--ink:#edf4f5;--muted:#afc1c9;--good:#5bd9c8;--warn:#f3c27b}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px system-ui,sans-serif}
@@ -28,14 +28,30 @@ table{width:100%;border-collapse:collapse;min-width:570px;font-size:13px}
 th,td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
 th{font-weight:500;color:var(--muted)}.scroll{overflow-x:auto}
 pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12px;border-radius:8px;white-space:pre-wrap}
+ .tabs{display:flex;gap:9px;margin:18px 0 0}.tabs button.active{background:#08766b}
+.tag-layout{display:grid;grid-template-columns:minmax(300px,430px) minmax(0,1fr);gap:18px}
+.tag-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tag-columns label{margin-top:9px}
+.tag-columns input, .tag-columns select{width:100%;padding:9px;background:#10202d;color:var(--ink);border:1px solid var(--line);border-radius:7px}
+.tag-columns input[type=range]{padding:5px 0}
+#courtMap{display:block;width:100%;border:1px solid var(--line);border-radius:8px;background:#163f38;cursor:crosshair}
+#tagImage{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#0c161e;border:1px solid var(--line);border-radius:8px}
+#tagCharts{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+#tagCharts canvas{width:100%;height:225px;background:#10202d;border:1px solid var(--line);border-radius:7px}
+.field-readout{font-size:12px;color:var(--good)}
+@media(max-width:1000px){.tag-layout,#tagCharts{grid-template-columns:1fr}}
 @media(max-width:820px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:500px){main{padding:12px}.card{padding:14px}.cols{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <main>
-<h1>SCROBOT Camera Lab</h1>
-<p class="hint">RealSense D435i USB 3 mode table · Gazebo Harmonic · ROS 2 Jazzy · camera benchmarking only</p>
+<h1>SCROBOT Camera & AprilTags Labs</h1>
+<p class="hint">RealSense D435i USB 3 · Gazebo Harmonic · ROS 2 Jazzy · independent camera and fiducial benchmarks</p>
+<div class="tabs">
+<button id="cameraTab" class="active">Camera Lab</button>
+<button id="tagTab">AprilTags Lab</button>
+</div>
 <div class="grid">
  <section class="card">
   <h2>Camera settings</h2>
@@ -46,14 +62,14 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
   <label for="depth_fps">Depth frame rate</label><select id="depth_fps"></select>
   <p class="hint">Only documented D435i USB 3 resolution/FPS combinations are selectable. RGB and depth rates can differ. Gazebo does not simulate USB bus limits.</p>
   <div class="buttons">
-   <button class="primary" id="start">Start / Restart test</button>
+   <button class="primary" id="start">Start camera-only test</button>
    <button id="stop">Stop</button>
   </div>
   <div id="health" class="status">Ready. Select a camera mode and start.</div>
   <p class="hint">Runs isolated Gazebo sensors and ROS image bridge. No GUI, AprilTags, YOLO, controllers or robot navigation.</p>
   <div class="buttons">
    <button id="save">Save benchmark JSON</button>
-   <button id="publish">Save tested settings to simulation YAML</button>
+   <button id="publish">Save tested camera settings to simulation YAML</button>
   </div>
   <p id="message" class="hint" role="status"></p>
  </section>
@@ -87,7 +103,112 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
    <details><summary>Monitor log</summary><pre id="monitorLog"></pre></details>
   </section>
  </div>
-</div>
+<section class="card" id="tagPane" hidden>
+ <h2>AprilTags Lab — robot pose, physical tag geometry and real detections</h2>
+ <p class="hint">Four real AprilTag 16h5 textures (IDs 0–3), mounted as two outward-facing plates on each badminton net pole. The scene uses the published court geometry and one lightweight light. AprilTag detections come from the actual <code>apriltag_ros</code> detector, not generated overlay boxes.</p>
+ <div class="tag-layout">
+  <div>
+   <h3>Tags and camera input</h3>
+   <div class="tag-columns">
+    <div><label for="tagId">Target tag</label><select id="tagId">
+       <option value="0">ID 0 · upper pole</option>
+       <option value="1">ID 1 · lower pole</option>
+       <option value="2">ID 2 · upper pole</option>
+       <option value="3">ID 3 · lower pole</option>
+    </select></div>
+    <div><label for="tagSize">Active tag edge</label>
+       <input id="tagSize" type="range" min="0.04" max="0.25" step="0.005" value="0.1"/>
+       <span id="sizeValue" class="field-readout"></span></div>
+    <div><label for="tagHeight">Tag center height</label>
+       <input id="tagHeight" type="range" min="0.12" max="2.50" step="0.02" value="0.15"/>
+       <span id="heightValue" class="field-readout"></span></div>
+    <div><label for="noiseSigma">RGB Gaussian pixel noise σ</label>
+       <input id="noiseSigma" type="range" min="0" max="50" step="1" value="0"/>
+       <span id="noiseValue" class="field-readout"></span></div>
+   </div>
+   <p id="mountRadius" class="hint">Mount radius will be computed automatically to avoid plate intersections.</p>
+   <div class="buttons">
+    <button class="primary" id="startTag">Start / Restart AprilTags scene</button>
+    <button id="applyNoise">Apply noise live</button>
+   </div>
+   <p class="hint">Changing tag size or height regenerates the meshes and requires restarting this scene. Gaussian noise modifies the RGB pixels <b>before detection</b>, without restarting Gazebo.</p>
+   <h3>Place the robot on the court</h3>
+   <svg id="courtMap" viewBox="0 0 700 410" aria-label="Click to choose the robot's location on the badminton court">
+    <rect x="41" y="40" width="618" height="330" rx="3" fill="#197067"/>
+    <rect x="64" y="63" width="572" height="284" fill="none" stroke="#e8f3ef" stroke-width="2"/>
+    <path d="M350 63V347 M210 63V347 M490 63V347 M64 205H636" stroke="#e8f3ef" stroke-opacity=".7" stroke-width="2" fill="none"/>
+    <line x1="350" y1="48" x2="350" y2="360" stroke="#f4ebac" stroke-width="3"/>
+    <circle cx="350" cy="65.4" r="6" fill="#cbd5df"/>
+    <circle cx="350" cy="344.6" r="6" fill="#cbd5df"/>
+    <g id="courtTags"></g><g id="robotMarker"></g>
+    <text x="48" y="27" fill="#d6efe7" font-size="15">Upper court side (+Y)</text>
+    <text x="48" y="397" fill="#d6efe7" font-size="14">Click to position the robot; use yaw for its direction</text>
+   </svg>
+   <div class="tag-columns">
+    <div><label for="robotX">Robot X (m)</label><input id="robotX" type="number" min="-7.2" max="7.2" step="0.1" value="1.47"/></div>
+    <div><label for="robotY">Robot Y (m)</label><input id="robotY" type="number" min="-3.6" max="3.6" step="0.1" value="1.58"/></div>
+    <div><label for="robotYaw">Robot yaw (degrees)</label><input id="robotYaw" type="number" min="-180" max="180" step="5" value="135"/></div>
+    <div><label>Quick alignment</label><button id="headOn" style="width:100%">Face selected tag at 2 m</button></div>
+   </div>
+   <div class="buttons"><button id="moveRobot" class="primary">Place / rotate robot</button></div>
+   <p id="robotStatus" class="hint">The overhead view is a pose selector, not a Gazebo renderer.</p>
+  </div>
+  <div>
+   <h3>Live robot camera POV</h3>
+   <img id="tagImage" alt="Live RGB frame with detected AprilTag corners and TF pose axes"/>
+   <p class="hint">Actual RGB image with detected corner outlines and TF axes when available; preview limited to about 2–3 FPS. This display adds image-conversion CPU work, reported separately under <b>tag_monitor</b>.</p>
+   <div class="stats">
+    <div class="stat"><small>Detection success</small><strong id="tagHit">—</strong><small>% of processed detector frames</small></div>
+    <div class="stat"><small>Detector throughput</small><strong id="tagFps">—</strong><small>frames/s, wall time</small></div>
+    <div class="stat"><small>3D position RMSE</small><strong id="tagPosError">—</strong><small>m versus true pose</small></div>
+    <div class="stat"><small>Range RMSE</small><strong id="tagRangeError">—</strong><small>m in camera frame</small></div>
+    <div class="stat"><small>Bearing RMSE</small><strong id="tagYawError">—</strong><small>degrees of camera bearing</small></div>
+    <div class="stat"><small>Plane-normal error</small><strong id="tagNormalError">—</strong><small>degrees, unsigned axis</small></div>
+   </div>
+   <div id="tagMeasurements" class="status">Start the AprilTags scene to measure real detections and estimated tag-to-camera pose.</div>
+   <h3>Tag detector CPU and memory</h3>
+   <div class="scroll"><table><thead><tr><th>Process</th><th>CPU % (per core)</th><th>RAM (MB)</th></tr></thead><tbody id="tagCpu"></tbody></table></div>
+   <p class="hint">The detection process is separate from the image noise/preview process. Noise and preview overhead are not misattributed to the detector.</p>
+  </div>
+ </div>
+ <section class="card">
+  <h2>Automated accuracy sweeps</h2>
+  <div class="tag-columns">
+   <div>
+    <h3>1 · Distance sweep (robot faces tag)</h3>
+    <div class="tag-columns">
+     <div><label>Start (m)</label><input id="distanceMin" type="number" min=".4" max="8" step=".1" value=".6"/></div>
+     <div><label>End (m)</label><input id="distanceMax" type="number" min=".4" max="8" step=".1" value="5.0"/></div>
+     <div><label>Step (m)</label><input id="distanceStep" type="number" min=".05" max="2" step=".05" value=".4"/></div>
+    </div>
+    <p class="hint">Distance is horizontal from robot base to tag center. Each pose turns the robot to face the tag directly.</p>
+    <button class="primary" id="distanceRun">Run distance sweep</button>
+   </div>
+   <div>
+    <h3>2 · Heading sweep (fixed distance)</h3>
+    <div class="tag-columns">
+     <div><label>Robot-base distance (m)</label><input id="fixedDistance" type="number" min=".4" max="8" step=".1" value="2"/></div>
+     <div><label>Start offset (°)</label><input id="angleMin" type="number" min="-90" max="90" step="5" value="-75"/></div>
+     <div><label>End offset (°)</label><input id="angleMax" type="number" min="-90" max="90" step="5" value="75"/></div>
+     <div><label>Step offset (°)</label><input id="angleStep" type="number" min="1" max="45" step="1" value="15"/></div>
+    </div>
+    <p class="hint">Robot stays at the specified distance on the tag normal and rotates about its vertical axis. Zero degrees means directly facing the tag.</p>
+    <button class="primary" id="headingRun">Run heading sweep</button>
+   </div>
+  </div>
+  <div class="tag-columns">
+   <div><label>Settled sampling time per pose (s)</label><input id="dwell" type="number" min="1" max="6" step=".25" value="2"/></div>
+   <div><div class="buttons"><button id="cancelSweep">Cancel sweep</button><a id="downloadSweep" href="/api/tag/sweep/result" target="_blank" rel="noopener">View saved sweep JSON</a></div></div>
+  </div>
+  <p class="status" id="sweepStatus">No sweep running.</p>
+  <div id="tagCharts">
+   <div><h3>Distance: pose RMSE and detection percentage</h3><canvas id="distanceChart" width="620" height="225"></canvas></div>
+   <div><h3>Heading offset: pose RMSE and detection percentage</h3><canvas id="headingChart" width="620" height="225"></canvas></div>
+  </div>
+  <div class="scroll"><table><thead><tr><th>Distance / angle</th><th>Detector frames</th><th>Detection %</th><th>3D RMSE (m)</th><th>Bearing RMSE (°)</th><th>Detector FPS</th></tr></thead><tbody id="sweepRows"></tbody></table></div>
+  <p class="hint">Each point is a static Gazebo pose. Empty or missed detections are recorded as missing, never zero error. All sweep JSON files are saved under <code>evaluation_results/camera_lab/tag_sweeps/</code>.</p>
+ </section>
+</section>
 </main>
 <script>
 const $ = id => document.getElementById(id);
