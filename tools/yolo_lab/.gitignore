@@ -1,0 +1,7 @@
+# Large machine-local datasets, training outputs, imported checkpoints
+models/pretrained/*.pt
+runs/
+artifacts/
+__pycache__/
+**/__pycache__/
+*.pyc
