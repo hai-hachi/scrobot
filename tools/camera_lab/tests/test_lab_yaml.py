@@ -51,8 +51,10 @@ class LabYamlContracts(unittest.TestCase):
                 saved=path_for(lab)
                 self.assertEqual(saved.parent,labdir)
                 self.assertTrue(saved.name.endswith("_lab.yaml"))
-                self.assertFalse(
-                    (ROOT/"src/scrobot_simulation/config"/saved.name).exists())
+                # Legacy files can remain on an upgraded local checkout;
+                # they must never be mistaken for the new write destination.
+                self.assertNotEqual(
+                    saved, ROOT/"src/scrobot_simulation/config"/saved.name)
         for name in ("camera_calibration.yaml","mobility_calibration.yaml",
                      "odometry_calibration.yaml","shuttle_spawn.yaml"):
             self.assertTrue(
