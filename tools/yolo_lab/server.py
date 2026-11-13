@@ -31,6 +31,7 @@ from lighting_source import calibration as lighting_calibration
 from yolo_settings import DEFAULT as YOLO_DEFAULT, validate as validate_yolo
 from world import build
 from workflow import Workflow
+from log_text import tail as clean_tail
 
 OUTPUT = ROOT / "evaluation_results/yolo_lab"
 CAMERA_METER = ROOT / "tools/camera_lab/monitor.py"
@@ -273,7 +274,7 @@ class Lab:
                 "meter": raw, "preview": preview,
                 "expected_mb_s": expected_mb_s(self.camera),
                 "processes": procs,
-                "logs": {n: tail(OUTPUT / f"{n}.log") for n in
+                "logs": {n: clean_tail(OUTPUT / f"{n}.log") for n in
                          ("gazebo", "image_bridge", "meter", "preview", "gui")},
                 "display_available": bool(os.environ.get("DISPLAY")
                                           or os.environ.get("WAYLAND_DISPLAY")),
