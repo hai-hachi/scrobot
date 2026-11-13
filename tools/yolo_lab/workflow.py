@@ -90,7 +90,10 @@ class Workflow:
 
     def _next_dataset_name(self):
         # Use workstation location's calendar date; never depend on UTC day.
-        prefix = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).strftime("%b%d")
+        local_day = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh"))
+        months = ("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug",
+                  "Sep","Oct","Nov","Dec")
+        prefix = f"{months[local_day.month-1]}{local_day.day:02d}"
         occupied = {p.name.split("__", 1)[0]
                     for p in DATAROOT.iterdir()} if DATAROOT.is_dir() else set()
         for number in range(1, 1000):
