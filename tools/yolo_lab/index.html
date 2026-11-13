@@ -818,6 +818,36 @@ $("compareStop").onclick=()=>action(async()=>{
  await post("/api/compare/stop",{});
  notify("Stopped A/B comparison. Saved validation reports remain available.");
 });
+const lastCompareStamps={a:0,b:0};
+function drawComparisonPlot(values){
+ const svg=$("comparisonPlot"),ns="http://www.w3.org/2000/svg";
+ svg.replaceChildren();
+ function el(tag,attrs,txt){
+  const node=document.createElementNS(ns,tag);
+  Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,String(v)));
+  if(txt!=null)node.textContent=String(txt);
+  svg.append(node);
+ }
+ const colors=["#55ded0","#e6bc6e"],names=["Precision","Recall","mAP@50","mAP@50–95"];
+ for(let tick=0;tick<=4;tick++){
+  const y=220-tick*44;
+  el("line",{x1:48,x2:740,y1:y,y2:y,stroke:"#395460","stroke-width":1});
+  el("text",{x:42,y:y+4,fill:"#b5cbd3","font-size":11,"text-anchor":"end"},(tick*.25).toFixed(2));
+ }
+ for(let i=0;i<4;i++){
+  const x=112+i*170;
+  el("text",{x:x+18,y:248,fill:"#d7e9e9","font-size":13,"text-anchor":"middle"},names[i]);
+  for(let model=0;model<2;model++){
+   const v=values[model]?.[i];
+   if(v==null||!Number.isFinite(v))continue;
+   const h=Math.min(176,Math.max(0,v*176));
+   el("rect",{x:x+model*36,y:220-h,width:29,height:h,rx:3,fill:colors[model]});
+   el("text",{x:x+model*36+15,y:214-h,fill:colors[model],"font-size":11,"text-anchor":"middle"},v.toFixed(3));
+  }
+ }
+ el("text",{x:635,y:18,fill:colors[0],"font-size":13},"■ A");
+ el("text",{x:694,y:18,fill:colors[1],"font-size":13},"■ B");
+}
 function renderWorkflow(s){
  const w=s.workflow||{},progress=w.dataset_progress||{},
        summary=w.dataset_summary||{},inspection=w.inspection||{};
@@ -940,37 +970,46 @@ function renderWorkflow(s){
   "No active training run.";
  $("trainingLog").textContent=(w.task_logs?.import||"")+
   "\n"+(w.task_logs?.train||"");
- const val=w.validation||{};
- $("valPrecision").textContent=fmt(val.precision,3);
- $("valRecall").textContent=fmt(val.recall,3);
- $("valMap50").textContent=fmt(val.map50,3);
- $("valMap95").textContent=fmt(val.map5095,3);
- $("valModelName").textContent=val.model?val.model.split("/").pop():"—";
- $("valDatasetName").textContent=val.dataset?val.dataset.split("/").slice(-2,-1)[0]:"—";
- $("validationState").textContent=val.split?
-  "Completed "+val.split+" evaluation using model "+val.model:
-  w.tasks?.validate?.running?"Ultralytics validation running…":
-  "No completed Ultralytics metrics report.";
- $("validationLog").textContent=w.task_logs?.validate||"No validation log yet";
- const live=w.live||{};
- $("liveFps").textContent=fmt(live.processed_fps,1);
- $("liveLatency").textContent=fmt(live.inference_ms,1);
- $("liveBoxCount").textContent=live.detections??"—";
- $("liveStatus").textContent=live.model?
-  "Model "+live.model+" · RGB "+(live.input_resolution||[]).join("×")+
-  " · processed frames "+live.processed_frames+
-  " · received callbacks "+live.received_frames:
-  w.tasks?.live?.running?"Loading model / waiting for Gazebo RGB…":
-  "Start live YOLO on the saved camera inspection scene.";
- $("liveBoxes").textContent=(live.boxes||[]).length?
-  (live.boxes||[]).map(x=>"bbox ["+[x.x0,x.y0,x.x1,x.y1].join(", ")+
-    "] confidence "+x.confidence).join(" · "):
-  "No shuttle bbox in last processed frame.";
- $("liveLog").textContent=w.task_logs?.live||"No inference process yet";
- if(live.updated_wall&&live.updated_wall>lastLiveStamp){
-  lastLiveStamp=live.updated_wall;
-  $("liveImage").src="/api/live-frame?t="+encodeURIComponent(live.updated_wall);
+ const cmp=w.comparison||{},reports=cmp.validation||{},livemap=cmp.live||{};
+ const selected=[$("compareModelA").value,$("compareModelB").value];
+ $("comparisonState").textContent=cmp.state?
+   "Comparison: "+cmp.state.replaceAll("_"," ")+(cmp.error?" · "+cmp.error:""):
+   "Pick two models, then run A/B validation or live detection.";
+ const values=[[],[]],metrics=["precision","recall","map50","map5095"];
+ for(const [idx,slot,upper] of [[0,"a","A"],[1,"b","B"]]){
+  const id=selected[idx],item=(w.models||[]).find(m=>m.id===id);
+  const report=reports[slot]||{},raw=livemap[slot]||{};
+  const valid=!!(report.model&&id&&w.selected_dataset&&
+   String(report.model).endsWith("/"+id)&&
+   String(report.dataset||"").includes("/"+w.selected_dataset+"/"));
+  const data=valid?report:{};
+  const live=cmp.mode==="live"&&cmp.models?.[idx]===id&&
+    String(raw.model||"").endsWith("/"+id)?raw:{};
+  $("compareTitle"+upper).textContent=upper+" · "+(item?.name||id||"—");
+  for(const [field,name] of [["Precision","precision"],["Recall","recall"],
+      ["Map50","map50"],["Map95","map5095"]]){
+   $("cmp"+upper+field).textContent=fmt(data[name],3);
+  }
+  values[idx]=metrics.map(key=>data[key]==null?null:Number(data[key]));
+  $("cmp"+upper+"Fps").textContent=fmt(live.processed_fps,1);
+  $("cmp"+upper+"Latency").textContent=fmt(live.inference_ms,1);
+  $("cmp"+upper+"Boxes").textContent=live.detections??"—";
+  $("cmp"+upper+"Status").textContent=live.model?
+   "Live RGB "+(live.input_resolution||[]).join("×")+" · "+(live.processed_frames||0)+" processed frames":
+   valid?"Validated on "+report.split+" dataset split":"No matching results yet.";
+  $("cmp"+upper+"Log").textContent=w.task_logs?.["validate_"+slot]||
+    w.task_logs?.["live_"+slot]||"No comparison log yet";
+  if(live.updated_wall&&live.updated_wall>lastCompareStamps[slot]){
+   lastCompareStamps[slot]=live.updated_wall;
+   $("cmp"+upper+"Image").src="/api/compare-frame?slot="+slot+
+      "&t="+encodeURIComponent(live.updated_wall);
+  }
+  if(!live.updated_wall){
+   lastCompareStamps[slot]=0;
+   $("cmp"+upper+"Image").removeAttribute("src");
+  }
  }
+ drawComparisonPlot(values);
 }
 async function init(){
  const r=await fetch("/api/options",{cache:"no-store"});
