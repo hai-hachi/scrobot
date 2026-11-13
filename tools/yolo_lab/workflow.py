@@ -246,6 +246,11 @@ class Workflow:
         model = self.model_path(model_choice)
         if split not in ("val","test") or device not in ("0","cpu"):
             raise ValueError("Invalid dataset split or device")
+        counts = _read_json(dataset / "dataset_summary.json").get("counts", {})
+        if counts and (counts.get(split) or {}).get("images", 0) < 1:
+            raise ValueError(
+                f"No {split} images exist in this dataset. Capture more varied views "
+                "or choose another split.")
         self.lab.stop()
         report = self.lab_output / "validation_metrics.json"
         report.unlink(missing_ok=True)
