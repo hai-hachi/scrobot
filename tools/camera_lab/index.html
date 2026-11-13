@@ -684,7 +684,10 @@ function renderTag(s){
    tagYaml.path:"No AprilTags Lab YAML saved yet.";
  $("lightingYamlStatus").textContent="Loaded Lighting Lab config: "+
    (s.lab_yaml?.lighting?.path||"—")+" · "+
-   (s.lab_yaml?.lighting?.lights??"—")+" calibrated lights; restart scene to reload.";
+   (s.lab_yaml?.lighting?.lights??"—")+" calibrated lights"+
+   (s.lab_yaml?.lighting?.saved_changed_since_start?
+    " · Lighting Lab YAML changed since scene started; restart to load new values.":"")+
+   ".";
  $("applyAllTags").disabled=s.mode!=="apriltags"||
    s.sweep?.state==="running";
  $("tagSharedStatus").textContent=geometryPending?
@@ -792,7 +795,7 @@ async function initialize(){
      venue.limit_x.toFixed(2)+" m X and ±"+venue.limit_y.toFixed(2)+
      " m Y (includes 0.30 m edge margin)."+
      (venue.lighting_config_matches_published_floor?"":
-      " Note: Lighting Lab YAML differs from published court SDF; using the smaller actual floor. Publish Lighting Lab venue changes before testing larger ranges.");
+      " Note: Lighting Lab YAML differs from published court SDF; this lab rebuilds its venue from the saved Lighting Lab YAML. Publish Lighting Lab calibration separately to update the main world.");
  }
  for(const name of ["color","depth"]){
   setOptions(name,Object.keys(modes[name]),modes.default[name]);
