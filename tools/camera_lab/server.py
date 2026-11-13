@@ -722,7 +722,13 @@ class Lab:
                 "tag_observation": tag_obs,
                 "tag_epoch": self.tag_epoch,
                 "tag_pipeline_hint": pipeline_hint,
-                "tag_publication": tag_publish_status(self.tag),
+                "tag_publication": (
+                    tag_publish_status(validate_tag(saved_tags))
+                    if saved_tags is not None else {
+                        "matches_lab": False, "error": None,
+                        "paths": [], "message": "Save AprilTags Lab YAML first",
+                    }
+                ),
                 "sweep": dict(self.sweep),
                 "settings": self.settings,
                 "expected": expected_mb_s(self.settings),
