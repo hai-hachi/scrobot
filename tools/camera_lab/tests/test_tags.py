@@ -511,6 +511,92 @@ class TagLabTests(TestCase):
         self.assertIn('/api/tag/publish',html)
         self.assertIn('"/api/tag/publish"',(LAB/"server.py").read_text())
 
+    def test_relocation_resets_accuracy_epoch_and_discards_stale_summary(self):
+        # The server must blank old RMSE immediately, before the observer's
+        # 120 ms timer sees the new control epoch.
+        with tempfile.TemporaryDirectory() as td:
+            folder=Path(td)
+            lab=server.Lab()
+            lab.mode="apriltags"
+            previous_epoch=lab.tag_epoch
+            old={"epoch":previous_epoch,"updated_wall":server.time.time(),
+                 "position_rmse_m":0.123,"pose_frames":25}
+            (folder/"tag_status.json").write_text(__import__("json").dumps(old))
+            (folder/"tag_preview.jpg").write_bytes(b"old-frame")
+            with (mock.patch.object(server,"RESULTS",folder),
+                  mock.patch.object(lab,"gz_set_robot_pose")):
+                result=lab.place_robot({
+                    "robot_x":1.0,"robot_y":2.0,"robot_yaw":-30.0,"tag_id":1
+                })
+                self.assertTrue(result["accuracy_reset"])
+                self.assertEqual(result["epoch"],previous_epoch+1)
+                self.assertEqual(lab.tag["tag_id"],1)
+                self.assertFalse((folder/"tag_status.json").exists())
+                self.assertFalse((folder/"tag_preview.jpg").exists())
+                self.assertEqual(lab.tag_status(),{})
+                control=__import__("json").loads(
+                    (folder/"tag_control.json").read_text())
+                self.assertEqual(control["epoch"],lab.tag_epoch)
+                self.assertEqual(control["tag"]["robot_x"],1.0)
+                # Even if a late observer callback rewrites old measurements,
+                # stale epoch data may never reach the dashboard.
+                (folder/"tag_status.json").write_text(
+                    __import__("json").dumps(old))
+                self.assertEqual(lab.tag_status(),{})
+                fresh={**old,"epoch":lab.tag_epoch,"pose_frames":3}
+                (folder/"tag_status.json").write_text(
+                    __import__("json").dumps(fresh))
+                self.assertEqual(lab.tag_status()["pose_frames"],3)
+
+    def test_single_geometry_action_updates_four_tags_with_common_values(self):
+        lab=server.Lab()
+        lab.mode="apriltags"
+        lab.sweep={"state":"idle"}
+        lab.settings=dict(modes.DEFAULT)
+        previous_pose={key:lab.tag[key] for key in (
+            "robot_x","robot_y","robot_yaw","tag_id","noise_sigma"
+        )}
+        with mock.patch.object(lab,"start_tags",
+                return_value={"world":"/tmp/apriltags.sdf"}) as start:
+            result=lab.update_all_tag_geometry({"size":.18,"height":.5})
+            self.assertEqual(result["updated_tag_ids"],[0,1,2,3])
+            self.assertAlmostEqual(result["size"],.18)
+            self.assertAlmostEqual(result["height"],.5)
+            self.assertAlmostEqual(result["mount_radius"],
+                                   geom.mount_radius(.18))
+            self.assertTrue(result["restarted"])
+            payload=start.call_args.args[0]
+            self.assertEqual(payload["camera"],modes.DEFAULT)
+            self.assertEqual(payload["tag"]["size"],.18)
+            self.assertEqual(payload["tag"]["height"],.5)
+            for key,value in previous_pose.items():
+                self.assertEqual(payload["tag"][key],value)
+        with self.assertRaisesRegex(ValueError,"Specify the shared"):
+            lab.update_all_tag_geometry({"size":.18})
+        lab.sweep={"state":"running"}
+        with self.assertRaisesRegex(ValueError,"Finish or cancel"):
+            lab.update_all_tag_geometry({"size":.18,"height":.5})
+
+    def test_measurement_epoch_filters_in_flight_pre_relocation_frames(self):
+        monitor=(LAB/"tag_monitor.py").read_text()
+        self.assertIn("self.errors = []",monitor)
+        self.assertIn("self.fresh_image_stamps = deque(maxlen=250)",monitor)
+        self.assertIn("self.fresh_image_stamps.append(stamp_key(out.header))",
+                      monitor)
+        self.assertIn("if stamp_key(msg.header) not in self.fresh_image_stamps:",
+                      monitor)
+        self.assertIn("if stamp_key(tf.header) not in self.fresh_image_stamps:",
+                      monitor)
+        server_code=(LAB/"server.py").read_text()
+        self.assertIn('"tag_epoch": self.tag_epoch',server_code)
+        self.assertIn('"accuracy_reset": True',server_code)
+        html=(LAB/"index.html").read_text()
+        self.assertIn('id="tagEpochStatus"',html)
+        self.assertIn("clearPoseAccuracy(result.epoch)",html)
+        self.assertIn('id="applyAllTags"',html)
+        self.assertIn('/api/tag/geometry',html)
+        self.assertIn('result.updated_tag_ids.length',html)
+
     def test_ui_tag_controls_and_browser_js(self):
         html=(LAB/"index.html").read_text()
         for key in ("tagPane","courtMap","tagSize","tagHeight","noiseSigma",
