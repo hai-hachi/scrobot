@@ -362,6 +362,14 @@ a{color:#65dfd1}.note{border-left:2px solid var(--alert);padding-left:11px;color
 </div>
 <p class="muted">Both live detectors subscribe to the same robot RGB topic, but their displayed frames may be slightly different in time. Use the held-out validation plot for an apples-to-apples accuracy comparison.</p>
 </div>
+<section class="card">
+<h2>Gazebo / process diagnostics</h2>
+<details><summary>Process status</summary><pre id="processLog">No processes active</pre></details>
+<details><summary>Gazebo log</summary><pre id="gazeboLog">No Gazebo log</pre></details>
+<details><summary>Image bridge / camera preview logs</summary><pre id="sensorLog">No sensor log</pre></details>
+<details><summary>Gazebo GUI log</summary><pre id="guiLog">No GUI log</pre></details>
+</section>
+</main>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
