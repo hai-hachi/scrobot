@@ -52,8 +52,14 @@ class TagMonitor(Node):
         self.detected = {}
         self.latest_tfs = {}
         self._reset()
-        self.pub = self.create_publisher(Image, "/camera_lab/tag_color",
-                                         qos_profile_sensor_data)
+        # CameraSubscriber in apriltag_ros expects a camera namespace with
+        # sibling image + CameraInfo topics. Publish both together here,
+        # with IDENTICAL header stamps. Do not feed independently-stamped
+        # Gazebo CameraInfo directly to the detector.
+        self.pub = self.create_publisher(
+            Image, "/camera_lab/tag/image_rect", qos_profile_sensor_data)
+        self.pub_info = self.create_publisher(
+            CameraInfo, "/camera_lab/tag/camera_info", qos_profile_sensor_data)
         self.create_subscription(Image, "/camera_lab/color", self.on_image,
                                  qos_profile_sensor_data)
         self.create_subscription(CameraInfo, "/camera_lab/color/camera_info",
@@ -69,6 +75,8 @@ class TagMonitor(Node):
     def _reset(self):
         self.reset_wall = time.monotonic()
         self.rgb_count = 0
+        self.paired_frames = 0
+        self.rejected_info_frames = 0
         self.tag_frames = 0
         self.hits = 0
         self.pose_count = 0
@@ -98,8 +106,42 @@ class TagMonitor(Node):
             return
 
     def on_info(self, msg):
-        if len(msg.k) == 9 and msg.k[0] > 0 and msg.k[4] > 0:
+        # Gazebo can publish a CameraInfo at a different tick from the RGB
+        # frame. Cache intrinsics, then stamp a copy using the RGB frame.
+        if (len(msg.k) == 9 and msg.k[0] > 0 and msg.k[4] > 0
+                and msg.width > 0 and msg.height > 0):
             self.camera_info = msg
+
+    def paired_info(self, image):
+        """Build rectified camera intrinsics with an exact image stamp.
+
+        Gazebo RGB images are unrectified pinhole simulations (no lens
+        distortion). Fill ROS P from K if bridge leaves projection unset.
+        """
+        if self.camera_info is None:
+            return None
+        info = self.camera_info
+        if info.width != image.width or info.height != image.height:
+            return None
+        result = CameraInfo()
+        result.header = image.header
+        result.height = info.height
+        result.width = info.width
+        result.distortion_model = info.distortion_model
+        result.d = list(info.d)
+        result.k = list(info.k)
+        result.r = list(info.r)
+        result.p = list(info.p)
+        if not all(abs(result.p[i]) > 1e-9 for i in (0, 2, 5, 6)):
+            # Single Gazebo pinhole camera, no rectification or stereo shift.
+            fx, fy, cx, cy = info.k[0], info.k[4], info.k[2], info.k[5]
+            result.p = [float(fx), 0.0, float(cx), 0.0,
+                        0.0, float(fy), float(cy), 0.0,
+                        0.0, 0.0, 1.0, 0.0]
+        result.binning_x = info.binning_x
+        result.binning_y = info.binning_y
+        result.roi = info.roi
+        return result
 
     def on_image(self, msg):
         cfg = self.control
@@ -127,7 +169,15 @@ class TagMonitor(Node):
             out.data = arr.tobytes()
         else:
             out = msg
-        self.pub.publish(out)
+        info = self.paired_info(out)
+        if info is not None:
+            # Match by sequence timestamp; BEST_EFFORT, depth=5 for
+            # both streams, with a single producer ordering their writes.
+            self.pub_info.publish(info)
+            self.pub.publish(out)
+            self.paired_frames += 1
+        else:
+            self.rejected_info_frames += 1
         if time.monotonic() - self.reset_wall > .35:
             self.rgb_count += 1
         self.rgb.append((stamp(out.header), out, time.monotonic()))
@@ -300,7 +350,12 @@ class TagMonitor(Node):
                           math.ceil(.95*len(latencies))-1)] if latencies else None
         summary = {"updated_wall":time.time(),"epoch":self.epoch,
                    "tag_id":self.control["tag"]["tag_id"] if self.control else None,
-                   "rgb_frames":self.rgb_count,"detector_frames":self.tag_frames,
+                   "rgb_frames":self.rgb_count,
+                   "paired_frames":self.paired_frames,
+                   "unpaired_frames":self.rejected_info_frames,
+                   "image_subscribers":self.pub.get_subscription_count(),
+                   "info_subscribers":self.pub_info.get_subscription_count(),
+                   "detector_frames":self.tag_frames,
                    "detected_frames":self.hits,"pose_frames":self.pose_count,
                    "detection_pct":round(100*self.hits/self.tag_frames,2)
                        if self.tag_frames else None,
@@ -321,6 +376,8 @@ class TagMonitor(Node):
                         if self.control else None,
                    "observed_translation":self.latest_observed,
                    "camera_info_valid":self.camera_info is not None,
+                   "camera_info_focal_px":round(float(self.camera_info.k[0]),2)
+                       if self.camera_info is not None else None,
                    "noise_sigma":self.control["tag"]["noise_sigma"]
                        if self.control else 0,
                    "preview_age_s":round(now-self.last_preview,2)
