@@ -130,8 +130,10 @@ class TagMonitor(Node):
         if time.monotonic() - self.reset_wall > .35:
             self.rgb_count += 1
         self.rgb.append((stamp(out.header), out))
-        # Preview after empty detections: still show the current camera POV.
-        if time.monotonic() - self.last_preview > .75:
+        # Before apriltag_ros starts publishing, still show a live frame.
+        # Once it runs, draw from the matching detections/TF timestamps
+        # instead of overwriting the overlay with an undecorated image.
+        if self.tag_frames == 0 and time.monotonic() - self.last_preview > .75:
             self.preview(out, [])
 
     def on_detections(self, msg):
@@ -163,7 +165,15 @@ class TagMonitor(Node):
         nearest = min(self.rgb, key=lambda x:abs(x[0]-stamp(msg.header)),
                       default=None)
         if nearest and abs(nearest[0]-stamp(msg.header))<0.03:
-            self.preview(nearest[1], ds)
+            have_tf = any(
+                key in self.latest_tfs and
+                abs(self.latest_tfs[key]["stamp"] - stamp(msg.header)) < .06
+                for key in (d["id"] for d in ds)
+            )
+            # For detected markers, prefer waiting until TF arrives; it
+            # carries the actual detector pose used for the drawn axes.
+            if not ds or have_tf or now-self.last_preview>.85:
+                self.preview(nearest[1], ds)
         self.last_stamp = stamp(msg.header)
 
     def on_tf(self, msg):
@@ -171,6 +181,7 @@ class TagMonitor(Node):
         if cfg is None or time.monotonic()-self.reset_wall<.35:
             return
         tag_id = cfg["tag"]["tag_id"]
+        stamp_for_preview = None
         for tf in msg.transforms:
             if tf.child_frame_id not in {
                 f"observed_tag_{i}" for i in range(4)
@@ -185,6 +196,7 @@ class TagMonitor(Node):
                 "stamp":stamp(tf.header),
             }
             self.latest_tfs[key] = sample
+            stamp_for_preview = sample["stamp"]
             if key != tag_id:
                 continue
             # Match only this camera optical frame. Comparing a different
@@ -197,6 +209,15 @@ class TagMonitor(Node):
                 self.errors.append(err)
                 self.pose_count += 1
                 self.latest_observed = sample
+        if stamp_for_preview is not None:
+            key=round(stamp_for_preview,4)
+            ds=self.detected.get(key)
+            if ds:
+                nearest=min(self.rgb,
+                    key=lambda item:abs(item[0]-stamp_for_preview),
+                    default=None)
+                if nearest and abs(nearest[0]-stamp_for_preview)<.03:
+                    self.preview(nearest[1],ds)
         if len(self.errors)>5000:
             self.errors=self.errors[-5000:]
 
