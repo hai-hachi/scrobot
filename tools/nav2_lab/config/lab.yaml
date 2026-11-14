@@ -1,0 +1,20 @@
+# Dedicated Nav2 Lab settings. Never edit production Nav2 from this file.
+planner: NavFn
+controller: RPP
+mode: track
+goal:
+  x: 3.0
+  y: 0.0
+  yaw_deg: 0.0
+limits:
+  cruise_speed: 0.47
+  max_wheel_rpm: 100.0
+experiment:
+  timeout_s: 90.0
+  sample_hz: 20.0
+  run_root: ~/scrobot_ws/evaluation_results/nav2_lab
+simulation:
+  start_x: 0.0
+  start_y: 0.0
+  start_yaw: 0.0
+  use_magnetometer: false
