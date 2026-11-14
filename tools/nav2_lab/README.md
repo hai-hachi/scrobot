@@ -26,8 +26,7 @@ The workspace must contain the repository's `src/` packages and its
 cd ~/scrobot_ws
 colcon build --symlink-install
 source install/setup.bash
-sudo apt install ros-jazzy-nav2-smac-planner ros-jazzy-nav2-theta-star-planner \
-  ros-jazzy-nav2-mppi-controller ros-jazzy-dwb-controller
+sudo apt install ros-jazzy-navigation2
 python3 tools/nav2_lab/web_server.py
 # http://127.0.0.1:8772
 ```
