@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SCROBOT · Nav2 Lab</title>
+<link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script>
+</head>
+<body>
+<div class="layout">
+<aside class="side">
+  <div class="brand"><span class="logo">S<span>·</span></span><div><b>SCROBOT</b><small>ROBOTICS LABORATORY</small></div></div>
+  <p class="hint">WORKSPACE</p>
+  <nav aria-label="Nav2 Lab sections">
+    <button data-tab="setup" class="tab active">▦ &nbsp; Setup &amp; experiments</button>
+    <button data-tab="planners" class="tab">⌁ &nbsp; Path planners</button>
+    <button data-tab="controllers" class="tab">≋ &nbsp; Path controllers</button>
+    <button data-tab="results" class="tab">▤ &nbsp; Benchmark results</button>
+  </nav>
+  <div class="bottom"><div id="stack-led" class="led"></div><b id="stack-label">Stack stopped</b><p>ROS 2 Jazzy · Gazebo Harmonic</p><p>Local-only · production settings preserved</p></div>
+</aside>
+<main>
+<header class="top"><span>SCROBOT / TOOLS / <b>NAV2 LAB</b></span><span id="conn">Connecting…</span></header>
+<div class="content">
+<section class="hero"><div class="eyebrow">NAVIGATION EXPERIMENT WORKSPACE</div><h1>Nav2 <em>Lab</em></h1>
+<p>Compare global paths, controller tracking and real robot motion using the existing SCROBOT Gazebo model and safety pipeline.</p></section>
+<div id="notice" class="notice" role="status" hidden></div>
+
+<section class="pane active" id="setup">
+  <div class="metrics">
+    <div class="metric"><small>PLANNER</small><b id="kpi-planner">NavFn</b></div>
+    <div class="metric"><small>CONTROLLER</small><b id="kpi-controller">RPP</b></div>
+    <div class="metric"><small>RUN STATUS</small><b id="kpi-status">Idle</b></div>
+    <div class="metric"><small>WHEEL LIMIT</small><b>100 <span>RPM</span></b></div>
+  </div>
+  <div class="two">
+    <article class="panel"><div class="panel-header"><h2>Algorithm selection</h2><span>Switch plugins without changing main Nav2</span></div>
+      <label>Global path planner<select id="planner"><option value="NavFn">NavFn · Grid A*</option><option value="Smac2D">Smac 2D · Cost-aware A*</option><option value="ThetaStar">Theta* · Any-angle</option></select></label>
+      <label>Path-following controller<select id="controller"><option value="RPP">Regulated Pure Pursuit</option><option value="DWB">DWB · Dynamic Window</option><option value="MPPI">MPPI · Predictive sampling</option></select></label>
+      <label>Cruise speed <span>m/s · max 0.50</span><input type="number" id="speed" min=".05" max=".5" step=".01"></label>
+      <p class="note">All three planner and controller plugins are loaded by the isolated Nav2 launch. Changes to speed or controller tuning require restarting the lab stack; changing only plugin selection or goal does not.</p>
+    </article>
+    <article class="panel"><div class="panel-header"><h2>Goal pose</h2><span>In the local odom frame</span></div>
+      <div class="three"><label>Goal X <span>m</span><input type="number" id="x" min="-8" max="8" step=".1"></label>
+      <label>Goal Y <span>m</span><input type="number" id="y" min="-3.5" max="3.5" step=".1"></label>
+      <label>Yaw <span>degrees</span><input type="number" id="yaw" min="-360" max="360" step="5"></label></div>
+      <h3>Experiment</h3>
+      <div class="two inner">
+        <label>Timeout <span>s</span><input type="number" id="timeout" min="5" max="600" step="5"></label>
+        <label>Recording <span>Hz</span><input type="number" id="rate" min="1" max="100" step="5"></label>
+      </div>
+      <p class="note">The robot starts at the configured simulation origin. For fair controller comparisons, restart the stack to reset the pose between trials.</p>
+    </article>
+  </div>
+  <article class="panel"><div class="panel-header"><h2>Planned path &amp; measured trajectory</h2><span>Latest experiment</span></div>
+    <canvas id="plot" width="900" height="380"></canvas>
+    <div class="legend"><span><i class="line planned"></i> Nav2 planned path</span><span><i class="line measured"></i> EKF measured trajectory</span></div>
+  </article>
+  <article class="panel"><div class="panel-header"><h2>Run output</h2><span>Live service messages</span></div><pre id="logs">No experiment started.</pre></article>
+</section>
+
+<section class="pane" id="planners"><h2>Global planner comparison</h2>
+<p>Send the same start/goal to each Nav2 planner. Planner-only runs do not move the robot. Compare path length, point count, computation time, and route geometry.</p>
+<div class="catalog">
+<article class="panel"><h3>NavFn</h3><p>Conventional costmap-based path planner. Configured with A* search in this lab; the production baseline.</p></article>
+<article class="panel"><h3>Smac 2D</h3><p>Cost-aware 2D A* with smoothing. Useful for evaluating more natural paths through the court.</p></article>
+<article class="panel"><h3>Theta*</h3><p>Any-angle line-of-sight planning. Good for comparing directness and corner behavior.</p></article>
+</div>
+<p class="note">All planners receive the same global costmap and footprint. A map-to-odom transform is not required; this isolated test uses odom as the global frame.</p></section>
+
+<section class="pane" id="controllers"><h2>Path-following controller comparison</h2>
+<p>Execute a planner-generated path through Nav2's real <code>FollowPath</code> action and observe tracking against the path.</p>
+<div class="catalog">
+<article class="panel"><h3>Regulated Pure Pursuit</h3><p>Geometric lookahead controller with curvature-aware speed regulation. The existing SCROBOT baseline.</p></article>
+<article class="panel"><h3>DWB</h3><p>Samples velocity commands and scores simulated trajectories using configurable critics for goal progress and obstacle avoidance.</p></article>
+<article class="panel"><h3>MPPI</h3><p>Sampling-based predictive optimization using a differential-drive model. More computationally intensive.</p></article>
+</div>
+<p class="note">The production wheel-RPM limiter stays in the command pipeline. Its intervention can affect how closely each controller tracks its path, which is part of the real-system result.</p></section>
+
+<section class="pane" id="results"><h2>Benchmark results</h2><p>Every trial saves its YAML snapshot, planned path, odometry, ground truth, final commands and summary. Click a run to inspect its saved metrics.</p>
+<article class="panel"><div class="panel-header"><h2>Latest run</h2><span id="run-name">No run</span></div><div id="summary" class="summary">Start an experiment to collect results.</div></article>
+<article class="panel"><div class="panel-header"><h2>Recent experiments</h2><span>Latest 30</span></div><div id="history">No data yet.</div></article>
+</section>
+
+</div>
+<div class="actionbar">
+  <div class="status" id="action-status">Stack stopped · ready for isolated simulation</div>
+  <div class="actions">
+    <button id="save" class="btn ghost">Save lab YAML</button>
+    <button id="stack-start" class="btn secondary">Start simulation</button>
+    <button id="stack-stop" class="btn danger">Stop simulation</button>
+    <button id="plan" class="btn secondary">Plan only</button>
+    <button id="track" class="btn primary">Plan + follow</button>
+    <button id="cancel" class="btn danger">Cancel run</button>
+  </div>
+</div>
+</main></div>
+</body></html>
