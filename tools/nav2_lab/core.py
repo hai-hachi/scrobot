@@ -48,6 +48,9 @@ def validate_config(config):
     speed = config["limits"]["cruise_speed"]
     if speed > wheel_speed_limit(config["limits"]["max_wheel_rpm"]) + 1e-9:
         raise ValueError("Cruise speed exceeds physical wheel RPM limit")
+    domain = config["simulation"].get("ros_domain_id")
+    if isinstance(domain, bool) or not isinstance(domain, int) or not 1 <= domain <= 232:
+        raise ValueError("simulation.ros_domain_id must be 1..232")
     if not isinstance(config["simulation"].get("use_magnetometer"), bool):
         raise ValueError("simulation.use_magnetometer must be bool")
     if not isinstance(config["experiment"].get("run_root"), str):
@@ -106,7 +109,7 @@ def build_nav2_params(production, config):
     c["MPPI"] = {
         "plugin": CONTROLLERS["MPPI"],
         "time_steps": 48, "model_dt": 0.04, "batch_size": 750,
-        "vx_std": 0.15, "vy_std": 0.0, "wz_std": 0.3,
+        "vx_std": 0.15, "vy_std": 0.2, "wz_std": 0.3,
         "vx_max": cruise, "vx_min": 0.0, "vy_max": 0.0,
         "wz_max": 2.0, "ax_max": 1.0, "ax_min": -1.4,
         "ay_min": 0.0, "ay_max": 0.0, "az_max": 1.0,
