@@ -50,17 +50,16 @@ controller_server:
       stateful: true
 
     # ----------------------------------------------------------
-    # RPP - 0.8 m/s sweep tune
+    # RPP - hardware-feasible cruise (100 RPM gives 0.5236 m/s straight-line maximum)
     # ----------------------------------------------------------
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
 
       # Desired cruise speed
-      desired_linear_vel: 0.80
+      desired_linear_vel: 0.47
 
-      # Slightly longer adaptive lookahead than the previous 0.70 s tune.
-      # This damps the small left-right correction that appeared immediately
-      # after the U-turns at 0.8 m/s.
+      # Existing lookahead values retained as a starting point; revalidate
+      # turning performance after reducing cruise speed to 0.47 m/s.
       lookahead_dist: 0.64
       use_velocity_scaled_lookahead_dist: true
       lookahead_time: 0.80
