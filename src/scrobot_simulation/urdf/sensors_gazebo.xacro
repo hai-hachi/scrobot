@@ -29,7 +29,7 @@
 
 
     <!-- ====================================================== -->
-    <!-- Separate 5883L magnetometer                            -->
+    <!-- Separate 5883L-family magnetometer                            -->
     <!-- ====================================================== -->
 
     <xacro:if value="${enable_magnetometer}">
@@ -39,7 +39,8 @@
       <gazebo reference="base_link">
         <sensor name="magnetometer_5883l" type="magnetometer">
           <always_on>true</always_on>
-          <update_rate>50.0</update_rate>
+          <!-- 100 Hz assumes QMC5883L continuous mode (not HMC5883L). -->
+          <update_rate>100.0</update_rate>
           <visualize>false</visualize>
           <topic>/imu/mag</topic>
           <gz_frame_id>mag_link</gz_frame_id>
