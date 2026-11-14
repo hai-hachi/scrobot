@@ -14,6 +14,7 @@ experiment:
   sample_hz: 20.0
   run_root: ~/scrobot_ws/evaluation_results/nav2_lab
 simulation:
+  ros_domain_id: 77  # Separate from production; lab launch and trial share this domain
   start_x: 0.0
   start_y: 0.0
   start_yaw: 0.0
