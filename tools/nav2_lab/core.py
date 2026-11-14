@@ -147,6 +147,25 @@ def distance_to_path(point, path):
     return best
 
 
+def align_ground_truth(samples, odom_start, truth_start):
+    """Align world-frame truth to odom at the initial paired observation.
+
+    Inputs are stamped (time, x, y, yaw) tuples. This rigid SE(2) alignment
+    compares trajectories independent of different initial coordinate origins.
+    It does NOT correct subsequent odometry drift.
+    """
+    if not samples or odom_start is None or truth_start is None:
+        return []
+    delta = odom_start[3] - truth_start[3]
+    c, s = math.cos(delta), math.sin(delta)
+    output = []
+    for stamp, x, y, heading in samples:
+        dx, dy = x - truth_start[1], y - truth_start[2]
+        output.append((stamp, odom_start[1] + c*dx-s*dy,
+                       odom_start[2] + s*dx+c*dy, heading+delta))
+    return output
+
+
 def tracking_metrics(path, tracked):
     if not path or not tracked:
         return {}
