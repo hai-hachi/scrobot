@@ -189,7 +189,7 @@ The **Update lab config YAML** button in **Performance and presets** saves
 the *current light, material, and venue slider values* to this tracked file:
 
 ```text
-~/scrobot_ws/src/src/scrobot_simulation/config/lighting_lab.yaml
+~/scrobot_ws/src/tools/configs/labs/lighting_lab.yaml
 ```
 
 The first `src` is your Git checkout; the second `src` belongs to the ROS
@@ -220,7 +220,7 @@ After obtaining a good result in the lab:
    does not hot-reload its source SDF.
 
 The second button reads only the saved
-`src/scrobot_simulation/config/lighting_lab.yaml`, validates it, then
+`tools/configs/labs/lighting_lab.yaml`, validates it, then
 **atomically updates** `src/scrobot_simulation/worlds/badminton_court.sdf`.
 It transfers the complete light array (count, center-based positions, HSV
 color, intensity, type, shadow settings and attenuation), venue and wall

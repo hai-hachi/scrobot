@@ -1,7 +1,17 @@
-# Large machine-local datasets, training outputs, imported checkpoints
-models/pretrained/*.pt
+# YOLO training outputs and machine-local checkpoint weights
+# Keep Gazebo model.sdf/model.config and scripts in Git.
+models/pretrained/
+models/pretrains/
+models/trained/
 runs/
 artifacts/
-__pycache__/
+
+# Per-run datasets/caches, diagnostic images and temporary exports
+datasets/
+data/
+output/
+outputs/
+wandb/
 **/__pycache__/
-*.pyc
+*.py[cod]
+*.log

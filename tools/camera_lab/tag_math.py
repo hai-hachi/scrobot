@@ -17,7 +17,7 @@ import yaml
 # Use the Lighting Lab's CALIBRATED venue clearance and avoid positioning
 # beyond the floor already published in the court SDF.
 WS = Path(__file__).resolve().parents[2]
-LIGHTING_CONFIG = WS / "src/scrobot_simulation/config/lighting_lab.yaml"
+LIGHTING_CONFIG = WS / "tools/configs/labs/lighting_lab.yaml"
 PUBLISHED_COURT = WS / "src/scrobot_simulation/worlds/badminton_court.sdf"
 COURT_LENGTH, COURT_WIDTH = 15.4, 7.2
 ROBOT_EDGE_MARGIN = 0.30  # keep camera proxy inside the outer venue boundary

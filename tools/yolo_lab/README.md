@@ -46,9 +46,9 @@ The server and Gazebo use ROS domain **83** and isolated Gazebo partition
 
 | Owner | Saved source | Consumer |
 |---|---|---|
-| Camera tab | `src/scrobot_simulation/config/camera_lab.yaml` | All YOLO RGB/depth modes, camera scene and capture sensor |
-| Lighting Lab | `src/scrobot_simulation/config/lighting_lab.yaml` | YOLO court lights, shadows, HSV materials and venue |
-| YOLO tabs | `src/scrobot_simulation/config/yolo_lab.yaml` | Scene spawning, dataset capture, training, validation, and live inference settings, saved independently by stage |
+| Camera tab | `tools/configs/labs/camera_lab.yaml` | All YOLO RGB/depth modes, camera scene and capture sensor |
+| Lighting Lab | `tools/configs/labs/lighting_lab.yaml` | YOLO court lights, shadows, HSV materials and venue |
+| YOLO tabs | `tools/configs/labs/yolo_lab.yaml` | Scene spawning, dataset capture, training, validation, and live inference settings, saved independently by stage |
 
 **Save Camera Lab YAML** and the YOLO per-tab **Save settings** actions are distinct.
 A scene/capture is generated from the saved YAMLs, **not unsaved sliders**.
@@ -209,10 +209,10 @@ The authoritative *active* sources are under `tools/yolo_lab/`:
 | `src/scrobot_debug/models/yolo_*/*` | `models/yolo_*/*` |
 | `src/scrobot_debug/config/yolo_dataset_bridge.yaml` | `assets/yolo_dataset_bridge.yaml` |
 
-The historical YOLO-specific debug monitors and launch scenarios also
-have copies in `tools/yolo_lab/legacy_debug/` for reference. The older
-`src/scrobot_debug/` entry points remain available so existing ROS
-debug launches are **not** broken. The production ROS node
+The old `legacy_debug/` copies were removed from the active tools tree
+because all ten were byte-for-byte duplicates of tracked files in
+`src/scrobot_debug/`. Those original ROS debug scripts and launch entry
+points remain available and unchanged. The production ROS node
 `src/scrobot_perception/scripts/yolo_shuttle_detector.py` is purposely
 left in the perception package because the actual robot's installed
 detector launch depends on it; this new lab is not changing that
@@ -302,3 +302,7 @@ For faster collection, start by reducing RGB resolution and keeping Gazebo
 GUI closed. Dataset originals are still saved with JPEG quality 95; a lower
 quality preset could reduce disk/encoding time, but should be validated
 against small-object label quality before adopting.
+
+**Script ownership:** see [scripts/README.md](scripts/README.md) for the
+capture, label inspection, fine-tuning, validation and live inference entry
+points. Shared configuration and log handling live under `tools/shared/`.

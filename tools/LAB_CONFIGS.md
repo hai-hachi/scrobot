@@ -1,6 +1,6 @@
 # SCROBOT Lab YAML architecture
 
-Every active calibration lab owns one **saved lab YAML**. Lab YAML files are
+Every active calibration lab owns one **saved lab YAML**. Lab YAML files live in `tools/configs/labs/` and are
 working calibration records; the **normal simulation** has separate production
 SDF/ROS YAMLs. A lab's Save button only writes its own YAML. A lab's Publish
 button copies the **saved, validated YAML values** into the specific production
@@ -11,12 +11,12 @@ into their own YAML or having to publish to main simulation first.
 
 | Lab | Persistent saved YAML | Production publication |
 | --- | --- | --- |
-| Lighting | `src/scrobot_simulation/config/lighting_lab.yaml` | `src/scrobot_simulation/worlds/badminton_court.sdf` (lights, colors, venue) |
-| Camera | `src/scrobot_simulation/config/camera_lab.yaml` | `src/scrobot_simulation/config/camera_calibration.yaml` |
-| AprilTags | `src/scrobot_simulation/config/apriltags_lab.yaml` | `src/scrobot_localization/config/court_landmarks.yaml` and `src/scrobot_perception/config/perception.yaml` |
-| Mobility | `src/scrobot_simulation/config/mobility_lab.yaml` | `src/scrobot_simulation/config/mobility_calibration.yaml` |
-| Odometry | `src/scrobot_simulation/config/odometry_lab.yaml` | `src/scrobot_simulation/config/odometry_calibration.yaml` |
-| YOLO | `src/scrobot_simulation/config/yolo_lab.yaml` | No automatic production publication; model training, validation and live inference run locally |
+| Lighting | `tools/configs/labs/lighting_lab.yaml` | `src/scrobot_simulation/worlds/badminton_court.sdf` (lights, colors, venue) |
+| Camera | `tools/configs/labs/camera_lab.yaml` | `src/scrobot_simulation/config/camera_calibration.yaml` |
+| AprilTags | `tools/configs/labs/apriltags_lab.yaml` | `src/scrobot_localization/config/court_landmarks.yaml` and `src/scrobot_perception/config/perception.yaml` |
+| Mobility | `tools/configs/labs/mobility_lab.yaml` | `src/scrobot_simulation/config/mobility_calibration.yaml` |
+| Odometry | `tools/configs/labs/odometry_lab.yaml` | `src/scrobot_simulation/config/odometry_calibration.yaml` |
+| YOLO | `tools/configs/labs/yolo_lab.yaml` | No automatic production publication; model training, validation and live inference run locally |
 
 ## Rules
 
@@ -47,10 +47,9 @@ into their own YAML or having to publish to main simulation first.
 7. **YOLO Lab's Camera tab** imports the same Camera Lab D435i
    mode table and writes the shared `camera_lab.yaml` when saved.
    Its independent `yolo_lab.yaml` records shuttle scene and
-   dataset/training settings. The seven tabs provide camera calibration,
+   dataset/training settings. The five tabs provide camera calibration,
    a shuttle inspection scene, synchronized Gazebo dataset collection,
-   automatic label QA, Ultralytics training, held-out validation, and
-   live bounding-box inference. These stages reuse the saved Lighting
+   automatic label QA, Ultralytics training, and A/B validation/live comparison. These stages reuse the saved Lighting
    YAML. Model checkpoints and datasets are local artifacts; the lab
    **does not automatically deploy weights** to the main robot.
 8. **Legacy settings migration.** Mobility and Odometry continue reading
@@ -58,7 +57,7 @@ into their own YAML or having to publish to main simulation first.
    no new YAML has been saved. Live edits may continue to update that
    temporary JSON draft, but publication now **requires** the explicit
    `Save <Lab> YAML` action. Once YAML exists, it wins on the next launch.
-9. **Shared library:** `tools/lab_configs.py` is the one path registry and
+9. **Shared library:** `tools/shared/lab_configs.py` is the one path registry and
    YAML reader/writer used for the modern labs. Lighting Lab retains its
    historic unwrapped `lights/colors/venue` YAML schema for compatibility;
    other lab YAMLs use `schema_version: 1`, `lab: <id>`, and `settings:`.
@@ -96,3 +95,10 @@ The ROS debug/scenario launch files in `src/scrobot_scenarios/` are test
 harnesses (not independent calibrated lab dashboards); they consume main
 simulation configuration only. The `tools/real_comparison/` session
 evaluation scripts likewise do not own calibration YAML.
+
+The old `src/scrobot_simulation/config/*_lab.yaml` location is deprecated. On
+upgraded checkouts, saved lab YAMLs are tracked in `tools/configs/labs/`.
+Missing Mobility/Odometry saved YAMLs are created on first save. The shared
+registry supports reading older files when a new file has not yet been saved.
+Production YAMLs (`camera_calibration.yaml`, `mobility_calibration.yaml`,
+`odometry_calibration.yaml`, and `shuttle_spawn.yaml`) stay in `src/`.

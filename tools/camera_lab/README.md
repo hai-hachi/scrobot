@@ -90,7 +90,7 @@ Beside the live AprilTag camera image, the dashboard reports:
   output, not the preview rate
 
 **Save AprilTags Lab YAML** stores the selected shared tag geometry and
-test pose/noise at `src/scrobot_simulation/config/apriltags_lab.yaml`,
+test pose/noise at `tools/configs/labs/apriltags_lab.yaml`,
 without touching production. **Publish saved AprilTags YAML** reads this
 saved YAML only, never unsaved sliders. On confirmation, it updates:
 
@@ -168,7 +168,7 @@ the same edge size.
   calibrated SCROBOT mount and looks down 15 degrees.
   **Robot placement now extends outside the green court mat**, across the
   calibrated Lighting Lab venue floor. The limits are loaded directly from
-  `src/scrobot_simulation/config/lighting_lab.yaml`, independent of
+  `tools/configs/labs/lighting_lab.yaml`, independent of
   whether they have been published to the main simulation SDF. The lab
   regenerates the floor/walls using those dimensions and retains a 0.30 m
   outer margin for the robot proxy. With the current Lighting Lab
@@ -387,7 +387,7 @@ CPU and RAM to `evaluation_results/camera_lab/benchmark_*.json`. At least
 30 frames per enabled stream must have arrived, with matching dimensions.
 
 **Save Camera Lab YAML** writes the chosen RGB/depth resolution and FPS
-to `src/scrobot_simulation/config/camera_lab.yaml`. It does not
+to `tools/configs/labs/camera_lab.yaml`. It does not
 change the production camera. **Publish saved Camera YAML** reads that
 saved YAML only; after browser confirmation, it updates
 `src/scrobot_simulation/config/camera_calibration.yaml`, preserving

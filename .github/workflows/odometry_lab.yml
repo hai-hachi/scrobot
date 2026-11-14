@@ -4,6 +4,8 @@ on:
   push:
     branches: [real-comparison]
     paths:
+      - "tools/shared/**"
+      - "tools/configs/labs/**"
       - "tools/odometry_lab/**"
       - "src/scrobot_simulation/config/odometry_calibration.yaml"
       - "src/scrobot_simulation/urdf/sensors_gazebo.xacro"
