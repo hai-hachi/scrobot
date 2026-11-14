@@ -24,8 +24,8 @@ def test_all_motion_quadrants():
         for w in (-7.0, -3.0, -0.5, 0.0, 0.5, 3.0, 7.0):
             vv, ww = limit(v, w)
             assert feasible(vv, ww)
-            if (v, w) != (0.0, 0.0):
-                if v: assert abs(vv / v - (ww / w if w else vv / v)) < 1e-10 if w else True
+            if v != 0.0 and w != 0.0:
+                assert math.isclose(vv / v, ww / w, abs_tol=1e-10)
 
 
 def test_no_change_within_envelope():
