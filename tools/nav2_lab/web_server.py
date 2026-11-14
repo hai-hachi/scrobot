@@ -194,6 +194,10 @@ class Service:
             if self.active(self.run):
                 raise RuntimeError('An experiment is already running')
             cfg = self.config()
+            loaded = yaml.safe_load(self.active_params.read_text())
+            active_speed = loaded['controller_server']['ros__parameters']['RPP']['desired_linear_vel']
+            if abs(active_speed - cfg['limits']['cruise_speed']) > 1e-9:
+                raise RuntimeError('Cruise speed changed since Nav2 launch. Stop and restart the lab simulation before benchmarking.')
             root = self.root()
             root.mkdir(parents=True, exist_ok=True)
             run_dir = root / (datetime.now().strftime('%Y%m%d_%H%M%S') + '_' +
