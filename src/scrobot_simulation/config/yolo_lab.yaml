@@ -30,6 +30,11 @@ settings:
   dataset_images: 1200
   positive_fraction: 0.3
   epochs: 15
+  learning_rate: 0.0005
+  optimizer: AdamW
+  patience: 8
+  mosaic: 1.0
+  rect: true
   batch: 8
   imgsz: 640
   validation_imgsz: 640
