@@ -54,6 +54,26 @@ def json_read(path):
         return None
 
 
+def available_nav2_plugins(env):
+    required = {
+        'nav2_planner', 'nav2_controller', 'nav2_navfn_planner',
+        'nav2_smac_planner', 'nav2_theta_star_planner',
+        'nav2_regulated_pure_pursuit_controller', 'nav2_dwb_controller',
+        'nav2_mppi_controller', 'nav2_lifecycle_manager'
+    }
+    try:
+        result = subprocess.run(['ros2', 'pkg', 'list'], capture_output=True,
+                                text=True, timeout=12, check=False, env=env)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError('ROS package discovery timed out') from exc
+    if result.returncode:
+        raise RuntimeError('Could not inspect installed ROS packages')
+    missing = sorted(required - set(result.stdout.splitlines()))
+    if missing:
+        raise RuntimeError('Missing Nav2 ROS packages: ' + ', '.join(missing) +
+                           '. Install ros-jazzy-navigation2 and source ROS 2.')
+
+
 def existing_ros_graph(env):
     if not shutil.which('ros2'):
         raise RuntimeError('ROS 2 not found. Source /opt/ros/jazzy/setup.bash and workspace/install/setup.bash.')
@@ -140,6 +160,7 @@ class Service:
             if self.active(self.run):
                 raise RuntimeError('Stop active experiment before restarting stack')
             lab_env = self.lab_env()
+            available_nav2_plugins(lab_env)
             topics = existing_ros_graph(lab_env)
             if '/clock' in topics or '/joint_states' in topics or '/diff_drive_controller/odom' in topics:
                 raise RuntimeError('Robot or simulation topics already exist in the Nav2 Lab ROS domain. Stop them or choose another isolated domain ID.')
