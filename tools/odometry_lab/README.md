@@ -9,7 +9,7 @@ versus independent Gazebo ground truth. Lives in `scrobot_ws/tools/odometry_lab`
 This lab reads the existing Jazzy/Gazebo Harmonic SCROBOT topics:
 
 - `/joint_states` (left_wheel_joint and right_wheel_joint)
-- `/diff_drive_controller/odom` (production wheel odometry, default 50 Hz)
+- `/diff_drive_controller/odom` (production wheel odometry, default 100 Hz)
 - `/odometry/filtered` (production EKF)
 - `/evaluation/ground_truth_odom` (Gazebo world truth; **never** used in estimator)
 - `/evaluation/local_odom_test_state` (optional test segment label)
@@ -46,7 +46,7 @@ python3 tools/odometry_lab/run_lab.py --scenario none
 Straight-line motion (90-RPM **target**, 0.4712 m/s for 0.05 m wheel radius):
 
 ```bash
-python3 tools/odometry_lab/run_lab.py --scenario straight --publish-hz 50
+python3 tools/odometry_lab/run_lab.py --scenario straight --publish-hz 100
 ```
 
 Other scenarios: `static`, `rotate`, `arc`, `suite`. Motion is through the
@@ -83,7 +83,7 @@ and mode restoration (not a hardware E-stop). This is intended for simulation.
 
 Run 10, 20, 50, 100, 200 Hz with `--publish-hz`; this changes **only the lab
 stream** and measures the added topic cost. It does **not** silently alter the
-production `diff_drive_controller` publish rate. To test production rate,
+production `diff_drive_controller` publish rate (100 Hz). To test production rate,
 change its `publish_rate` in a separate controlled simulation launch, then
 restore it. Keep source feedback/estimator Hz fixed when sweeping publish Hz.
 For head-to-head accuracy, reset robot pose and simulator state between trials.
