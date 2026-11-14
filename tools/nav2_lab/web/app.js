@@ -72,6 +72,8 @@ function renderSummary(summary) {
     ['Planner wall time',fmt(summary.planning_wall_s)+' s'],
     ['Nav2 compute time',fmt(summary.planning_nav2_s)+' s'],
     ['Tracking time',fmt(summary.tracking_duration_s)+' s'],
+    ['Truth cross-track RMSE',fmt(summary.ground_truth_tracking_rmse_m)+' m'],
+    ['Truth goal position error',fmt(summary.ground_truth_goal_position_error_m)+' m'],
     ['Cross-track RMSE',fmt(summary.tracking_rmse_m)+' m'],
     ['Maximum cross-track',fmt(summary.tracking_max_error_m)+' m'],
     ['Goal position error',fmt(summary.goal_position_error_m)+' m'],
@@ -92,8 +94,8 @@ function drawPlot(s) {
   const canvas=$('plot'), ctx=canvas.getContext('2d');
   const width=canvas.width,height=canvas.height;
   ctx.fillStyle='#0c1927';ctx.fillRect(0,0,width,height);
-  const planned=s?.path?.points||[], measured=s?.tracked||[];
-  const all=[...planned,...measured];
+  const planned=s?.path?.points||[], measured=s?.tracked||[], truth=s?.ground_truth_aligned||[];
+  const all=[...planned,...measured,...truth];
   if (!all.length) {
     ctx.fillStyle='#7794ac';ctx.font='15px sans-serif';
     ctx.textAlign='center';ctx.fillText('No path available — start a planner experiment',width/2,height/2);return;
@@ -114,7 +116,7 @@ function drawPlot(s) {
     points.forEach((p,i)=>{const [x,y]=map(p);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
     ctx.stroke();ctx.setLineDash([]);
   }
-  draw(planned,'#76aaf8');draw(measured,'#4bd8b1');
+  draw(planned,'#76aaf8');draw(measured,'#4bd8b1');draw(truth,'#f2ba67',[6,3]);
   function mark(p,color,r,label) {
     const [x,y]=map(p);ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,r,0,2*Math.PI);ctx.fill();
     ctx.font='12px sans-serif';ctx.fillText(label,x+10,y-10);
