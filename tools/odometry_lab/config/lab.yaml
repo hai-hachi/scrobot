@@ -3,12 +3,12 @@ scenario: straight
 run_root: ~/scrobot_ws/evaluation_results/odometry_lab
 rates:
   encoder_sample_hz: 100.0
-  estimator_hz: 50.0
-  publish_hz: 50.0
+  estimator_hz: 100.0
+  publish_hz: 100.0
   gui_hz: 5.0
 hardware:
-  encoder_ticks_per_motor_rev: 2048
-  gear_ratio: 1.0  # joint_states are wheel-side; effective ticks/wheel rev = ticks * ratio
+  encoder_ticks_per_motor_rev: 3264  # STM32 APP_CPR_WR / APP_CPR_WL: output shaft counts/rev
+  gear_ratio: 1.0  # Gazebo joint_states are wheel-side; counts here are already effective
   wheel_radius_m: 0.050
   wheel_separation_m: 0.420
   left_radius_multiplier: 1.0
