@@ -51,9 +51,10 @@ velocity_smoother:
     feedback: "OPEN_LOOP"
     enable_stamped_cmd_vel: true
 
-    # 0.8 m/s sweep speed; angular headroom also covers the local SMC limit.
-    max_velocity: [1.0, 0.0, 2.0]
-    min_velocity: [-1.0, 0.0, -2.0]
+    # Independent limits stay inside the 100-RPM physical wheel envelope.
+    # wheel_speed_limiter also enforces coupled linear/angular feasibility.
+    max_velocity: [0.5235987756, 0.0, 2.4933275029]
+    min_velocity: [-0.5235987756, 0.0, -2.4933275029]
 
     # Match the kinematic limits chosen for the controller tune.
     max_accel: [1.00, 0.0, 1.00]
@@ -75,7 +76,7 @@ collision_monitor:
     transform_tolerance: 0.2
     base_shift_correction: true
 
-    cmd_vel_in_topic: /cmd_vel_smoothed
+    cmd_vel_in_topic: /cmd_vel_wheel_limited
     cmd_vel_out_topic: /diff_drive_controller/cmd_vel
     enable_stamped_cmd_vel: true
 
