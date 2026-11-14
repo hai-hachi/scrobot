@@ -9,7 +9,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from core import (PLANNERS, CONTROLLERS, build_nav2_params, distance_to_path,
+from core import (PLANNERS, CONTROLLERS, align_ground_truth, build_nav2_params, distance_to_path,
                   path_length, tracking_metrics, validate_config, wheel_speed_limit)
 
 REPO = ROOT.parents[1]
@@ -58,6 +58,15 @@ def test_path_metrics():
     assert m['tracking_rmse_m'] > 0
     assert m['tracking_max_error_m'] == pytest.approx(.5)
     assert m['goal_position_error_m'] == pytest.approx(.1)
+
+
+def test_rigid_ground_truth_alignment():
+    odom_start = (0.0, 1.0, 2.0, math.pi/2)
+    truth_start = (0.0, 10.0, -3.0, 0.0)
+    aligned = align_ground_truth([(0.0, 10.0, -3.0, 0.0),
+                                  (1.0, 11.0, -3.0, 0.0)], odom_start, truth_start)
+    assert aligned[0][1:3] == pytest.approx((1.0, 2.0))
+    assert aligned[1][1:3] == pytest.approx((1.0, 3.0))
 
 
 def test_unknown_and_bad_numbers_rejected():
