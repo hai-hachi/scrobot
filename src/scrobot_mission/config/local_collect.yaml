@@ -81,6 +81,7 @@ local_collect_controller:
     smc_phi: 0.30
     smc_krho: 0.80
     smc_max_angular_speed: 1.00
+    # Within straight-line hardware cap; mixed v/w commands are wheel-limited.
     smc_max_linear_speed: 0.50
 
     # Rotate first for large position-heading error, matching the previous
