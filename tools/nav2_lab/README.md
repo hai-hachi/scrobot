@@ -36,9 +36,18 @@ Use **Start simulation** once. This launches a dedicated Gazebo instance and
 the production SCROBOT wheel motor/control/localization/perception stack,
 followed by the lab-only Nav2 planner/controller servers.
 
-Do not start the main mission or a second Gazebo/ROS control stack. The lab
-refuses to launch if it finds an existing `/clock`, and is intended **only**
-for simulation. Confirm that no physical robot shares the active ROS_DOMAIN_ID.
+Do not start the main mission or a second Gazebo/ROS control stack. The lab refuses to launch if it finds existing robot or simulation
+topics within its isolated ROS domain, and is intended **only** for simulation. Confirm that no physical robot shares the active ROS_DOMAIN_ID.
+
+The lab runs in **ROS_DOMAIN_ID=77** by default, with its own Gazebo
+transport partition `GZ_PARTITION=scrobot_nav2_lab_77`. It must not send
+commands to the physical robot. For terminal introspection, export both
+variables before running ROS/Gazebo inspection commands:
+
+```bash
+export ROS_DOMAIN_ID=77
+export GZ_PARTITION=scrobot_nav2_lab_77
+```
 
 The lab starts with `odom` as the global planning frame rather than `map`,
 to avoid requiring AprilTag initial global localization. The local EKF produces
