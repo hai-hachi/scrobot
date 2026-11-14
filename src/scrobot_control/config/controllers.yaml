@@ -60,7 +60,7 @@ diff_drive_controller:
     # Publishing
     # ==========================================
 
-    publish_rate: 50.0
+    publish_rate: 100.0
 
     velocity_rolling_window_size: 10
 
@@ -79,5 +79,11 @@ diff_drive_controller:
     # ==========================================
 
     linear.x.has_velocity_limits: true
-    linear.x.max_velocity: 1.0
-    linear.x.min_velocity: -1.0
+    # Straight-line kinematic cap from 100 RPM, r=0.050 m.
+    # Combined (v, omega) feasibility is enforced downstream by the
+    # shared wheel_speed_limiter before collision_monitor.
+    linear.x.max_velocity: 0.5235987756
+    linear.x.min_velocity: -0.5235987756
+    angular.z.has_velocity_limits: true
+    angular.z.max_velocity: 2.4933275029
+    angular.z.min_velocity: -2.4933275029
