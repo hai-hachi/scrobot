@@ -23,7 +23,7 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data
 
-from core import path_length, tracking_metrics, validate_config
+from core import align_ground_truth, path_length, tracking_metrics, validate_config
 
 STOP = False
 
@@ -68,6 +68,8 @@ class Nav2Trial(Node):
         self.last_sample_time = -float('inf')
         self.latest_odom = None
         self.latest_truth = None
+        self.initial_odom = None
+        self.initial_truth = None
         self.rate_period = 1.0 / config['experiment']['sample_hz']
         self.create_subscription(Odometry, '/odometry/filtered',
                                  self.on_odom, qos_profile_sensor_data)
@@ -183,6 +185,8 @@ class Nav2Trial(Node):
         goal.progress_checker_id = 'progress_checker'
         handle = self.goal_handle(self.controller, goal, 'controller')
         self.tracking = True
+        self.initial_odom = self.latest_odom
+        self.initial_truth = self.latest_truth
         self.started = time.monotonic()
         if self.latest_odom:
             self.odom.append(self.latest_odom)
@@ -228,6 +232,13 @@ def run(config, run_dir):
             summary['tracking_duration_s'] = trial.follow_path(planned)
             tracked = [(x, y) for t, x, y, yaw in trial.odom]
             summary.update(tracking_metrics(points, tracked))
+            aligned_truth = align_ground_truth(trial.truth, trial.initial_odom,
+                                               trial.initial_truth)
+            if aligned_truth:
+                gt_metrics = tracking_metrics(
+                    points, [(x, y) for _, x, y, _ in aligned_truth])
+                summary.update({'ground_truth_' + k: v
+                                for k, v in gt_metrics.items()})
             summary['tracked_samples'] = len(tracked)
             if trial.commands:
                 max_wheel_mps = 2*math.pi*.05*config['limits']['max_wheel_rpm']/60
@@ -247,6 +258,11 @@ def run(config, run_dir):
                      finite_snapshot(trial.odom))
             save_csv(run_dir / 'ground_truth.csv', ('stamp_s','x_world_m','y_world_m','yaw_rad'),
                      finite_snapshot(trial.truth))
+            aligned_truth = align_ground_truth(trial.truth, trial.initial_odom,
+                                               trial.initial_truth)
+            save_csv(run_dir / 'ground_truth_aligned.csv',
+                     ('stamp_s','x_odom_m','y_odom_m','yaw_odom_rad'),
+                     finite_snapshot(aligned_truth))
             save_csv(run_dir / 'commands.csv', ('stamp_s','linear_mps','angular_rps'),
                      finite_snapshot(trial.commands))
             trial.destroy_node()
