@@ -83,6 +83,15 @@ def generate_launch_description():
         ],
     )
 
+    # Enforce left/right RPM constraints after smoothing, before collision checks.
+    wheel_speed_limiter = Node(
+        package='scrobot_control',
+        executable='wheel_speed_limiter',
+        name='wheel_speed_limiter',
+        output='screen',
+        parameters=[pipeline_params, {'use_sim_time': use_sim_time}],
+    )
+
     collision_monitor = Node(
         package='nav2_collision_monitor',
         executable='collision_monitor',
@@ -120,6 +129,7 @@ def generate_launch_description():
         twist_mux,
         control_mode_mux,
         velocity_smoother,
+        wheel_speed_limiter,
         collision_monitor,
         lifecycle_manager,
     ])
