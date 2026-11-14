@@ -54,6 +54,10 @@ To reproduce the **previous validated** October 7 run exactly, disable the
 magnetometer in the mission launch with `use_magnetometer:=false`. Enabling it
 changes yaw estimation and requires renewed localization/full-mission testing.
 
+The EKF and wheel-odometry publishers are configured for 100 Hz. Measured
+ROS topic rates may be lower if Gazebo runs below real time or the ROS executor
+cannot keep pace. Confirm with `ros2 topic hz`.
+
 The D435i simulation uses:
 
 ```text
