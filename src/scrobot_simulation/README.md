@@ -28,7 +28,7 @@ ros2 launch scrobot_simulation simulation.launch.py
 ### Magnetometer (enabled by default)
 
 The simulated external 5883L magnetometer is now enabled on the Gazebo robot.
-The simulator publishes magnetic field measurements at 50 Hz and the existing
+The simulator publishes magnetic field measurements at 100 Hz and the existing
 Gazebo-to-ROS bridge forwards them to `/imu/mag`
 (`sensor_msgs/msg/MagneticField`, frame `mag_link`). The virtual sensor is
 aligned with `base_link`; `mag_link` is a fixed, co-located TF frame.
@@ -45,6 +45,10 @@ This standalone simulation launches the sensor but not Madgwick/EKF.
 The integrated full mission and `localization_check.launch.py` enable both
 sensor and Madgwick fusion with `use_magnetometer:=true` (their new default).
 The physical Orin bringup still uses `use_magnetometer:=false`.
+The 100 Hz virtual sensor rate assumes a QMC5883L-type device. A genuine
+HMC5883L does not support 100 Hz continuous sampling. Physical chip identity,
+magnetometer extrinsics, hard/soft-iron calibration, and measured noise must be
+verified before treating virtual heading as a calibrated hardware equivalent.
 
 To reproduce the **previous validated** October 7 run exactly, disable the
 magnetometer in the mission launch with `use_magnetometer:=false`. Enabling it
