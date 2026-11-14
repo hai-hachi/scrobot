@@ -54,12 +54,12 @@ def json_read(path):
         return None
 
 
-def existing_ros_graph():
+def existing_ros_graph(env):
     if not shutil.which('ros2'):
         raise RuntimeError('ROS 2 not found. Source /opt/ros/jazzy/setup.bash and workspace/install/setup.bash.')
     try:
         result = subprocess.run(['ros2', 'topic', 'list'], capture_output=True,
-                                text=True, timeout=8, check=False)
+                                text=True, timeout=8, check=False, env=env)
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError('ROS topic discovery timed out') from exc
     if result.returncode:
@@ -85,6 +85,7 @@ class Service:
         self.run_log = None
         self.last_run = None
         self.active_params = None
+        self.stack_env = None
         self.last_error = ''
 
     def config(self):
@@ -125,15 +126,23 @@ class Service:
     def root(self):
         return Path(self.config()['experiment']['run_root']).expanduser()
 
+    def lab_env(self):
+        env = os.environ.copy()
+        domain = self.config()['simulation']['ros_domain_id']
+        env['ROS_DOMAIN_ID'] = str(domain)
+        env['GZ_PARTITION'] = f'scrobot_nav2_lab_{domain}'
+        return env
+
     def start_stack(self):
         with self.lock:
             if self.active(self.stack):
                 raise RuntimeError('Lab stack already running')
             if self.active(self.run):
                 raise RuntimeError('Stop active experiment before restarting stack')
-            topics = existing_ros_graph()
-            if '/clock' in topics:
-                raise RuntimeError('A ROS simulation already publishes /clock. Stop it before starting the isolated Nav2 Lab to avoid duplicate robot/control nodes.')
+            lab_env = self.lab_env()
+            topics = existing_ros_graph(lab_env)
+            if '/clock' in topics or '/joint_states' in topics or '/diff_drive_controller/odom' in topics:
+                raise RuntimeError('Robot or simulation topics already exist in the Nav2 Lab ROS domain. Stop them or choose another isolated domain ID.')
             cfg = self.config()
             root = self.root()
             root.mkdir(parents=True, exist_ok=True)
@@ -152,7 +161,8 @@ class Service:
             with self.stack_log.open('w') as log:
                 self.stack = subprocess.Popen(
                     args, cwd=str(REPO), stdout=log, stderr=subprocess.STDOUT,
-                    start_new_session=True)
+                    start_new_session=True, env=lab_env)
+            self.stack_env = lab_env
             self.last_error = ''
             return self.status()
 
@@ -178,7 +188,8 @@ class Service:
                     '--config', str(snapshot), '--output', str(run_dir)]
             with self.run_log.open('w') as log:
                 self.run = subprocess.Popen(args, cwd=str(HERE),
-                    stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                    stdout=log, stderr=subprocess.STDOUT,
+                    start_new_session=True, env=self.stack_env)
             return self.status()
 
     def stop_trial(self):
@@ -208,6 +219,7 @@ class Service:
                     tracked = [[float(row['x_m']), float(row['y_m'])]
                                for row in csv.DictReader(stream)][::2][:1500]
             return {
+                'ros_domain_id': self.config()['simulation']['ros_domain_id'],
                 'stack_running': self.active(self.stack),
                 'stack_exit': self.stack.poll() if self.stack else None,
                 'experiment_running': self.active(self.run),
@@ -279,6 +291,11 @@ class Handler(BaseHTTPRequestHandler):
                         '/api/run', '/api/cancel'):
             return self.reply({'error': 'Not found'}, 404)
         try:
+            origin = self.headers.get('Origin', '')
+            if origin and urlparse(origin).hostname not in ('127.0.0.1', 'localhost'):
+                return self.reply({'error': 'Cross-origin control requests forbidden'}, 403)
+            if self.headers.get('Content-Type', '').split(';', 1)[0].strip() != 'application/json':
+                return self.reply({'error': 'JSON Content-Type required'}, 415)
             length = int(self.headers.get('Content-Length','0'))
             if length > 16384:
                 return self.reply({'error':'Request too large'},413)
