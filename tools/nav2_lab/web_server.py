@@ -239,7 +239,14 @@ class Service:
                 with (self.last_run/'odometry.csv').open() as stream:
                     tracked = [[float(row['x_m']), float(row['y_m'])]
                                for row in csv.DictReader(stream)][::2][:1500]
+            truth_aligned = []
+            if self.last_run and (self.last_run/'ground_truth_aligned.csv').exists():
+                import csv
+                with (self.last_run/'ground_truth_aligned.csv').open() as stream:
+                    truth_aligned = [[float(row['x_odom_m']), float(row['y_odom_m'])]
+                                     for row in csv.DictReader(stream)][::2][:1500]
             return {
+                'ground_truth_aligned': truth_aligned,
                 'ros_domain_id': self.config()['simulation']['ros_domain_id'],
                 'stack_running': self.active(self.stack),
                 'stack_exit': self.stack.poll() if self.stack else None,
