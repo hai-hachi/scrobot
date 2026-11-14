@@ -46,7 +46,6 @@ def generate_launch_description():
     lifecycle = Node(package='nav2_lifecycle_manager', executable='lifecycle_manager',
                      name='lifecycle_manager_navigation', output='screen',
                      parameters=[{'use_sim_time': True, 'autostart': True,
-                                  'bond_timeout': 0.0,
                                   'node_names': ['planner_server', 'controller_server']}])
     return LaunchDescription([
         DeclareLaunchArgument('nav2_params_file', description='Generated lab-only Nav2 YAML'),
