@@ -72,14 +72,16 @@ Each trial writes to `~/scrobot_ws/evaluation_results/nav2_lab/<run>`:
 - `path.json`: returned actual Nav2 global path;
 - `odometry.csv`: EKF pose while the robot tracks;
 - `ground_truth.csv`: independent Gazebo truth in world coordinates;
+- `ground_truth_aligned.csv`: Gazebo truth SE(2)-aligned at the trial start;
 - `commands.csv`: final safety-filtered robot commands;
 - `summary.json`: planning duration, path length, cross-track errors,
   goal position error, tracking time, wheel-limit fraction, command variation;
 - `runner.log`: action client diagnostic output.
 
-`ground_truth.csv` is **not** naively subtracted from `odometry.csv`
-because their coordinate frames differ; registered frame alignment is needed
-for ground-truth pose errors. Cross-track RMSE currently uses EKF pose.
+Gazebo ground truth uses the world frame. The lab aligns it once at each
+trial's initial pose (SE(2) translation + yaw) before evaluating tracking
+error. This removes the arbitrary initial frame offset without hiding later
+odometry drift. EKF-based and truth-based cross-track metrics are both saved.
 
 ## Hardware constraints
 
