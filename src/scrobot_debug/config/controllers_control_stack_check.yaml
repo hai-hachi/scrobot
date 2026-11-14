@@ -36,12 +36,15 @@ diff_drive_controller:
     # odom -> base_footprint so collision_monitor can transform scans.
     enable_odom_tf: true
 
-    publish_rate: 50.0
+    publish_rate: 100.0
     velocity_rolling_window_size: 10
     publish_limited_velocity: true
 
     cmd_vel_timeout: 0.5
 
     linear.x.has_velocity_limits: true
-    linear.x.max_velocity: 1.0
-    linear.x.min_velocity: -1.0
+    linear.x.max_velocity: 0.5235987756
+    linear.x.min_velocity: -0.5235987756
+    angular.z.has_velocity_limits: true
+    angular.z.max_velocity: 2.4933275029
+    angular.z.min_velocity: -2.4933275029
