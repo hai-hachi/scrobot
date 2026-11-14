@@ -17,7 +17,7 @@ local_odom_logger:
     left_wheel_joint: left_wheel_joint
     right_wheel_joint: right_wheel_joint
 
-    sample_rate: 50.0
+    sample_rate: 100.0
     tf_timeout: 0.02
 
     # Keep generated evaluation data beside /src in the workspace,
