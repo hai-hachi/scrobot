@@ -39,4 +39,11 @@ install(
   RENAME manual_teleop
 )
 
+install(
+  PROGRAMS
+    scripts/wheel_speed_limiter.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME wheel_speed_limiter
+)
+
 ament_package()
