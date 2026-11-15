@@ -22,6 +22,7 @@ import yaml
 from planning.core import PLANNERS, nav2_params, validate
 from planning.map_builder import write_court_map
 from planning.obstacles import Obstacles
+from planning.process_metrics import ProcessSampler
 from planning.scene import load_scene, save_scene, validate_scene, SCENE_PATH
 from planning.calibration import (load_inputs, build_world, generate_rate_profiles,
                          inputs_fingerprint, saved_summary)
@@ -128,6 +129,7 @@ class Service:
         self.scene=load_scene(default={"robot":previous,"obstacles":[]})
         self.active_robot=None
         self._pose_file=None
+        self.process_sampler=ProcessSampler(psutil,interval_s=1.5)
 
     def _write_pose_file(self,robot,goal):
         if self._pose_file is None:return
@@ -268,6 +270,7 @@ class Service:
             # These are frozen for the entire Gazebo session.
             scene=build_world(calibration,self.active_dir,loaded_scene)
             self.active_robot=deepcopy(loaded_scene["robot"])
+            self.process_sampler.reset()
             profiles=generate_rate_profiles(calibration,self.active_dir)
             self.loaded_config=deepcopy(cfg)
             self.loaded_inputs=calibration
@@ -492,6 +495,7 @@ class Service:
             self.loaded_inputs=None
             self.active_robot=None
             self._pose_file=None
+            self.process_sampler.reset()
             return self.status()
 
     def status(self):
@@ -522,6 +526,9 @@ class Service:
                     self.active_robot!=self.scene["robot"]),
                 "map_status":status_file(self.active_dir/"map_status.json")
                     if running(self.stack) and self.active_dir else None,
+                "process_resources":self.process_sampler.sample(
+                    self.stack.pid if running(self.stack) else None,
+                    self.rviz.pid if running(self.rviz) else None),
                 "moving_obstacle_error":self.obstacles.last_move_error if self.obstacles else "",
                 "stack_log":log_tail(self.stack_log),
                 "trial_log":log_tail(self.run_log),
