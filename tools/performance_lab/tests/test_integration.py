@@ -115,7 +115,7 @@ def test_environment_isolated_and_browser_controls_exist():
     assert 'id="stack-log"' in html
     assert 'id="history-rows"' in html
     assert 'id="mode"' in html
-    assert "use_sim_time" in js
+    assert "use_sim_time" in html
     assert "/api/benchmark/start" in js
     assert "/api/history/delete" in js
 
