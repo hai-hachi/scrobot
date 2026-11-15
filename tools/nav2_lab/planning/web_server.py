@@ -283,7 +283,8 @@ class Service:
                 self.stack=subprocess.Popen(args,env=self.env,cwd=REPO,
                   stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
             self.obstacles=Obstacles(self.active_dir/"fixtures",self.env,
-                                     initial_specs=loaded_scene["obstacles"])
+                                     initial_specs=loaded_scene["obstacles"],
+                                     clock_path=self.active_dir/"map_status.json")
             self.run_dir=None
             return self.status()
 
