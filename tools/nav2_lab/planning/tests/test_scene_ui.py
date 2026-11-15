@@ -64,20 +64,23 @@ def test_planner_tab_drag_clicks_cell_size_and_performance():
     assert "renderRates(status.map_status?.topic_hz)" in SCRIPT
 
 
-def test_rviz_robot_body_collision_footprint_and_calibrated_lines():
+def test_rviz_no_robot_body_thinner_collision_and_fixed_boxes():
     displays={d.get("Name"):d for d in RVIZ["Visualization Manager"]["Displays"]}
-    model=displays["Simplified SCROBOT body"]
-    assert model["Class"]=="rviz_default_plugins/RobotModel"
-    assert model["Visual Enabled"] is True
+    assert not any(d.get("Class")=="rviz_default_plugins/RobotModel"
+                   for d in displays.values())
     assert displays["Court markings and outer clearance"]["Topic"]["Value"]=="/nav2_lab/court_lines"
     assert displays["Robot and goal arrows"]["Topic"]["Value"]=="/nav2_lab/pose_arrows"
     assert displays["Camera link only"]["Topic"]["Value"]=="/nav2_lab/camera_link"
-    assert RVIZ["Visualization Manager"]["Displays"][1]["Alpha"]<=.35
+    assert displays["Static poles and tags"]["Alpha"]<=.35
     assert displays["Live global costmap"]["Alpha"]<=.25
     assert displays["Live global costmap"]["Draw Behind"] is True
     overlay=(ROOT/"map_status.py").read_text()
     assert "def read_footprint(" in overlay
-    assert 'marker("robot_footprint",0,Marker.LINE_STRIP' in overlay
+    assert "perimeter.scale.x=.025" in overlay
+    assert "Marker.CUBE,frame=\"map\"" in overlay
+    assert "self.court_pub.publish(self.fixed_court)" in overlay
+    assert "self.court_published=True" in overlay
+    assert "Marker.LINE_LIST" not in overlay
     launch=(ROOT/"launch"/"planning.launch.py").read_text()
     assert '"robot_visual_mode": "simple"' in launch
     assert '"--nav2-params", v["nav2_params_file"]' in launch
@@ -147,3 +150,18 @@ def test_live_planning_all_plugins_route_and_controls():
     assert 'id="live-interval"' in PAGE
     assert "renderResults(status.summary)" in SCRIPT
     assert "summary?.mode==='live'" in SCRIPT
+
+
+
+def test_court_painted_lines_reuse_fixed_sdf_box_dimensions():
+    import sys
+    sys.path.insert(0,str(ROOT))
+    from court_visual import court_lines,box_segments
+    world=ROOT.parents[2]/"src/scrobot_simulation/worlds/badminton_court.sdf"
+    geom=court_lines(world)
+    assert len(geom["court_line_boxes"])>=6
+    assert len(geom["court_outline_boxes"])==4
+    assert len(geom["clearance_outline_boxes"])==4
+    assert any(item["width"]==.04 for item in geom["court_line_boxes"])
+    assert all(item["length"]>0 for item in geom["court_line_boxes"])
+    assert len(box_segments(15.4,7.2,.05))==4
