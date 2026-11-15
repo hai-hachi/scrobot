@@ -37,7 +37,7 @@ def seconds(duration):
     return duration.sec+duration.nanosec/1e9
 
 
-def pose(x,y,yaw_deg,frame="odom",stamp=None):
+def pose(x,y,yaw_deg,frame="map",stamp=None):
     p=PoseStamped()
     p.header.frame_id=frame
     if stamp is not None:p.header.stamp=stamp
@@ -222,15 +222,15 @@ def run(config,run_dir,cache,planner_pid=None):
         output["camera_scan_messages_seen"]=node.scan_count
         output["map_frame"]=node.map.header.frame_id
         output["map_dimensions"]=[node.map.info.width,node.map.info.height]
-        if node.map.header.frame_id!="odom":
-            raise RuntimeError("Static map is not aligned to odom")
+        if node.map.header.frame_id!="map":
+            raise RuntimeError("Static map is not published in court-fixed map frame")
         for name in selected:
             if STOP:raise RuntimeError("Cancelled")
             profiler=ProcessProfile(planner_pid)
             try:
                 record=node.plan_one(name,profiler)
                 file=run_dir/(name+".json")
-                snapshot={"planner":name,"points":record.pop("path"),"frame_id":"odom"}
+                snapshot={"planner":name,"points":record.pop("path"),"frame_id":"map"}
                 file.write_text(json.dumps(snapshot,indent=2))
                 (cache/(name+".json")).write_text(json.dumps(snapshot))
                 output["results"][name]=record
