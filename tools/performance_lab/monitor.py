@@ -153,14 +153,20 @@ class TimingObserver(Node):
             if pending and not pending[0].done() and now-pending[1]<8.:
                 continue
             for service,client in clients:
-                if not client.service_is_ready():
-                    continue
-                future=client.call_async(GetState.Request())
-                self._lifecycle_pending[name]=(future,now)
-                future.add_done_callback(
-                    lambda future,name=name,service=service:
-                        self.on_lifecycle_result(name,service,future))
-                break
+                try:
+                    if not client.service_is_ready():
+                        continue
+                    future=client.call_async(GetState.Request())
+                    self._lifecycle_pending[name]=(future,now)
+                    future.add_done_callback(
+                        lambda future,name=name,service=service:
+                            self.on_lifecycle_result(name,service,future))
+                    break
+                except (RuntimeError,ValueError) as exc:
+                    self.nav2_lifecycle[name]={
+                        "state":"unknown","service":service,
+                        "last_seen_wall":None,"error":str(exc)[:180],
+                    }
 
     def on_lifecycle_result(self,name,service,future):
         try:
