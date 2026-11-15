@@ -103,6 +103,18 @@ function rateStatus(row){
 }
 function renderTopics(monitor){
   const records=monitor?.topics||{};
+  const graph=monitor?.publisher_graph||{};
+  const source=(name)=>{
+    const item=graph[name];
+    if(!item)return name+': awaiting publisher audit';
+    if(item.error)return name+': audit error '+item.error;
+    return name+': '+item.publisher_count+' publisher(s)'+
+      (item.publishers?.length?' ['+item.publishers.map(
+        p=>(p.node_namespace+'/'+p.node_name).replaceAll('//','/')).join(', ')+']':'');
+  };
+  $('publisher-graph').textContent='Controller-source publishers: '+
+    source('/diff_drive_controller/odom')+' · '+source('/joint_states')+
+    '. Multiple publishers require investigation, not timestamp rewriting.';
   const body=$('topic-rows');body.replaceChildren();
   if(!Object.keys(records).length){
     body.append(emptyRow(11,'Start simulation and wait for live ROS /clock and topics.'));
