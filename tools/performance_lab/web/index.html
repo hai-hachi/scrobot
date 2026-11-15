@@ -152,18 +152,70 @@
         </div>
         <div class="table-wrap"><table>
           <thead><tr><th>ROS topic</th><th>Target sim Hz</th><th>Wall Hz</th>
-            <th>Sim Hz</th><th>Clock − header offset (s)</th>
-            <th>Large header gaps</th><th>Assessment</th></tr></thead>
-          <tbody id="topic-rows"><tr><td colspan="7">Start simulation to measure topic rates.</td></tr></tbody>
+            <th>Sim Hz</th><th>Header p95 interval (ms)</th>
+            <th>Header p95 jitter (ms)</th><th>Unique header gaps</th>
+            <th>Clock − header offset (s)</th><th>Assessment</th></tr></thead>
+          <tbody id="topic-rows"><tr><td colspan="9">Start simulation to measure topic rates.</td></tr></tbody>
         </table></div>
         <p class="fineprint">Wall Hz is measured against monotonic wall time.
           Sim Hz divides message arrivals by the /clock progression in the same window.
-          Image/PointCloud2 payloads are monitored as serialized messages to avoid
-          extra deserialization; their header offset is intentionally unavailable.
-          Offset is last observed /clock minus message stamp, not processing latency.
-          A small negative offset can occur because of callback ordering.
-          Missing streams are unknown, not passed. Header gaps can indicate
-          skips or jitter, but are not proof of publisher drops.</p>
+          Image and PointCloud2 payloads are received as serialized messages;
+          the monitor reads only their CDR header timestamps, not their pixel
+          or point data. Header interval p95 and jitter come from source stamps,
+          while sim Hz still comes from /clock progression.
+          Unique gap totals count intervals over 1.5× nominal since observer
+          startup; they are not necessarily dropped frames or controller
+          deadline misses. Costmap full and update streams are non-periodic:
+          an initial latched map can be valid without further updates.
+          Clock minus header stamp is not one-way transport latency;
+          slightly negative values can occur because of callback ordering.</p>
+      </section>
+      <section class="panel">
+        <div class="panel-heading"><h2>Nav2 lifecycle &amp; costmap coverage</h2>
+          <span>Asynchronous GetState service checks · latched map + changes</span></div>
+        <div class="sync-heading">
+          <div>Planner server <strong id="nav2-planner-state">Unknown</strong></div>
+          <div>Controller server <strong id="nav2-controller-state">Unknown</strong></div>
+          <div>Costmap lifecycle <strong id="nav2-costmap-state">Unknown</strong></div>
+        </div>
+        <div class="sync-heading">
+          <div>Full costmap received <strong id="costmap-full-count">—</strong></div>
+          <div>Incremental map updates <strong id="costmap-update-count">—</strong></div>
+          <div>Nav2 command output <strong id="nav2-cmd-hz">—</strong></div>
+        </div>
+        <p class="fineprint" id="costmap-note">
+          A full OccupancyGrid is often published only once with reliable,
+          transient-local QoS. Additional messages are published on
+          /global_costmap/costmap_updates when cells change; silence on that
+          topic is not automatically a failure. Full-mission coverage requires
+          confirmed active planner/controller lifecycle and at least one full map.
+          An unavailable costmap lifecycle service is shown as unknown.</p>
+      </section>
+      <section class="panel">
+        <div class="panel-heading"><h2>Jazzy Nav2 controller timing</h2>
+          <span>Source-level clock audit + live log warning count</span></div>
+        <div class="sync-heading">
+          <div>Configured controller rate
+            <strong id="nav2-controller-target">25 sim Hz</strong></div>
+          <div>Wall Hz needed for 25 sim Hz
+            <strong id="nav2-target-wall-hz">—</strong></div>
+          <div>Sim Hz if WallRate achieved 25 wall Hz
+            <strong id="nav2-wallrate-sim-hz">—</strong></div>
+        </div>
+        <div class="sync-heading">
+          <div>WallRate warnings (last 60 wall s)
+            <strong id="nav2-warnings-recent">—</strong></div>
+          <div>WallRate warnings (since launch)
+            <strong id="nav2-warnings-total">—</strong></div>
+          <div>Reported computation frequency (latest)
+            <strong id="nav2-current-reported-hz">—</strong></div>
+        </div>
+        <p class="fineprint" id="nav2-timing-note">
+          Upstream Nav2 Jazzy uses rclcpp::WallRate in ControllerServer.
+          The warning counts missed WALL-clock scheduler deadlines, not
+          simulated-time controller deadline misses. /cmd_vel_nav is an
+          output proxy during navigation, not an iteration trace. This
+          diagnostic never changes controller_frequency or patches Nav2.</p>
       </section>
       <section class="panel">
         <div class="panel-heading"><h2>ROS node clock audit</h2>
