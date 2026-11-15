@@ -201,7 +201,8 @@ function renderAudit(audit){
 function renderProvenance(provenance){
   const list=$('calibration');list.replaceChildren();
   if(!provenance){list.textContent='Start the simulation to snapshot inputs.';return;}
-  const keys=['production_world','production_camera','production_mobility',
+  const keys=['production_world','installed_camera','installed_mobility',
+    'installed_odometry','production_camera','production_mobility',
     'production_odometry','saved_lighting','saved_camera',
     'saved_mobility','saved_odometry','saved_yolo'];
   for(const name of keys){
