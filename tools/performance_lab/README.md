@@ -39,17 +39,19 @@ this updated Performance Lab, so the installed launch files accept
 1. **Overview** — full-stack idle / full mission, synchronized / real-time
    acceptance, max RTF cap, benchmark duration, warmup, camera/controller
    proxy rates, live RTF trend and calibration provenance.
-2. **Clock & Sync** — ROS topic wall-Hz versus simulated-Hz, header timestamp
-   ages and discontinuities, clock reset/pause detection, and on-demand
-   audit of discovered nodes' `use_sim_time` parameters.
+2. **Clock & Sync** — ROS topic wall-Hz versus simulated-Hz, source-header
+   interval p95 and jitter, unique large timestamp gaps, clock reset/pause
+   detection, asynchronous Nav2 lifecycle checks, full/incremental costmap
+   observation, Nav2 Jazzy WallRate timing analysis and node `use_sim_time` audit.
 3. **Profiler** — scoped per-process CPU/RSS and top per-thread CPU
    (including Linux PID/TID/name), whole-host CPU/RAM,
    NVIDIA whole-device utilization/VRAM/temperature (when `nvidia-smi`
    is installed). A 100% CPU result is *one* logical core, not the whole
    machine; RSS can double-count shared pages.
 4. **Results** — warm-up + wall-time sampling window, frozen configuration
-   snapshots, sampled metrics, per-topic simulated-time rate acceptance,
-   run comparison by saved JSON and individual run deletion.
+   snapshots, separate sensor-cadence and active Nav2 costmap/lifecycle
+   coverage, controller warning counts, timestamp-gap deltas, saved JSON
+   comparisons and individual run deletion.
 
 ## Synchronized simulation vs real-time performance
 
@@ -72,12 +74,15 @@ The metric engine logs:
 - **Wall Hz**: ROS arrivals / monotonic wall-clock elapsed.
 - **Sim Hz**: ROS arrivals / elapsed `/clock` time.
 - **RTF**: elapsed simulation seconds / monotonic wall seconds.
-- **Header-minus-/clock offset / large timestamp gaps** where message headers
-  were sampled. Negative offsets can happen because a sensor callback
-  receives a newer stamp before the observer sees the next /clock update;
-  this is not negative network latency.
-  Image/PointCloud2 streams use **raw serialized subscriptions** to limit
-  monitor overhead; header-age is deliberately not sampled for large payloads.
+- **Header-minus-/clock offset / timestamp gaps / jitter**. Negative offsets
+  can happen when the topic callback receives a stamp before the observer
+  sees that /clock tick; this is not negative network latency. The monitor
+  extracts ONLY the first standard CDR Header timestamp of serialized
+  Image and PointCloud2 messages without deserializing large payloads.
+  It reports header interval p50/p95/max, absolute p95 jitter relative to
+  configured simulated period, and unique large-gap totals. The UI counts
+  each source-header gap once; benchmark reports differences of cumulative
+  totals across the measurement interval, not sums of overlapping 5 s windows.
 - **Clock paused/restarted** indicators; reports insufficient evidence
   as unknown rather than 0 Hz or a false pass.
 
@@ -88,6 +93,49 @@ checks discovered ROS parameters but **cannot prove** every internal
 timeout or controller update follows /clock. Check TF, actual control
 state, queues and logs. A future coordinated Gazebo stepping/acknowledgment
 phase is separate; this initial lab does not introduce a custom scheduler.
+
+## Jazzy Nav2 timing and costmap correctness
+
+Nav2 Jazzy's `nav2_controller` uses `rclcpp::WallRate` to schedule
+`ControllerServer::computeControl()`, even with `use_sim_time: true`.
+At 0.25× real-time factor, an ideal **25 Hz per simulated second**
+controller would be triggered **6.25 times per wall second**, while
+the upstream Jazzy WallRate still requests 25 times per wall second.
+The Performance Lab reports both theoretical expectations from the
+installed `controller_frequency` parameter and the observed
+`/cmd_vel_nav` output rate while goals are active. Neither output rate
+nor the printed "current loop rate" in the warning is an actual
+ControllerServer iteration trace.
+
+The lab counts `Control loop missed its desired rate` warning log lines
+incrementally without duplicating previous log tails. Counts are clearly
+labeled **missed wall-rate wakeups**, not failed simulated-time
+controller cycles. The source audit is based on the upstream Jazzy
+ControllerServer implementation; check installed Nav2 binaries before
+assuming all patched builds use the same loop. No controller frequency,
+ROS parameters, Gazebo callbacks or production source is changed here.
+
+The global costmap uses **reliable TRANSIENT_LOCAL** publishers:
+`/global_costmap/costmap` (OccupancyGrid) contains the full map, and
+`/global_costmap/costmap_updates` (OccupancyGridUpdate) contains
+changed cells. The full map may be published once. A static map need
+not produce incremental updates continuously. The monitor now uses
+matching QoS, remembers full-map reception even after its 5-second
+rate window expires, and asynchronously queries
+`/planner_server/get_state`, `/controller_server/get_state`, and
+known global-costmap GetState service names. Missing or inaccessible
+lifecycle services remain unknown rather than being guessed.
+
+A full-mission benchmark separately reports **sensor cadence pass**
+and **Nav2 coverage verified** (active planner and controller lifecycle
+and at least one full global map observed). This is not yet a proof of
+deterministic lockstep, successful navigation goals or bounded
+latency. Nav2 updates or costmap visualization silence alone is not
+considered a failure.
+
+Upstream references:
+- https://api.nav2.org/nav2-jazzy/html/controller__server_8cpp_source.html
+- https://api.nav2.org/nav2-jazzy/html/costmap__2d__publisher_8cpp_source.html
 
 ## Workload fidelity
 
@@ -101,8 +149,9 @@ baseline, not a complete active navigation acceptance test.
 
 `full_mission`: the same complete stack **with normal shuttle collection
 mission enabled**. The real mission/ROS algorithms run unmodified; the
-benchmark additionally checks active global costmap publication as part
-of the full-mission topic-rate coverage.
+benchmark additionally verifies active Nav2 planner/controller lifecycle
+states and that at least one full global costmap was observed. Full map
+and incremental update messages do NOT have fixed 3-Hz rate acceptance.
 
 The launch consumes the **published** config from the production
 `src/scrobot_simulation/config/` and the production world, not automatically
@@ -137,7 +186,8 @@ Lab output root. Calibration and the active world are never deleted.
 
 ## Known limitations and acceptance
 
-This release validates ROS **topic cadence and time-source configuration**.
+This release validates ROS **topic cadence and time-source configuration**,
+plus non-invasive Nav2 lifecycle/costmap evidence.
 The UI deliberately labels wheel odometry and joint-state frequencies as
 proxies: neither measures the STM32 PID loop or every
 `ros2_control` callback execution. YOLO detections have no fixed Hz target
