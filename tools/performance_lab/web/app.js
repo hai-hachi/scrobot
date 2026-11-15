@@ -94,6 +94,7 @@ function rateStatus(row){
     paused:['Paused','warn'],
     sim_rate_low:['Low (sim time)','bad'],
     sim_rate_high:['High (sim time)','bad'],
+    sim_jitter_high:['High jitter (sim time)','bad'],
     rtf_low:['RTF low','warn'],
     observed:['Observed','ok'],
     unknown:['Unknown','warn'],
@@ -126,7 +127,7 @@ function renderTopics(monitor){
   $('clock-jumps').textContent=String(monitor.clock_jumps||0);
   const clues=[];
   for(const [topic,data]of Object.entries(records))
-    if(data.status==='sim_rate_low'||data.status==='sim_rate_high')
+    if(['sim_rate_low','sim_rate_high','sim_jitter_high'].includes(data.status))
       clues.push(data.label+': '+data.status.replace('_',' '));
   $('clock-note').textContent=clues.length?
     clues.slice(0,4).join('; ')+'. Check rates, timestamps, queues and logs.':
@@ -211,11 +212,13 @@ function renderNav2(nav2,timing){
   $('nav2-cmd-hz').textContent=fmt(timing?.cmd_vel_nav?.sim_hz)+' sim Hz';
   const schedule=timing?.scheduler||{},warnings=timing?.warnings||{};
   $('nav2-controller-target').textContent=fmt(
-    schedule.configured_controller_hz,1)+' Hz · WallRate';
+    schedule.configured_controller_hz,1)+' Hz · '+
+    (timing?.overlay?.active?'ROS time':'WallRate · PATCH REQUIRED');
   $('nav2-target-wall-hz').textContent=fmt(
     schedule.expected_wall_hz_for_sim_cadence)+' Hz';
-  $('nav2-wallrate-sim-hz').textContent=fmt(
-    schedule.theoretical_sim_hz_if_wallrate_sustained)+' Hz';
+  $('nav2-wallrate-sim-hz').textContent=timing?.overlay?.active?
+    'ROS-clock overlay active':fmt(
+      schedule.theoretical_sim_hz_if_wallrate_sustained)+' Hz (unpatched)';
   $('nav2-warnings-recent').textContent=warnings.warning_last_60_wall_s??'—';
   $('nav2-warnings-total').textContent=warnings.warning_total??'—';
   $('nav2-current-reported-hz').textContent=
@@ -284,7 +287,11 @@ function renderSummary(data){
   p.textContent='Average RTF '+fmt(r.avg_rtf,3)+
     '× · Sensor sim-time cadence '+(r.cadence_pass?'PASS':'NOT VERIFIED / LOW')+
     ' · Nav2 lifecycle/costmap '+nav+
-    ' · Jazzy wall-scheduler warnings '+(
+    ' · Controller / smoother '+(
+      r.timing_quality?.controller_and_smoother_cadence_pass?'PASS':'NOT VERIFIED')+
+    ' · Wheel odom timestamp '+(
+      r.timing_quality?.wheel_odom_header_jitter_pass?'PASS':'JITTER')+
+    ' · Controller warnings '+(
       r.timing_quality?.nav2_wall_scheduler_warnings_in_window??'not measured')+
     (r.real_time_rate_pass===null?' · Real-time not assessed':
       ' · Real-time '+(r.real_time_rate_pass?'PASS':'FAIL'))+
