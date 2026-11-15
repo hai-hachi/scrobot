@@ -370,7 +370,8 @@ class Workflow:
             generated = build_dataset(
                 camera, yolo, self.lab_output / "dataset_world.sdf",
                 lighting=lighting_calibration())
-            generated=self.lab.apply_rtf_world(generated)
+            from shared.sim_speed import cap_world, get as read_speed
+            generated=cap_world(generated, generated, read_speed("yolo"))
             self.lab.camera = camera
             self.lab.yolo = yolo
             self.lab.phase = "generating_dataset"
