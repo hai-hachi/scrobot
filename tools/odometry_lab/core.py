@@ -158,6 +158,7 @@ class StreamMeter:
     """Actual header stamp rate (Hz), interval jitter and arrival freshness."""
     def __init__(self):
         self.times = deque(maxlen=250)
+        self.arrivals = deque(maxlen=250)
         self.last_wall = None
         self.count = 0
         self.frame = ""
@@ -172,13 +173,20 @@ class StreamMeter:
             self.times.append(stamp)
         self.count += 1
         self.last_wall = time.monotonic()
+        self.arrivals.append(self.last_wall)
         self.frame = frame
 
     def status(self):
         steps = [b-a for a,b in zip(self.times, list(self.times)[1:]) if b>a]
         age = None if self.last_wall is None else time.monotonic()-self.last_wall
+        recent=[t for t in self.arrivals if self.last_wall is not None and t>=time.monotonic()-5.0]
+        wall_span=recent[-1]-recent[0] if len(recent)>=2 else 0.0
+        wall_hz=round((len(recent)-1)/wall_span,2) if wall_span>0 else None
         return {
             "count": self.count,
+            "wall_hz":wall_hz,
+            "sim_hz": (round((len(steps) / sum(steps)), 2)
+                       if len(steps) >= 3 and sum(steps) > 0 else None),
             "hz": (round((len(steps) / sum(steps)), 2)
                    if len(steps) >= 3 and sum(steps) > 0 else None),
             "jitter_ms": (round(statistics.pstdev(steps)*1000, 3)
