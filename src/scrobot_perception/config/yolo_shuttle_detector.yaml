@@ -1,6 +1,6 @@
 yolo_shuttle_detector:
   ros__parameters:
-    use_sim_time: false
+    use_sim_time: true
 
     # Leave empty in source. Supply with launch argument model_path:=... or
     # environment variable SCROBOT_YOLO_MODEL.
@@ -11,7 +11,8 @@ yolo_shuttle_detector:
     imgsz: 960
     confidence_threshold: 0.10
     iou_threshold: 0.70
-    max_detection_rate: 15.0
+    # Cap per simulated second using the RGB source timestamps, not wall time.
+    max_detection_rate: 30.0
 
     color_topic: /camera/camera/color/image_raw
     aligned_depth_topic: /camera/camera/aligned_depth_to_color/image_raw
