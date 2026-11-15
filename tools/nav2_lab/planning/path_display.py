@@ -9,6 +9,7 @@ import rclpy
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path as NavPath
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 
 from core import PLANNERS
@@ -16,7 +17,9 @@ from core import PLANNERS
 
 class Overlay(Node):
     def __init__(self, cache):
-        super().__init__("nav2_lab_path_display")
+        super().__init__("nav2_lab_path_display",
+            parameter_overrides=[Parameter("use_sim_time",Parameter.Type.BOOL,True)],
+            automatically_declare_parameters_from_overrides=True)
         self.cache=Path(cache)
         qos=QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL,
                        reliability=ReliabilityPolicy.RELIABLE)
@@ -39,7 +42,7 @@ class Overlay(Node):
             try:
                 data=json.loads(filepath.read_text())
                 msg=NavPath()
-                msg.header.frame_id="odom"
+                msg.header.frame_id=data.get("frame_id","map")
                 msg.header.stamp=self.get_clock().now().to_msg()
                 for px,py in data["points"]:
                     pose=PoseStamped()
