@@ -118,6 +118,7 @@ class Monitor(Node):
         self.geometry=court_lines(world)
         self.started=time.monotonic()
         self.sim_time_s=None
+        self.clock_marks=deque(maxlen=1024)
         self.records={}
         self.topic_times={name:deque(maxlen=256) for name,_,_ in TOPICS}
         self.buffer=Buffer()
@@ -147,6 +148,7 @@ class Monitor(Node):
         self.topic_times[topic].append(now)
         if topic=="/clock":
             self.sim_time_s=msg.clock.sec+msg.clock.nanosec*1e-9
+            self.clock_marks.append((now,self.sim_time_s))
         elif topic in ("/map","/global_costmap/costmap"):
             # Counting every occupied cell at 3Hz wastes CPU on large grids.
             self.records[topic]={
@@ -177,6 +179,19 @@ class Monitor(Node):
         camera=camera_link_marker()
         camera.header.stamp=stamp
         self.camera_pub.publish(camera)
+
+    def real_time_factor(self,now):
+        """Measure sim seconds / wall seconds from /clock over a recent window."""
+        if not self.clock_marks:
+            return None
+        if now-self.clock_marks[-1][0]>1.5:
+            return 0.0  # Gazebo stopped or paused
+        marks=[item for item in self.clock_marks if item[0]>=now-3.]
+        if len(marks)<2:return None
+        wall=marks[-1][0]-marks[0][0]
+        if wall<=.1:return None
+        sim=max(0.0,marks[-1][1]-marks[0][1])
+        return round(sim/wall,2)
 
     def tick(self):
         now=time.monotonic()
@@ -219,6 +234,7 @@ class Monitor(Node):
             }
         status["uptime_wall_s"]=round(now-self.started,1)
         status["sim_time_s"]=self.sim_time_s
+        status["real_time_factor"]=self.real_time_factor(now)
         if not status["static_map"]["received"]:
             status["hint"]="No /map: map_server must be active with the generated court YAML."
         elif not status["global_costmap"]["received"]:
