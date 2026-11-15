@@ -12,7 +12,8 @@ sys.path.insert(0,str(LAB))
 
 from planning.map_builder import court_geometry, occupancy, write_court_map
 from planning.core import PLANNERS, nav2_params, path_length, path_turning, validate
-from planning.obstacles import sdf_fixture, validate_placement
+from planning.obstacles import sdf_fixture, pose_along_segment
+from planning.scene import validate_scene, load_scene, save_scene
 
 WORLD=REPO/"src"/"scrobot_simulation"/"worlds"/"badminton_court.sdf"
 LANDMARKS=REPO/"src"/"scrobot_localization"/"config"/"court_landmarks.yaml"
@@ -66,7 +67,8 @@ def test_planner_plugins_production_config_not_mutated():
     assert cost["plugins"]==["static_layer","obstacle_layer","inflation_layer"]
     assert cost["static_layer"]["map_topic"]=="/map"
     assert cost["obstacle_layer"]["depth_scan"]["topic"]=="/camera/camera/depth/scan"
-    assert generated["map_server"]["ros__parameters"]["frame_id"]=="odom"
+    assert generated["map_server"]["ros__parameters"]["frame_id"]=="map"
+    assert cost["global_frame"]=="map"
 
 
 def test_map_only_no_depth():
@@ -78,12 +80,15 @@ def test_map_only_no_depth():
     assert cost["plugins"]==["static_layer","inflation_layer"]
 
 
-def test_reject_unaligned_spawn_and_bad_planner():
+def test_robot_spawn_allowed_when_mapped_to_court_frame():
     cfg=config()
-    cfg["simulation"]["start_x"]=1.5
+    cfg["simulation"]["start_x"]=-3.0
+    cfg["simulation"]["start_y"]=1.0
+    cfg["simulation"]["start_yaw"]=0.5
+    assert validate(cfg)
+    cfg["planning"]["planner"]="unsupported"
     with pytest.raises(ValueError):validate(cfg)
-    cfg=config();cfg["planning"]["planner"]="unsupported"
-    with pytest.raises(ValueError):validate(cfg)
+
 
 
 def test_geometry_metrics():
@@ -91,11 +96,31 @@ def test_geometry_metrics():
     assert path_turning([(0,0),(1,0),(1,1)])==pytest.approx(1.5707963268)
 
 
-def test_fixture_models_and_reject_robot_overlap():
-    assert '<collision name="body_collision">' in sdf_fixture("box","nav2_lab_box_001")
-    assert '<collision name="body_collision">' in sdf_fixture("human","nav2_lab_human_001")
-    validate_placement("box",1.5,0)
-    validate_placement("human",2.0,.0,True)
-    with pytest.raises(ValueError):validate_placement("box",0,0)
-    with pytest.raises(ValueError):validate_placement("human",2,2.7,True)
-    with pytest.raises(ValueError):validate_placement("box",1,0,True)
+def test_adjustable_cube_and_two_point_human_fixture(tmp_path):
+    base={"robot":{"x":-3.0,"y":0.0,"yaw_deg":45.0},"obstacles":[
+        {"kind":"box","x":-1.5,"y":0.0,"size":.75},
+        {"kind":"human","point_a":{"x":0.0,"y":-1.0},
+         "point_b":{"x":0.0,"y":1.0},"speed_mps":.6},
+    ]}
+    values=validate_scene(base)
+    xml=sdf_fixture(values["obstacles"][0],"nav2_lab_box_001")
+    assert "<size>0.7500 0.7500 0.7500</size>" in xml
+    assert '<collision name="body_collision">' in xml
+    human=sdf_fixture(values["obstacles"][1],"nav2_lab_human_002")
+    assert "<radius>0.24</radius>" in human
+    assert "<length>1.74</length>" in human
+    assert pose_along_segment({"x":0,"y":0},{"x":2,"y":0},.5,2)["x"] == pytest.approx(.5*2)
+    assert pose_along_segment({"x":0,"y":0},{"x":2,"y":0},.5,6)["x"] == pytest.approx(.5*6-2)
+    yaml_path=tmp_path/"nav2_scene.yaml"
+    save_scene(base,yaml_path)
+    assert load_scene(yaml_path)==values
+
+
+def test_scene_rejects_invalid_path_or_cube():
+    scene={"robot":{"x":-3.0,"y":0.0,"yaw_deg":0.0},"obstacles":[
+        {"kind":"box","x":-1.5,"y":0.0,"size":1.6},
+    ]}
+    with pytest.raises(ValueError):validate_scene(scene)
+    scene["obstacles"]=[{"kind":"human","point_a":{"x":0,"y":0},
+                         "point_b":{"x":0,"y":0},"speed_mps":.6}]
+    with pytest.raises(ValueError):validate_scene(scene)
