@@ -25,6 +25,7 @@ FILES = {
     "yolo": CONFIG_DIR / "yolo_lab.yaml",
     "nav2": CONFIG_DIR / "nav2_lab.yaml",
     "mesh": CONFIG_DIR / "mesh_lab.yaml",
+    "performance": CONFIG_DIR / "performance_lab.yaml",
 }
 
 
