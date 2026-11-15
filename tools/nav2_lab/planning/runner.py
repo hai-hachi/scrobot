@@ -267,7 +267,7 @@ def run_live(config, run_dir, cache, interval_s, planner_pid=None):
         "phase":"live_path_planning","mode":"live","requested":names,
         "start":config["planning"]["start"],"goal":config["planning"]["goal"],
         "depth_obstacles":config["planning"]["depth_obstacles"],
-        "interval_s":interval,"cycle":0,"completed_cycles":0,
+        "interval_s":interval,"interval_time_basis":"ros_sim","cycle":0,"completed_cycles":0,
         "status":"starting","started_wall_time":time.time(),
         "resource_note":"CPU/RSS includes shared planner_server callbacks and costmap; plugin memory is not isolated.",
         "counts":{name:{"success":0,"failure":0} for name in names},
@@ -287,7 +287,8 @@ def run_live(config, run_dir, cache, interval_s, planner_pid=None):
         output["map_dimensions"]=[node.map.info.width,node.map.info.height]
         output["status"]="running"
         while not STOP:
-            started=time.monotonic()
+            started=time.monotonic()  # CPU/ROS action profile remains wall time.
+            started_sim=node.get_clock().now().nanoseconds * 1e-9
             output["cycle"]+=1
             hashes=[]
             output["results"]={}
@@ -319,12 +320,12 @@ def run_live(config, run_dir, cache, interval_s, planner_pid=None):
             output["last_cycle_wall_s"]=round(time.monotonic()-started,3)
             output["last_updated_wall_time"]=time.time()
             write_summary(summary,output)
-            # Never pile up Nav2 action requests when four plans exceed
-            # the selected interval.
-            remaining=started+interval-time.monotonic()
+            # Plan at a configured interval in simulated seconds, independent
+            # of Gazebo RTF. Never pile up requests when a cycle overruns.
+            remaining=started_sim+interval - node.get_clock().now().nanoseconds * 1e-9
             while not STOP and remaining>0:
-                rclpy.spin_once(node,timeout_sec=min(.1,remaining))
-                remaining=started+interval-time.monotonic()
+                rclpy.spin_once(node,timeout_sec=min(.1,max(0.005,remaining)))
+                remaining=started_sim+interval - node.get_clock().now().nanoseconds * 1e-9
         output["status"]="stopped"
     except Exception as exc:
         output["status"]="stopped" if STOP else "error"
