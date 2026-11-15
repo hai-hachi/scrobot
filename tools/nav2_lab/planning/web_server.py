@@ -2,6 +2,7 @@
 """SCROBOT Nav2 path-planning laboratory: local-only experiment orchestration."""
 import argparse
 import json
+import math
 import os
 import re
 import shutil
@@ -117,6 +118,7 @@ class Service:
         self.rviz=None
         self.gui=None
         self.trial=None
+        self.trial_mode=None
         self.active_dir=None
         self.env=None
         self.obstacles=None
@@ -337,7 +339,14 @@ class Service:
             self.run_dir=None
             return self.status()
 
-    def trial_start(self):
+    def trial_start(self, options=None):
+        opts=options or {}
+        mode=opts.get('mode','single')
+        if mode not in ('single','live'):
+            raise ValueError('Planning mode must be single or live')
+        interval=opts.get('interval_s',2.0)
+        if type(interval) not in (float,int) or not math.isfinite(interval) or not .5<=interval<=10.:
+            raise ValueError('Live interval must be 0.5–10 seconds')
         with self.lock:
             if not running(self.stack):raise RuntimeError("Start simulation first")
             if running(self.trial):raise RuntimeError("Planner benchmark already running")
@@ -374,6 +383,8 @@ class Service:
                  "--output",str(self.run_dir),
                  "--cache",str(self.active_dir/"paths")]
             if pid:cmd+=["--planner-pid",str(pid)]
+            if mode=="live":cmd+=["--live-interval-s",str(interval)]
+            self.trial_mode=mode
             with self.run_log.open("w") as log:
                 self.trial=subprocess.Popen(cmd,env=self.env,cwd=HERE,
                     stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
@@ -399,8 +410,8 @@ class Service:
 
     def add_obstacle(self,body):
         with self.lock:
-            if running(self.trial):
-                raise RuntimeError("Do not change obstacles during a benchmark")
+            if running(self.trial) and self.trial_mode!="live":
+                raise RuntimeError("Do not change obstacles during a single benchmark")
             spec=body.get("obstacle")
             candidate=deepcopy(self.scene)
             candidate["obstacles"].append(spec)
@@ -415,8 +426,8 @@ class Service:
 
     def remove_obstacle(self,body):
         with self.lock:
-            if running(self.trial):
-                raise RuntimeError("Finish benchmark before changing obstacles")
+            if running(self.trial) and self.trial_mode!="live":
+                raise RuntimeError("Finish single benchmark before changing obstacles")
             index=body.get("index")
             if type(index) is not int or not 0<=index<len(self.scene["obstacles"]):
                 raise ValueError("Select a valid obstacle index")
@@ -428,8 +439,8 @@ class Service:
 
     def clear_obstacles(self):
         with self.lock:
-            if running(self.trial):
-                raise RuntimeError("Finish benchmark before changing obstacles")
+            if running(self.trial) and self.trial_mode!="live":
+                raise RuntimeError("Finish single benchmark before changing obstacles")
             if running(self.stack) and self.obstacles:
                 self.obstacles.clear()
             self.scene["obstacles"]=[]
@@ -513,6 +524,7 @@ class Service:
                 "gui_log":log_tail(self.gui.log_path) if self.gui else "",
                 "rviz_log":log_tail(self.active_dir/"rviz.log") if self.active_dir else "",
                 "trial_running":running(self.trial),
+                "trial_mode":self.trial_mode if running(self.trial) else None,
                 "trial_exit_code":self.trial.poll() if self.trial else None,
                 "run_name":self.run_dir.name if self.run_dir else None,
                 "summary":summary,"results":outputs,
@@ -593,7 +605,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/scene/place-robot":lambda x:self.service.place_robot(x),
             "/api/start":lambda x:self.service.stack_start(),
             "/api/stop":lambda x:self.service.stop(),
-            "/api/plan":lambda x:self.service.trial_start(),
+            "/api/plan":lambda x:self.service.trial_start(x),
             "/api/cancel":lambda x:self.service.abort_trial(),
             "/api/gazebo-gui/open":lambda x:self.service.open_gui(),
             "/api/gazebo-gui/close":lambda x:self.service.close_gui(),
