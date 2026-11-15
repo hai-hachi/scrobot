@@ -23,6 +23,7 @@ FILES = {
     "mobility": CONFIG_DIR / "mobility_lab.yaml",
     "odometry": CONFIG_DIR / "odometry_lab.yaml",
     "yolo": CONFIG_DIR / "yolo_lab.yaml",
+    "nav2": CONFIG_DIR / "nav2_lab.yaml",
 }
 
 
