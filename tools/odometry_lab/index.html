@@ -43,7 +43,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101925;border:1px so
  <section>
   <div class="panel">
    <div class="row"><h2>Live sensor publication health</h2><span id="clock" class="status">Sim time —</span></div>
-   <table class="frequency"><thead><tr><th>Stream</th><th>Target</th><th>Measured</th><th>Jitter</th><th>Age</th><th>Frame</th></tr></thead><tbody id="sensorRows"></tbody></table>
+   <table class="frequency"><thead><tr><th>Stream</th><th>Target sim Hz</th><th>Measured sim Hz</th><th>Wall Hz</th><th>Jitter</th><th>Age</th><th>Frame</th></tr></thead><tbody id="sensorRows"></tbody></table>
    <p>Measured rate is calculated from message-header timestamps (simulation time), not from browser refreshes. Stale streams and repeated timestamps are flagged.</p>
   </div>
   <div class="panel">
@@ -250,7 +250,7 @@ $("mobilityYamlStatus").textContent=mobilityYaml.saved?
   const m=s.streams?.[id]||{},row=document.createElement("tr");
   const configured=target==="100 Hz"?"100":fmt(s.settings[target],0);
   const stale=m.last_age_wall_s==null||m.last_age_wall_s>1.8;
-  row.innerHTML='<td>'+title+'</td><td class="mono">'+configured+'</td><td class="mono '+(stale?"warn":"ok")+'">'+fmt(m.hz,1)+' Hz</td><td class="mono">'+fmt(m.jitter_ms,2)+' ms</td><td class="mono">'+fmt(m.last_age_wall_s,2)+' s</td><td class="mono">'+(m.frame_id||"—")+'</td>';
+  row.innerHTML='<td>'+title+'</td><td class="mono">'+configured+'</td><td class="mono '+(stale?"warn":"ok")+'">'+fmt(m.sim_hz??m.hz,1)+' Hz</td><td class="mono">'+fmt(m.wall_hz,1)+' Hz</td><td class="mono">'+fmt(m.jitter_ms,2)+' ms</td><td class="mono">'+fmt(m.last_age_wall_s,2)+' s</td><td class="mono">'+(m.frame_id||"—")+'</td>';
   body.append(row)
  }
  const m=s.metrics||{};
