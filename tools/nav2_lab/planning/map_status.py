@@ -54,7 +54,7 @@ def marker(ns,mid,kind,frame="map",color=(.85,.90,.95,1.0)):
     return m
 
 
-def endpoints(marker_obj,segments,height=.035):
+def endpoints(marker_obj,segments,height=.13):
     for x1,y1,x2,y2 in segments:
         marker_obj.points.extend([Point(x=x1,y=y1,z=height),
                                   Point(x=x2,y=y2,z=height)])
@@ -80,7 +80,7 @@ def scene_markers(geometry,robot,goal):
         arrow=marker("poses",mid,Marker.ARROW,color=color)
         arrow.pose.position.x=float(pose["x"])
         arrow.pose.position.y=float(pose["y"])
-        arrow.pose.position.z=.10
+        arrow.pose.position.z=.20
         yaw=math.radians(float(pose["yaw_deg"]))
         arrow.pose.orientation.z=math.sin(yaw/2)
         arrow.pose.orientation.w=math.cos(yaw/2)
