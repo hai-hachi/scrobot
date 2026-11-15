@@ -1151,9 +1151,7 @@ async function init(){
  setInterval(()=>poll().catch(e=>notify(e.message,true)),1100);
 }
 init().catch(e=>notify(e.message,true));
-</script>
 
-<script>
 /* Shared lab-only Gazebo RTF cap; source sensor/controller rates never scale. */
 (function(){
   async function initRtfControl(){
