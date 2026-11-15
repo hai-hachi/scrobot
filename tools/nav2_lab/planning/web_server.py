@@ -53,19 +53,19 @@ def status_file(path):
 
 # Gazebo/ROS/terminal progress output uses ANSI SGR/OSC and carriage returns.
 # Remove whole control sequences, not just the ESC byte (which leaves "[0m").
-ANSI_CSI = re.compile(r"\\x1b\\[[0-?]*[ -/]*[@-~]")
-ANSI_OSC = re.compile(r"\\x1b\\][^\\x07\\x1b]*(?:\\x07|\\x1b\\\\)")
-ANSI_SINGLE = re.compile(r"\\x1b[@-_]")
+ANSI_CSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+ANSI_OSC = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+ANSI_SINGLE = re.compile(r"\x1b[@-_]")
+
 def sanitize_log(text):
     text=ANSI_OSC.sub("",text)
     text=ANSI_CSI.sub("",text)
     text=ANSI_SINGLE.sub("",text)
-    text=text.replace("\\r\\n","\\n").replace("\\r","\\n")
-    return "".join(ch for ch in text if ch in "\\n\\t" or ord(ch)>=32)
+    text=text.replace("\r\n","\n").replace("\r","\n")
+    return "".join(ch for ch in text if ch in "\n\t" or ord(ch)>=32)
 
 def log_tail(path,limit=6000):
     if not path or not path.exists():return ""
-    # Read extra bytes so color sequences split by the file seek are unlikely.
     with path.open("rb") as f:
         f.seek(max(0,path.stat().st_size-limit*2))
         return sanitize_log(f.read().decode("utf-8","replace"))[-limit:]
