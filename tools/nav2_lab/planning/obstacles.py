@@ -36,7 +36,7 @@ def pose_along_segment(a,b,speed_mps,elapsed_s):
 
 def sdf_fixture(spec,name):
     """Physical collision + camera-visible geometry, spawned at model pose."""
-    from scene import validate_scene
+    from planning.scene import validate_scene
     # Reuse validation for structure and dimensional bounds, but don't check
     # robot overlap here: the scene server already validates the full scene.
     fixture=validate_scene({"robot":{"x":0.,"y":0.,"yaw_deg":0.},
