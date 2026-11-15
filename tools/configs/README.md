@@ -13,6 +13,7 @@ and ROS package-specific `src/*/config/` directories, plus the production
 | mobility_lab.yaml | src/scrobot_simulation/config/mobility_calibration.yaml |
 | odometry_lab.yaml | src/scrobot_simulation/config/odometry_calibration.yaml |
 | yolo_lab.yaml | No automatic production deployment |
+| nav2_lab.yaml | No publication: planner experiments only; imports saved upstream labs |
 
 **Save** changes only the lab's own YAML. **Publish** transfers saved and
 validated parameters to their production destination. The main simulation
