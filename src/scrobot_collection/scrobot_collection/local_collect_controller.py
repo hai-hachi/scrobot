@@ -158,7 +158,7 @@ class LocalCollectController(Node):
 
         self.raw_points = []
         self.raw_frame = ''
-        self.raw_stamp_monotonic = 0.0
+        self.raw_stamp_sim_s = 0.0
         self.action_active = False
         self.last_v = 0.0
         self.last_w = 0.0
@@ -212,12 +212,36 @@ class LocalCollectController(Node):
     # Perception / action plumbing
     # ------------------------------------------------------------------
 
+    def _now_seconds(self):
+        """ROS time: /clock in simulation, system time on the real robot."""
+        return self.get_clock().now().nanoseconds * 1e-9
+
+    def _sleep_sim(self, seconds, goal_handle):
+        """Pace the action in ROS time, yielding the executor between ticks.
+
+        Wall sleep is only a short cooperative wait, never the control time
+        base. A paused /clock pauses motion timing, but action cancellation
+        and ROS shutdown are still observed while waiting.
+        """
+        start = self._now_seconds()
+        target = start + max(0.0, float(seconds))
+        while rclpy.ok() and not goal_handle.is_cancel_requested:
+            now = self._now_seconds()
+            if now >= target or now < start - 1e-6:
+                return
+            time.sleep(0.003)
+
     def _detections_cb(self, msg):
         points = [detection_position(d) for d in msg.detections]
+        stamp = msg.header.stamp
+        source_stamp = float(stamp.sec) + float(stamp.nanosec) * 1e-9
+        # Source time, not arrival time: a delayed YOLO frame is not fresh.
+        if source_stamp <= 0.0:
+            source_stamp = self._now_seconds()
         with self.lock:
             self.raw_points = points
             self.raw_frame = msg.header.frame_id
-            self.raw_stamp_monotonic = time.monotonic()
+            self.raw_stamp_sim_s = source_stamp
 
     def _goal_cb(self, _request):
         with self.lock:
@@ -317,8 +341,8 @@ class LocalCollectController(Node):
 
     def _fresh_points_snapshot(self):
         with self.lock:
-            age = time.monotonic() - self.raw_stamp_monotonic
-            if age > self.detection_max_age:
+            age = self._now_seconds() - self.raw_stamp_sim_s
+            if age > self.detection_max_age or age < -0.10:
                 return '', []
             return self.raw_frame, list(self.raw_points)
 
@@ -478,7 +502,7 @@ class LocalCollectController(Node):
         )
 
         period = 1.0 / max(self.control_rate, 1.0)
-        previous = time.monotonic()
+        previous = self._now_seconds()
         stable_since = None
         self.last_v = 0.0
         self.last_w = 0.0
@@ -488,7 +512,7 @@ class LocalCollectController(Node):
                 self._stop()
                 return False, 'canceled during SMC pose'
 
-            now = time.monotonic()
+            now = self._now_seconds()
             if now >= deadline:
                 self._stop()
                 return True, 'target timeout during SMC pose'
@@ -496,7 +520,7 @@ class LocalCollectController(Node):
             base = self._frame_pose_in_odom(self.base_frame)
             if base is None:
                 self._stop()
-                time.sleep(period)
+                self._sleep_sim(period, goal_handle)
                 continue
 
             desired_v, desired_w, rho, alpha, e_y, e_theta, s = self._smc_command(
@@ -536,7 +560,7 @@ class LocalCollectController(Node):
                     )
                     return True, 'pre-pose reached and stable'
 
-                time.sleep(period)
+                self._sleep_sim(period, goal_handle)
                 continue
 
             stable_since = None
@@ -544,7 +568,7 @@ class LocalCollectController(Node):
             dt = max(1e-3, now - previous)
             previous = now
             self._send_slewed(desired_v, desired_w, dt)
-            time.sleep(period)
+            self._sleep_sim(period, goal_handle)
 
         self._stop()
         return False, 'ROS shutdown during SMC pose'
@@ -559,7 +583,7 @@ class LocalCollectController(Node):
         )
 
         period = 1.0 / max(self.control_rate, 1.0)
-        previous = time.monotonic()
+        previous = self._now_seconds()
         desired_speed = min(
             self.straight_collect_speed,
             self.smc_max_linear_speed,
@@ -570,7 +594,7 @@ class LocalCollectController(Node):
                 self._stop()
                 return False, 'canceled during straight collection'
 
-            now = time.monotonic()
+            now = self._now_seconds()
             if now >= deadline:
                 self._stop()
                 return True, 'target timeout during straight collection'
@@ -582,7 +606,7 @@ class LocalCollectController(Node):
             )
             if local is None:
                 self._stop()
-                time.sleep(period)
+                self._sleep_sim(period, goal_handle)
                 continue
 
             x, y, _ = local
@@ -599,7 +623,7 @@ class LocalCollectController(Node):
             dt = max(1e-3, now - previous)
             previous = now
             self._send_slewed(desired_speed, 0.0, dt)
-            time.sleep(period)
+            self._sleep_sim(period, goal_handle)
 
         self._stop()
         return False, 'ROS shutdown during straight collection'
@@ -622,7 +646,7 @@ class LocalCollectController(Node):
         )
 
         period = 1.0 / max(self.control_rate, 1.0)
-        previous = time.monotonic()
+        previous = self._now_seconds()
         desired_speed = min(self.overrun_speed, self.smc_max_linear_speed)
 
         while rclpy.ok():
@@ -630,7 +654,7 @@ class LocalCollectController(Node):
                 self._stop()
                 return False, 'canceled during overrun'
 
-            now = time.monotonic()
+            now = self._now_seconds()
             if now >= deadline:
                 self._stop()
                 return True, 'target timeout during overrun'
@@ -638,7 +662,7 @@ class LocalCollectController(Node):
             current = self._frame_pose_in_odom(self.collector_frame)
             if current is None:
                 self._stop()
-                time.sleep(period)
+                self._sleep_sim(period, goal_handle)
                 continue
 
             traveled = math.hypot(current[0] - start[0], current[1] - start[1])
@@ -653,13 +677,13 @@ class LocalCollectController(Node):
             dt = max(1e-3, now - previous)
             previous = now
             self._send_slewed(desired_speed, 0.0, dt)
-            time.sleep(period)
+            self._sleep_sim(period, goal_handle)
 
         self._stop()
         return False, 'ROS shutdown during overrun'
 
     def _drive_target(self, target_odom, goal_handle, feedback):
-        deadline = time.monotonic() + self.target_timeout
+        deadline = self._now_seconds() + self.target_timeout
 
         pre_pose = self._build_precollect_pose(target_odom)
         if pre_pose is None:
@@ -701,7 +725,7 @@ class LocalCollectController(Node):
 
         attempted_odom = []
         attempted_count = 0
-        spree_started = time.monotonic()
+        spree_started = self._now_seconds()
         overall_timeout = float(goal_handle.request.timeout_sec)
         if overall_timeout <= 0.0:
             overall_timeout = 120.0
@@ -719,7 +743,7 @@ class LocalCollectController(Node):
                     result.message = 'Local collection canceled.'
                     return result
 
-                if time.monotonic() - spree_started >= overall_timeout:
+                if self._now_seconds() - spree_started >= overall_timeout:
                     self._stop()
                     self._phase('DONE')
                     goal_handle.succeed()
