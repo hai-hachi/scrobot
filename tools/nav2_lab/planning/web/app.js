@@ -76,11 +76,11 @@ function renderResults(data){
     const row=document.createElement('tr');
     const values=[
       name,result.status,
-      format(result.planning_nav2_s*1000,1),
-      format(result.planning_wall_s*1000,1),
+      format(typeof result.planning_nav2_s==='number'?result.planning_nav2_s*1000:NaN,1),
+      format(typeof result.planning_wall_s==='number'?result.planning_wall_s*1000:NaN,1),
       format(result.path_length_m,2),
       format(result.min_costmap_lethal_clearance_m,2),
-      format(result.planner_process_cpu_s*1000,1),
+      format(typeof result.planner_process_cpu_s==='number'?result.planner_process_cpu_s*1000:NaN,1),
       format(result.planner_process_rss_mb,1),
       format(result.planner_process_rss_delta_mb,2)
     ];
