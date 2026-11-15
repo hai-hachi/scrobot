@@ -55,6 +55,7 @@ async function operation(callback){
 }
 function setButtons(){
   const live=Boolean(status?.stack_running),running=Boolean(status?.trial_running);
+  const liveTrial=running&&status?.trial_mode==='live';
   const buttons={
     start:!live,stop:live,plan:live&&!running,cancel:running,save:true,
     'scene-save':!running,'scene-load':!live,
@@ -63,9 +64,15 @@ function setButtons(){
     'gui-close':live&&Boolean(status?.gazebo_gui?.running),
     'rviz-open':live&&!status?.rviz_running,
     'rviz-close':live&&status?.rviz_running,
-    'add-box':!running,'add-human':!running,'clear-obstacles':!running
+    'add-box':!running||liveTrial,'add-human':!running||liveTrial,
+    'clear-obstacles':!running||liveTrial
   };
   for(const[key,enabled]of Object.entries(buttons))$(key).disabled=busy||!enabled;
+  $('planning-mode').disabled=busy||running;
+  $('live-interval').disabled=busy||running;
+  $('plan').textContent=$('planning-mode').value==='live'?
+    'Start live replanning':'Compare planners';
+  $('cancel').textContent=liveTrial?'Stop live planning':'Cancel';
 }
 function tag(name,attrs={},text=''){
   const element=document.createElementNS(SVG_NS,name);
@@ -286,7 +293,7 @@ function renderObstacles(items){
     info.append(title,detail);
     const remove=document.createElement('button');
     remove.className='btn small danger';remove.textContent='Remove';
-    remove.disabled=busy||Boolean(status?.trial_running);
+    remove.disabled=busy||(Boolean(status?.trial_running)&&status?.trial_mode!=='live');
     remove.onclick=()=>operation(async()=>{
       const updated=await api('/api/obstacles/remove',{index:i});
       scene=updated.scene;renderObstacles(scene.obstacles);showScene();
@@ -479,6 +486,14 @@ function renderResults(summary){
     ' · depth scans received '+(summary.camera_scan_messages_seen??0)+
     (summary.costmap_consistent===false?' · costmap changed between planners':''):
     'No planner benchmark started.';
+  $('live-state').textContent=summary?.mode==='live'?
+    'Live cycle '+(summary.cycle||0)+' · completed '+(summary.completed_cycles||0)+
+    ' · last cycle '+fmt(summary.last_cycle_wall_s,2)+' s · refresh requested '+
+    fmt(summary.interval_s,1)+' s. All four plugins are called sequentially; '+
+    'a changing costmap may make their paths differ. Last updated '+
+    (typeof summary.last_updated_wall_time==='number'?
+       new Date(summary.last_updated_wall_time*1000).toLocaleTimeString():'—')+'.':
+    'Single comparison mode. Switch to Live replan to repeatedly refresh all four paths as a cylinder moves.';
 }
 async function refreshHistory(){
   try{
@@ -508,7 +523,8 @@ async function refresh(){
     $('connection').textContent='Local service connected';
     $('stack-dot').classList.toggle('on',status.stack_running);
     $('stack-state').textContent=status.stack_running?'Simulation running':'Simulation stopped';
-    $('action-state').textContent=status.trial_running?'Planning…':
+    $('action-state').textContent=status.trial_running?
+      (status.trial_mode==='live'?'Live replanning · robot stationary':'Planning…'):
       status.stack_running?'Simulation active · robot stays stationary':'Simulation stopped';
     $('scene-warning').textContent=status.scene_restart_required?
       'Robot coordinates changed since Gazebo launch. Use Place Robot to restart and align TF.':'';
@@ -568,9 +584,19 @@ $('start').onclick=()=>operation(async()=>{
   notify('Planner-only simulation launching from the selected court pose.');
 });
 $('stop').onclick=()=>operation(async()=>{await api('/api/stop',{});notify('Stopping lab simulation.');});
+$('planning-mode').onchange=()=>{
+  $('live-interval-row').hidden=$('planning-mode').value!=='live';
+  setButtons();
+};
+$('planning-mode').onchange();
 $('plan').onclick=()=>operation(async()=>{
-  await savePlan();await api('/api/plan',{});
-  notify('Planner comparison started. No drive commands will be sent.');
+  await savePlan();
+  const mode=$('planning-mode').value;
+  const interval_s=Number($('live-interval').value);
+  await api('/api/plan',{mode,interval_s});
+  notify(mode==='live'?
+    'Live replanning started: all four paths refresh until you press Stop live planning. The robot will not move.':
+    'Single planner comparison started. The robot will not move.');
 });
 $('cancel').onclick=()=>operation(async()=>{await api('/api/cancel',{});notify('Cancel requested.');});
 $('gui-open').onclick=()=>operation(async()=>{await api('/api/gazebo-gui/open',{});notify('Opening Gazebo GUI.');});
