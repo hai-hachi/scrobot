@@ -2,31 +2,204 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SCROBOT Mesh Lab</title>
 <style>
-:root{font-family:system-ui,-apple-system,sans-serif;color:#dfe7ef;background:#101821}
-*{box-sizing:border-box}body{margin:0 auto;padding:24px;max-width:1260px}
-header{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}
-h1{font-size:26px;margin:0 0 4px}h2{font-size:20px}h3{font-size:16px;margin-bottom:8px}
-small,.muted{color:#9aaaba}button,select,input{background:#172b3d;color:#eaf4fd;border:1px solid #345069;border-radius:8px;padding:8px;font:inherit}
-button{cursor:pointer}button:hover{background:#25425d}button.primary{background:#146f87;border-color:#38a2ba}
-input[type=checkbox]{width:18px;height:18px}input[type=number]{width:110px}
-nav{display:flex;gap:10px;margin:20px 0}nav button.active{background:#236078}
-main section{display:none}main section.active{display:block}
-.panel{background:#182633;border:1px solid #314254;border-radius:12px;padding:18px;margin-bottom:15px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
-.field{display:flex;gap:12px;align-items:center;justify-content:space-between;margin:10px 0}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
-table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
-td,th{border-bottom:1px solid #344759;text-align:left;padding:7px;overflow-wrap:anywhere}
-pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:#10202c;padding:12px;border-radius:8px;max-height:290px;overflow:auto}
-#notice{color:#c0e4ed}#geometryRows{max-height:470px;overflow:auto}
-.good{color:#61d5b2}.bad{color:#f5a39d}
+
+:root{
+  color-scheme:dark;
+  --bg:#0b121b;
+  --panel:#15202b;
+  --sub:#1f2d3c;
+  --border:#344457;
+  --text:#edf5fa;
+  --muted:#a6b6c4;
+  --mint:#42d0c2;
+  --amber:#f7b964;
+  --rose:#ed8ca8;
+  --violet:#aaa2ec;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:linear-gradient(135deg,#0a1721,#0b1119 68%);
+  color:var(--text);
+  font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+header{
+  padding:20px max(24px,calc((100vw - 1480px)/2));
+  display:flex;align-items:center;justify-content:space-between;
+  gap:14px;flex-wrap:wrap;
+  background:#111d27;border-bottom:1px solid var(--border);
+}
+.brand{display:flex;align-items:center;gap:13px}
+.logo{
+  display:grid;place-items:center;flex-shrink:0;
+  width:39px;height:39px;border-radius:9px;
+  background:#123f38;border:1px solid #206e5e;
+  color:var(--mint);font-size:22px;font-weight:800;
+}
+.eyebrow{
+  color:var(--mint);font-size:11px;letter-spacing:2px;
+  font-weight:700;text-transform:uppercase;
+}
+h1{font-size:25px;line-height:1.25;letter-spacing:-.35px;margin:4px 0}
+h2{font-size:16px;font-weight:700;margin:0 0 13px}
+h3{font-size:13px;color:var(--muted);letter-spacing:.05em;margin:17px 0 10px}
+p{color:var(--muted);font-size:12px;line-height:1.6;margin:8px 0 11px}
+small,.muted{color:var(--muted);font-size:11px;line-height:1.55}
+code{color:#c7e7e0;font-size:11px}
+.shell{max-width:1510px;margin:0 auto;padding:20px 24px 48px}
+.header-status{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.tag,.scope{
+  padding:6px 11px;background:var(--sub);border:1px solid var(--border);
+  border-radius:16px;color:var(--muted);font-size:11px;white-space:nowrap;
+}
+#connection{display:flex;align-items:center;gap:8px}
+#connection::before{
+  content:"";width:8px;height:8px;flex-shrink:0;
+  border-radius:50%;background:var(--amber);
+}
+#connection.good{color:var(--mint)}
+#connection.good::before{background:var(--mint)}
+#connection.bad{color:var(--rose)}
+#connection.bad::before{background:var(--rose)}
+nav{
+  max-width:1510px;margin:0 auto;
+  padding:18px 24px 0;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+}
+nav button{
+  color:var(--muted);border-radius:8px;
+  background:var(--panel);padding:10px 17px;
+}
+nav button.active{
+  background:#153b3c;border-color:#258679;color:#a9ffed;
+  box-shadow:inset 0 -2px 0 var(--mint);
+}
+main section{display:none}
+main section.active{display:block}
+.panel{
+  min-width:0;background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:18px;margin-bottom:16px;
+  box-shadow:0 8px 28px #0002;
+}
+.panel h2{
+  padding-bottom:13px;margin-bottom:14px;
+  border-bottom:1px solid var(--border);
+}
+.grid{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:16px;align-items:start;
+}
+.field{display:grid;gap:7px;margin:13px 0}
+.field label{color:var(--muted);font-size:12px;font-weight:500}
+select,input[type=number]{
+  width:100%;padding:10px;
+  background:var(--sub);color:var(--text);
+  border:1px solid var(--border);border-radius:7px;
+  font:inherit;outline:none;
+}
+select:focus,input[type=number]:focus{
+  border-color:var(--mint);box-shadow:0 0 0 2px #42d0c223;
+}
+input[type=checkbox]{
+  width:18px;height:18px;accent-color:var(--mint);cursor:pointer;
+}
+.field:has(input[type=checkbox]){
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;background:var(--sub);padding:11px 12px;border-radius:8px;
+}
+.field:has(input[type=checkbox]) label{color:var(--text)}
+button{
+  background:#27394b;color:var(--text);
+  border:1px solid var(--border);border-radius:8px;
+  padding:10px 13px;font:inherit;font-weight:600;
+  cursor:pointer;transition:background .15s,border-color .15s;
+}
+button:hover:not(:disabled){background:#34495e;border-color:#54718a}
+button:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
+button:disabled{opacity:.45;cursor:default}
+button.primary{
+  background:#0c7c75;border-color:#12b2a5;color:white;
+}
+button.primary:hover:not(:disabled){background:#119187;border-color:#26d1be}
+.actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:15px 0}
+.actions+.hint{margin-top:7px}
+.metrics{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;
+}
+.metric{
+  background:var(--sub);border:1px solid #ffffff0b;
+  padding:13px;border-radius:9px;min-height:96px;
+}
+.metric small{display:block;color:var(--muted);font-size:11px}
+.metric strong{
+  display:block;margin:7px 0 3px;font-size:22px;
+  font-weight:700;line-height:1.1;letter-spacing:-.3px;
+  color:var(--text);font-variant-numeric:tabular-nums;
+}
+.metric em{font-style:normal;font-size:10px;color:var(--muted)}
+.metric:nth-child(1) strong{color:var(--mint)}
+#geometryRows,#jointRows{
+  max-height:470px;overflow:auto;
+  background:#101925;border:1px solid var(--border);border-radius:8px;
+}
+#jointRows{max-height:290px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+td,th{padding:10px;border-bottom:1px solid #304154;text-align:left;overflow-wrap:anywhere;vertical-align:top}
+th{
+  position:sticky;top:0;background:#1c2b3a;color:var(--muted);
+  font-weight:600;font-size:11px;letter-spacing:.02em;
+}
+tbody tr:nth-child(even){background:#ffffff04}
+tbody tr:hover{background:#42d0c20d}
+pre{
+  background:#101925;border:1px solid var(--border);border-radius:8px;
+  padding:13px;margin:0;max-height:350px;overflow:auto;
+  color:#d1e4ed;font-size:12px;line-height:1.6;
+  white-space:pre-wrap;overflow-wrap:anywhere;
+}
+#auditError{color:var(--amber)}
+.statusbar{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:14px;flex-wrap:wrap;max-width:1462px;margin:0 auto 25px;
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:10px;padding:12px 16px;
+}
+#notice{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+@media(max-width:950px){
+  .grid{grid-template-columns:1fr}
+  .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:550px){
+  header{padding:14px}
+  .shell{padding:13px}
+  nav{padding:13px 13px 0}
+  nav button{flex:1}
+  .panel{padding:13px}
+  h1{font-size:22px}
+  .eyebrow{font-size:10px;letter-spacing:1.4px}
+  .metrics{gap:8px}
+  .metric{min-height:85px}
+  .metric strong{font-size:19px}
+}
 </style></head><body>
-<header><div><h1>SCROBOT · Mesh Lab</h1><small>Gazebo Harmonic native viewer · RViz optional · real-comparison</small></div>
-<div id="connection">Connecting…</div></header>
+<header>
+  <div class="brand">
+    <div class="logo" aria-hidden="true">S</div>
+    <div>
+      <div class="eyebrow">SCROBOT · REAL COMPARISON</div>
+      <h1>Mesh Lab</h1>
+      <p>Visual &amp; collision meshes · link frames · lighting · render performance</p>
+    </div>
+  </div>
+  <div class="header-status">
+    <span class="scope">LOCAL · 127.0.0.1</span>
+    <span id="connection" class="tag">Connecting…</span>
+  </div>
+</header>
 <nav><button class="active" data-tab="geometry">Geometry</button><button data-tab="lighting">Lighting</button><button data-tab="benchmark">Benchmark</button></nav>
-<main>
+<main class="shell">
 <section class="active" id="geometry"><div class="grid">
-<div class="panel"><h2>Scene</h2>
+<div class="panel"><h2>01 · Inspection scene</h2>
 <div class="field"><label for="model">Inspect</label><select id="model"><option value="both">Robot + shuttle</option><option value="robot">Robot only</option><option value="shuttle">Shuttle only</option></select></div>
 <div class="field"><label for="robot_visual_mode">Robot visual</label><select id="robot_visual_mode"><option>full</option><option>simple</option><option>none</option></select></div>
 <div class="field"><label for="shuttle_count">Shuttle count</label><input id="shuttle_count" type="number" min="1" max="50"></div>
@@ -34,38 +207,46 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:12px;background:#10202c
 <div class="actions"><button class="primary" onclick="apply()">Apply scene (restart)</button><button onclick="save()">Save Mesh Lab YAML</button></div>
 <small>Gazebo desktop is the 3D viewer. Use its View and Component Inspector controls for collisions, joints, wireframe, inertia, center of mass and poses. Applying restarts only this derived inspection scene.</small>
 </div>
-<div class="panel"><h2>RViz2</h2>
+<div class="panel"><h2>02 · Coordinate frames / RViz2</h2>
 <p>Use RViz only for robot URDF link tree, TF and frame inspection. Close RViz before benchmarking.</p>
 <div class="actions"><button onclick="action('/api/rviz/open')">Open RViz</button><button onclick="action('/api/rviz/close')">Close RViz</button></div>
 <small>Gazebo may reduce fixed joints internally. RViz shows the original URDF/TF frames; Gazebo shows simulated entities.</small>
 <h3>Coordinate conventions</h3><p class="muted">Robot joint origins are parent-link-relative. Shuttle SDF geometry poses are link-relative. The audit does not claim they are Gazebo world poses.</p>
 </div></div>
-<div class="panel"><h2>Geometry audit</h2><p class="muted">Read-only extraction from expanded robot Xacro and original shuttle SDF, including existing STL triangle counts.</p>
+<div class="panel"><h2>03 · Model geometry audit</h2><p class="muted">Read-only extraction from expanded robot Xacro and original shuttle SDF, including existing STL triangle counts.</p>
 <div class="actions"><button onclick="refreshAudit()">Refresh audit</button></div>
 <div id="geometryRows"></div><h3>Joint origins</h3><div id="jointRows"></div><p class="muted" id="auditError"></p></div>
 </section>
 <section id="lighting"><div class="grid">
-<div class="panel"><h2>Saved Lighting Lab preset</h2>
+<div class="panel"><h2>01 · Saved Lighting Lab preset</h2>
 <p>This lab consumes <code>tools/configs/labs/lighting_lab.yaml</code> (light array, colors and court clearances). It never writes to that YAML.</p>
 <div class="field"><label for="lighting_enabled">Enable configured lights</label><input id="lighting_enabled" type="checkbox"></div>
 <div class="field"><label for="shadows_enabled">Enable saved shadow allocation</label><input id="shadows_enabled" type="checkbox"></div>
 <div class="actions"><button class="primary" onclick="apply()">Apply to new Gazebo scene</button></div>
 <small>Lights are removed only in the temporary world when disabled. This is not a photometric calibration tool; use the Lighting Lab to tune light parameters.</small>
 </div>
-<div class="panel"><h2>Render budget</h2><div class="field"><label for="depth_camera">Gazebo depth sensor</label><input id="depth_camera" type="checkbox"></div>
+<div class="panel"><h2>02 · Rendering workload</h2><div class="field"><label for="depth_camera">Gazebo depth sensor</label><input id="depth_camera" type="checkbox"></div>
 <p>For reliable comparisons, use a fixed Gazebo GUI view and the same workstation conditions. Offscreen and GUI rendering workloads differ.</p>
 <p class="muted">RGB sensor work remains in robot mode; use shuttle-only mode for a baseline without robot sensors. Camera resolution comes from the existing simulation configuration.</p></div></div>
 </section>
 <section id="benchmark"><div class="grid">
-<div class="panel"><h2>Run</h2><div class="field"><label for="benchmark_seconds">Duration (seconds)</label><input type="number" id="benchmark_seconds" min="5" max="60"></div>
+<div class="panel"><h2>01 · Benchmark setup</h2><div class="field"><label for="benchmark_seconds">Duration (seconds)</label><input type="number" id="benchmark_seconds" min="5" max="60"></div>
 <div class="actions"><button class="primary" onclick="apply()">Apply experiment settings</button><button onclick="action('/api/benchmark')">Start benchmark</button></div>
 <small>Settings are snapshotted when sampling begins. Status polling drives samples; keep this tab/browser open. RViz must be closed.</small></div>
-<div class="panel"><h2>Live metrics</h2><div id="metrics">Waiting for Gazebo…</div>
+<div class="panel"><h2>02 · Live simulation telemetry</h2><div class="metrics" id="metrics">
+  <div class="metric"><small>Real-time factor</small><strong id="metricRtf">—</strong><em>Target 1.00×</em></div>
+  <div class="metric"><small>Process-tree CPU</small><strong id="metricCpu">—</strong><em>Core-equivalent percentage</em></div>
+  <div class="metric"><small>Process RAM</small><strong id="metricRam">—</strong><em>MiB · descendant RSS</em></div>
+  <div class="metric"><small>NVIDIA GPU</small><strong id="metricGpu">—</strong><em>Whole device · if available</em></div>
+</div>
 <p class="muted">CPU/RAM cover the ROS launch process tree; Gazebo GUI is separate. GPU usage, when available, is whole-device. No GUI FPS value is guessed.</p></div></div>
-<div class="panel"><h2>Last run</h2><pre id="benchmarkResult">No benchmark recorded yet.</pre></div>
+<div class="panel"><h2>03 · Last benchmark result</h2><pre id="benchmarkResult">No benchmark recorded yet.</pre></div>
 </section>
 </main>
-<p id="notice">Lab settings are not production configuration.</p>
+<footer class="statusbar">
+  <span id="notice" role="status" aria-live="polite">Lab settings are not production configuration.</span>
+  <span class="scope">MESH LAB · ISOLATED CONFIG</span>
+</footer>
 <script>
 const $=id=>document.getElementById(id);
 const fields=['model','robot_visual_mode','shuttle_count','shuttle_seed','lighting_enabled','shadows_enabled','depth_camera','benchmark_seconds'];
@@ -110,7 +291,10 @@ async function poll(){try{const r=await fetch('/api/status');if(!r.ok)throw Erro
  $('connection').className=data.gazebo_running?'good':'bad';
  if(!initialized||(!dirty&&!data.benchmark&&!data.result))loadSettings(data.settings);
  const x=data.sample,fmt=v=>v==null?'Unavailable':String(v);
- $('metrics').textContent='RTF '+fmt(x.rtf)+' · CPU '+fmt(x.cpu_percent)+'% · RAM '+fmt(x.rss_mib)+' MiB · GPU '+(x.gpu?fmt(x.gpu.util_percent)+'%':'Unavailable');
+ $('metricRtf').textContent=fmt(x.rtf);
+ $('metricCpu').textContent=x.cpu_percent==null?'—':x.cpu_percent+'%';
+ $('metricRam').textContent=x.rss_mib==null?'—':x.rss_mib;
+ $('metricGpu').textContent=x.gpu?.util_percent==null?'—':x.gpu.util_percent+'%';
  if(data.benchmark)$('benchmarkResult').textContent='Recording '+data.benchmark.elapsed+' / '+data.benchmark.duration+' s, '+data.benchmark.samples+' samples';
  else if(data.result)$('benchmarkResult').textContent=JSON.stringify({file:data.result.file,averages:data.result.averages,samples:data.result.sample_count,notes:data.result.measurement_note},null,2);
  }catch(e){$('connection').textContent=e.message}}
