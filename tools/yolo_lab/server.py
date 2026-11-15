@@ -29,6 +29,7 @@ from lab_configs import read as read_lab, save as save_lab, path_for
 from modes import (COLOR, DEPTH, DEFAULT as CAMERA_DEFAULT,
                    validate as validate_camera, expected_mb_s)
 from lighting_source import calibration as lighting_calibration
+from shared.sim_speed import get as read_speed, save as save_speed, cap_world, response as speed_response
 from yolo_settings import DEFAULT as YOLO_DEFAULT, validate as validate_yolo
 from world import build
 from settle import snapshot
@@ -191,6 +192,7 @@ class Lab:
                 lighting = lighting_calibration()
                 path, manifest = build(
                     camera, yolo, OUTPUT / "world.sdf", lighting=lighting)
+                cap_world(path, path, read_speed("yolo"))
                 self.manifest = manifest
                 self.started_with = {
                     "camera": camera, "yolo": yolo,
@@ -425,6 +427,8 @@ class Handler(BaseHTTPRequestHandler):
                     "camera_default": CAMERA_DEFAULT,
                     "yolo_default": YOLO_DEFAULT,
                     "status": self.lab.status()})
+            if route == "/api/sim-speed":
+                return self.respond(200, speed_response("yolo", bool(self.lab.processes.get("gazebo") and self.lab.processes["gazebo"].poll() is None)))
             if route == "/api/status":
                 return self.respond(200, self.lab.status())
             if route == "/api/preview":
@@ -494,7 +498,11 @@ class Handler(BaseHTTPRequestHandler):
         route = urlsplit(self.path).path
         try:
             body = self.request_body()
-            if route == "/api/config/camera/save":
+            if route == "/api/sim-speed":
+                if set(body) != {"max_rtf"}:raise ValueError("Set only max_rtf")
+                result={"max_rtf":save_speed("yolo",body["max_rtf"]),
+                        "restart_required":True}
+            elif route == "/api/config/camera/save":
                 result = self.lab.save_camera(body)
             elif route == "/api/config/yolo/save":
                 result = self.lab.save_yolo(body)
