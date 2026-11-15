@@ -50,8 +50,16 @@ public:
     if (!this->initialized_ || now < this->startSim_)
     {
       this->startSim_ = now;
+      this->lastUpdate_ = now - 1.0;
       this->initialized_ = true;
     }
+
+    // At most 60 fixed pose updates per simulated second, independent
+    // of the physics step rate. This is smooth without issuing 1000+
+    // pose commands/second for each moving obstacle.
+    if (now - this->lastUpdate_ < 1.0 / 60.0)
+      return;
+    this->lastUpdate_ = now;
 
     // The specified speed is the average traversal speed on each leg.
     // Cosine easing makes the cylinder decelerate to zero at both ends,
@@ -73,6 +81,7 @@ private:
   double ax_{0}, ay_{0}, bx_{0}, by_{0}, speed_{0.6};
   double length_{0};
   double startSim_{0};
+  double lastUpdate_{-1.0};
   bool initialized_{false};
   bool valid_{false};
 };
@@ -83,3 +92,7 @@ GZ_ADD_PLUGIN(
   gz::sim::System,
   scrobot_simulation::Nav2MovingCylinderSystem::ISystemConfigure,
   scrobot_simulation::Nav2MovingCylinderSystem::ISystemPreUpdate)
+
+GZ_ADD_PLUGIN_ALIAS(
+  scrobot_simulation::Nav2MovingCylinderSystem,
+  "scrobot_simulation::Nav2MovingCylinderSystem")
