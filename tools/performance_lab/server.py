@@ -107,14 +107,21 @@ def summary_of_samples(samples,settings):
     def measure(values):
         return round(sum(values)/len(values),3) if values else None
     rtfs=[s["monitor"]["rtf"] for s in usable]
-    required=(
+    required=[
         "/camera/camera/color/image_raw",
+        "/camera/camera/depth/image_raw",
         "/camera/camera/depth/points",
+        "/camera/camera/depth/scan_raw",
+        "/camera/camera/depth/scan",
         "/camera/camera/imu",
+        "/imu/mag",
         "/diff_drive_controller/odom",
         "/odometry/filtered",
         "/joint_states",
-    )
+    ]
+    if settings["profile"]=="full_mission":
+        # A mission run should have lifecycle-activated Nav2 costmaps.
+        required.append("/global_costmap/costmap")
     checks={}
     for topic in required:
         rows=[s["monitor"]["topics"].get(topic,{}) for s in usable]
@@ -144,6 +151,13 @@ def summary_of_samples(samples,settings):
         "avg_rtf":rtf_mean,"minimum_rtf":min(rtfs) if rtfs else None,
         "sample_count":len(samples),
         "cadence_pass":cadence,
+        "coverage_note":(
+            "Parked baseline: Nav2 processes exist but costmaps are not "
+            "lifecycle-activated; this is not a complete active navigation test."
+            if settings["profile"]=="full_idle"
+            else "Full mission requires an active global costmap, as well as "
+                 "RGB, depth, IMU, magnetometer, scans, odometry and EKF."
+        ),
         "real_time_rate_pass":realtime if settings["mode"]=="real_time" else None,
         "checks":checks,
         "note":(
