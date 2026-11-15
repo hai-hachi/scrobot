@@ -219,6 +219,7 @@ class Service:
                 "imu_rate_hz":rates["imu_hz"],
                 "magnetometer_rate_hz":rates["magnetometer_hz"],
                 "ground_truth_rate_hz":rates["ground_truth_hz"],
+                "use_magnetometer":str(calibration["use_magnetometer"]).lower(),
             }
             args=["ros2","launch",str(LAUNCH),
                   "nav2_params_file:="+str(params),
