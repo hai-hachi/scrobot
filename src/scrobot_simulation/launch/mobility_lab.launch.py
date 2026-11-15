@@ -26,6 +26,7 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'simulation.launch.py')),
         launch_arguments={
             'use_sim_time': 'true',
+            'world': LaunchConfiguration('world'),
             'headless': 'true',
             'x': '0.0', 'y': '0.0', 'z': '0.003', 'yaw': '0.0',
             'robot_visual_mode': 'simple',
@@ -49,6 +50,7 @@ def generate_launch_description():
     # Existing gazebo.launch.py bridge_config already maps Gazebo independent
     # ground truth to ROS /evaluation/ground_truth_odom (SENSOR_DATA QoS).
     return LaunchDescription([
+        DeclareLaunchArgument('world', default_value=os.path.join(pkg,'worlds','badminton_court.sdf')),
         DeclareLaunchArgument('drive_contact_mu', default_value='5.0'),
         DeclareLaunchArgument('caster_contact_mu', default_value='0.05'),
         DeclareLaunchArgument('wheel_joint_damping', default_value='0.0'),
