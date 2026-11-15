@@ -41,9 +41,23 @@ target_link_libraries(
     gz-transport${GZ_TRANSPORT_VER}::gz-transport${GZ_TRANSPORT_VER}
 )
 
+add_library(
+  nav2_moving_cylinder_system
+  SHARED
+  src/nav2_moving_cylinder_system.cpp
+)
+set_property(TARGET nav2_moving_cylinder_system PROPERTY CXX_STANDARD 17)
+target_link_libraries(
+  nav2_moving_cylinder_system
+  PRIVATE
+    gz-plugin${GZ_PLUGIN_VER}::gz-plugin${GZ_PLUGIN_VER}
+    gz-sim8::gz-sim8
+)
+
 install(
   TARGETS
     shuttle_manager_system
+    nav2_moving_cylinder_system
   LIBRARY DESTINATION lib
 )
 
