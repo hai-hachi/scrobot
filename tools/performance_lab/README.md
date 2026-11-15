@@ -39,7 +39,8 @@ is necessary** before running this lab.
 2. **Clock & Sync** — ROS topic wall-Hz versus simulated-Hz, header timestamp
    ages and discontinuities, clock reset/pause detection, and on-demand
    audit of discovered nodes' `use_sim_time` parameters.
-3. **Profiler** — scoped per-process CPU/RSS, whole-host CPU/RAM,
+3. **Profiler** — scoped per-process CPU/RSS and top per-thread CPU
+   (including Linux PID/TID/name), whole-host CPU/RAM,
    NVIDIA whole-device utilization/VRAM/temperature (when `nvidia-smi`
    is installed). A 100% CPU result is *one* logical core, not the whole
    machine; RSS can double-count shared pages.
