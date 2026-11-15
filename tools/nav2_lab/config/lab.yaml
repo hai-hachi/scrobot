@@ -1,0 +1,31 @@
+# Dedicated Nav2 Lab settings. Never edit production Nav2 from this file.
+planner: NavFn
+controller: RPP
+mode: plan
+goal:
+  x: 3.0
+  y: 0.0
+  yaw_deg: 0.0
+limits:
+  cruise_speed: 0.47
+  max_wheel_rpm: 100.0
+experiment:
+  timeout_s: 90.0
+  sample_hz: 20.0
+  run_root: ~/scrobot_ws/evaluation_results/nav2_lab
+simulation:
+  ros_domain_id: 77  # Separate from production; lab launch and trial share this domain
+  start_x: 0.0
+  start_y: 0.0
+  start_yaw: 0.0
+  use_magnetometer: false
+
+# Path-planning-only lab. The static court map is generated from
+# scrobot_simulation/worlds/badminton_court.sdf + court_landmarks.yaml.
+planning:
+  planner: all  # all | NavFnDijkstra | NavFnAStar | Smac2D | ThetaStar
+  depth_obstacles: true
+  resolution_m: 0.05
+  timeout_s: 25.0
+  start: {x: -3.0, y: 0.0, yaw_deg: 0.0}
+  goal: {x: 3.0, y: 0.0, yaw_deg: 0.0}
