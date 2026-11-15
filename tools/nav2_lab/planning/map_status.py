@@ -130,9 +130,12 @@ class Monitor(Node):
         for topic, msgtype, qos_name in TOPICS:
             qos={"best_effort":qos_profile_sensor_data,
                  "reliable":qos_live,"latched":qos_map}[qos_name]
+            # Avoid fully deserializing ~10 MB depth clouds just for Hz:
+            # raw=True gives serialized bytes and reduces monitor CPU load.
             self.create_subscription(
                 msgtype,topic,
-                lambda msg, topic=topic:self.received(topic,msg),qos)
+                lambda msg, topic=topic:self.received(topic,msg),qos,
+                raw=(topic=="/camera/camera/depth/points"))
         self.court_pub=self.create_publisher(MarkerArray,
             "/nav2_lab/court_lines",qos_map)
         self.poses_pub=self.create_publisher(MarkerArray,
