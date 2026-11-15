@@ -238,6 +238,8 @@ def summary_of_samples(samples,settings):
         and smoother_quality["verified"])
     timing={
         "nav2_wall_scheduler_warnings_in_window":warnings_new,
+        "controller_scheduler_warnings_in_window":warnings_new,
+        "scheduler_time_basis":"ros_sim" if overlay_active else "wall",
         "nav2_cmd_vel_avg_sim_hz":cmd_quality["avg_sim_hz"],
         "nav2_cmd_vel_available":cmd_quality["active_windows"]>0,
         "nav2_sim_clock_overlay_active":overlay_active,
