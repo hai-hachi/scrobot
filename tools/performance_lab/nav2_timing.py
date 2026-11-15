@@ -168,9 +168,9 @@ class ControllerWarningMeter:
             "reported_computation_hz_min":min(values) if values else None,
             "reported_computation_hz_max":max(values) if values else None,
             "note":(
-                "Jazzy warning means WallRate missed a wall-clock wakeup. "
-                "The displayed 'current loop rate' uses ROS/simulation time "
-                "for a single computation duration, not measured throughput. "
-                "Warnings are counted once as logs arrive."
+                "Scheduler warnings refer to wall deadlines in unpatched "
+                "Nav2, but ROS-clock deadlines in the SCROBOT patched overlay. "
+                "The displayed current-loop figure is a single computation "
+                "duration, not measured throughput. Counts deduplicate log lines."
             ),
         }
