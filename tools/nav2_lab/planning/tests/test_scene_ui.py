@@ -107,7 +107,7 @@ def test_log_color_escapes_are_removed():
     import sys
     sys.path.insert(0,str(ROOT.parent))
     from planning.web_server import sanitize_log
-    colored="\\x1b[32m[INFO]\\x1b[0m ready\\r\\n\\x1b]0;title\\x07plain"
+    colored="\x1b[32m[INFO]\x1b[0m ready\r\n\x1b]0;title\x07plain"
     cleaned=sanitize_log(colored)
-    assert cleaned=="[INFO] ready\\nplain"
-    assert "\\x1b" not in cleaned
+    assert cleaned=="[INFO] ready\nplain"
+    assert "\x1b" not in cleaned
