@@ -64,6 +64,7 @@ function buttons(){
     'gazebo-close':Boolean(status?.gazebo_gui?.running),
     'rviz-open':live&&!status?.rviz_running,'rviz-close':Boolean(status?.rviz_running),
     'audit-start':live&&status?.audit?.status!=='running',
+    'monitor-restart':live&&!status?.benchmark,
     'history-refresh':true,
   };
   for(const[key,enabled]of Object.entries(permissions)){
@@ -300,7 +301,9 @@ async function refresh(){
     $('connection').textContent='Local server connected';
     const active=result.stack_running;
     $('top-status').textContent=active?(
-      'Full stack running · '+result.launch_settings?.mode):
+      result.observer_running
+        ?'Full stack running · '+result.launch_settings?.mode
+        :'Full stack running · CLOCK OBSERVER OFFLINE'):
       'Simulation stopped';
     const meter=result.monitor;
     $('rtf').textContent=meter?.rtf==null?'—':fmt(meter.rtf,3)+'×';
@@ -363,6 +366,11 @@ $('bench-start').onclick=()=>action(async()=>{
 $('bench-cancel').onclick=()=>action(async()=>{
   await api('/api/benchmark/cancel',{});
   alertText('Benchmark cancellation requested; partial run will be recorded.');
+});
+$('monitor-restart').onclick=()=>action(async()=>{
+  const result=await api('/api/observer/restart',{});
+  alertText('Clock observer restarted (PID '+result.observer_pid+
+    '). ROS topic and RTF readings will reappear after sampling starts.');
 });
 $('audit-start').onclick=()=>action(async()=>{
   await api('/api/audit/start',{});
