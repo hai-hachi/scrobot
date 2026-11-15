@@ -17,6 +17,7 @@ into their own YAML or having to publish to main simulation first.
 | Mobility | `tools/configs/labs/mobility_lab.yaml` | `src/scrobot_simulation/config/mobility_calibration.yaml` |
 | Odometry | `tools/configs/labs/odometry_lab.yaml` | `src/scrobot_simulation/config/odometry_calibration.yaml` |
 | YOLO | `tools/configs/labs/yolo_lab.yaml` | No automatic production publication; model training, validation and live inference run locally |
+| Nav2 | `tools/configs/labs/nav2_lab.yaml` | No production publication; consumes saved Lighting/Camera/AprilTags/Mobility/Odometry lab YAMLs |
 
 ## Rules
 
