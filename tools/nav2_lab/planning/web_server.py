@@ -245,7 +245,8 @@ class Service:
             if not running(self.stack):raise RuntimeError("Start simulation first")
             if running(self.rviz):return self.status()
             with (self.active_dir/"rviz.log").open("w") as log:
-                self.rviz=subprocess.Popen(["rviz2","-d",str(RVIZ)],
+                self.rviz=subprocess.Popen(["rviz2","-d",str(RVIZ),
+                    "--ros-args","-p","use_sim_time:=true"],
                     env=self.env,cwd=REPO,stdout=log,stderr=subprocess.STDOUT,
                     start_new_session=True)
             return self.status()
