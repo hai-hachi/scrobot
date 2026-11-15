@@ -360,7 +360,7 @@ poll();refreshAudit();setInterval(poll,1000);
         });
         const result=await r.json();
         if(!r.ok || result.error)throw new Error(result.error||"HTTP "+r.status);
-        note.textContent="Saved "+Number(result.max_rtf).toFixed(2)+
+        note.textContent="Saved "+Number(result.max_rtf??slider.value).toFixed(2)+
           "× Gazebo RTF cap. Stop and restart this lab simulation to apply. Production YAML and simulated-Hz targets are unchanged.";
       }catch(e){note.textContent="Unable to save RTF cap: "+e.message;}
       finally{btn.disabled=false;}
