@@ -33,7 +33,7 @@ def generate_launch_description():
     v = {key: LaunchConfiguration(key) for key in args}
 
     simulation = include("scrobot_simulation", "simulation.launch.py", {
-        "use_sim_time": "true", "x": "0", "y": "0", "yaw": "0",
+        "headless": "true", "use_sim_time": "true", "x": "0", "y": "0", "yaw": "0",
         "enable_magnetometer": v["use_magnetometer"],
         "enable_depth_camera": "true",
         **{key: v[key] for key in args if key not in ("ekf_params", "use_magnetometer")},

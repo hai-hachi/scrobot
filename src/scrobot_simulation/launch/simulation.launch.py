@@ -65,6 +65,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     world = LaunchConfiguration('world')
     gz_verbosity = LaunchConfiguration('gz_verbosity')
+    headless = LaunchConfiguration('headless')
     world_name = LaunchConfiguration('world_name')
     robot_name = LaunchConfiguration('robot_name')
 
@@ -113,6 +114,7 @@ def generate_launch_description():
         launch_arguments={
             'world': world,
             'gz_verbosity': gz_verbosity,
+            'headless': headless,
         }.items(),
     )
 
@@ -193,6 +195,10 @@ def generate_launch_description():
             'gz_verbosity',
             default_value='3',
             description='Gazebo verbosity level.',
+        ),
+        DeclareLaunchArgument(
+            'headless', default_value='false', choices=['true', 'false'],
+            description='Run Gazebo server without opening the desktop GUI.'
         ),
         DeclareLaunchArgument(
             'world_name',

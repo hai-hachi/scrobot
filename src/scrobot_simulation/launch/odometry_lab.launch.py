@@ -43,6 +43,7 @@ def generate_launch_description():
     mag = LaunchConfiguration("use_magnetometer")
     sim = include("scrobot_simulation", "simulation.launch.py", {
         "use_sim_time": "true",
+        "headless": "true",
         "x": "0.0", "y": "0.0", "z": "0.003", "yaw": "0.0",
         "enable_depth_camera": "false",
         "robot_visual_mode": "simple",

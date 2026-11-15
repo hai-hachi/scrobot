@@ -12,7 +12,7 @@ from launch.actions import (
     IncludeLaunchDescription,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, IfElseSubstitution
 
 from launch_ros.actions import Node
 
@@ -37,6 +37,7 @@ def generate_launch_description():
 
     world = LaunchConfiguration('world')
     gz_verbosity = LaunchConfiguration('gz_verbosity')
+    headless = LaunchConfiguration('headless')
 
     description_share_parent = os.path.dirname(
         description_pkg
@@ -134,7 +135,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             'gz_args': [
-                '-r -v ',
+                IfElseSubstitution(headless, '-r -s -v ', '-r -v '),
                 gz_verbosity,
                 ' ',
                 world,
@@ -158,6 +159,11 @@ def generate_launch_description():
             'gz_verbosity',
             default_value='3',
             description='Gazebo verbosity level.',
+        ),
+
+        DeclareLaunchArgument(
+            'headless', default_value='false', choices=['true', 'false'],
+            description='Start Gazebo server only; GUI may be opened separately.'
         ),
 
         add_description_resources,

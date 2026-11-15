@@ -26,6 +26,7 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'simulation.launch.py')),
         launch_arguments={
             'use_sim_time': 'true',
+            'headless': 'true',
             'x': '0.0', 'y': '0.0', 'z': '0.003', 'yaw': '0.0',
             'robot_visual_mode': 'simple',
             'enable_magnetometer': 'false',

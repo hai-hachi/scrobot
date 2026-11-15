@@ -734,6 +734,7 @@ class Lab:
         command = [
             "ros2", "launch", "scrobot_simulation", "simulation.launch.py",
             f"world:={worldfile}",
+            "headless:=true",
             f"x:={robot['x']}", f"y:={robot['y']}",
             f"z:={robot['z']}",
             f"yaw:={math.radians(robot['yaw'])}",

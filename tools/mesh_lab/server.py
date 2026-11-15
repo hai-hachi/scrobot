@@ -126,7 +126,8 @@ class Runtime:
         if s["model"] == "shuttle":
             # No robot, controllers, depth sensors or bridge process needed.
             return ["ros2", "launch", "scrobot_simulation", "gazebo.launch.py",
-                    f"world:={self.workdir / 'mesh_lab_world.sdf'}", "gz_verbosity:=2"]
+                    f"world:={self.workdir / 'mesh_lab_world.sdf'}",
+            "headless:=true", "headless:=true", "gz_verbosity:=2"]
         return [
             "ros2", "launch", "scrobot_simulation", "simulation.launch.py",
             f"world:={self.workdir / 'mesh_lab_world.sdf'}",
