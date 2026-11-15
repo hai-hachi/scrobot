@@ -18,6 +18,7 @@ from rclpy.time import Time
 from rclpy.duration import Duration
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from nav_msgs.msg import OccupancyGrid
+from rosgraph_msgs.msg import Clock
 from tf2_ros import Buffer, TransformListener
 
 
@@ -28,6 +29,7 @@ class Monitor(Node):
             automatically_declare_parameters_from_overrides=True)
         self.output=Path(output)
         self.records={}
+        self.sim_time_s=None
         self.started=time.monotonic()
         self.buffer=Buffer()
         self.listener=TransformListener(self.buffer,self)
@@ -35,11 +37,15 @@ class Monitor(Node):
                            durability=DurabilityPolicy.TRANSIENT_LOCAL)
         qos_live=QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE,
                             durability=DurabilityPolicy.VOLATILE)
+        self.create_subscription(Clock,"/clock",self.on_clock,qos_live)
         self.create_subscription(OccupancyGrid,"/map",
                                  lambda msg:self.record("static_map",msg),qos_map)
         self.create_subscription(OccupancyGrid,"/global_costmap/costmap",
                                  lambda msg:self.record("global_costmap",msg),qos_live)
-        self.create_timer(1.0,self.tick)
+        self.create_timer(0.15,self.tick)
+
+    def on_clock(self,msg):
+        self.sim_time_s=msg.clock.sec+msg.clock.nanosec*1e-9
 
     def record(self,name,msg):
         self.records[name]={
@@ -72,6 +78,7 @@ class Monitor(Node):
             status["global_costmap"]["received"] and
             tf["map_to_base_footprint"])
         status["uptime_wall_s"]=round(time.monotonic()-self.started,1)
+        status["sim_time_s"]=self.sim_time_s
         if not status["static_map"]["received"]:
             status["hint"]="No /map received: check map_server active and loaded map YAML."
         elif not status["global_costmap"]["received"]:
