@@ -235,7 +235,7 @@ details{margin:10px 0}summary{cursor:pointer;color:var(--text);font-size:12px}
 <div class="actions"><button class="primary" onclick="apply()">Apply experiment settings</button><button onclick="action('/api/benchmark')">Start benchmark</button></div>
 <small>Settings are snapshotted when sampling begins. Status polling drives samples; keep this tab/browser open. RViz must be closed.</small></div>
 <div class="panel"><h2>02 · Live simulation telemetry</h2><div class="metrics" id="metrics">
-  <div class="metric"><small>Real-time factor</small><strong id="metricRtf">—</strong><em>Target 1.00×</em></div>
+  <div class="metric"><small>Real-time factor</small><strong id="metricRtf">—</strong><em>Measured Gazebo RTF · compare with selected cap</em></div>
   <div class="metric"><small>Process-tree CPU</small><strong id="metricCpu">—</strong><em>Core-equivalent percentage</em></div>
   <div class="metric"><small>Process RAM</small><strong id="metricRam">—</strong><em>MiB · descendant RSS</em></div>
   <div class="metric"><small>NVIDIA GPU</small><strong id="metricGpu">—</strong><em>Whole device · if available</em></div>
