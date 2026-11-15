@@ -319,6 +319,7 @@ poll();refreshAudit();setInterval(poll,1000);
 /* Shared lab-only Gazebo RTF cap; source sensor/controller rates never scale. */
 (function(){
   async function initRtfControl(){
+    if(typeof document.querySelector!=="function")return;
     const main=document.querySelector("main");
     if(!main || document.getElementById("lab-rtf-control"))return;
     const box=document.createElement("section");
