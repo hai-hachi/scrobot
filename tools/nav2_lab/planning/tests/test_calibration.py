@@ -89,3 +89,43 @@ def test_calibration_owner_readonly_and_fingerprints(tmp_path):
     assert snapshot["camera"]["depth"] == "1280x720"
     assert snapshot["apriltags"]["size_m"] == .15
     assert set(saved_hashes) == set(snapshot["sources"])
+
+
+def test_local_saved_mobility_and_odometry_override_published(tmp_path,monkeypatch):
+    # Simulate calibration YAMLs saved locally but not committed to the branch.
+    from importlib.util import module_from_spec, spec_from_file_location
+    def defaults(path,name):
+        spec=spec_from_file_location(name,path)
+        module=module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return dict(module.DEFAULTS)
+    mobility=defaults(calibration.TOOLS/"mobility_lab"/"core.py","_test_mobility_owner")
+    odometry=defaults(calibration.TOOLS/"odometry_lab"/"core.py","_test_odom_owner")
+    mobility["wheel_joint_damping"]=.15
+    mobility["wheel_collision_width"]=.001
+    odometry["imu_hz"]=80.
+    odometry["ground_truth_hz"]=80.
+    odometry["use_magnetometer"]=True
+    source_read=calibration.lab_configs.read
+    source_path=calibration.source_path
+    files={}
+    for name,settings in (("mobility",mobility),("odometry",odometry)):
+        path=tmp_path/(name+"_lab.yaml")
+        path.write_text(yaml.safe_dump({
+            "schema_version":1,"lab":name,"settings":settings,
+        }))
+        files[name]=path
+    def read(lab):
+        if lab=="mobility":return mobility
+        if lab=="odometry":return odometry
+        return source_read(lab)
+    monkeypatch.setattr(calibration.lab_configs,"read",read)
+    monkeypatch.setattr(calibration,"source_path",
+                        lambda name: files.get(name,source_path(name)))
+    result=calibration.load_inputs()
+    assert result["mobility"]["physics"]["wheel_joint_damping"]==.15
+    assert result["odometry"]["imu_hz"]==80.
+    assert result["use_magnetometer"] is True
+    assert result["provenance"]["mobility"]["source"]=="saved_lab_yaml"
+    assert result["provenance"]["odometry"]["source"]=="saved_lab_yaml"
+    assert not result["warnings"]
