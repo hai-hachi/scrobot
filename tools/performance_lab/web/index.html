@@ -206,6 +206,17 @@
           an algorithm runs in parallel.</p>
       </section>
       <section class="panel">
+        <div class="panel-heading"><h2>Highest-CPU threads</h2>
+          <span>Linux thread IDs · one core = 100% · sampling every ~2 s</span></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Thread name</th><th>Process</th>
+            <th>CPU / 1 core (%)</th><th>PID</th><th>TID</th></tr></thead>
+          <tbody id="thread-rows"><tr><td colspan="5">Start simulation to inspect threads.</td></tr></tbody>
+        </table></div>
+        <p class="fineprint">DDS receive workers and rendering threads may be
+          bottlenecks even when the whole machine has idle cores.</p>
+      </section>
+      <section class="panel">
         <h2>GPU and rendering</h2>
         <div id="gpu-details" class="small-muted">No GPU measurements.</div>
         <p class="fineprint">Profile full-stack load without permanently
