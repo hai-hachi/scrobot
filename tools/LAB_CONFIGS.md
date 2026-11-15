@@ -19,6 +19,7 @@ into their own YAML or having to publish to main simulation first.
 | YOLO | `tools/configs/labs/yolo_lab.yaml` | No automatic production publication; model training, validation and live inference run locally |
 | Nav2 | `tools/configs/labs/nav2_lab.yaml` (planner), `tools/configs/labs/nav2_scene.yaml` (scene) | No production publication; consumes saved Lighting/Camera/AprilTags/Mobility/Odometry lab YAMLs |
 | Mesh | `tools/configs/labs/mesh_lab.yaml` | No production publication; inspects existing robot/shuttle geometry and consumes saved Lighting YAML |
+| Performance | `tools/configs/labs/performance_lab.yaml` | No production publication; benchmarks the actual full-stack launch with copied RTF-capped court and snapshots published + saved calibration |
 
 ## Rules
 
@@ -59,7 +60,7 @@ into their own YAML or having to publish to main simulation first.
    no new YAML has been saved. Live edits may continue to update that
    temporary JSON draft, but publication now **requires** the explicit
    `Save <Lab> YAML` action. Once YAML exists, it wins on the next launch.
-9. **Shared library:** `tools/shared/lab_configs.py` is the one path registry and
+9. **Performance authority:** The full-stack Performance Lab uses the **published** production camera/physics/odometry settings and production world, while recording saved lab YAML checksums. Speed capping only modifies an isolated copied world; it never silently publishes unvalidated draft calibration.\n10. **Shared library:** `tools/shared/lab_configs.py` is the one path registry and
    YAML reader/writer used for the modern labs. Lighting Lab retains its
    historic unwrapped `lights/colors/venue` YAML schema for compatibility;
    other lab YAMLs use `schema_version: 1`, `lab: <id>`, and `settings:`.
