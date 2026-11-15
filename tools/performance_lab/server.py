@@ -160,6 +160,10 @@ def summary_of_samples(samples,settings):
                 rows,"header_large_gap_total"),
             "observed_backward_stamps":delta_count(
                 rows,"header_backward_total"),
+            "observed_repeated_stamps":delta_count(
+                rows,"header_duplicate_total"),
+            "avg_source_unique_hz":average(
+                [r.get("source_unique_hz") for r in rows]),
         }
         if settings["mode"]=="real_time":
             check["wall_rate_pass"]=bool(
@@ -231,7 +235,9 @@ def summary_of_samples(samples,settings):
     odom_quality=checks.get("/diff_drive_controller/odom",{})
     odom_stable=bool(
         odom_quality.get("header_interval_p95_ms") is not None
-        and odom_quality["header_interval_p95_ms"]<=15.0)
+        and odom_quality["header_interval_p95_ms"]<=15.0
+        and odom_quality.get("observed_repeated_stamps")==0
+        and (odom_quality.get("avg_source_unique_hz") or 0)>=95.0)
     overlay_active=installed_sim_clock_overlay()["active"]
     control_pass=bool(
         overlay_active and cmd_quality["verified"]
@@ -247,11 +253,27 @@ def summary_of_samples(samples,settings):
         "velocity_smoother":smoother_quality,
         "controller_and_smoother_cadence_pass":control_pass,
         "wheel_odom_header_jitter_pass":odom_stable,
+        "wheel_odom_source_unique_hz":odom_quality.get("avg_source_unique_hz"),
+        "wheel_odom_repeated_stamps":odom_quality.get("observed_repeated_stamps"),
+        "joint_state_repeated_stamps":checks.get("/joint_states",{}).get(
+            "observed_repeated_stamps"),
+        "wheel_odom_publishers":next(
+            (x["monitor"].get("publisher_graph",{}).get(
+                "/diff_drive_controller/odom") for x in reversed(usable)
+             if x["monitor"].get("publisher_graph",{}).get(
+                "/diff_drive_controller/odom")),None),
+        "joint_state_publishers":next(
+            (x["monitor"].get("publisher_graph",{}).get(
+                "/joint_states") for x in reversed(usable)
+             if x["monitor"].get("publisher_graph",{}).get(
+                "/joint_states")),None),
         "note":(
             "Controller/smoother require installed ROS-clock overlays AND "
             "25 simulated Hz output with reasonable header jitter. "
             "This still does not instrument internal Nav2 loop executions. "
-            "Wheel odometry timestamp jitter is assessed separately."
+            "Wheel odometry also requires distinct source timestamps, >95 Hz "
+            "unique-stamp cadence, and <=15 ms p95 source intervals. "
+            "Publisher counts distinguish duplicate sources from scheduler issues."
         ),
     }
 
