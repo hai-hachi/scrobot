@@ -110,7 +110,10 @@ class PlannerTrial(Node):
         qos_map=QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL,
                            reliability=ReliabilityPolicy.RELIABLE)
         self.create_subscription(OccupancyGrid,"/map",self.on_map,qos_map)
-        self.create_subscription(OccupancyGrid,"/global_costmap/costmap",self.on_costmap,qos_map)
+        # Volatile is compatible with either volatile or transient-local costmap publishers.
+        qos_costmap=QoSProfile(depth=5,durability=DurabilityPolicy.VOLATILE,
+                               reliability=ReliabilityPolicy.RELIABLE)
+        self.create_subscription(OccupancyGrid,"/global_costmap/costmap",self.on_costmap,qos_costmap)
         self.create_subscription(LaserScan,"/camera/camera/depth/scan",self.on_scan,qos_profile_sensor_data)
         self.client=ActionClient(self,ComputePathToPose,"/compute_path_to_pose")
 
