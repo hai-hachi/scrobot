@@ -222,10 +222,33 @@ class Lab:
                 "shuttles": len(manifest["shuttles"]),
             }
 
+    def apply_rtf_world(self, path):
+        cap_world(path, path, read_speed("yolo"))
+        return str(path)
+
+    def _wait_simulated_seconds(self, seconds, generation):
+        """Wait for source image time, not wall time, at any RTF cap."""
+        start = None
+        deadline = time.monotonic() + max(40.0, float(seconds) * 25.0)
+        while time.monotonic() < deadline:
+            with self.lock:
+                if generation != self.scene_generation:
+                    return False
+            sample = self.recent_json(OUTPUT / "meter.json")
+            stamp = sample.get("streams", {}).get("color", {}).get("last_stamp_sim_s")
+            if stamp is not None:
+                if start is None or stamp < start:
+                    start = stamp
+                if stamp - start >= seconds:
+                    return True
+            time.sleep(.05)  # Cooperative polling only; not simulated elapsed time.
+        raise RuntimeError("Timed out waiting for Gazebo camera simulation time")
+
     def _settle_scene(self, generation, camera, yolo, lighting):
         # Never freeze to guessed positions; use actual simulated poses.
         try:
-            time.sleep(yolo["settle_seconds"])
+            if not self._wait_simulated_seconds(yolo["settle_seconds"], generation):
+                return
             with self.lock:
                 if generation != self.scene_generation:
                     return
@@ -235,7 +258,8 @@ class Lab:
             poses = snapshot(names, env)
             stable = False
             for _ in range(12):
-                time.sleep(0.8)
+                if not self._wait_simulated_seconds(0.8, generation):
+                    return
                 with self.lock:
                     if generation != self.scene_generation:
                         return
@@ -262,6 +286,7 @@ class Lab:
                 frozen_path, frozen = build(
                     camera, final_yolo, static_path, lighting=lighting,
                     settled_poses=poses)
+                self.apply_rtf_world(frozen_path)
                 gui_was_open = (self.processes.get("gui") is not None and
                                 self.processes["gui"].poll() is None)
                 for name in reversed(list(self.processes)):
