@@ -99,6 +99,17 @@ def prepare_world(source,dest,max_rtf):
             "max_rtf":cap}
 
 
+def installed_simulation_config(filename):
+    """Return the installed package config used by launch, if ROS is sourced."""
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        location=Path(get_package_share_directory("scrobot_simulation"))
+        result=location/"config"/filename
+        return result if result.is_file() else None
+    except (ImportError,LookupError,OSError):
+        return None
+
+
 def calibration_snapshot():
     """Record the actual production inputs AND saved lab state, not silent publish."""
     files={
@@ -107,6 +118,14 @@ def calibration_snapshot():
         "production_mobility":ROOT/"src/scrobot_simulation/config/mobility_calibration.yaml",
         "production_odometry":ROOT/"src/scrobot_simulation/config/odometry_calibration.yaml",
     }
+    # Include installed package versions: ROS launch looks them up through
+    # the ament index, which may differ from src/ if the workspace was not
+    # rebuilt after a calibration publish.
+    for name in ("camera_calibration.yaml","mobility_calibration.yaml",
+                 "odometry_calibration.yaml"):
+        path=installed_simulation_config(name)
+        if path:
+            files["installed_"+name.replace("_calibration.yaml","")]=path
     from tools.shared.lab_configs import FILES
     files.update({"saved_"+name:path for name,path in FILES.items()
                   if name not in ("performance",)})
@@ -120,7 +139,8 @@ def calibration_snapshot():
             result[name]={"path":str(path),"error":str(exc)}
     # Published calibration is what the production launch actually consumes.
     result["authority_note"]=(
-        "Full production launch consumes published src/ configs and production world. "
-        "Saved lab YAMLs are snapshotted for provenance, not silently published."
+        "Full production launch consumes ament-installed configs and an isolated "
+        "copy of the production world. Source and saved lab YAMLs are snapshotted "
+        "for provenance; none is silently published. Rebuild to sync installed configs."
     )
     return result
