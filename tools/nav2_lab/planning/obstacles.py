@@ -5,6 +5,7 @@ moves back and forth between A/B. The requested m/s is paced in wall time;
 actual Gazebo simulated-time speed may differ when real-time factor != 1.
 """
 from copy import deepcopy
+import json
 import math
 from pathlib import Path
 import subprocess
@@ -91,10 +92,11 @@ def gz_call(command,env,timeout=10):
 
 
 class Obstacles:
-    def __init__(self,root,env,initial_specs=()):
+    def __init__(self,root,env,initial_specs=(),clock_path=None):
         self.root=Path(root)
         self.root.mkdir(parents=True,exist_ok=True)
         self.env=env
+        self.clock_path=Path(clock_path) if clock_path else None
         self.entities={}
         self.counter=0
         self.lock=threading.RLock()
@@ -111,7 +113,9 @@ class Obstacles:
             self.counter+=1
             name=entity_name(spec["kind"],self.counter)
             self.entities[name]={"name":name,"spec":deepcopy(spec),
-                                  "spawn_time":time.monotonic()}
+                                  "spawn_time":time.monotonic(),
+                                  "start_sim_time":None,
+                                  "last_position":None}
             return name
 
     def spawn(self,spec):
@@ -128,7 +132,9 @@ class Obstacles:
                     "-x",str(x),"-y",str(y),"-z","0"],self.env,timeout=15)
             self.counter+=1
             self.entities[name]={"name":name,"spec":deepcopy(spec),
-                                  "spawn_time":time.monotonic()}
+                                  "spawn_time":time.monotonic(),
+                                  "start_sim_time":None,
+                                  "last_position":None}
             return self.list()
 
     def delete(self,name):
@@ -158,24 +164,50 @@ class Obstacles:
         self.stop_event.set()
         self.thread.join(timeout=3)
 
+    def _sim_time(self):
+        if self.clock_path is None:
+            return None
+        try:
+            data=json.loads(self.clock_path.read_text())
+            stamp=data.get("sim_time_s")
+            return float(stamp) if stamp is not None and math.isfinite(stamp) else None
+        except (OSError,ValueError,TypeError):
+            return None
+
     def _move_loop(self):
         while not self.stop_event.wait(.25):
+            now=self._sim_time()
+            if now is None:
+                # Wait for real Gazebo /clock measurements; do not invent time.
+                continue
             with self.lock:
-                people=[dict(o) for o in self.entities.values()
-                        if o["spec"]["kind"]=="human"]
-            for person in people:
+                moving=[]
+                for o in self.entities.values():
+                    if o["spec"]["kind"]!="human":
+                        continue
+                    if o["start_sim_time"] is None or now < o["start_sim_time"]:
+                        o["start_sim_time"]=now
+                    elapsed=max(0.0,now-o["start_sim_time"])
+                    spec=o["spec"]
+                    pos=pose_along_segment(
+                        spec["point_a"],spec["point_b"],spec["speed_mps"],elapsed)
+                    previous=o["last_position"]
+                    if previous is not None and math.hypot(
+                        pos["x"]-previous["x"],pos["y"]-previous["y"]) < .008:
+                        continue
+                    moving.append((o["name"],pos))
+            for name,pos in moving:
                 if self.stop_event.is_set():return
-                spec=person["spec"]
-                pos=pose_along_segment(
-                    spec["point_a"],spec["point_b"],spec["speed_mps"],
-                    time.monotonic()-person["spawn_time"])
-                request=(f'name: "{person["name"]}" '
+                request=(f'name: "{name}" '
                          f'position: {{x: {pos["x"]:.5f} y: {pos["y"]:.5f} z: 0}}')
                 try:
                     gz_call(["gz","service","-s",f"/world/{WORLD}/set_pose",
                              "--reqtype","gz.msgs.Pose",
                              "--reptype","gz.msgs.Boolean","--timeout","1400",
                              "--req",request],self.env,timeout=2.5)
+                    with self.lock:
+                        if name in self.entities:
+                            self.entities[name]["last_position"]=pos
                     self.last_move_error=""
                 except (RuntimeError,subprocess.TimeoutExpired,FileNotFoundError) as exc:
                     self.last_move_error=str(exc)[-450:]
