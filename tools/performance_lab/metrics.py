@@ -249,7 +249,7 @@ class ClockMeter:
                 # Only encoder / joint-state streams must be new-stamped at
                 # 100 Hz. These are direct ros2_control outputs, unlike mux
                 # and relay topics where re-stamping can be source-dependent.
-                if (row["status"]=="pass" and name in (
+                if (row["status"] in ("pass","sim_jitter_high") and name in (
                         "/diff_drive_controller/odom","/joint_states")
                         and row["header_sample_count"]>=12
                         and (row["header_duplicate_count"]>0
