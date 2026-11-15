@@ -29,10 +29,11 @@ performance, results and logs remain on one page.
 - Choose Robot or Goal and click the court to set X/Y, then **drag in the
   heading direction** to set yaw. This reuses the gesture from YOLO Lab.
 - Choose Cube, click its center and select side length 0.20 to 1.50 m.
-- Choose Walking cylinder, then click A followed by B. The B click creates
-  a moving obstacle; the picker immediately cycles back to A for the next
-  cylinder (A, B, A, B, ...). Each cylinder is 1.74 m tall and 0.48 m
-  in diameter. The walking-speed slider sets 0.10 to 2.00 m per simulated
+- Choose Moving cylinder and click A, then B to define the current route.
+  Later clicks replace A and then B of **the same preview** (the two latest
+  selected points). No model is created on a court click. Press **Add cylinder**
+  to spawn exactly one object, just like Add cube. Each is 1.74 m tall and
+  0.48 m in diameter; the speed slider supports 0.10–2.00 m per simulation
   second, based on Gazebo /clock. Numeric A/B input also remains available.
 - Use the **Cell size** numeric field (0.02 to 0.20 m per cell) for the
   planner costmap. Changing it requires restarting the simulation.
@@ -76,9 +77,16 @@ These are now integer values. The other important correction is the frame:
 - For robot spawn pose `(x, y, yaw)`, an explicit static
   `map -> odom` transform is published. The stationary planner publishes an additional static
   `odom -> base_footprint` frame, without starting wheel odometry or EKF.
-- RViz shows only a camera-link marker (no full RobotModel), yellow robot
-  and blue goal arrows, the source SDF badminton court lines, court outline,
-  and outermost venue clearance line. These are visualization overlays only.
+- RViz now displays a **simplified robot body** via RobotModel (lightweight
+  URDF proxy visual), plus the **actual Nav2 global-costmap collision
+  footprint** as a magenta polygon. This polygon is the robot footprint
+  configured for Nav2 collision checks; it is not the inflated costmap radius
+  or an estimate from the STL mesh.
+- Court lines are bright white; the court outline is lime and the outermost
+  venue clearance boundary is pink. Static map opacity is **0.30**, global
+  costmap opacity **0.22**, both drawn behind the high-contrast overlays.
+  Robot and goal heading arrows, camera-link marker and four planner paths
+  remain visible.
 - RViz's Fixed Frame is `map`, with an independently configured static
   `/map` display (reliable/transient-local QoS) and live
   `/global_costmap/costmap` display (reliable/volatile QoS).
@@ -166,6 +174,30 @@ Nav2 paths, planner CPU/RAM and timing results, and logs.
 
 If an upstream saved YAML changes, restart the simulator to apply a new
 snapshot. The main `src/` simulation and all other labs remain unchanged.
+
+## Continuous live replanning
+
+Choose **Live replan — all four planners** and a refresh interval
+(0.5–10 seconds; default **2 seconds**), then press **Start live replanning**.
+This starts one persistent action client which invokes NavFn Dijkstra,
+NavFn A*, Smac 2D, and Theta* **sequentially** every cycle. Each new
+successful Nav2 result replaces that planner's retained RViz path.
+A failed planner clears its stale path. The lab records latest planning
+latency/path length/clearance, completed cycles, wall-clock cycle duration,
+success/failure counts and changing-costmap fingerprints.
+
+The robot **never moves** in this test, and a moving cylinder is registered
+as an obstacle only if the real simulated depth-camera pipeline observes it.
+Because the four requests are sequential, a person may move and change the
+costmap between them: this mode measures **adaptation to new perception**,
+not a strictly controlled same-costmap planner benchmark.
+
+Use **Stop live planning** to end the loop. Cubes/cylinders can be
+added/removed and the scene YAML saved while live planning is running.
+To change the goal, robot pose, costmap resolution or depth-layer mode,
+stop live planning first (and restart simulation for changes requiring
+a new map/robot pose). The requested interval is a **minimum cycle period**:
+if all four planners take longer, they are not queued concurrently.
 
 ## Performance diagnostics (why depth is below 30 Hz)
 
