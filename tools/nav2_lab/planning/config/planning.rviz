@@ -91,7 +91,7 @@ Visualization Manager:
       Color: 238; 179; 69
       Enabled: true
       Line Style: Lines
-      Line Width: 0.035
+      Line Width: 0.08
       Name: NavFn - Dijkstra
       Pose Style: None
       Topic:
@@ -107,7 +107,7 @@ Visualization Manager:
       Color: 82; 162; 239
       Enabled: true
       Line Style: Lines
-      Line Width: 0.035
+      Line Width: 0.08
       Name: NavFn - A star
       Pose Style: None
       Topic:
@@ -123,7 +123,7 @@ Visualization Manager:
       Color: 54; 214; 154
       Enabled: true
       Line Style: Lines
-      Line Width: 0.035
+      Line Width: 0.08
       Name: Smac 2D
       Pose Style: None
       Topic:
@@ -139,7 +139,7 @@ Visualization Manager:
       Color: 195; 135; 240
       Enabled: true
       Line Style: Lines
-      Line Width: 0.035
+      Line Width: 0.08
       Name: Theta star
       Pose Style: None
       Topic:
