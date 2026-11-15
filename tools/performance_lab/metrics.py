@@ -86,10 +86,17 @@ def interval_quality(items,expected):
     """Timing distribution from individual header stamps, not averaged Hz."""
     stamps=[x[2] for x in items if x[2] is not None]
     gaps=[b-a for a,b in zip(stamps,stamps[1:])]
-    positive=[gap for gap in gaps if gap>0]
+    positive=[gap for gap in gaps if gap>1e-9]
+    # A message with a repeated source stamp is NOT a fresh sensor/control
+    # cycle, even if the transport arrival rate appears to be 100 Hz.
+    duplicates=sum(abs(gap)<=1e-9 for gap in gaps)
+    duration=stamps[-1]-stamps[0] if len(stamps)>=2 else None
+    unique_hz=(len(positive)/duration if duration and duration>0 else None)
     nominal=1./expected if expected else None
     jitter=[abs(g-nominal) for g in positive] if nominal else []
     return {
+        "header_duplicate_count":duplicates,
+        "source_unique_hz":round(unique_hz,3) if unique_hz is not None else None,
         "header_interval_samples":len(positive),
         "header_interval_p50_ms":round(percentile(positive,.5)*1000,3)
             if positive else None,
@@ -123,6 +130,7 @@ class ClockMeter:
         self.total_counts={topic:0 for topic in self.topic_specs}
         self.total_header_gaps={topic:0 for topic in self.topic_specs}
         self.total_header_backward={topic:0 for topic in self.topic_specs}
+        self.total_header_duplicates={topic:0 for topic in self.topic_specs}
         self.previous_stamps={}
         self.first_seen_sim={}
         self.last_seen_sim={}
@@ -139,6 +147,7 @@ class ClockMeter:
         self.total_counts[name]=0
         self.total_header_gaps[name]=0
         self.total_header_backward[name]=0
+        self.total_header_duplicates[name]=0
 
     def clock(self,sim,wall=None):
         wall=time.monotonic() if wall is None else float(wall)
@@ -152,6 +161,7 @@ class ClockMeter:
             self.total_counts=dict.fromkeys(self.events,0)
             self.total_header_gaps=dict.fromkeys(self.events,0)
             self.total_header_backward=dict.fromkeys(self.events,0)
+            self.total_header_duplicates=dict.fromkeys(self.events,0)
             self.first_seen_sim.clear()
             self.last_seen_sim.clear()
             self.last_seen_wall.clear()
@@ -179,6 +189,7 @@ class ClockMeter:
             if old is not None:
                 gap=stamp-old
                 if gap<-1e-6:self.total_header_backward[name]+=1
+                if abs(gap)<=1e-9:self.total_header_duplicates[name]+=1
                 if expected and gap>1.5/expected:
                     self.total_header_gaps[name]+=1
             self.previous_stamps[name]=stamp
@@ -214,6 +225,7 @@ class ClockMeter:
                 "header_large_gap_count":gaps,
                 "header_large_gap_total":self.total_header_gaps[name],
                 "header_backward_total":self.total_header_backward[name],
+                "header_duplicate_total":self.total_header_duplicates[name],
                 "header_sample_count":len(stamps),
                 "count_in_window":len(items),
                 "count_total":self.total_counts[name],
@@ -234,6 +246,16 @@ class ClockMeter:
                         and row["header_interval_samples"]>=12
                         and p95>1500.0/expected):
                     row["status"]="sim_jitter_high"
+                # Only encoder / joint-state streams must be new-stamped at
+                # 100 Hz. These are direct ros2_control outputs, unlike mux
+                # and relay topics where re-stamping can be source-dependent.
+                if (row["status"]=="pass" and name in (
+                        "/diff_drive_controller/odom","/joint_states")
+                        and row["header_sample_count"]>=12
+                        and (row["header_duplicate_count"]>0
+                             or (row["source_unique_hz"] is not None
+                                 and row["source_unique_hz"]<.90*expected))):
+                    row["status"]="repeated_source_stamps"
             result[name]=row
         return {
             "wall_now":time.time(),"sim_now":self.sim_time,
