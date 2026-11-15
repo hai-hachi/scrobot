@@ -1,0 +1,64 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Enabled: true
+  Global Options:
+    Fixed Frame: map
+    Background Color: 26; 34; 42
+    Frame Rate: 20
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Reference grid
+      Enabled: true
+      Plane: XY
+      Cell Size: 1
+      Plane Cell Count: 24
+      Alpha: 0.3
+    - Class: rviz_default_plugins/TF
+      Name: Robot TF axes
+      Enabled: true
+      Show Axes: true
+      Show Arrows: false
+      Show Names: false
+      Marker Scale: 0.2
+      Frames:
+        All Enabled: true
+      Tree: {}
+    - Class: rviz_default_plugins/RobotModel
+      Name: Robot visual
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        History Policy: Keep Last
+        Depth: 1
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 0.9
+    - Class: rviz_default_plugins/LaserScan
+      Name: Depth scan
+      Enabled: true
+      Topic:
+        Value: /camera/camera/depth/scan
+        Reliability Policy: Best Effort
+      Style: Flat Squares
+      Size (Pixels): 3
+      Alpha: 0.8
+      Color: 255; 183; 97
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Current View
+      Scale: 26
+      Target Frame: map
+      Value: TopDownOrtho (rviz_default_plugins)
