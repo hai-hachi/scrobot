@@ -47,12 +47,19 @@ def test_full_stack_launch_defaults_preserved():
     assert "'sweep_mission.launch.py'" in full
     assert "'headless', default_value='false'" in full
     assert "'mission_enabled', default_value='true'" in full
+    assert "'mission_autostart', default_value='true'" in full
+    assert "'autostart': mission_autostart" in full
+    mission_launch=(ROOT/"src/scrobot_mission/launch/sweep_mission.launch.py").read_text()
+    assert "'autostart', default_value='true'" in mission_launch
+    assert "ParameterValue(autostart, value_type=bool)" in mission_launch
     assert "'world': world" in full
     assert "condition=IfCondition(mission_enabled)" in full
     code=(HERE/"server.py").read_text()
     assert '"scrobot_bringup","sim.launch.py"' in code
     assert '"use_sim_time:=true","headless:=true"' in code
-    assert '"mission_enabled:="' in code
+    assert '"mission_enabled:=true"' in code
+    assert '"mission_autostart:="' in code
+    assert '"true" if self.settings["profile"]=="full_mission" else "false"' in code
     assert '"world:="+self.world_info["path"]' in code
     assert "prepare_world(" in code
     assert "self.run_settings=dict(self.settings)" in code
@@ -75,33 +82,60 @@ def test_expected_pub_rates_are_production_not_saved_drafts():
 
 
 def test_sync_pass_vs_real_time_rate_pass():
-    def sample(rtf, sim_hz,wall_hz):
+    # All published sensor and odom/scan topics are required, rather than
+    # passing from a hand-picked subset while RGB/IMU/EKF silently fall behind.
+    targets={
+        "/camera/camera/color/image_raw":30.,
+        "/camera/camera/depth/image_raw":30.,
+        "/camera/camera/depth/points":30.,
+        "/camera/camera/depth/scan_raw":30.,
+        "/camera/camera/depth/scan":30.,
+        "/camera/camera/imu":100.,
+        "/imu/mag":100.,
+        "/diff_drive_controller/odom":100.,
+        "/odometry/filtered":100.,
+        "/joint_states":100.,
+        "/global_costmap/costmap":3.,
+    }
+    def sample(rtf,missed=None):
         topics={}
-        for name in (
-            "/camera/camera/color/image_raw",
-            "/camera/camera/depth/points",
-            "/camera/camera/imu",
-            "/diff_drive_controller/odom",
-            "/odometry/filtered",
-            "/joint_states",
-        ):
-            target=100 if name in ("/camera/camera/imu",
-                                  "/diff_drive_controller/odom",
-                                  "/odometry/filtered","/joint_states") else 30
-            topics[name]={"sim_hz":target if sim_hz else 0,
-                          "wall_hz":wall_hz*target/30.,
-                          "expected_sim_hz":target}
+        for name,target in targets.items():
+            correct=(name!=missed)
+            topics[name]={
+                "sim_hz":target if correct else .7*target,
+                "wall_hz":rtf*target if correct else rtf*.7*target,
+                "expected_sim_hz":target,
+            }
         return {"monitor":{"rtf":rtf,"topics":topics}}
-    samples=[sample(.5,True,15) for i in range(4)]
+
+    samples=[sample(.5) for _ in range(4)]
     sync=summary_of_samples(samples,{**DEFAULTS,"mode":"synchronized"})
     assert sync["cadence_pass"] is True
     assert sync["real_time_rate_pass"] is None
+    assert "Parked baseline" in sync["coverage_note"]
     rt=summary_of_samples(samples,{**DEFAULTS,"mode":"real_time"})
     assert rt["cadence_pass"] is True
     assert rt["real_time_rate_pass"] is False
+
+    mission=summary_of_samples(samples,{
+        **DEFAULTS,"profile":"full_mission"})
+    assert mission["cadence_pass"] is True
+    assert "/global_costmap/costmap" in mission["checks"]
+    broken=summary_of_samples(
+        [sample(.5,missed="/camera/camera/imu") for _ in range(4)],
+        DEFAULTS)
+    assert broken["cadence_pass"] is False
+    assert broken["checks"]["/camera/camera/imu"]["sim_rate_pass"] is False
+    missing_nav=summary_of_samples(
+        [ {"monitor":{"rtf":.5,"topics":{
+            k:v for k,v in sample(.5)["monitor"]["topics"].items()
+            if k!="/global_costmap/costmap"
+        }}} for _ in range(4)],
+        {**DEFAULTS,"profile":"full_mission"})
+    assert missing_nav["cadence_pass"] is False
+    assert missing_nav["checks"]["/global_costmap/costmap"]["sim_rate_pass"] is False
     missing=summary_of_samples([],DEFAULTS)
     assert missing["cadence_pass"] is False
-
 
 def test_environment_isolated_and_browser_controls_exist():
     env=local_environment(DEFAULTS)
