@@ -13,6 +13,7 @@ backend, tests and resources should remain inside the owning folder.
 | [yolo_lab/](yolo_lab/) | Shuttle datasets, labels, training, comparison: `python3 tools/yolo_lab/server.py` |
 | [mesh_lab/](mesh_lab/) | Gazebo visual/collision/frame inspection, optional RViz and benchmark: `python3 tools/mesh_lab/server.py` |
 | [nav2_lab/](nav2_lab/) | Nav2 planner experiments, RViz costmaps, saved lab inputs: `python3 tools/nav2_lab/server.py` |
+| [performance_lab/](performance_lab/) | Full-stack simulated-time synchronization, CPU/GPU profiling and timed benchmarks: `python3 tools/performance_lab/server.py` |
 | [real_comparison/](real_comparison/) | Full mission evaluation runner; no lab YAML ownership |
 | [hardware/](hardware/) | Physical STM32/serial bench diagnostics, not a Gazebo lab |
 | [shared/](shared/) | Common YAML registry, path ownership and log formatting |
