@@ -89,7 +89,7 @@ class TimingObserver(Node):
         self.create_subscription(
             Clock,"/clock",self.on_clock,
             QoSProfile(depth=30,reliability=ReliabilityPolicy.BEST_EFFORT))
-        self.subscriptions=[]
+        self._tracked_subscriptions=[]
         reliable=QoSProfile(depth=1,reliability=ReliabilityPolicy.RELIABLE,
                              durability=DurabilityPolicy.VOLATILE)
         for topic,kind in TOPIC_TYPES.items():
@@ -99,7 +99,7 @@ class TimingObserver(Node):
                 kind,topic,
                 lambda msg,topic=topic,large=large:self.on_topic(topic,msg,large),
                 qos,raw=large)
-            self.subscriptions.append(subscription)
+            self._tracked_subscriptions.append(subscription)
         self.dynamic={}
         self.create_timer(1.0,self.flush)
         self.create_timer(5.0,self.discover_extra_topics)
