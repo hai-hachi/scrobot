@@ -75,8 +75,13 @@ def validate_scene(value, check_overlap=True):
             coords = [(o["x"],o["y"])]
             margin = .60 + o["size"]/2
         else:
-            coords = [(o["point_a"]["x"],o["point_a"]["y"]),
-                      (o["point_b"]["x"],o["point_b"]["y"])]
+            a,b=o["point_a"],o["point_b"]
+            dx,dy=b["x"]-a["x"],b["y"]-a["y"]
+            # Check the full walking segment, not only the endpoints.
+            progress=max(0.0,min(1.0,(
+                (robot["x"]-a["x"])*dx+(robot["y"]-a["y"])*dy
+            )/(dx*dx+dy*dy)))
+            coords=[(a["x"]+progress*dx,a["y"]+progress*dy)]
             margin = .85
         if any(math.hypot(x-robot["x"],y-robot["y"]) < margin
                for x,y in coords):
