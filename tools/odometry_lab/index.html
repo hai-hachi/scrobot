@@ -271,8 +271,7 @@ $("mobilityYamlStatus").textContent=mobilityYaml.saved?
 }
 async function poll(){try{const r=await fetch("/api/status",{cache:"no-store"});if(!r.ok)throw Error("Cannot reach lab status");display(await r.json())}catch(e){$("readiness").textContent=e.message}}
 setInterval(poll,500);window.addEventListener("resize",()=>last&&display(last));poll();
-</script>
-<script>
+
 /* Shared lab-only Gazebo RTF cap; source sensor/controller rates never scale. */
 (function(){
   async function initRtfControl(){
