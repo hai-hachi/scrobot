@@ -300,13 +300,16 @@ async function refreshHistory(){
   try{
     const items=await api('/api/history');
     const tbody=$('history-rows');tbody.replaceChildren();
-    if(!items.length){tbody.append(emptyRow(8,'No saved performance experiments.'));return;}
+    if(!items.length){tbody.append(emptyRow(9,'No saved performance experiments.'));return;}
     for(const row of items){
       const tr=document.createElement('tr');
       cell(tr,row.run_id);cell(tr,row.profile);cell(tr,row.mode);
       cell(tr,fmt(row.summary?.avg_rtf,3)+'×');
       cell(tr,row.summary?.cadence_pass?'Pass':'Not verified',
            row.summary?.cadence_pass?'ok':'warn');
+      const nav=row.summary?.nav2_coverage_pass;
+      cell(tr,nav===true?'Lifecycle + map':nav===null?'Parked / N.A.':
+           'Not verified',nav===true?'ok':'warn');
       cell(tr,row.outcome);
       const artifact=document.createElement('td');
       const link=document.createElement('a');
