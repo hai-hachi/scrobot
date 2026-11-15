@@ -21,7 +21,7 @@ from sensor_msgs.msg import Image,PointCloud2,Imu,MagneticField,LaserScan,JointS
 from nav_msgs.msg import Odometry,OccupancyGrid
 
 from metrics import ClockMeter,stamp_seconds
-from settings import EXPECTED_TOPICS,ROOT
+from settings import EXPECTED_TOPICS,ROOT,installed_simulation_config
 
 
 TOPIC_TYPES={
@@ -50,8 +50,9 @@ def actual_targets():
     import yaml
     targets=dict(EXPECTED_TOPICS)
     try:
-        cam=yaml.safe_load(
-            (ROOT/"src/scrobot_simulation/config/camera_calibration.yaml").read_text())
+        camera_config=(installed_simulation_config("camera_calibration.yaml")
+            or ROOT/"src/scrobot_simulation/config/camera_calibration.yaml")
+        cam=yaml.safe_load(camera_config.read_text())
         targets["/camera/camera/color/image_raw"]=float(cam["color"]["fps"])
         targets["/camera/camera/depth/image_raw"]=float(cam["depth"]["fps"])
         targets["/camera/camera/depth/points"]=float(cam["depth"]["fps"])
@@ -59,8 +60,9 @@ def actual_targets():
         targets["/camera/camera/depth/scan"]=float(cam["depth"]["fps"])
     except (OSError,KeyError,TypeError,ValueError,yaml.YAMLError):pass
     try:
-        odom=yaml.safe_load(
-            (ROOT/"src/scrobot_simulation/config/odometry_calibration.yaml").read_text())
+        odom_config=(installed_simulation_config("odometry_calibration.yaml")
+            or ROOT/"src/scrobot_simulation/config/odometry_calibration.yaml")
+        odom=yaml.safe_load(odom_config.read_text())
         rates=odom["rates"]
         for topic,key in (
             ("/camera/camera/imu","imu_hz"),
