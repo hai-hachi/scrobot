@@ -16,6 +16,11 @@ import threading
 import time
 from urllib.parse import urlparse
 import webbrowser
+import sys
+
+# Allow direct invocation: python3 tools/mesh_lab/server.py
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tools.mesh_lab.audit import audit
 from tools.mesh_lab.scene import build_world
@@ -182,7 +187,7 @@ class Runtime:
         # Use an isolated RViz config with no navigation displays.
         config = Path(__file__).with_name("mesh.rviz")
         self.rviz = subprocess.Popen(
-            ["rviz2", "-d", str(config)],
+            ["rviz2", "-d", str(config), "--ros-args", "-p", "use_sim_time:=true"],
             stdout=log, stderr=subprocess.STDOUT,
             env=local_environment(), start_new_session=True,
         )
