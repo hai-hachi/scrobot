@@ -1,6 +1,7 @@
 'use strict';
 const $=id=>document.getElementById(id);
 let saved=null, status=null, busy=false, activePane='setup';
+let calibration=null;
 
 function showNotice(msg,error=false){
   const el=$('notice');el.hidden=false;el.textContent=msg;el.classList.toggle('error',error);
@@ -107,6 +108,52 @@ function renderResults(data){
       (summary.costmap_consistent===false?' · WARNING: costmap changed between planners':'');
   }else $('result-note').textContent='No results yet.';
 }
+function renderCalibration(data){
+  calibration=data;
+  const container=$('calibration-list');
+  container.replaceChildren();
+  const labels={
+    lighting:'Lighting',camera:'Camera / D435i',apriltags:'AprilTags',
+    mobility:'Mobility',odometry:'Odometry'
+  };
+  const details={
+    lighting:data.lighting.light_rows+'×'+data.lighting.light_cols+
+      ' lights · '+data.lighting.shadow_count+' shadows · venue from saved YAML',
+    camera:data.camera.color+' @ '+data.camera.color_fps+
+      ' Hz RGB · '+data.camera.depth+' @ '+data.camera.depth_fps+' Hz depth',
+    apriltags:'Edge '+data.apriltags.size_m+' m · mount height '+data.apriltags.height_m+' m',
+    mobility:'Wheel contact '+data.mobility.physics.wheel_collision_width+
+      ' m · motor '+data.mobility.motor.model,
+    odometry:'Wheel '+data.odometry.wheel_odom_hz+' Hz · IMU '+
+      data.odometry.imu_hz+' Hz · EKF '+data.odometry.ekf_hz+' Hz'
+  };
+  for(const [key,title] of Object.entries(labels)){
+    const origin=data.sources[key];
+    const row=document.createElement('div');row.className='calibration-row';
+    const left=document.createElement('div');
+    const heading=document.createElement('strong');heading.textContent=title;
+    const desc=document.createElement('small');desc.textContent=details[key];
+    left.append(heading,desc);
+    const badge=document.createElement('span');
+    badge.className='calibration-origin'+(origin.source==='saved_lab_yaml'?'':' fallback');
+    badge.textContent=origin.source==='saved_lab_yaml'?'Saved YAML':'Published fallback';
+    badge.title=origin.path;
+    row.append(left,badge);container.append(row);
+  }
+  $('depth-mode').textContent=data.camera.depth;
+  $('depth-rate').textContent=data.camera.depth_fps+' FPS · saved Camera Lab · ~90.5° HFOV';
+  const warning=[...(data.warnings||[])];
+  if(data.restart_required)warning.unshift(
+    'A source lab YAML has changed. Restart the simulation to apply the new calibration.');
+  $('calibration-warning').textContent=warning.join(' ');
+}
+async function refreshCalibration(){
+  try{renderCalibration(await api('/api/calibration'));}
+  catch(e){
+    $('calibration-list').textContent='Cannot load saved lab configuration: '+e.message;
+    $('calibration-warning').textContent='Save the required Lighting, Camera and AprilTags YAMLs in their owning labs first.';
+  }
+}
 function renderObstacles(obstacles){
   const list=$('obstacle-list');list.replaceChildren();
   if(!obstacles?.length){
@@ -190,9 +237,18 @@ $('obstacle-kind').onchange=()=>{
   if(!human)$('obstacle-moving').checked=false;
 };
 $('obstacle-kind').onchange();
-$('save').onclick=()=>operation(async()=>{await save();showNotice('Saved Nav2 Lab YAML. Restart simulation if you changed map/perception settings.');});
-$('start').onclick=()=>operation(async()=>{await save();await api('/api/start',{});showNotice('Planner-only simulation launching. Open RViz and check lifecycle startup before planning.');});
-$('stop').onclick=()=>operation(async()=>{await api('/api/stop',{});showNotice('Stopping isolated simulation.');});
+$('save').onclick=()=>operation(async()=>{
+  await save();await refreshCalibration();
+  showNotice('Saved Nav2 Lab YAML separately under tools/configs/labs/. Restart simulation after upstream calibration changes.');
+});
+$('start').onclick=()=>operation(async()=>{
+  await save();await api('/api/start',{});await refreshCalibration();
+  showNotice('Planner simulation launching with snapshots of saved Lighting, Camera, AprilTags and available Mobility/Odometry calibrations.');
+});
+$('stop').onclick=()=>operation(async()=>{
+  await api('/api/stop',{});await refreshCalibration();
+  showNotice('Stopping isolated simulation.');
+});
 $('rviz-open').onclick=()=>operation(async()=>{await api('/api/rviz/open',{});showNotice('RViz opening with planner path and costmap displays.');});
 $('rviz-close').onclick=()=>operation(async()=>{await api('/api/rviz/close',{});showNotice('Closing RViz.');});
 $('plan').onclick=()=>operation(async()=>{
@@ -211,8 +267,9 @@ $('add-obstacle').onclick=()=>operation(async()=>{
 });
 $('clear-obstacles').onclick=()=>operation(async()=>{await api('/api/obstacles/clear',{});showNotice('Lab obstacles removed.');});
 (async()=>{
-  try{populate(await api('/api/config'));await refresh();await refreshHistory();}
+  try{populate(await api('/api/config'));await refresh();await refreshHistory();await refreshCalibration();}
   catch(e){showNotice(e.message,true);}
   setInterval(refresh,2200);
   setInterval(refreshHistory,15000);
+  setInterval(refreshCalibration,12000);
 })();
