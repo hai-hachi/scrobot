@@ -41,6 +41,11 @@ TOPIC_TYPES={
     "/global_costmap/costmap":OccupancyGrid,
     "/global_costmap/costmap_updates":OccupancyGridUpdate,
     "/cmd_vel_nav":TwistStamped,
+    "/cmd_vel_approach":TwistStamped,
+    "/cmd_vel_auto":TwistStamped,
+    "/cmd_vel_smoothed":TwistStamped,
+    "/cmd_vel_motor_target":TwistStamped,
+    "/diff_drive_controller/cmd_vel":TwistStamped,
 }
 LARGE_TOPICS={
     "/camera/camera/color/image_raw",
@@ -49,6 +54,11 @@ LARGE_TOPICS={
     "/global_costmap/costmap",
     "/global_costmap/costmap_updates",
     "/cmd_vel_nav",
+    "/cmd_vel_approach",
+    "/cmd_vel_auto",
+    "/cmd_vel_smoothed",
+    "/cmd_vel_motor_target",
+    "/diff_drive_controller/cmd_vel",
 }
 
 
@@ -88,6 +98,7 @@ class TimingObserver(Node):
         self.output=Path(output)
         self.mode=mode
         targets=actual_targets()
+        self.expected_rgb_sim_hz=targets.get("/camera/camera/color/image_raw",30.0)
         from metrics import TOPIC_SPECS
         self.meter=ClockMeter({
             topic:(targets.get(topic,expected),label)
@@ -190,14 +201,21 @@ class TimingObserver(Node):
                 if topic not in (
                     "/perception/shuttle_detections_2d",
                     "/perception/shuttle_detections_3d",
+                    "/perception/collectable_shuttle_detections_3d",
                 ) or topic in self.dynamic or not types:
                     continue
                 # Avoid extra deserialization on vision messages.
                 kind=get_message(types[0])
-                self.meter.add_topic(topic,None,topic.rsplit("/",1)[-1])
+                expected=(self.expected_rgb_sim_hz
+                          if topic in (
+                              "/perception/shuttle_detections_2d",
+                              "/perception/shuttle_detections_3d",
+                          ) else None)
+                self.meter.add_topic(topic,expected,topic.rsplit("/",1)[-1])
                 self.dynamic[topic]=self.create_subscription(
                     kind,topic,
-                    lambda msg,topic=topic:self.meter.topic(topic),
+                    lambda msg,topic=topic:self.meter.topic(
+                        topic,header_stamp=serialized_header_stamp(msg)),
                     qos_profile_sensor_data,raw=True)
         except (ImportError,LookupError,RuntimeError,ValueError) as exc:
             self.get_logger().debug(str(exc))
