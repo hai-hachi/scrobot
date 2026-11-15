@@ -23,7 +23,12 @@ TOPIC_SPECS={
     "/camera/camera/depth/scan":(30.0,"Filtered scan"),
     "/global_costmap/costmap":(None,"Nav2 full costmap (latched)"),
     "/global_costmap/costmap_updates":(None,"Nav2 incremental costmap updates"),
-    "/cmd_vel_nav":(None,"Nav2 velocity command; active goal proxy"),
+    "/cmd_vel_nav":(None,"Nav2 output; wall-scheduled controller"),
+    "/cmd_vel_approach":(None,"Local collection SMC output; active only"),
+    "/cmd_vel_auto":(None,"Autonomous mux output"),
+    "/cmd_vel_smoothed":(None,"Velocity smoother output"),
+    "/cmd_vel_motor_target":(100.0,"Simulation motor-response target"),
+    "/diff_drive_controller/cmd_vel":(100.0,"Simulation motor-response output"),
     "/perception/shuttle_detections":(None,"YOLO detections if published"),
 }
 NONPERIODIC_TOPICS={
