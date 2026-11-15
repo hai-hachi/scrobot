@@ -374,9 +374,9 @@ class FastYoloDatasetCapture(Node):
             qos_profile_sensor_data,
         )
 
-        # Wall-clock timer intentionally used through normal ROS timer. The world
-        # runs with real_time_factor=0 (as fast as possible), so this loop is not
-        # gated by a deliberate simulation settle interval.
+        # The ROS timer follows /clock in simulation. It is intentionally
+        # independent of wall-clock RTF so the dataset collector remains
+        # reproducible when Gazebo is capped at 0.25x or another speed.
         self.create_timer(0.01, self.capture_step)
 
         self.get_logger().info(
