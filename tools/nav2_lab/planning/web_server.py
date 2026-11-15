@@ -23,6 +23,9 @@ import yaml
 from planning.core import PLANNERS, nav2_params, validate
 from planning.map_builder import write_court_map
 from planning.obstacles import Obstacles
+from planning.history_store import (list_runs as saved_runs,
+                                    delete_run as remove_run,
+                                    delete_all as remove_all_runs)
 from planning.process_metrics import ProcessSampler
 from planning.scene import load_scene, save_scene, validate_scene, SCENE_PATH
 from planning.calibration import (load_inputs, build_world, generate_rate_profiles,
@@ -552,13 +555,35 @@ class Service:
             }
 
     def history(self):
-        root=self.root()
-        if not root.exists():return []
-        output=[]
-        for path in sorted(root.glob("*_planning_*/summary.json"),reverse=True)[:25]:
-            info=status_file(path)
-            if info:output.append({"name":path.parent.name,"summary":info})
-        return output
+        with self.lock:
+            output=[]
+            for folder in saved_runs(self.root())[:25]:
+                info=status_file(folder/"summary.json")
+                if info:output.append({"name":folder.name,"summary":info})
+            return output
+
+    def delete_history(self,body):
+        with self.lock:
+            if running(self.trial):
+                raise RuntimeError("Stop the current planner run before deleting history")
+            name=body.get("name")
+            deleted=remove_run(self.root(),name)
+            if self.run_dir is not None and self.run_dir.name==deleted:
+                self.run_dir=None
+                self.run_log=None
+            return {"deleted":[deleted],"remaining":len(saved_runs(self.root()))}
+
+    def clear_history(self,body):
+        with self.lock:
+            if body.get("confirm") is not True:
+                raise ValueError("Explicit confirmation required to delete all history")
+            if running(self.trial):
+                raise RuntimeError("Stop the current planner run before clearing history")
+            deleted=remove_all_runs(self.root())
+            if self.run_dir is not None and self.run_dir.name in deleted:
+                self.run_dir=None
+                self.run_log=None
+            return {"deleted":deleted,"remaining":len(saved_runs(self.root()))}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -607,6 +632,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/stop":lambda x:self.service.stop(),
             "/api/plan":lambda x:self.service.trial_start(x),
             "/api/cancel":lambda x:self.service.abort_trial(),
+            "/api/history/delete":lambda x:self.service.delete_history(x),
+            "/api/history/clear":lambda x:self.service.clear_history(x),
             "/api/gazebo-gui/open":lambda x:self.service.open_gui(),
             "/api/gazebo-gui/close":lambda x:self.service.close_gui(),
             "/api/rviz/open":lambda x:self.service.open_rviz(),
@@ -628,7 +655,7 @@ class Handler(BaseHTTPRequestHandler):
             body=json.loads(self.rfile.read(length) or "{}")
             if not isinstance(body,dict):raise ValueError("Expected JSON object")
             return self.json_reply(mapping[path](body))
-        except (ValueError,RuntimeError,subprocess.TimeoutExpired) as exc:
+        except (ValueError,RuntimeError,FileNotFoundError,subprocess.TimeoutExpired) as exc:
             return self.json_reply({"error":str(exc)},400)
         except Exception as exc:return self.json_reply({"error":str(exc)},500)
 
