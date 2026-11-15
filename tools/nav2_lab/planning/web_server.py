@@ -21,6 +21,8 @@ import yaml
 from core import PLANNERS, nav2_params, validate
 from map_builder import write_court_map
 from obstacles import Obstacles
+from calibration import (load_inputs, build_world, generate_rate_profiles,
+                         inputs_fingerprint, saved_summary)
 
 try: import psutil
 except ImportError: psutil=None
@@ -28,7 +30,11 @@ except ImportError: psutil=None
 HERE=Path(__file__).resolve().parent
 LAB=HERE.parent
 REPO=HERE.parents[2]
-CONFIG=LAB/"config"/"lab.yaml"
+sys.path.insert(0,str(REPO/"tools"))
+from shared.lab_configs import (path_for as lab_yaml_path, read as read_lab_yaml,
+                                save as save_lab_yaml)
+CONFIG=lab_yaml_path("nav2")
+TEMPLATE=LAB/"config"/"lab.yaml"
 WEB=HERE/"web"
 LAUNCH=HERE/"launch"/"planning.launch.py"
 RVIZ=HERE/"config"/"planning.rviz"
@@ -98,9 +104,31 @@ class Service:
         self.stack_log=None
         self.run_log=None
         self.loaded_config=None
+        self.loaded_inputs=None
 
     def config(self):
-        return validate(yaml.safe_load(self.config_path.read_text()))
+        # Nav2 owns an independently saved YAML under tools/configs/labs/.
+        # Until first Save, use its bundled template rather than production.
+        if self.config_path == CONFIG:
+            data=read_lab_yaml("nav2")
+            if data is None:
+                data=yaml.safe_load(TEMPLATE.read_text())
+        else:
+            data=yaml.safe_load(self.config_path.read_text())
+        return validate(data)
+
+    def calibration_status(self):
+        current=load_inputs()
+        response=saved_summary(current)
+        response["restart_required"]=(
+            running(self.stack) and self.loaded_inputs is not None and
+            inputs_fingerprint(current)!=inputs_fingerprint(self.loaded_inputs)
+        )
+        response["calibration_snapshot_file"]=(
+            str(self.active_dir/"calibration_snapshot.yaml")
+            if running(self.stack) and self.active_dir else None
+        )
+        return response
 
     def env_for(self,cfg):
         env=os.environ.copy()
@@ -127,9 +155,12 @@ class Service:
                         if coord in values[section]:
                             cfg["planning"][section][coord]=values[section][coord]
             validate(cfg)
-            tmp=self.config_path.with_suffix(".tmp")
-            tmp.write_text(yaml.safe_dump(cfg,sort_keys=False))
-            tmp.replace(self.config_path)
+            if self.config_path == CONFIG:
+                save_lab_yaml("nav2",cfg,validator=validate)
+            else:
+                tmp=self.config_path.with_suffix(".tmp")
+                tmp.write_text(yaml.safe_dump(cfg,sort_keys=False))
+                tmp.replace(self.config_path)
             return cfg
 
     def root(self):
@@ -140,16 +171,29 @@ class Service:
             if running(self.stack):raise RuntimeError("Lab simulation is already running")
             if running(self.trial):raise RuntimeError("Stop planner trial before restarting")
             cfg=self.config()
+            calibration=load_inputs()
             self.env=self.env_for(cfg)
             preflight(self.env)
             root=self.root()
             root.mkdir(parents=True,exist_ok=True)
             self.active_dir=root/"_planning_active"
             self.active_dir.mkdir(parents=True,exist_ok=True)
+            # Build world + ROS overrides from validated saved owner YAMLs.
+            # These are frozen for the entire Gazebo session.
+            scene=build_world(calibration,self.active_dir)
+            profiles=generate_rate_profiles(calibration,self.active_dir)
             self.loaded_config=deepcopy(cfg)
+            self.loaded_inputs=calibration
+            (self.active_dir/"calibration_snapshot.yaml").write_text(
+                yaml.safe_dump(calibration,sort_keys=False))
+            resource=scene["tag_resource_dir"]
+            old_resource=self.env.get("GZ_SIM_RESOURCE_PATH","")
+            self.env["GZ_SIM_RESOURCE_PATH"]=(
+                resource+(os.pathsep+old_resource if old_resource else "")
+            )
             map_path,geometry=write_court_map(
-                WORLD,LANDMARKS,self.active_dir/"static_map",
-                cfg["planning"]["resolution_m"])
+                scene["world_path"],scene["landmarks_path"],
+                self.active_dir/"static_map",cfg["planning"]["resolution_m"])
             generated=nav2_params(yaml.safe_load(PRODUCTION_NAV2.read_text()),
                                   cfg,map_path,geometry)
             params=self.active_dir/"nav2_planning.yaml"
@@ -160,9 +204,26 @@ class Service:
             cache.mkdir(exist_ok=True)
             for f in cache.glob("*.json"):f.unlink()
             self.stack_log=self.active_dir/"stack.log"
+            camera=calibration["camera"]
+            mobility=calibration["mobility"]["physics"]
+            rates=calibration["odometry"]
+            cw,ch=map(int,camera["color"].split("x"))
+            dw,dh=map(int,camera["depth"].split("x"))
+            launch_values={
+                "world":scene["world_path"],
+                "controller_params":profiles["controller_params"],
+                "ekf_params":profiles["ekf_params"],
+                "color_width":cw,"color_height":ch,"color_fps":camera["color_fps"],
+                "depth_width":dw,"depth_height":dh,"depth_fps":camera["depth_fps"],
+                **mobility,
+                "imu_rate_hz":rates["imu_hz"],
+                "magnetometer_rate_hz":rates["magnetometer_hz"],
+                "ground_truth_rate_hz":rates["ground_truth_hz"],
+            }
             args=["ros2","launch",str(LAUNCH),
                   "nav2_params_file:="+str(params),
                   "path_cache:="+str(cache)]
+            args.extend(f"{key}:={value}" for key,value in launch_values.items())
             with self.stack_log.open("w") as log:
                 self.stack=subprocess.Popen(args,env=self.env,cwd=REPO,
                   stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
@@ -175,6 +236,10 @@ class Service:
             if not running(self.stack):raise RuntimeError("Start simulation first")
             if running(self.trial):raise RuntimeError("Planner benchmark already running")
             cfg=self.config()
+            if inputs_fingerprint(load_inputs()) != inputs_fingerprint(self.loaded_inputs):
+                raise RuntimeError(
+                    "Another lab's saved calibration changed since Nav2 launch. "
+                    "Restart this lab to apply it before benchmarking.")
             if (cfg["planning"]["depth_obstacles"]!=self.loaded_config["planning"]["depth_obstacles"]
                 or cfg["planning"]["resolution_m"]!=self.loaded_config["planning"]["resolution_m"]):
                 raise RuntimeError("Costmap settings changed. Restart simulation to apply them.")
@@ -185,6 +250,8 @@ class Service:
             (self.run_dir/"config_snapshot.yaml").write_text(yaml.safe_dump(cfg,sort_keys=False))
             shutil.copyfile(self.active_dir/"nav2_planning.yaml",
                             self.run_dir/"nav2_params_snapshot.yaml")
+            shutil.copyfile(self.active_dir/"calibration_snapshot.yaml",
+                            self.run_dir/"calibration_snapshot.yaml")
             self.run_log=self.run_dir/"trial.log"
             pid=self.planner_pid()
             cmd=[sys.executable,str(HERE/"runner.py"),
@@ -271,6 +338,7 @@ class Service:
                 self.obstacles=None
             interrupt(self.stack)
             self.loaded_config=None
+            self.loaded_inputs=None
             return self.status()
 
     def status(self):
@@ -293,6 +361,8 @@ class Service:
                 "stack_log":log_tail(self.stack_log),
                 "trial_log":log_tail(self.run_log),
                 "domain":self.config()["simulation"]["ros_domain_id"],
+                "calibration":saved_summary(self.loaded_inputs)
+                    if self.loaded_inputs is not None else None,
                 "loaded_depth":self.loaded_config["planning"]["depth_obstacles"]
                     if running(self.stack) and self.loaded_config else None,
             }
@@ -323,6 +393,8 @@ class Handler(BaseHTTPRequestHandler):
         path=urlparse(self.path).path
         try:
             if path=="/api/config":return self.json_reply(self.service.config())
+            if path=="/api/calibration":return self.json_reply(
+                self.service.calibration_status())
             if path=="/api/status":return self.json_reply(self.service.status())
             if path=="/api/history":return self.json_reply(self.service.history())
             filename={"/":"index.html","/index.html":"index.html",
