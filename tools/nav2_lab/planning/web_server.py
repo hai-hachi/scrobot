@@ -18,11 +18,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import yaml
-from core import PLANNERS, nav2_params, validate
-from map_builder import write_court_map
-from obstacles import Obstacles
-from scene import load_scene, save_scene, validate_scene, SCENE_PATH
-from calibration import (load_inputs, build_world, generate_rate_profiles,
+from planning.core import PLANNERS, nav2_params, validate
+from planning.map_builder import write_court_map
+from planning.obstacles import Obstacles
+from planning.scene import load_scene, save_scene, validate_scene, SCENE_PATH
+from planning.calibration import (load_inputs, build_world, generate_rate_profiles,
                          inputs_fingerprint, saved_summary)
 
 try: import psutil
