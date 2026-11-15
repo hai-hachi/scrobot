@@ -21,6 +21,7 @@ import yaml
 from core import PLANNERS, nav2_params, validate
 from map_builder import write_court_map
 from obstacles import Obstacles
+from scene import load_scene, save_scene, validate_scene, SCENE_PATH
 from calibration import (load_inputs, build_world, generate_rate_profiles,
                          inputs_fingerprint, saved_summary)
 
@@ -107,6 +108,45 @@ class Service:
         self.run_log=None
         self.loaded_config=None
         self.loaded_inputs=None
+        previous=self.config()["planning"]["start"]
+        self.scene=load_scene(default={"robot":previous,"obstacles":[]})
+        self.active_robot=None
+
+    def scene_status(self):
+        return {"scene":deepcopy(self.scene),
+                "path":str(SCENE_PATH),
+                "saved":SCENE_PATH.exists(),
+                "restart_required":(
+                    running(self.stack) and
+                    self.active_robot is not None and
+                    self.scene["robot"]!=self.active_robot)}
+
+    def save_scene(self,body):
+        with self.lock:
+            proposal=deepcopy(self.scene)
+            if "robot" in body:
+                proposal["robot"]=body["robot"]
+            self.scene=save_scene(validate_scene(proposal))
+            return self.scene_status()
+
+    def load_scene(self):
+        with self.lock:
+            if running(self.stack):
+                raise RuntimeError("Stop simulation before loading saved scene; live Gazebo entities would differ.")
+            self.scene=load_scene(default=self.scene)
+            return self.scene_status()
+
+    def place_robot(self,body):
+        with self.lock:
+            proposed=deepcopy(self.scene)
+            proposed["robot"]=body.get("robot")
+            proposed=validate_scene(proposed)
+            self.scene=proposed
+            if running(self.stack):
+                # Reinitialize odometry, TF and costmaps consistently.
+                self.stop()
+                return self.stack_start()
+            return self.scene_status()
 
     def config(self):
         # Nav2 owns an independently saved YAML under tools/configs/labs/.
@@ -173,6 +213,8 @@ class Service:
             if running(self.stack):raise RuntimeError("Lab simulation is already running")
             if running(self.trial):raise RuntimeError("Stop planner trial before restarting")
             cfg=self.config()
+            loaded_scene=validate_scene(self.scene)
+            cfg["planning"]["start"]=deepcopy(loaded_scene["robot"])
             calibration=load_inputs()
             self.env=self.env_for(cfg)
             preflight(self.env)
@@ -182,7 +224,8 @@ class Service:
             self.active_dir.mkdir(parents=True,exist_ok=True)
             # Build world + ROS overrides from validated saved owner YAMLs.
             # These are frozen for the entire Gazebo session.
-            scene=build_world(calibration,self.active_dir)
+            scene=build_world(calibration,self.active_dir,loaded_scene)
+            self.active_robot=deepcopy(loaded_scene["robot"])
             profiles=generate_rate_profiles(calibration,self.active_dir)
             self.loaded_config=deepcopy(cfg)
             self.loaded_inputs=calibration
@@ -212,7 +255,11 @@ class Service:
             rates=calibration["odometry"]
             cw,ch=map(int,camera["color"].split("x"))
             dw,dh=map(int,camera["depth"].split("x"))
+            robot=loaded_scene["robot"]
             launch_values={
+                "robot_x":robot["x"], "robot_y":robot["y"],
+                "robot_yaw_rad":__import__("math").radians(robot["yaw_deg"]),
+                "map_status_file":str(self.active_dir/"map_status.json"),
                 "world":scene["world_path"],
                 "controller_params":profiles["controller_params"],
                 "ekf_params":profiles["ekf_params"],
@@ -231,7 +278,8 @@ class Service:
             with self.stack_log.open("w") as log:
                 self.stack=subprocess.Popen(args,env=self.env,cwd=REPO,
                   stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
-            self.obstacles=Obstacles(self.active_dir/"fixtures",self.env)
+            self.obstacles=Obstacles(self.active_dir/"fixtures",self.env,
+                                     initial_specs=loaded_scene["obstacles"])
             self.run_dir=None
             return self.status()
 
@@ -240,6 +288,9 @@ class Service:
             if not running(self.stack):raise RuntimeError("Start simulation first")
             if running(self.trial):raise RuntimeError("Planner benchmark already running")
             cfg=self.config()
+            if self.scene["robot"] != self.active_robot:
+                raise RuntimeError("Robot pose changed: restart simulation before planning.")
+            cfg["planning"]["start"]=deepcopy(self.active_robot)
             if inputs_fingerprint(load_inputs()) != inputs_fingerprint(self.loaded_inputs):
                 raise RuntimeError(
                     "Another lab's saved calibration changed since Nav2 launch. "
@@ -256,6 +307,8 @@ class Service:
                             self.run_dir/"nav2_params_snapshot.yaml")
             shutil.copyfile(self.active_dir/"calibration_snapshot.yaml",
                             self.run_dir/"calibration_snapshot.yaml")
+            (self.run_dir/"scene_snapshot.yaml").write_text(
+                yaml.safe_dump(validate_scene(self.scene),sort_keys=False))
             self.run_log=self.run_dir/"trial.log"
             pid=self.planner_pid()
             cmd=[sys.executable,str(HERE/"runner.py"),
@@ -288,28 +341,41 @@ class Service:
 
     def add_obstacle(self,body):
         with self.lock:
-            if not running(self.stack) or self.obstacles is None:
-                raise RuntimeError("Start simulation before adding obstacles")
             if running(self.trial):
-                raise RuntimeError("Do not change obstacles during a planner benchmark")
-            return self.obstacles.spawn(body.get("kind"),body.get("x"),body.get("y"),
-                                        body.get("moving",False))
+                raise RuntimeError("Do not change obstacles during a benchmark")
+            spec=body.get("obstacle")
+            candidate=deepcopy(self.scene)
+            candidate["obstacles"].append(spec)
+            candidate=validate_scene(candidate)
+            selected=candidate["obstacles"][-1]
+            if running(self.stack):
+                if not self.obstacles:
+                    raise RuntimeError("Obstacle manager unavailable")
+                self.obstacles.spawn(selected)
+            self.scene=candidate
+            return self.scene_status()
 
     def remove_obstacle(self,body):
         with self.lock:
-            if not self.obstacles or not running(self.stack):
-                raise RuntimeError("No simulation running")
             if running(self.trial):
-                raise RuntimeError("Finish benchmark before modifying obstacles")
-            return self.obstacles.delete(body.get("name"))
+                raise RuntimeError("Finish benchmark before changing obstacles")
+            index=body.get("index")
+            if type(index) is not int or not 0<=index<len(self.scene["obstacles"]):
+                raise ValueError("Select a valid obstacle index")
+            if running(self.stack):
+                name=self.obstacles.list()[index]["name"]
+                self.obstacles.delete(name)
+            self.scene["obstacles"].pop(index)
+            return self.scene_status()
 
     def clear_obstacles(self):
         with self.lock:
-            if not self.obstacles or not running(self.stack):
-                raise RuntimeError("No simulation running")
             if running(self.trial):
-                raise RuntimeError("Finish benchmark before modifying obstacles")
-            return self.obstacles.clear()
+                raise RuntimeError("Finish benchmark before changing obstacles")
+            if running(self.stack) and self.obstacles:
+                self.obstacles.clear()
+            self.scene["obstacles"]=[]
+            return self.scene_status()
 
     def open_gui(self):
         with self.lock:
@@ -360,6 +426,7 @@ class Service:
             interrupt(self.stack)
             self.loaded_config=None
             self.loaded_inputs=None
+            self.active_robot=None
             return self.status()
 
     def status(self):
@@ -381,6 +448,15 @@ class Service:
                 "run_name":self.run_dir.name if self.run_dir else None,
                 "summary":summary,"results":outputs,
                 "obstacles":self.obstacles.list() if self.obstacles else [],
+                "scene":deepcopy(self.scene),
+                "scene_yaml":str(SCENE_PATH),
+                "scene_saved":SCENE_PATH.exists(),
+                "active_robot":deepcopy(self.active_robot),
+                "scene_restart_required":(
+                    running(self.stack) and self.active_robot is not None and
+                    self.active_robot!=self.scene["robot"]),
+                "map_status":status_file(self.active_dir/"map_status.json")
+                    if running(self.stack) and self.active_dir else None,
                 "moving_obstacle_error":self.obstacles.last_move_error if self.obstacles else "",
                 "stack_log":log_tail(self.stack_log),
                 "trial_log":log_tail(self.run_log),
@@ -417,6 +493,7 @@ class Handler(BaseHTTPRequestHandler):
         path=urlparse(self.path).path
         try:
             if path=="/api/config":return self.json_reply(self.service.config())
+            if path=="/api/scene":return self.json_reply(self.service.scene_status())
             if path=="/api/calibration":return self.json_reply(
                 self.service.calibration_status())
             if path=="/api/status":return self.json_reply(self.service.status())
@@ -439,6 +516,9 @@ class Handler(BaseHTTPRequestHandler):
         path=urlparse(self.path).path
         mapping={
             "/api/save":lambda x:{"config":self.service.save(x)},
+            "/api/scene/save":lambda x:self.service.save_scene(x),
+            "/api/scene/load":lambda x:self.service.load_scene(),
+            "/api/scene/place-robot":lambda x:self.service.place_robot(x),
             "/api/start":lambda x:self.service.stack_start(),
             "/api/stop":lambda x:self.service.stop(),
             "/api/plan":lambda x:self.service.trial_start(),
@@ -447,9 +527,9 @@ class Handler(BaseHTTPRequestHandler):
             "/api/gazebo-gui/close":lambda x:self.service.close_gui(),
             "/api/rviz/open":lambda x:self.service.open_rviz(),
             "/api/rviz/close":lambda x:self.service.close_rviz(),
-            "/api/obstacles/add":lambda x:{"obstacles":self.service.add_obstacle(x)},
-            "/api/obstacles/remove":lambda x:{"obstacles":self.service.remove_obstacle(x)},
-            "/api/obstacles/clear":lambda x:{"obstacles":self.service.clear_obstacles()},
+            "/api/obstacles/add":lambda x:self.service.add_obstacle(x),
+            "/api/obstacles/remove":lambda x:self.service.remove_obstacle(x),
+            "/api/obstacles/clear":lambda x:self.service.clear_obstacles(),
         }
         if path not in mapping:return self.json_reply({"error":"Not found"},404)
         origin=self.headers.get("Origin","")
