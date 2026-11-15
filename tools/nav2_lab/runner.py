@@ -124,10 +124,14 @@ class Nav2Trial(Node):
             raise RuntimeError(f'{label}: goal rejected')
         return handle
 
-    def await_result(self, handle, timeout_s, label):
+    def await_result(self, handle, timeout_s, label, sim_time=False):
         result_future = handle.get_result_async()
-        deadline = time.monotonic() + timeout_s
-        while not STOP and time.monotonic() < deadline:
+        # Physical trajectory deadlines must follow /clock when Gazebo RTF
+        # changes. Planner service/readiness watchdogs remain wall time.
+        now = (lambda: self.get_clock().now().nanoseconds * 1e-9
+               if sim_time else time.monotonic())
+        deadline = now() + timeout_s
+        while not STOP and now() < deadline:
             if result_future.done():
                 response = result_future.result()
                 if response.status != GoalStatus.STATUS_SUCCEEDED:
@@ -188,13 +192,15 @@ class Nav2Trial(Node):
         self.initial_odom = self.latest_odom
         self.initial_truth = self.latest_truth
         self.started = time.monotonic()
+        self.started_sim = self.get_clock().now().nanoseconds * 1e-9
         if self.latest_odom:
             self.odom.append(self.latest_odom)
             self.last_sample_time = self.latest_odom[0]
         try:
             self.await_result(handle, self.config['experiment']['timeout_s'],
-                              'controller')
-            return time.monotonic() - self.started
+                              'controller', sim_time=True)
+            self.tracking_wall_s = time.monotonic() - self.started
+            return self.get_clock().now().nanoseconds * 1e-9 - self.started_sim
         finally:
             self.tracking = False
 
@@ -230,6 +236,8 @@ def run(config, run_dir):
             {'frame_id': planned.header.frame_id, 'points': points}, indent=2))
         if config['mode'] == 'track':
             summary['tracking_duration_s'] = trial.follow_path(planned)
+            summary['tracking_duration_time_basis'] = 'ros_sim'
+            summary['tracking_wall_s'] = trial.tracking_wall_s
             tracked = [(x, y) for t, x, y, yaw in trial.odom]
             summary.update(tracking_metrics(points, tracked))
             aligned_truth = align_ground_truth(trial.truth, trial.initial_odom,
