@@ -375,8 +375,10 @@ function renderRates(rateData){
     const record=rateData?.[topic];
     const tr=document.createElement('tr');
     const values=[topic,
-      record?.latched?(record.received?'Latched':'—'):
-        (record?.hz==null?'—':fmt(record.hz,1)),
+      record?.latched?(record.received?'Event':'—'):
+        (record?.wall_hz==null?'—':fmt(record.wall_hz,1)),
+      record?.latched?(record.received?'Event':'—'):
+        (record?.sim_hz==null?'—':fmt(record.sim_hz,1)),
       record?.age_s==null?'No data':fmt(record.age_s,1)+' s ago',
       meaning];
     values.forEach((v,i)=>{
@@ -437,9 +439,9 @@ function renderProcessResources(resources,health,inputs){
   }
   const hints=[];
   if(typeof rtf==='number'&&rtf<.85){
-    hints.push('Gazebo is running at '+fmt(rtf,2)+'× real time. At this speed, '+
-      configuredFps+' simulated FPS corresponds to about '+fmt(effective||0,1)+
-      ' wall-clock FPS. Check Gazebo server CPU and GPU/rendering load.');
+    hints.push('At measured RTF '+fmt(rtf,2)+'×, '+
+      configuredFps+' simulated FPS corresponds to ~'+fmt(effective||0,1)+
+      ' wall FPS. This is expected when the lab RTF cap is intentionally below 1.0; do not infer overload from RTF alone.');
   }
   if(typeof cloud==='number'&&effective!==null&&effective>1&&cloud<effective*.78){
     hints.push('Depth cloud arrives at '+fmt(cloud,1)+
