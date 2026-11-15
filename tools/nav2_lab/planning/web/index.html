@@ -27,14 +27,14 @@
 
  <section class="panel" id="scene-panel">
    <div class="between"><h2>1 · Scene setup</h2><span>Shared court pose picker, inspired by AprilTags Lab</span></div>
-   <p class="muted">For robot and goal: click to place, then drag toward the desired heading (same gesture as YOLO Lab). For moving cylinders, click A then B; repeat A then B to add another.</p>
+   <p class="muted">For robot and goal: click to place, then drag toward the desired heading (same gesture as YOLO Lab). For moving cylinders, click A then B to preview the route, then press Add cylinder. Repeat clicks to edit the same pending A/B pair.</p>
    <div class="grid scene-layout">
     <div>
       <div class="field"><label for="court-pick">Click-to-place mode</label><select id="court-pick">
         <option value="robot">Robot starting pose</option>
         <option value="goal">Planner goal</option>
         <option value="box">Cube center</option>
-        <option value="human">Walking cylinder: A → B → A → B…</option>
+        <option value="human">Moving cylinder: pick A / B</option>
 
       </select></div>
       <svg id="courtMap" viewBox="0 0 760 430" role="img" tabindex="0"
@@ -77,8 +77,8 @@
    </div>
    <div class="grid">
      <div class="scene-subsection">
-       <h3>Walking obstacle · fixed human dimensions</h3>
-       <p class="fineprint">A simple cylinder (1.74 m tall, 0.48 m diameter) moves between A and B. Select Walking cylinder and click A, then B; the next two clicks define another route. Speed uses the slider.</p>
+       <h3>Moving cylinder · fixed human-sized dimensions</h3>
+       <p class="fineprint">A simple cylinder (1.74 m tall, 0.48 m diameter) moves between A and B. Select Moving cylinder and click A then B. Clicking again updates A then B of the pending route. Press Add cylinder to create an object; clicks alone never spawn one.</p>
        <div class="quad">
          <label>Point A · X (m)<input id="human-ax" type="number" value="-1.5" step=".1"></label>
          <label>Point A · Y (m)<input id="human-ay" type="number" value="-0.7" step=".1"></label>
@@ -87,7 +87,7 @@
        </div>
        <div class="field"><label for="human-speed">Walking speed <b id="human-speed-value">0.60 m/s</b></label>
        <input type="range" id="human-speed" min=".1" max="2" step=".05" value=".6"></div>
-       <button class="btn secondary" id="add-human">Add cylinder from entered A/B</button>
+       <button class="btn secondary" id="add-human">Add cylinder</button>
        <p class="fineprint">Walking speed follows Gazebo simulation time from <code>/clock</code>. Pausing Gazebo also pauses the route.</p>
      </div>
      <div class="scene-subsection">
@@ -98,7 +98,7 @@
          <button class="btn primary" id="scene-save">Save Scene YAML</button>
          <button class="btn outline" id="scene-load">Load Saved Scene</button>
        </div>
-       <p class="fineprint">Scene YAML: <code>tools/configs/labs/nav2_scene.yaml</code>. Saves robot pose, cube dimensions and human route/speed. Saved scene objects spawn on the next start.</p>
+       <p class="fineprint">Scene YAML: <code>tools/configs/labs/nav2_scene.yaml</code>. Saves robot pose, cube dimensions and cylinder route/speed. Saved scene objects spawn on the next start.</p>
        <p class="warning fineprint" id="scene-warning"></p>
      </div>
    </div>
@@ -117,6 +117,17 @@
         <option value="ThetaStar">Theta*</option>
        </select></div>
      <div class="field"><label for="timeout">Planning timeout (s)</label><input id="timeout" type="number" step="1" min="3" max="120"></div>
+     <div class="field"><label for="planning-mode">Planning mode</label>
+       <select id="planning-mode">
+         <option value="single">Single comparison</option>
+         <option value="live">Live replan — all four planners</option>
+       </select>
+     </div>
+     <div class="field" id="live-interval-row" hidden>
+       <label for="live-interval">Live refresh interval (seconds)</label>
+       <input id="live-interval" type="number" min="0.5" max="10.0" step="0.5" value="2.0">
+       <p class="fineprint">All four Nav2 planners replan sequentially from the stationary robot pose. The costmap can change between calls. No motion commands are sent.</p>
+     </div>
     </div>
     <div>
      <div class="switchline"><label for="depth-enabled">Use RealSense depth obstacle layer</label><input id="depth-enabled" type="checkbox"></div>
@@ -174,6 +185,7 @@
  <section class="panel" id="benchmarks">
    <div class="between"><h2>4 · Planner benchmarks</h2><span id="run-name">No experiment</span></div>
    <p class="fineprint" id="result-note">Compare CPU/RAM, plan length, clearance and planning time. The robot does not drive during this experiment.</p>
+   <p class="fineprint" id="live-state">Single planning is ready. Choose Live replan to refresh all four planner paths as moving objects cross the depth camera view.</p>
    <div class="table-wrap"><table>
      <thead><tr><th>Planner</th><th>Status</th><th>Nav2 (ms)</th><th>Roundtrip (ms)</th>
      <th>Path (m)</th><th>Clearance (m)</th><th>CPU (ms)</th><th>RSS (MB)</th><th>Δ RSS (MB)</th></tr></thead>
