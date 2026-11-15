@@ -14,6 +14,8 @@ import time
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
+from rclpy.time import Time
+from rclpy.duration import Duration
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from nav_msgs.msg import OccupancyGrid
 from tf2_ros import Buffer, TransformListener
@@ -62,8 +64,8 @@ class Monitor(Node):
         for target,source in (("map","odom"),("map","base_footprint")):
             key=target+"_to_"+source
             tf[key]=bool(self.buffer.can_transform(
-                target,source,rclpy.time.Time(),
-                timeout=rclpy.duration.Duration(seconds=0)))
+                target,source,Time(),
+                timeout=Duration(seconds=0)))
         status["tf"]=tf
         status["ready"]=bool(
             status["static_map"]["received"] and
