@@ -1,0 +1,15 @@
+# Saved Odometry Lab settings, not main simulation params.
+# Use the separate Publish button to transfer to production.
+schema_version: 1
+lab: odometry
+settings:
+  profile: square
+  linear_m_s: 0.5
+  angular_rad_s: 1.0
+  pre_s: 0.6
+  use_magnetometer: true
+  wheel_odom_hz: 100.0
+  imu_hz: 100.0
+  magnetometer_hz: 100.0
+  ground_truth_hz: 100.0
+  ekf_hz: 100.0

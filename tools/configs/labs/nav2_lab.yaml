@@ -1,0 +1,38 @@
+# Saved Nav2 Lab settings, not main simulation params.
+# Use the separate Publish button to transfer to production.
+schema_version: 1
+lab: nav2
+settings:
+  planner: NavFn
+  controller: RPP
+  mode: plan
+  goal:
+    x: 3.0
+    y: 0.0
+    yaw_deg: 0.0
+  limits:
+    cruise_speed: 0.47
+    max_wheel_rpm: 100.0
+  experiment:
+    timeout_s: 90.0
+    sample_hz: 20.0
+    run_root: ~/scrobot_ws/evaluation_results/nav2_lab
+  simulation:
+    ros_domain_id: 77
+    start_x: 0.0
+    start_y: 0.0
+    start_yaw: 0.0
+    use_magnetometer: false
+  planning:
+    planner: all
+    depth_obstacles: true
+    resolution_m: 0.05
+    timeout_s: 25
+    start:
+      x: -3
+      y: 0
+      yaw_deg: 0
+    goal:
+      x: 3
+      y: 0
+      yaw_deg: 0

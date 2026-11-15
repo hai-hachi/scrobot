@@ -1,0 +1,21 @@
+# Saved Mobility Lab settings, not main simulation params.
+# Use the separate Publish button to transfer to production.
+schema_version: 1
+lab: mobility
+settings:
+  profile: spin
+  target_rpm: 90.0
+  pre_s: 1.0
+  hold_s: 5.0
+  post_s: 3.0
+  model: first_order
+  tau_left: 0.05
+  tau_right: 0.05
+  gain_left: 1.0
+  gain_right: 1.0
+  drive_contact_mu: 5.0
+  caster_contact_mu: 0.05
+  wheel_joint_damping: 0.0
+  drive_slip1: 0.0
+  drive_slip2: 0.0
+  wheel_collision_width: 0.001

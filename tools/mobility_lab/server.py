@@ -9,6 +9,7 @@ This is localhost only, makes no production URDF edits, and saves data under
 """
 from __future__ import annotations
 
+import sys
 import argparse
 import csv
 from datetime import datetime, timezone
