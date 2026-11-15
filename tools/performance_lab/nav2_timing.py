@@ -52,7 +52,20 @@ def installed_sim_clock_overlay():
         except (ImportError,LookupError,OSError):
             details[pkg]={"installed":False}
     versions={x.get("nav2_version") for x in details.values()}
-    active=all(x["installed"] for x in details.values()) and len(versions)==1
+    active=(all(x["installed"] for x in details.values())
+            and len(versions)==1 and None not in versions)
+    # A stale overlay from an older apt upgrade is not a validated match.
+    if active:
+        import xml.etree.ElementTree as ET
+        for pkg in details:
+            try:
+                apt=Path("/opt/ros/jazzy/share")/pkg/"package.xml"
+                installed=ET.parse(apt).getroot().findtext("version")
+                if installed != details[pkg]["nav2_version"]:
+                    details[pkg]["apt_version"]=installed
+                    active=False
+            except (OSError,ET.ParseError):
+                active=False
     return {"active":active,"packages":details,"clock_domain":
             "ros_when_simulated" if active else "upstream_wall",
             "note":("Both Nav2 timing packages must be rebuilt and their overlay "
