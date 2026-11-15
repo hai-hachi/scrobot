@@ -1,6 +1,6 @@
 """Depth-visible Gazebo scene fixtures: adjustable cubes and two-point humans.
 
-A human is a fixed 0.48m diameter / 1.74m tall solid model whose Gazebo pose
+A plain cylinder is 0.48m diameter / 1.74m tall. Its Gazebo pose
 moves back and forth between A/B. The requested m/s is paced in wall time;
 actual Gazebo simulated-time speed may differ when real-time factor != 1.
 """
@@ -62,13 +62,12 @@ def sdf_fixture(spec,name):
         <collision name="body_collision"><pose>0 0 {HUMAN_HEIGHT/2:.4f} 0 0 0</pose>
           <geometry><cylinder><radius>{HUMAN_RADIUS}</radius>
           <length>{HUMAN_HEIGHT}</length></cylinder></geometry></collision>
-        <visual name="body_visual"><pose>0 0 0.82 0 0 0</pose>
-          <geometry><cylinder><radius>0.20</radius><length>1.34</length>
-          </cylinder></geometry><material><diffuse>0.15 0.39 0.78 1</diffuse>
-          </material></visual>
-        <visual name="head"><pose>0 0 1.58 0 0 0</pose>
-          <geometry><sphere><radius>0.17</radius></sphere></geometry>
-          <material><diffuse>0.85 0.67 0.50 1</diffuse></material></visual>"""
+        <visual name="body_visual"><pose>0 0 {HUMAN_HEIGHT/2:.4f} 0 0 0</pose>
+          <geometry><cylinder><radius>{HUMAN_RADIUS}</radius>
+          <length>{HUMAN_HEIGHT}</length></cylinder></geometry>
+          <material><ambient>0.12 0.28 0.60 1</ambient>
+          <diffuse>0.20 0.45 0.82 1</diffuse></material></visual>
+"""
     return f"""<?xml version="1.0"?>
 <sdf version="1.9">
   <model name="{escape(name)}">
