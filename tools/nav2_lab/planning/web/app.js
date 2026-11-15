@@ -58,7 +58,7 @@ function setButtons(){
   const liveTrial=running&&status?.trial_mode==='live';
   const buttons={
     start:!live,stop:live,plan:live&&!running,cancel:running,save:true,
-    'scene-save':!running,'scene-load':!live,
+    'scene-save':!running||liveTrial,'scene-load':!live,
     'place-robot':!running,
     'gui-open':live&&!status?.gazebo_gui?.running,
     'gui-close':live&&Boolean(status?.gazebo_gui?.running),
@@ -69,6 +69,7 @@ function setButtons(){
   };
   for(const[key,enabled]of Object.entries(buttons))$(key).disabled=busy||!enabled;
   $('planning-mode').disabled=busy||running;
+  $('planner').disabled=busy||running||$('planning-mode').value==='live';
   $('live-interval').disabled=busy||running;
   $('plan').textContent=$('planning-mode').value==='live'?
     'Start live replanning':'Compare planners';
@@ -585,7 +586,9 @@ $('start').onclick=()=>operation(async()=>{
 });
 $('stop').onclick=()=>operation(async()=>{await api('/api/stop',{});notify('Stopping lab simulation.');});
 $('planning-mode').onchange=()=>{
-  $('live-interval-row').hidden=$('planning-mode').value!=='live';
+  const liveMode=$('planning-mode').value==='live';
+  $('live-interval-row').hidden=!liveMode;
+  if(liveMode)$('planner').value='all';
   setButtons();
 };
 $('planning-mode').onchange();
