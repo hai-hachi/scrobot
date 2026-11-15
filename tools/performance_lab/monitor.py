@@ -123,6 +123,7 @@ class TimingObserver(Node):
                 qos,raw=large)
             self._tracked_subscriptions.append(subscription)
         self.dynamic={}
+        self.publisher_graph={}
         self.nav2_lifecycle={
             name:{"state":"unavailable","service":None,"last_seen_wall":None}
             for name in ("planner_server","controller_server","global_costmap")
@@ -194,7 +195,22 @@ class TimingObserver(Node):
             }
 
     def discover_extra_topics(self):
-        """Subscribe to published YOLO detections if their message type exists."""
+        """Subscribe to YOLO and audit publisher multiplicity for core feedback."""
+        # A repeated source stamp could be an extra publisher or a real
+        # controller-manager cadence problem. Capture graph evidence without
+        # presuming either root cause or rewriting the incoming timestamps.
+        for topic in ("/diff_drive_controller/odom","/joint_states"):
+            try:
+                infos=self.get_publishers_info_by_topic(topic)
+                self.publisher_graph[topic]={
+                    "publisher_count":len(infos),
+                    "publishers":[{
+                        "node_name":p.node_name,
+                        "node_namespace":p.node_namespace,
+                    } for p in infos[:8]],
+                }
+            except (RuntimeError,ValueError) as exc:
+                self.publisher_graph[topic]={"error":str(exc)[:180]}
         try:
             from rosidl_runtime_py.utilities import get_message
             for topic,types in self.get_topic_names_and_types():
@@ -241,6 +257,7 @@ class TimingObserver(Node):
                 ),
             },
         }
+        snapshot["publisher_graph"]=dict(self.publisher_graph)
         snapshot["observer_wall_time"]=time.time()
         snapshot["observer_pid"]=__import__("os").getpid()
         self.output.parent.mkdir(parents=True,exist_ok=True)
