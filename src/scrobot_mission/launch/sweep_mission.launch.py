@@ -6,6 +6,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -56,7 +57,7 @@ def generate_launch_description():
             sweep_params,
             {
                 'use_sim_time': use_sim_time,
-                'autostart': autostart,
+                'autostart': ParameterValue(autostart, value_type=bool),
                 'return_to_idle': return_to_idle,
                 'idle_x': idle_x,
                 'idle_y': idle_y,
