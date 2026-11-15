@@ -226,6 +226,7 @@ class TagLabTests(TestCase):
                                    return_value=(Path("/tmp/tags"),{})),
                   mock.patch.object(server,"tag_world",
                                    return_value="/tmp/lab_world.sdf") as builder,
+                  mock.patch.object(server,"cap_world",return_value="/tmp/lab_world.sdf"),
                   mock.patch.object(lab,"launch",
                                    side_effect=lambda n,cmd:jobs.append((n,cmd)))):
                 result=lab.start_tags({
@@ -249,6 +250,7 @@ class TagLabTests(TestCase):
                     return_value=(Path("/tmp/court_apriltags"),{})),\
                  mock.patch.object(server,"tag_world",
                     return_value="/tmp/fake_apriltags_world.sdf"),\
+                 mock.patch.object(server,"cap_world",return_value="/tmp/fake_apriltags_world.sdf"),\
                  mock.patch.object(lab,"launch",
                     side_effect=lambda name,cmd:jobs.append((name,cmd))):
                 result=lab.start_tags({
