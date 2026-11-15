@@ -1,0 +1,32 @@
+name: Performance Lab pure-Python and UI checks
+
+on:
+  push:
+    paths:
+      - 'tools/performance_lab/**'
+      - 'tools/configs/labs/performance_lab.yaml'
+      - 'tools/shared/lab_configs.py'
+      - 'src/scrobot_bringup/launch/sim.launch.py'
+      - '.github/workflows/performance_lab.yml'
+  pull_request:
+    paths:
+      - 'tools/performance_lab/**'
+      - 'tools/configs/labs/performance_lab.yaml'
+      - 'tools/shared/lab_configs.py'
+      - 'src/scrobot_bringup/launch/sim.launch.py'
+      - '.github/workflows/performance_lab.yml'
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pyyaml pytest
+      - name: Compile Performance Lab Python sources
+        run: python -m compileall -q tools/performance_lab src/scrobot_bringup/launch/sim.launch.py
+      - name: Check browser JavaScript syntax
+        run: node --check tools/performance_lab/web/app.js
+      - name: Test clock timebases, full-stack wiring and safe settings
+        run: python -m pytest -q tools/performance_lab/tests
