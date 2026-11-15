@@ -1,0 +1,15 @@
+# Saved Performance Lab experiment preferences only.
+# Runs the full production launch with copied court; does not publish simulation files.
+schema_version: 1
+lab: performance
+settings:
+  mode: synchronized
+  profile: full_idle
+  max_rtf: 1.0
+  duration_s: 60
+  warmup_s: 15
+  ros_domain_id: 85
+  shuttle_count: 50
+  shuttle_seed: 20261003
+  yolo_device: '0'
+  model_path: ''
