@@ -286,6 +286,26 @@ class Runtime:
             self.thread_sampler.reset()
             return {"stopped":True}
 
+    def observer_restart(self):
+        """Repair clock monitoring without resetting the real Gazebo world."""
+        with self.lock:
+            if not running(self.stack):
+                raise RuntimeError("Start the full simulation first")
+            if self.bench is not None:
+                raise RuntimeError("Finish or cancel the benchmark before restarting the observer")
+            kill_group(self.observer)
+            self.observer=None
+            self.monitor_file.unlink(missing_ok=True)
+            with self.observer_log.open("wb") as log:
+                self.observer=subprocess.Popen(
+                    [sys.executable,str(HERE/"monitor.py"),
+                     "--output",str(self.monitor_file),
+                     "--mode",(self.run_settings or self.settings)["mode"]],
+                    env=self.env,cwd=ROOT,stdout=log,
+                    stderr=subprocess.STDOUT,start_new_session=True)
+            return {"restarted":True,"observer_pid":self.observer.pid,
+                    "note":"Metrics will appear once /clock and topic samples arrive"}
+
     def gui_open(self):
         with self.lock:
             if not running(self.stack):raise RuntimeError("Start simulation first")
@@ -352,12 +372,17 @@ class Runtime:
                 },
                 "calibration":self.inputs,
                 "warnings":(
-                    ["No YOLO model configured: set model_path or "
-                     "SCROBOT_YOLO_MODEL to run complete perception."]
-                    if running(self.stack) and not (
-                        (self.run_settings or {}).get("model_path") or
-                        self.env.get("SCROBOT_YOLO_MODEL"))
-                    else []
+                    (["Clock observer stopped unexpectedly (exit " +
+                      str(self.observer.poll() if self.observer else "not launched") +
+                      "). See ROS clock observer log and use Restart observer."]
+                     if running(self.stack) and not running(self.observer)
+                     else [])
+                    + (["No YOLO model configured: set model_path or "
+                        "SCROBOT_YOLO_MODEL to run complete perception."]
+                       if running(self.stack) and not (
+                           (self.run_settings or {}).get("model_path") or
+                           self.env.get("SCROBOT_YOLO_MODEL"))
+                       else [])
                 ),
             }
 
@@ -592,6 +617,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/rviz/close":lambda body:self.lab.rviz_close(),
             "/api/benchmark/start":lambda body:self.lab.benchmark_start(),
             "/api/benchmark/cancel":lambda body:self.lab.benchmark_cancel(),
+            "/api/observer/restart":lambda body:self.lab.observer_restart(),
             "/api/history/delete":self.lab.history_delete,
             "/api/audit/start":lambda body:self.lab.audit_start(),
         }
