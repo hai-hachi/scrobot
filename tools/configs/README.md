@@ -15,6 +15,7 @@ and ROS package-specific `src/*/config/` directories, plus the production
 | yolo_lab.yaml | No automatic production deployment |
 | nav2_lab.yaml | No publication: planner experiments only; imports saved upstream labs |
 | nav2_scene.yaml | Nav2-owned robot pose, cube sizes and moving-human route/speed; no production publication |
+| performance_lab.yaml | Full-stack synchronization profile, RTF cap and benchmark preferences; no production publication |
 
 **Save** changes only the lab's own YAML. **Publish** transfers saved and
 validated parameters to their production destination. The main simulation
