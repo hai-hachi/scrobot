@@ -30,7 +30,7 @@
     <section id="setup" class="pane active">
       <div class="metrics">
         <div class="metric"><small>ROBOT MODEL</small><strong>SCROBOT</strong><span>Existing Gazebo model</span></div>
-        <div class="metric"><small>DEPTH CAMERA</small><strong>848 × 480</strong><span>15 Hz · ~90.5° horizontal FOV</span></div>
+        <div class="metric"><small>DEPTH CAMERA</small><strong id="depth-mode">Loading…</strong><span id="depth-rate">Saved Camera Lab YAML · ~90.5° HFOV</span></div>
         <div class="metric"><small>PATH REQUESTS</small><strong>4 planners</strong><span>Dijkstra / A* / Smac 2D / Theta*</span></div>
         <div class="metric"><small>ROS DOMAIN</small><strong id="domain">77</strong><span>Isolated from main mission</span></div>
       </div>
@@ -69,19 +69,25 @@
           </select></div>
           <div class="block">
             <strong>Static map</strong>
-            <p>Generated from the existing badminton_court.sdf and court_landmarks.yaml. Only net poles and AprilTag mount plates are occupied; the net and court lines are not.</p>
+            <p>Generated from the existing badminton_court.sdf plus the saved Lighting and AprilTags lab geometry. Only net poles and AprilTag mount plates are occupied; the net and court lines are not.</p>
           </div>
           <div class="block">
             <strong>Depth observations</strong>
-            <p>Simulated RealSense → point cloud → filtered depth scan → Nav2 obstacle layer. Boxes and walking people are not inserted directly into the static map.</p>
+            <p>Saved Camera Lab RGB/depth modes → simulated RealSense → depth scan → Nav2 obstacle layer. Boxes and walking people are not inserted directly into the static map.</p>
           </div>
           <div class="block muted">
             <strong>Comparison rule</strong>
             <p>Keep obstacles stationary when comparing all planners. A moving person can change the observed costmap between sequential requests.</p>
           </div>
-          <p class="fineprint">Changing map resolution or depth-layer setting requires restarting the lab simulation. This lab deliberately spawns the robot at world (0,0,0), so the court map aligns with odom.</p>
+          <p class="fineprint">Changing map resolution, depth-layer setting or any upstream lab calibration requires restarting the lab simulation. The robot spawns at world (0,0,0), so the court map aligns with odom.</p>
         </article>
       </div>
+      <article class="panel">
+        <div class="between"><h2>Saved calibration inputs</h2><span>Read-only upstream lab settings</span></div>
+        <p class="muted">Nav2 reads the saved Lighting, Camera, AprilTags, Mobility and Odometry YAMLs directly. It does not overwrite them or publish to the main simulation. Restart this lab after an upstream Save.</p>
+        <div id="calibration-list" class="calibration-list"><p class="muted">Reading saved lab YAMLs…</p></div>
+        <p id="calibration-warning" class="fineprint warning"></p>
+      </article>
       <article class="panel">
         <div class="between"><h2>Visualization</h2><span>RViz2 — no duplicate browser map</span></div>
         <div class="legend">
