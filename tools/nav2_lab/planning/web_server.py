@@ -133,6 +133,8 @@ class Service:
         with self.lock:
             if running(self.stack):
                 raise RuntimeError("Stop simulation before loading saved scene; live Gazebo entities would differ.")
+            if not SCENE_PATH.exists():
+                raise FileNotFoundError("No saved Nav2 scene YAML yet. Click Save Scene YAML first.")
             self.scene=load_scene(default=self.scene)
             return self.scene_status()
 
@@ -223,6 +225,7 @@ class Service:
             root.mkdir(parents=True,exist_ok=True)
             self.active_dir=root/"_planning_active"
             self.active_dir.mkdir(parents=True,exist_ok=True)
+            (self.active_dir/"map_status.json").unlink(missing_ok=True)
             # Build world + ROS overrides from validated saved owner YAMLs.
             # These are frozen for the entire Gazebo session.
             scene=build_world(calibration,self.active_dir,loaded_scene)
@@ -425,6 +428,15 @@ class Service:
                     except Exception:pass
                 self.obstacles=None
             interrupt(self.stack)
+            if running(self.stack):
+                try:
+                    self.stack.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    interrupt(self.stack,signal.SIGTERM)
+                    try:self.stack.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        interrupt(self.stack,signal.SIGKILL)
+                        self.stack.wait(timeout=3)
             self.loaded_config=None
             self.loaded_inputs=None
             self.active_robot=None
