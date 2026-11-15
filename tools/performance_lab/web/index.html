@@ -199,7 +199,7 @@
             <strong id="nav2-controller-target">25 sim Hz</strong></div>
           <div>Wall Hz needed for 25 sim Hz
             <strong id="nav2-target-wall-hz">—</strong></div>
-          <div>Sim Hz if WallRate achieved 25 wall Hz
+          <div>Scheduler status / unpatched sim Hz
             <strong id="nav2-wallrate-sim-hz">—</strong></div>
         </div>
         <div class="sync-heading">
@@ -211,11 +211,13 @@
             <strong id="nav2-current-reported-hz">—</strong></div>
         </div>
         <p class="fineprint" id="nav2-timing-note">
-          Upstream Nav2 Jazzy uses rclcpp::WallRate in ControllerServer.
-          The warning counts missed WALL-clock scheduler deadlines, not
-          simulated-time controller deadline misses. /cmd_vel_nav is an
-          output proxy during navigation, not an iteration trace. This
-          diagnostic never changes controller_frequency or patches Nav2.</p>
+          SCROBOT requires a version-matched ROS-clock overlay for the Jazzy
+          controller server and velocity smoother in synchronized mode.
+          Install with python3 tools/performance_lab/prepare_nav2_sim_clock.py
+          --build, then source install/setup.bash and restart the lab.
+          /cmd_vel_nav is an output proxy, not an internal loop trace.
+          The configured 25 Hz targets and physical acceleration limits
+          remain unchanged.</p>
       </section>
       <section class="panel">
         <div class="panel-heading"><h2>ROS node clock audit</h2>
@@ -234,7 +236,8 @@
           simulated depth camera normally produces about 15 messages/second
           in wall time. A 100-Hz simulated ROS timer normally fires about
           50 times per wall second. We flag unexpectedly low/high simulated-time
-          cadence separately from a valid wall-clock slowdown.</p>
+          cadence and excessive timestamp jitter separately from a valid
+          wall-clock slowdown.</p>
         <p class="fineprint"><strong>Nav2 controller warning:</strong>
           A log line saying the 25 Hz controller missed its rate while showing
           a higher "current loop rate" is possible. The reported figure is
