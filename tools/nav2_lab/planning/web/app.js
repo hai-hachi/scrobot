@@ -125,7 +125,8 @@ function renderCalibration(data){
     mobility:'Wheel contact '+data.mobility.physics.wheel_collision_width+
       ' m · motor '+data.mobility.motor.model,
     odometry:'Wheel '+data.odometry.wheel_odom_hz+' Hz · IMU '+
-      data.odometry.imu_hz+' Hz · EKF '+data.odometry.ekf_hz+' Hz'
+      data.odometry.imu_hz+' Hz · EKF '+data.odometry.ekf_hz+' Hz · magnetometer '+
+      (data.use_magnetometer?'enabled':'disabled')
   };
   for(const [key,title] of Object.entries(labels)){
     const origin=data.sources[key];
