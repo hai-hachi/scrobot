@@ -1,0 +1,48 @@
+name: Nav2 Jazzy ROS Clock Overlay Build
+
+on:
+  push:
+    branches: [real-comparison]
+    paths:
+      - 'tools/performance_lab/prepare_nav2_sim_clock.py'
+      - 'tools/performance_lab/tests/test_nav2_clock_overlay.py'
+      - '.github/workflows/nav2_sim_clock.yml'
+  workflow_dispatch:
+
+jobs:
+  overlay-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: jazzy
+
+      - name: Install matching Nav2 Jazzy packages and colcon
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ros-jazzy-nav2-controller \
+            ros-jazzy-nav2-velocity-smoother \
+            python3-colcon-common-extensions
+
+      - name: Prepare and build version-matched ROS clock overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/ros/jazzy/setup.bash
+          python3 tools/performance_lab/prepare_nav2_sim_clock.py --build
+
+      - name: Verify overlay precedes apt and has provenance markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          for pkg in nav2_controller nav2_velocity_smoother; do
+            prefix="$(ros2 pkg prefix "$pkg")"
+            echo "$pkg -> $prefix"
+            test "$prefix" != "/opt/ros/jazzy"
+            grep -q SCROBOT_NAV2_ROS_CLOCK_V1 "$prefix/share/$pkg/scrobot_sim_clock_patch.txt"
+          done
