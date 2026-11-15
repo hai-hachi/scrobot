@@ -26,6 +26,7 @@ from core import DEFAULTS, RATE_NAMES, validate
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lab_configs import path_for as lab_yaml_path, read as read_lab_yaml, save as save_lab_yaml
+from shared.lab_ui import GazeboGUI, log_tail as lab_log_tail
 
 HERE=Path(__file__).resolve().parent
 REPO=HERE.parents[1]
@@ -135,6 +136,7 @@ class Lab:
         self.attach=attach
         self.proc=None
         self.log=None
+        self.gui=GazeboGUI(OUT/"gazebo_gui.log",env=os.environ.copy())
         self.restarting=False
         self.error=None
         self.active_rates=None
@@ -144,6 +146,7 @@ class Lab:
             self.active_rates=rates_of(self.settings)
 
     def stop_sim(self):
+        self.gui.close()
         proc=self.proc
         self.proc=None
         if proc is not None and proc.poll() is None:
@@ -246,6 +249,8 @@ class Lab:
                 "settings":dict(self.settings),
                 "rates_changed":self.active_rates!=rates_of(self.settings) or
                      self.bridge.node.settings["use_magnetometer"]!=self.settings["use_magnetometer"],
+                "gazebo_gui":self.gui.status(),
+                "logs":{"gazebo":lab_log_tail(OUT/"gazebo.log"),"gazebo_gui":lab_log_tail(self.gui.log_path)},
                 "gazebo_alive":self.attach or
                     (self.proc is not None and self.proc.poll() is None),
                 "restarting":self.restarting,
@@ -342,6 +347,13 @@ class Handler(BaseHTTPRequestHandler):
             lab=self.server.lab
             if path=="/api/settings":
                 result=lab.change_settings(body)
+            elif path=="/api/gazebo-gui/open":
+                if body != {}:raise ValueError("GUI open expects empty object")
+                if not lab.status()["gazebo_alive"]:raise RuntimeError("Start Gazebo before opening its GUI")
+                result={"message":lab.gui.open()}
+            elif path=="/api/gazebo-gui/close":
+                if body != {}:raise ValueError("GUI close expects empty object")
+                result={"message":lab.gui.close()}
             elif path=="/api/restart":
                 result=lab.restart()
             elif path=="/api/run":
@@ -389,7 +401,7 @@ def main():
     print("ROS_DOMAIN_ID=",os.environ["ROS_DOMAIN_ID"])
     print("Recordings:",OUT)
     if not args.no_browser:
-        webbrowser.open(url)
+        webbrowser.open_new_tab(url)
     try:
         httpd.serve_forever(poll_interval=0.2)
     except KeyboardInterrupt:

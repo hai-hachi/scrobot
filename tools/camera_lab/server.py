@@ -923,9 +923,8 @@ def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8769)
-    parser.add_argument(
-        "--open-browser", action="store_true",
-        help="Optionally open the dashboard in the system browser; off by default")
+    parser.add_argument("--open-browser", action="store_true",
+                        help="Deprecated: browser opens a new tab by default")
     # Retain backwards compatibility with older lab start commands.
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
@@ -938,9 +937,9 @@ def main():
     print("SCROBOT Camera Lab: " + url, flush=True)
     # Avoid browser-side Crashpad / Opera GX warnings on routine lab startup.
     # Browser launch is optional: the HTTP server works independently.
-    if args.open_browser and not args.no_browser:
+    if not args.no_browser:
         try:
-            webbrowser.open(url)
+            webbrowser.open_new_tab(url)
         except Exception as exc:
             print(f"Browser could not open automatically: {exc}\nOpen {url} manually.",
                   file=sys.stderr)

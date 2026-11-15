@@ -33,6 +33,7 @@ from publish import publish_saved_calibration, published_status
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lab_configs import path_for as lab_yaml_path, read as read_lab_yaml, save as save_lab_yaml
+from shared.lab_ui import GazeboGUI, log_tail as lab_log_tail
 
 HERE = Path(__file__).resolve().parent
 OUTPUT = Path.home() / "scrobot_ws/evaluation_results/mobility_lab"
@@ -91,6 +92,7 @@ class Lab:
         self.attach = bool(attach)
         self.proc = None
         self.log = None
+        self.gui = GazeboGUI(OUTPUT / "gazebo_gui.log", env=os.environ.copy())
         self.reference_step = []
         self.reference_stop = []
         self.reference_source = None
@@ -122,6 +124,7 @@ class Lab:
                 self.error = f"Ignoring malformed reference CSV: {exc}"
 
     def stop_sim(self):
+        self.gui.close()
         if self.proc is None:
             return
         p = self.proc
@@ -236,6 +239,9 @@ class Lab:
                 "physics_dirty": self.physics_dirty(),
                 "gazebo_alive": self.attach or (self.proc is not None and self.proc.poll() is None),
                 "gazebo_managed": not self.attach,
+                "gazebo_gui": self.gui.status(),
+                "logs": {"gazebo": lab_log_tail(OUTPUT / "gazebo.log"),
+                         "gazebo_gui": lab_log_tail(self.gui.log_path)},
                 "restarting": self.restarting,
                 "settings": self.settings,
                 "result_settings": settings,
@@ -372,6 +378,16 @@ class Handler(BaseHTTPRequestHandler):
             elif route == "/api/abort":
                 self.lab.bridge.node.abort()
                 result = {"stage": "aborted"}
+            elif route == "/api/gazebo-gui/open":
+                if body != {}:
+                    raise ValueError("GUI open expects empty object")
+                if not self.lab.status()["gazebo_alive"]:
+                    raise RuntimeError("Start Gazebo before opening its GUI")
+                result = {"message": self.lab.gui.open()}
+            elif route == "/api/gazebo-gui/close":
+                if body != {}:
+                    raise ValueError("GUI close expects empty object")
+                result = {"message": self.lab.gui.close()}
             elif route == "/api/restart":
                 self.lab.restart()
                 result = {"started": True}
@@ -425,7 +441,7 @@ def main():
     print(f"ROS_DOMAIN_ID={os.environ['ROS_DOMAIN_ID']}  GZ_PARTITION={os.environ['GZ_PARTITION']}")
     print(f"Recording: {OUTPUT}")
     if not args.no_browser:
-        webbrowser.open(url)
+        webbrowser.open_new_tab(url)
     try:
         httpd.serve_forever(poll_interval=0.2)
     except KeyboardInterrupt:

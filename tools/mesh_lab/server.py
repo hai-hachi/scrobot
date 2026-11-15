@@ -22,6 +22,7 @@ import sys
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from tools.shared.lab_ui import GazeboGUI, log_tail as lab_log_tail
 from tools.mesh_lab.audit import audit
 from tools.mesh_lab.scene import build_world
 from tools.mesh_lab.settings import DEFAULTS, ROOT, read_lighting, read_settings, save_settings, validate
@@ -85,6 +86,7 @@ class Runtime:
         self.workdir = root
         self.proc = None
         self.rviz = None
+        self.gui = GazeboGUI(root / "gazebo_gui.log", env=local_environment())
         self.logs = {}
         self.stats = deque(maxlen=2400)
         self.last_stats_at = None
@@ -151,6 +153,7 @@ class Runtime:
         self.reset_measurements()
 
     def stop(self):
+        self.gui.close()
         for name in ("rviz", "proc"):
             proc = getattr(self, name)
             if proc and proc.poll() is None:
@@ -267,6 +270,8 @@ class Runtime:
             raise ValueError("Gazebo is not running")
         if self.rviz and self.rviz.poll() is None:
             raise ValueError("Close RViz before benchmarking")
+        if self.gui.running:
+            raise ValueError("Close Gazebo GUI before benchmarking")
         duration = self.settings["benchmark_seconds"]
         self.benchmark = {"start": time.monotonic(), "duration": duration,
                           "samples": [], "settings": dict(self.settings),
@@ -317,6 +322,10 @@ class Runtime:
             return {
                 "gazebo_running": self.proc is not None and self.proc.poll() is None,
                 "rviz_running": self.rviz is not None and self.rviz.poll() is None,
+                "gazebo_gui": self.gui.status(),
+                "logs": {"gazebo": lab_log_tail(self.workdir / "gazebo.log"),
+                         "gazebo_gui": lab_log_tail(self.gui.log_path),
+                         "rviz": lab_log_tail(self.workdir / "rviz.log")},
                 "settings": self.settings, "sample": item,
                 "benchmark": {
                     "elapsed": round(time.monotonic()-self.benchmark["start"], 1),
@@ -363,7 +372,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path
         if path not in ("/api/apply", "/api/save", "/api/rviz/open",
-                        "/api/rviz/close", "/api/benchmark"):
+                        "/api/rviz/close", "/api/benchmark",
+                        "/api/gazebo-gui/open", "/api/gazebo-gui/close"):
             self.send_json(404, {"error": "Unknown endpoint"})
             return
         try:
@@ -380,6 +390,16 @@ class Handler(BaseHTTPRequestHandler):
                 elif path == "/api/save":
                     p = save_settings(payload)
                     msg = f"Saved Mesh Lab preferences to {p}; production unchanged"
+                elif path == "/api/gazebo-gui/open":
+                    if payload:
+                        raise ValueError("GUI open expects empty object")
+                    if not self.lab.proc or self.lab.proc.poll() is not None:
+                        raise RuntimeError("Start Gazebo before opening the GUI")
+                    msg = self.lab.gui.open()
+                elif path == "/api/gazebo-gui/close":
+                    if payload:
+                        raise ValueError("GUI close expects empty object")
+                    msg = self.lab.gui.close()
                 elif path == "/api/rviz/open":
                     msg = self.lab.open_rviz()
                 elif path == "/api/rviz/close":
@@ -397,7 +417,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=8770)
+    parser.add_argument("--port", type=int, default=8771)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--attach", action="store_true",
                         help="Dashboard only: connect to an existing Gazebo world")
@@ -416,7 +436,7 @@ def main():
         address = f"http://127.0.0.1:{args.port}"
         print("SCROBOT Mesh Lab:", address, flush=True)
         if not args.no_browser:
-            webbrowser.open(address)
+            webbrowser.open_new_tab(address)
         try:
             server.serve_forever(poll_interval=.5)
         except KeyboardInterrupt:

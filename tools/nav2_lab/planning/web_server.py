@@ -31,6 +31,7 @@ HERE=Path(__file__).resolve().parent
 LAB=HERE.parent
 REPO=HERE.parents[2]
 sys.path.insert(0,str(REPO/"tools"))
+from shared.lab_ui import GazeboGUI
 from shared.lab_configs import (path_for as lab_yaml_path, read as read_lab_yaml,
                                 save as save_lab_yaml)
 CONFIG=lab_yaml_path("nav2")
@@ -96,6 +97,7 @@ class Service:
         self.lock=threading.RLock()
         self.stack=None
         self.rviz=None
+        self.gui=None
         self.trial=None
         self.active_dir=None
         self.env=None
@@ -204,6 +206,7 @@ class Service:
             cache.mkdir(exist_ok=True)
             for f in cache.glob("*.json"):f.unlink()
             self.stack_log=self.active_dir/"stack.log"
+            self.gui = GazeboGUI(self.active_dir/"gazebo_gui.log", env=self.env, cwd=REPO)
             camera=calibration["camera"]
             mobility=calibration["mobility"]["physics"]
             rates=calibration["odometry"]
@@ -308,6 +311,21 @@ class Service:
                 raise RuntimeError("Finish benchmark before modifying obstacles")
             return self.obstacles.clear()
 
+    def open_gui(self):
+        with self.lock:
+            if not running(self.stack):
+                raise RuntimeError("Start simulation before opening Gazebo GUI")
+            if self.gui is None:
+                raise RuntimeError("Gazebo GUI helper not initialized")
+            self.gui.open()
+            return self.status()
+
+    def close_gui(self):
+        with self.lock:
+            if self.gui:
+                self.gui.close()
+            return self.status()
+
     def open_rviz(self):
         with self.lock:
             if not running(self.stack):raise RuntimeError("Start simulation first")
@@ -331,6 +349,8 @@ class Service:
                 try:self.trial.wait(timeout=5)
                 except subprocess.TimeoutExpired:interrupt(self.trial,signal.SIGTERM)
             interrupt(self.rviz)
+            if self.gui:
+                self.gui.close()
             if self.obstacles:
                 self.obstacles.shutdown()
                 if running(self.stack):
@@ -353,6 +373,8 @@ class Service:
                 "stack_running":running(self.stack),
                 "stack_exit_code":self.stack.poll() if self.stack else None,
                 "rviz_running":running(self.rviz),
+                "gazebo_gui":self.gui.status() if self.gui else {"running":False},
+                "gui_log":log_tail(self.gui.log_path) if self.gui else "",
                 "trial_running":running(self.trial),
                 "trial_exit_code":self.trial.poll() if self.trial else None,
                 "run_name":self.run_dir.name if self.run_dir else None,
@@ -420,6 +442,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/stop":lambda x:self.service.stop(),
             "/api/plan":lambda x:self.service.trial_start(),
             "/api/cancel":lambda x:self.service.abort_trial(),
+            "/api/gazebo-gui/open":lambda x:self.service.open_gui(),
+            "/api/gazebo-gui/close":lambda x:self.service.close_gui(),
             "/api/rviz/open":lambda x:self.service.open_rviz(),
             "/api/rviz/close":lambda x:self.service.close_rviz(),
             "/api/obstacles/add":lambda x:{"obstacles":self.service.add_obstacle(x)},
@@ -455,7 +479,7 @@ def main():
     Handler.service=Service()
     server=ThreadingHTTPServer(("127.0.0.1",a.port),Handler)
     print(f"SCROBOT Nav2 Path Planning Lab: http://127.0.0.1:{a.port}",flush=True)
-    if not a.no_browser:webbrowser.open(f"http://127.0.0.1:{a.port}")
+    if not a.no_browser:webbrowser.open_new_tab(f"http://127.0.0.1:{a.port}")
     try:server.serve_forever()
     except KeyboardInterrupt:pass
     finally:

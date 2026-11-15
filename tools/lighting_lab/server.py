@@ -40,6 +40,9 @@ from publish import publish_saved_calibration
 from performance import PREVIEW_PROFILES, changed_fields, dirty_material_groups, preview_world_settings
 from light_frames import GEOMETRY_KEYS, create_marker_batch, extent
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from shared.lab_ui import GazeboGUI, log_tail as lab_log_tail
+
 
 SOURCE = Path(__file__).resolve().parents[2] / (
     "src/scrobot_simulation/worlds/badminton_court.sdf"
@@ -720,6 +723,7 @@ class Lab:
         self.spawned = []
         self.spawn_counter = 0
         self.log = workdir / "gazebo_launch.log"
+        self.gui = GazeboGUI(workdir / "gazebo_gui.log", env=os.environ.copy())
         self.loghandle = None
         if launch:
             self._launch_simulation()
@@ -758,6 +762,7 @@ class Lab:
         print(f"Gazebo PID {self.proc.pid}; log {self.log}", flush=True)
 
     def _stop_simulation(self):
+        self.gui.close()
         if self.proc is not None and self.proc.poll() is None:
             try:
                 os.killpg(self.proc.pid, signal.SIGINT)
@@ -955,6 +960,7 @@ class Lab:
         return str(output)
 
     def close(self):
+        self.gui.close()
         self.adapter.stop()
         if self.owns_simulation:
             self._stop_simulation()
@@ -984,6 +990,9 @@ class Handler(BaseHTTPRequestHandler):
             result["gazebo_alive"] = (
                 self.lab.proc.poll() is None if self.lab.proc is not None else None
             )
+            result["gazebo_gui"] = self.lab.gui.status()
+            result["logs"] = {"gazebo": lab_log_tail(self.lab.log),
+                              "gazebo_gui": lab_log_tail(self.lab.gui.log_path)}
             self.reply(200, result)
         elif path.startswith("/frame/"):
             key = path.split("/")[-1]
@@ -1004,7 +1013,8 @@ class Handler(BaseHTTPRequestHandler):
                         "/api/free", "/api/shuttles", "/api/preset",
                         "/api/venue", "/api/orbit", "/api/config",
                         "/api/publish", "/api/preview",
-                        "/api/light_frames", "/api/render_budget"):
+                        "/api/light_frames", "/api/render_budget",
+                        "/api/gazebo-gui/open", "/api/gazebo-gui/close"):
             self.reply(404, {"error": "Unknown action"})
             return
         size = int(self.headers.get("Content-Length", "0"))
@@ -1028,7 +1038,19 @@ class Handler(BaseHTTPRequestHandler):
                         self.reply(200, {"ok": True, "superseded": True,
                                          "message": "Replaced by a newer request"})
                         return
-                if path == "/api/lights":
+                if path == "/api/gazebo-gui/open":
+                    if payload:
+                        raise ValueError("Gazebo GUI open expects empty object")
+                    if self.lab.owns_simulation and (
+                        self.lab.proc is None or self.lab.proc.poll() is not None
+                    ):
+                        raise RuntimeError("Start Gazebo before opening its GUI")
+                    text = self.lab.gui.open()
+                elif path == "/api/gazebo-gui/close":
+                    if payload:
+                        raise ValueError("Gazebo GUI close expects empty object")
+                    text = self.lab.gui.close()
+                elif path == "/api/lights":
                     text = self.lab.adapter.apply_lights(payload)
                 elif path == "/api/materials":
                     text = self.lab.adapter.apply_materials(payload)
@@ -1134,7 +1156,7 @@ def main():
         print("SCROBOT lighting lab:", url, flush=True)
         print("Full Gazebo log:", lab.log, flush=True)
         if not args.no_browser:
-            webbrowser.open(url)
+            webbrowser.open_new_tab(url)
         try:
             server.serve_forever(poll_interval=0.4)
         except KeyboardInterrupt:

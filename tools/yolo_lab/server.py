@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 import time
+import webbrowser
 from urllib.parse import urlsplit, parse_qs
 
 HERE = Path(__file__).resolve().parent
@@ -611,6 +612,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8770)
+    parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
     lab = Lab()
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
@@ -618,6 +620,8 @@ def main():
     print(f"SCROBOT YOLO Lab: http://127.0.0.1:{args.port}", flush=True)
     print("ROS_DOMAIN_ID=83 (isolated); Camera, Scene, Dataset & Labels, Train, Compare Models", flush=True)
     print("Training requires Ultralytics; a checkpoint must be imported explicitly.", flush=True)
+    if not args.no_browser:
+        webbrowser.open_new_tab(f"http://127.0.0.1:{args.port}")
     try:
         httpd.serve_forever(poll_interval=0.2)
     except KeyboardInterrupt:
