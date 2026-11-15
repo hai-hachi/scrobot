@@ -70,7 +70,7 @@ def court_box_markers(geometry):
                          Marker.CUBE,frame="map",color=color)
             solid.pose.position.x=float(item["x"])
             solid.pose.position.y=float(item["y"])
-            solid.pose.position.z=.27  # above the Nav2 occupancy overlay
+            solid.pose.position.z=.09  # fixed plane just above Nav2 occupancy
             angle=float(item["yaw"])
             solid.pose.orientation.z=math.sin(angle/2)
             solid.pose.orientation.w=math.cos(angle/2)
@@ -110,7 +110,7 @@ def scene_markers(geometry,robot,goal,footprint=None):
         # rotate it with robot heading, do not infer from visual meshes.
         perimeter=marker("robot_footprint",0,Marker.LINE_STRIP,
                          color=(1.,.25,.85,1.))
-        perimeter.scale.x=.07
+        perimeter.scale.x=.025
         angle=math.radians(float(robot["yaw_deg"]))
         ca,sa=math.cos(angle),math.sin(angle)
         px,py=float(robot["x"]),float(robot["y"])
