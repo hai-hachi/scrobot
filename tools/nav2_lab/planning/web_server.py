@@ -196,6 +196,7 @@ class Service:
                     for coord in ("x","y","yaw_deg"):
                         if coord in values[section]:
                             cfg["planning"][section][coord]=values[section][coord]
+            cfg["planning"]["start"]=deepcopy(self.scene["robot"])
             validate(cfg)
             if self.config_path == CONFIG:
                 save_lab_yaml("nav2",cfg,validator=validate)
