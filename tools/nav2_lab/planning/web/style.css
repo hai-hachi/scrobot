@@ -96,3 +96,29 @@ body{background:linear-gradient(135deg,#0a1721,#0b1119 68%);font-size:14px;line-
   .lab-logs{margin:0 12px 24px}
   .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Unified scene + planner screen */
+.scene-layout{grid-template-columns:minmax(0,1.2fr) minmax(300px,1fr)}
+#courtMap{display:block;width:100%;max-width:860px;height:auto;border:1px solid #3b685d;background:#0d2028;border-radius:9px;cursor:crosshair;outline-offset:4px}
+#courtMap:focus{outline:2px solid var(--accent)}
+#courtMap text{pointer-events:none;user-select:none}
+.scene-subsection{background:#0f1d2b;border:1px solid var(--line);border-radius:8px;padding:15px;margin-top:13px}
+.quad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.quad label{font-size:11px;color:#c6d7e3}
+.quad input{display:block;margin-top:7px;width:100%;background:#0c1927;color:var(--text);padding:10px;border:1px solid #385267;border-radius:6px;font:inherit}
+.scene-actions,.button-row{display:flex;gap:9px;flex-wrap:wrap;margin:13px 0}
+input[type=range]{accent-color:var(--accent);padding:0;cursor:pointer}
+.field label b{float:right;color:var(--accent)}
+.readiness{grid-template-columns:repeat(3,minmax(0,1fr));margin:12px 0}
+.readiness .metric strong{font-size:17px}
+.obstacle-row{border-bottom:1px solid var(--line);padding:10px 0;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.obstacle-row strong{display:block;font-size:12px}
+.obstacle-row small{display:block;color:var(--muted);font-size:10px;margin-top:5px;line-height:1.5}
+.lab-logs{margin-bottom:25px}
+.lab-logs details{margin:10px 0;border:1px solid var(--line);border-radius:7px;padding:8px}
+.lab-logs summary{font-weight:600;cursor:pointer}
+@media(max-width:1150px){.scene-layout{grid-template-columns:1fr}.readiness{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:710px){.quad{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .readiness{grid-template-columns:1fr}.scene-layout{grid-template-columns:1fr}
+  .actionbar{position:sticky;bottom:0}.content{padding-bottom:35px}
+  #courtMap{max-width:100%}}
