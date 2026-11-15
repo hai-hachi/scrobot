@@ -1,0 +1,17 @@
+# Nav2 Planner Lab only: do not bridge RGB, IMU, magnetometer or
+# collection/ground-truth streams in this stationary planner experiment.
+- ros_topic_name: /clock
+  gz_topic_name: /clock
+  ros_type_name: rosgraph_msgs/msg/Clock
+  gz_type_name: gz.msgs.Clock
+  direction: GZ_TO_ROS
+  qos_profile: CLOCK
+- ros_topic_name: /camera/camera/depth/points
+  gz_topic_name: /camera/depth/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+  qos_profile: SENSOR_DATA
+  publisher_queue: 1
+  lazy: false
+  frame_id: camera_depth_frame
