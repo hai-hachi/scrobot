@@ -131,6 +131,7 @@ def load_inputs():
     if saved_odometry is not None:
         validated = _validate_odometry(saved_odometry)
         result["odometry"] = {k: float(validated[k]) for k in RATE_KEYS}
+        result["use_magnetometer"] = bool(validated["use_magnetometer"])
         provenance["odometry"] = _origin("odometry", odometry_path, "saved_lab_yaml")
     else:
         published = ROOT / "src/scrobot_simulation/config/odometry_calibration.yaml"
@@ -140,6 +141,7 @@ def load_inputs():
         sys.path.insert(0, str(ROOT / "src/scrobot_simulation/launch"))
         from odometry_rate_config import validated_rates
         result["odometry"] = validated_rates(data["rates"])
+        result["use_magnetometer"] = False  # Published rate-only YAML has no enable flag
         provenance["odometry"] = _origin("odometry", published, "published_fallback")
         warnings.append("Odometry Lab has no saved YAML here; using explicitly "
                         "labeled published simulation calibration instead.")
@@ -224,5 +226,6 @@ def saved_summary(loaded):
         },
         "mobility": deepcopy(loaded["mobility"]),
         "odometry": deepcopy(loaded["odometry"]),
+        "use_magnetometer": loaded["use_magnetometer"],
         "note": "YOLO dataset/training settings are not used by depth-only path planning.",
     }
