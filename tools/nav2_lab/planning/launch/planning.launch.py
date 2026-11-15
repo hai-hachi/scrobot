@@ -23,7 +23,7 @@ def generate_launch_description():
     # All these inputs are pinned from owning saved-lab YAMLs by the Nav2 Lab
     # service, not copied from published production camera/lighting defaults.
     args = [
-        "world", "controller_params", "ekf_params",
+        "world", "controller_params", "ekf_params", "use_magnetometer",
         "color_width", "color_height", "color_fps",
         "depth_width", "depth_height", "depth_fps",
         "wheel_joint_damping", "wheel_collision_width",
@@ -34,14 +34,14 @@ def generate_launch_description():
 
     simulation = include("scrobot_simulation", "simulation.launch.py", {
         "use_sim_time": "true", "x": "0", "y": "0", "yaw": "0",
-        "enable_magnetometer": "false",
+        "enable_magnetometer": v["use_magnetometer"],
         "enable_depth_camera": "true",
         **{key: v[key] for key in args if key != "ekf_params"},
     })
     control = include("scrobot_control", "control_stack.launch.py",
                       {"use_sim_time": "true"})
     localization = include("scrobot_localization", "localization.launch.py", {
-        "use_sim_time": "true", "use_magnetometer": "false",
+        "use_sim_time": "true", "use_magnetometer": v["use_magnetometer"],
         "ekf_params": v["ekf_params"],
     })
     depth_scan = include("scrobot_perception", "perception.launch.py", {
