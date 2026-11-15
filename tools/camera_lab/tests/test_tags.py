@@ -304,11 +304,12 @@ class TagLabTests(TestCase):
             ".tag-layout{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr)",
             html)
 
-    def test_server_does_not_launch_opera_or_any_browser_by_default(self):
+    def test_server_opens_browser_tab_by_default_with_opt_out(self):
         source=(LAB/"server.py").read_text()
-        self.assertIn('parser.add_argument(\n        "--open-browser"',source)
-        self.assertIn("if args.open_browser and not args.no_browser:",source)
-        self.assertNotIn("if not args.no_browser:\n        webbrowser.open(url)",source)
+        self.assertIn('parser.add_argument("--no-browser", action="store_true")',source)
+        self.assertIn("if not args.no_browser:",source)
+        self.assertIn("webbrowser.open_new_tab(url)",source)
+        self.assertNotIn("subprocess.Popen(['opera'",source)
 
     def test_apriltag_detector_receives_exact_timestamp_camera_pair(self):
         monitor=(LAB/"tag_monitor.py").read_text()

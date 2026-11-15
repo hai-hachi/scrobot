@@ -19,8 +19,8 @@ from tags_scene import tag_world
 from lighting_source import calibration
 
 class LabYamlContracts(unittest.TestCase):
-    def test_five_independent_yaml_paths_and_atomic_reload(self):
-        expected={"lighting","camera","apriltags","mobility","odometry","yolo"}
+    def test_registered_labs_independent_yaml_paths_and_atomic_reload(self):
+        expected={"lighting","camera","apriltags","mobility","odometry","yolo","nav2","mesh"}
         self.assertEqual(set(__import__("lab_configs").FILES),expected)
         self.assertEqual(path_for("lighting").name,"lighting_lab.yaml")
         with tempfile.TemporaryDirectory() as d:
@@ -43,7 +43,7 @@ class LabYamlContracts(unittest.TestCase):
 
     def test_lab_yaml_ownership_is_outside_production_ros_packages(self):
         import lab_configs
-        expected={"lighting","camera","apriltags","mobility","odometry","yolo"}
+        expected={"lighting","camera","apriltags","mobility","odometry","yolo","nav2","mesh"}
         self.assertEqual(set(lab_configs.FILES),expected)
         labdir=ROOT/"tools/configs/labs"
         for lab in expected:
