@@ -16,7 +16,7 @@ RESULTS=ROOT/"evaluation_results/performance_lab"
 DEFAULTS={
     "mode":"synchronized",
     "profile":"full_idle",
-    "max_rtf":1.0,
+    "max_rtf":0.25,
     "duration_s":60,
     "warmup_s":15,
     "ros_domain_id":85,
