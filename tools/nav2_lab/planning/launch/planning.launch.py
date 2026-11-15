@@ -70,7 +70,7 @@ def generate_launch_description():
         "robot_name": "scrobot", "x": v["robot_x"], "y": v["robot_y"],
         "yaw": v["robot_yaw_rad"], "z": "0.003",
         "enable_depth_camera": "true", "enable_magnetometer": "false",
-        "robot_visual_mode": "none",
+        "robot_visual_mode": "simple",
         **{name: v[name] for name in (
             "controller_params", "color_width", "color_height", "color_fps",
             "depth_width", "depth_height", "depth_fps", "imu_rate_hz",
@@ -126,7 +126,8 @@ def generate_launch_description():
     map_monitor = ExecuteProcess(
         cmd=[sys.executable, str(HERE / "map_status.py"),
              "--output", v["map_status_file"], "--world", v["world"],
-             "--pose-file", v["pose_file"]],
+             "--pose-file", v["pose_file"],
+             "--nav2-params", v["nav2_params_file"]],
         output="screen",
     )
     paths = ExecuteProcess(
