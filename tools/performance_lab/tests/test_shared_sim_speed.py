@@ -8,8 +8,8 @@ from tools.shared import sim_speed
 
 def test_speed_setting_is_lab_specific_atomic_and_validated(tmp_path, monkeypatch):
     monkeypatch.setattr(sim_speed, "FILE", tmp_path / "simulation_speed.yaml")
-    assert sim_speed.get("camera") == 1.0
-    assert sim_speed.get("nav2") == 1.0
+    assert sim_speed.get("camera") == 0.25
+    assert sim_speed.get("nav2") == 0.25
     assert sim_speed.save("camera", 0.25) == 0.25
     assert sim_speed.save("nav2", 0.5) == 0.5
     assert sim_speed.get("camera") == 0.25
