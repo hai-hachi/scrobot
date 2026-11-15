@@ -95,6 +95,7 @@ function rateStatus(row){
     sim_rate_low:['Low (sim time)','bad'],
     sim_rate_high:['High (sim time)','bad'],
     rtf_low:['RTF low','warn'],
+    observed:['Observed','ok'],
     unknown:['Unknown','warn'],
   })[row.status]||['Unknown','warn'];
 }
@@ -102,7 +103,7 @@ function renderTopics(monitor){
   const records=monitor?.topics||{};
   const body=$('topic-rows');body.replaceChildren();
   if(!Object.keys(records).length){
-    body.append(emptyRow(7,'Start simulation and wait for live ROS /clock and topics.'));
+    body.append(emptyRow(9,'Start simulation and wait for live ROS /clock and topics.'));
     return;
   }
   for(const[topic,data]of Object.entries(records)){
@@ -111,8 +112,10 @@ function renderTopics(monitor){
     cell(tr,data.expected_sim_hz==null?'—':fmt(data.expected_sim_hz));
     cell(tr,fmt(data.wall_hz));
     cell(tr,fmt(data.sim_hz));
+    cell(tr,fmt(data.header_interval_p95_ms,2));
+    cell(tr,fmt(data.header_abs_jitter_p95_ms,2));
+    cell(tr,data.header_sample_count>1?String(data.header_large_gap_total):'—');
     cell(tr,fmt(data.header_clock_offset_sim_s,3));
-    cell(tr,data.header_sample_count>1?String(data.header_large_gap_count):'—');
     const [txt,kind]=rateStatus(data);
     cell(tr,txt,kind);
     body.append(tr);
@@ -195,6 +198,35 @@ function renderThreads(stats){
     body.append(tr);
   }
 }
+function renderNav2(nav2,timing){
+  const lifecycle=nav2?.lifecycle||{},costmap=nav2?.costmap||{};
+  const state=name=>lifecycle[name]?.state||'Unknown';
+  $('nav2-planner-state').textContent=state('planner_server');
+  $('nav2-controller-state').textContent=state('controller_server');
+  $('nav2-costmap-state').textContent=state('global_costmap');
+  $('costmap-full-count').textContent=nav2?
+    (costmap.full_received?'Yes · '+costmap.full_messages:'No'):'—';
+  $('costmap-update-count').textContent=nav2?
+    String(costmap.update_messages??0):'—';
+  $('nav2-cmd-hz').textContent=fmt(timing?.cmd_vel_nav?.sim_hz)+' sim Hz';
+  const schedule=timing?.scheduler||{},warnings=timing?.warnings||{};
+  $('nav2-controller-target').textContent=fmt(
+    schedule.configured_controller_hz,1)+' Hz · WallRate';
+  $('nav2-target-wall-hz').textContent=fmt(
+    schedule.expected_wall_hz_for_sim_cadence)+' Hz';
+  $('nav2-wallrate-sim-hz').textContent=fmt(
+    schedule.theoretical_sim_hz_if_wallrate_sustained)+' Hz';
+  $('nav2-warnings-recent').textContent=warnings.warning_last_60_wall_s??'—';
+  $('nav2-warnings-total').textContent=warnings.warning_total??'—';
+  $('nav2-current-reported-hz').textContent=
+    fmt(warnings.latest_reported_computation_hz,1)+' Hz';
+  $('costmap-note').textContent=nav2?
+    'Full map '+(costmap.full_received?'received':'not observed')+
+    ' · incremental changes '+(costmap.update_messages??0)+
+    '. Full map uses reliable/transient-local QoS. No incremental updates may be normal in a static scene. '+
+    'Mission coverage requires active planner and controller plus one full map.':
+    'Waiting for the ROS observer and asynchronous Nav2 lifecycle checks.';
+}
 function renderAudit(audit){
   const lines=$('audit-rows');lines.replaceChildren();
   $('audit-note').textContent=
@@ -247,11 +279,16 @@ function renderSummary(data){
   const title=document.createElement('strong');
   title.textContent=report.run_id+' · '+report.outcome;
   const p=document.createElement('p');
-  p.textContent='Average RTF '+fmt(r.avg_rtf,3)+'× · Sim-time cadence '+
-    (r.cadence_pass?'PASS':'NOT VERIFIED / BELOW TARGET')+
-    (r.real_time_rate_pass===null?' · Real-time status NOT assessed':
-      ' · Real-time rate '+(r.real_time_rate_pass?'PASS':'FAIL'))+
-    '. Results are topic-rate checks, not an end-to-end mission acceptance certificate.';
+  const nav=r.nav2_coverage_pass===null?'Not required':
+    r.nav2_coverage_pass===true?'Active lifecycle + full map seen':'NOT VERIFIED';
+  p.textContent='Average RTF '+fmt(r.avg_rtf,3)+
+    '× · Sensor sim-time cadence '+(r.cadence_pass?'PASS':'NOT VERIFIED / LOW')+
+    ' · Nav2 lifecycle/costmap '+nav+
+    ' · Jazzy wall-scheduler warnings '+(
+      r.timing_quality?.nav2_wall_scheduler_warnings_in_window??'not measured')+
+    (r.real_time_rate_pass===null?' · Real-time not assessed':
+      ' · Real-time '+(r.real_time_rate_pass?'PASS':'FAIL'))+
+    '. Neither sensor cadence nor Nav2 coverage proves deterministic lockstep.';
   const coverage=document.createElement('p');
   coverage.textContent=r.coverage_note||'No workload coverage note available.';
   area.replaceChildren(title,p,coverage);
@@ -318,6 +355,7 @@ async function refresh(){
       meter?.topics?.['/camera/camera/depth/points']?.expected_sim_hz,0)+' sim Hz';
     renderChart(meter?.rtf);
     renderTopics(meter);
+    renderNav2(meter?.nav2,result.nav2_timing);
     renderResources(result.resources,result.gpu);
     renderThreads(result.threads);
     renderAudit(result.audit);
