@@ -99,7 +99,7 @@
 </header>
 <main>
   <section class="metrics">
-    <div class="metric"><small>Real-time factor</small><b id="m-rtf">—</b><em>Target 1.0× / lower means slower</em></div>
+    <div class="metric"><small>Real-time factor</small><b id="m-rtf">—</b><em>Measured RTF · compare with selected speed cap</em></div>
     <div class="metric"><small>Robot RGB rate</small><b id="m-robot-fps">—</b><em>Frames per second received</em></div>
     <div class="metric"><small>Robot exposure proxy</small><b id="m-bright">—</b><em>Mean image brightness, not lux</em></div>
     <div class="metric"><small>Active lights</small><b id="m-lights">8</b><em id="m-shadow-summary">2 shadow-casting · 6 fill lights</em></div>
@@ -598,7 +598,7 @@ async function getStatus(){
    syncControls(s.settings);
    controlsHydrated=true;
   }
-  const rtf=s.sim.rtf,rtfGood=rtf!==undefined&&rtf>=.7;
+  const rtf=s.sim.rtf,rtfGood=rtf!==undefined&&rtf>=0.85*(s.rtf_cap??1);
   if(rtf!==undefined){
    rtfHistory.push(rtf);if(rtfHistory.length>60)rtfHistory.shift();drawRtfTrend();
   }
@@ -607,7 +607,9 @@ async function getStatus(){
   $("m-lights").textContent=s.lights;
   $("m-shadow-summary").textContent=s.shadow_lights+" shadow-casting · "+
    Math.max(0,s.lights-s.shadow_lights)+" fill lights";
-  $("m-robot-fps").textContent=(s.feeds.robot.fps||0).toFixed(1)+" Hz";
+  $("m-robot-fps").textContent=s.feeds.robot.sim_fps==null?
+     (s.feeds.robot.wall_fps||0).toFixed(1)+" wall Hz":
+     s.feeds.robot.sim_fps.toFixed(1)+" sim Hz";
   $("m-cpu").textContent=s.load_1m.toFixed(1);
   $("m-cores").textContent="System load / "+s.cpu_cores+" CPU threads";
   $("m-gpu").textContent=s.gpu?s.gpu.utilization_percent.toFixed(0)+"%":"—";
@@ -616,12 +618,15 @@ async function getStatus(){
   $("m-bright").textContent=exp?exp.mean+"%":"—";
   $("detail-time").textContent=s.sim.sim_seconds===undefined?"—":s.sim.sim_seconds+" s";
   $("detail-paused").textContent=s.sim.paused===undefined?"—":(s.sim.paused?"Yes":"No");
-  $("detail-fps").textContent=s.feeds.overhead.fps+" / "+s.feeds.free.fps+" Hz";
+  $("detail-fps").textContent=[s.feeds.overhead,s.feeds.free].map(f=>
+     f.sim_fps==null?(f.wall_fps+" wall Hz"):
+       (f.sim_fps+" sim / "+f.wall_fps+" wall Hz")).join(" · ");
   $("detail-age").textContent=s.sim.stats_age_s===null?"—":s.sim.stats_age_s+" s";
   $("detail-high").textContent=exp?exp.clipped_bright+"%":"—";
   $("detail-low").textContent=exp?exp.clipped_dark+"%":"—";
   const rgb=s.feeds.robot;
-  $("detail-robot-rates").textContent=rgb.fps+" / "+rgb.preview_fps+" Hz";
+  $("detail-robot-rates").textContent=(rgb.sim_fps==null?"—":rgb.sim_fps)+
+     " sim Hz / "+rgb.wall_fps+" wall Hz / "+rgb.preview_fps+" preview wall Hz";
   $("detail-image-cost").textContent=rgb.jpeg_encode_ms===null?"—":
    rgb.jpeg_encode_ms+" ms · "+rgb.jpeg_kib+" KiB";
   $("detail-robot-age").textContent=rgb.age_s===null?"—":rgb.age_s+" s";
@@ -685,7 +690,7 @@ async function getStatus(){
   $("diagnosis").textContent=!exp?"Awaiting robot camera image to estimate clipping.":
     exp.clipped_bright>10?"High clipped-highlight fraction: reduce intensity or change light angle.":
     exp.clipped_dark>30?"Many dark pixels: inspect shadow coverage and exposure settings.":
-    rtf!==undefined&&rtf<.7?"Illumination may be too expensive: reduce shadow-casting lights, count, or range.":
+    rtf!==undefined&&rtf<.85*(s.rtf_cap??1)?"Measured RTF below the requested cap; inspect lighting, camera rendering and shadows.":
     "Balanced image clipping proxy. Verify visual appearance and compare at a fixed robot pose.";
   for(const key of ["robot","overhead","free"]){
    const f=s.feeds[key];$("v-"+key).textContent=f.fps?f.fps+" Hz":"Waiting";
