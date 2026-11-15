@@ -6,6 +6,7 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
@@ -51,6 +52,9 @@ def generate_launch_description():
         raise RuntimeError(f"Invalid simulation motor model: {motor['model']}")
     motor_model_enabled = motor['model'] == 'first_order'
     use_sim_time = LaunchConfiguration('use_sim_time')
+    headless = LaunchConfiguration('headless')
+    world = LaunchConfiguration('world')
+    mission_enabled = LaunchConfiguration('mission_enabled')
     use_magnetometer = LaunchConfiguration('use_magnetometer')
 
     model_path = LaunchConfiguration('model_path')
@@ -77,6 +81,8 @@ def generate_launch_description():
         'simulation.launch.py',
         {
             'use_sim_time': use_sim_time,
+            'headless': headless,
+            'world': world,
             'x': robot_x,
             'y': robot_y,
             'z': robot_z,
@@ -166,6 +172,18 @@ def generate_launch_description():
             default_value='true',
             choices=['true', 'false'],
         ),
+        # Optional lab overrides; the standard production launch remains
+        # GUI-on, production-world and mission-on by default.
+        DeclareLaunchArgument('headless', default_value='false',
+                              choices=['true', 'false']),
+        DeclareLaunchArgument(
+            'world',
+            default_value=str(
+                Path(get_package_share_directory('scrobot_simulation'))
+                / 'worlds/badminton_court.sdf'),
+        ),
+        DeclareLaunchArgument('mission_enabled', default_value='true',
+                              choices=['true', 'false']),
         DeclareLaunchArgument(
             'use_magnetometer',
             default_value='true',
@@ -253,5 +271,6 @@ def generate_launch_description():
             ],
         ),
         TimerAction(period=shuttle_delay, actions=[shuttles]),
-        TimerAction(period=mission_delay, actions=[mission]),
+        TimerAction(period=mission_delay, actions=[mission],
+                    condition=IfCondition(mission_enabled)),
     ])
