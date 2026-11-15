@@ -111,7 +111,7 @@ function renderTopics(monitor){
     cell(tr,data.expected_sim_hz==null?'—':fmt(data.expected_sim_hz));
     cell(tr,fmt(data.wall_hz));
     cell(tr,fmt(data.sim_hz));
-    cell(tr,fmt(data.header_age_sim_s,3));
+    cell(tr,fmt(data.header_clock_offset_sim_s,3));
     cell(tr,data.header_sample_count>1?String(data.header_large_gap_count):'—');
     const [txt,kind]=rateStatus(data);
     cell(tr,txt,kind);
@@ -252,7 +252,9 @@ function renderSummary(data){
     (r.real_time_rate_pass===null?' · Real-time status NOT assessed':
       ' · Real-time rate '+(r.real_time_rate_pass?'PASS':'FAIL'))+
     '. Results are topic-rate checks, not an end-to-end mission acceptance certificate.';
-  area.replaceChildren(title,p);
+  const coverage=document.createElement('p');
+  coverage.textContent=r.coverage_note||'No workload coverage note available.';
+  area.replaceChildren(title,p,coverage);
 }
 
 async function refreshHistory(){
