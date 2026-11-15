@@ -24,6 +24,7 @@ def generate_launch_description():
     # service, not copied from published production camera/lighting defaults.
     args = [
         "world", "controller_params", "ekf_params", "use_magnetometer",
+        "robot_x", "robot_y", "robot_yaw_rad", "map_status_file",
         "color_width", "color_height", "color_fps",
         "depth_width", "depth_height", "depth_fps",
         "wheel_joint_damping", "wheel_collision_width",
@@ -33,10 +34,13 @@ def generate_launch_description():
     v = {key: LaunchConfiguration(key) for key in args}
 
     simulation = include("scrobot_simulation", "simulation.launch.py", {
-        "headless": "true", "use_sim_time": "true", "x": "0", "y": "0", "yaw": "0",
+        "headless": "true", "use_sim_time": "true", "x": v["robot_x"], "y": v["robot_y"],
+        "yaw": v["robot_yaw_rad"],
         "enable_magnetometer": v["use_magnetometer"],
         "enable_depth_camera": "true",
-        **{key: v[key] for key in args if key not in ("ekf_params", "use_magnetometer")},
+        **{key: v[key] for key in args if key not in (
+            "ekf_params", "use_magnetometer", "robot_x", "robot_y",
+            "robot_yaw_rad", "map_status_file")},
     })
     control = include("scrobot_control", "control_stack.launch.py",
                       {"use_sim_time": "true"})
@@ -47,6 +51,18 @@ def generate_launch_description():
     depth_scan = include("scrobot_perception", "perception.launch.py", {
         "use_sim_time": "true", "enable_yolo": "false",
     })
+    court_transform = Node(
+        package="tf2_ros", executable="static_transform_publisher",
+        name="nav2_lab_map_to_odom", output="screen",
+        arguments=["--x",v["robot_x"],"--y",v["robot_y"],"--z","0",
+                   "--yaw",v["robot_yaw_rad"],"--frame-id","map",
+                   "--child-frame-id","odom"],
+    )
+    map_status = ExecuteProcess(
+        cmd=[sys.executable,str(Path(__file__).resolve().parents[1] / "map_status.py"),
+             "--output",v["map_status_file"]],
+        output="screen",
+    )
     map_server = Node(
         package="nav2_map_server", executable="map_server", name="map_server",
         output="screen", parameters=[params, {"use_sim_time": True}],
@@ -72,7 +88,7 @@ def generate_launch_description():
         DeclareLaunchArgument("nav2_params_file"),
         DeclareLaunchArgument("path_cache"),
         *[DeclareLaunchArgument(key) for key in args],
-        simulation,
+        simulation, court_transform, map_status,
         TimerAction(period=5.0, actions=[control, localization, depth_scan]),
         TimerAction(period=12.0, actions=[map_server, planner, lifecycle, display]),
     ])
