@@ -1,0 +1,12 @@
+# Mesh Lab inspection preferences only; not production simulation settings.
+schema_version: 1
+lab: mesh
+settings:
+  model: both
+  robot_visual_mode: full
+  shuttle_count: 1
+  shuttle_seed: 20261115
+  lighting_enabled: true
+  shadows_enabled: true
+  depth_camera: false
+  benchmark_seconds: 15
