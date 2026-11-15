@@ -27,7 +27,7 @@ def test_settings_validation_and_production_world_not_mutated(tmp_path):
     assert updated.replace('<real_time_factor>0.5</real_time_factor>',
                            '<real_time_factor>1.0</real_time_factor>')==base
     assert info["original_sha256"]!=info["generated_sha256"]
-    assert validate(DEFAULTS)["max_rtf"]==1.
+    assert validate(DEFAULTS)["max_rtf"]==.25
     with pytest.raises(ValueError):
         validate({**DEFAULTS,"max_rtf":0.})
     with pytest.raises(ValueError):
