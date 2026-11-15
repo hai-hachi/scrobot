@@ -17,7 +17,7 @@ Visualization Manager:
     - Class: rviz_default_plugins/Map
       Name: Static poles and tags
       Enabled: true
-      Alpha: 0.75
+      Alpha: 0.90
       Color Scheme: map
       Draw Behind: true
       Topic:
@@ -30,7 +30,7 @@ Visualization Manager:
     - Class: rviz_default_plugins/Map
       Name: Live global costmap
       Enabled: true
-      Alpha: 0.35
+      Alpha: 0.60
       Color Scheme: costmap
       Draw Behind: false
       Topic:
@@ -136,7 +136,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 20; 26; 35
-    Fixed Frame: odom
+    Fixed Frame: map
     Frame Rate: 20
   Name: root
   Tools:
@@ -152,7 +152,7 @@ Visualization Manager:
     Current:
       Class: rviz_default_plugins/TopDownOrtho
       Name: Current View
-      Target Frame: odom
-      Scale: 60
+      Target Frame: map
+      Scale: 46
       Angle: 0
     Saved: ~
