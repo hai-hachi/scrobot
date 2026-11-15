@@ -78,15 +78,21 @@ def scene_markers(geometry,robot,goal):
         (1,"goal",goal,(.28,.80,1.,1.)),
     ):
         arrow=marker("poses",mid,Marker.ARROW,color=color)
-        arrow.pose.position.x=float(pose["x"])
-        arrow.pose.position.y=float(pose["y"])
-        arrow.pose.position.z=.20
         yaw=math.radians(float(pose["yaw_deg"]))
-        arrow.pose.orientation.z=math.sin(yaw/2)
-        arrow.pose.orientation.w=math.cos(yaw/2)
-        arrow.scale.x=.58
-        arrow.scale.y=.15
-        arrow.scale.z=.15
+        x,y=float(pose["x"]),float(pose["y"])
+        # Explicit end points select RViz's arrow geometry where the scales
+        # mean shaft diameter, head diameter and head LENGTH (not xyz axes).
+        # Two equal 0.35 m segments: shaft length == pointed taper length.
+        shaft_length=.35
+        head_length=.35
+        arrow.points=[
+            Point(x=x,y=y,z=.20),
+            Point(x=x+(shaft_length+head_length)*math.cos(yaw),
+                  y=y+(shaft_length+head_length)*math.sin(yaw),z=.20),
+        ]
+        arrow.scale.x=.10     # former 0.15 m thickness reduced by one third
+        arrow.scale.y=.16     # slim, distinguishable triangular head
+        arrow.scale.z=head_length
         results.markers.append(arrow)
     return results
 
