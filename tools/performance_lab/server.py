@@ -34,6 +34,10 @@ from tools.performance_lab.settings import (
 from tools.shared.lab_ui import GazeboGUI,log_tail
 from tools.nav2_lab.planning.process_metrics import ProcessSampler
 from tools.performance_lab.thread_metrics import ThreadSampler
+from tools.performance_lab.nav2_timing import (
+    ControllerWarningMeter,installed_controller_frequency,
+    nav2_scheduler_expectations,
+)
 
 try:import psutil
 except ImportError:psutil=None
@@ -102,11 +106,22 @@ def gpu_metrics():
 
 
 def summary_of_samples(samples,settings):
-    """Rate acceptance is NOT a closed-loop/correctness guarantee."""
-    usable=[item for item in samples if item.get("monitor",{}).get("rtf") is not None]
-    def measure(values):
+    """Sustained sensor cadence, separate Nav2 lifecycle/map and timing evidence.
+
+    A latched full map is evidence of a published costmap, NOT a 3-Hz stream.
+    Warning counters come from Jazzy's WALL scheduler, so they are reported
+    separately and must not be counted as simulated-time deadline misses.
+    """
+    usable=[x for x in samples if x.get("monitor",{}).get("rtf") is not None]
+    def average(items):
+        values=[float(v) for v in items if v is not None]
         return round(sum(values)/len(values),3) if values else None
-    rtfs=[s["monitor"]["rtf"] for s in usable]
+    def delta_count(items,key):
+        values=[x.get(key) for x in items if isinstance(x.get(key),int)]
+        if len(values)<2 or values[-1]<values[0]:return None
+        return values[-1]-values[0]
+
+    rtfs=[x["monitor"]["rtf"] for x in usable]
     required=[
         "/camera/camera/color/image_raw",
         "/camera/camera/depth/image_raw",
@@ -119,55 +134,123 @@ def summary_of_samples(samples,settings):
         "/odometry/filtered",
         "/joint_states",
     ]
-    if settings["profile"]=="full_mission":
-        # A mission run should have lifecycle-activated Nav2 costmaps.
-        required.append("/global_costmap/costmap")
     checks={}
     for topic in required:
-        rows=[s["monitor"]["topics"].get(topic,{}) for s in usable]
-        sim=[r["sim_hz"] for r in rows if r.get("sim_hz") is not None]
-        wall=[r["wall_hz"] for r in rows if r.get("wall_hz") is not None]
+        rows=[x["monitor"].get("topics",{}).get(topic,{}) for x in usable]
+        sim=[r.get("sim_hz") for r in rows if r.get("sim_hz") is not None]
+        wall=[r.get("wall_hz") for r in rows if r.get("wall_hz") is not None]
         expected=next((r.get("expected_sim_hz") for r in rows
                        if r.get("expected_sim_hz")),None)
-        sim_mean=measure(sim)
-        wall_mean=measure(wall)
+        sim_mean=average(sim)
+        wall_mean=average(wall)
         enough=len(sim)>=max(2,int(len(usable)*.6))
-        sim_good=(bool(enough and expected and sim_mean is not None
-                       and .9*expected<=sim_mean<=1.15*expected))
-        check={"expected_sim_hz":expected,"avg_sim_hz":sim_mean,
-               "avg_wall_hz":wall_mean,"coverage":len(sim),
-               "sim_rate_pass":sim_good}
+        good=bool(enough and expected and sim_mean is not None
+                  and .9*expected<=sim_mean<=1.15*expected)
+        check={
+            "expected_sim_hz":expected,
+            "avg_sim_hz":sim_mean,"avg_wall_hz":wall_mean,
+            "coverage":len(sim),"sim_rate_pass":good,
+            "header_interval_p95_ms":average(
+                [r.get("header_interval_p95_ms") for r in rows]),
+            "header_abs_jitter_p95_ms":average(
+                [r.get("header_abs_jitter_p95_ms") for r in rows]),
+            # Unique changes in monotonic counters across the sampled
+            # measurement interval; do not sum overlapping five-second windows.
+            "observed_large_header_gaps":delta_count(
+                rows,"header_large_gap_total"),
+            "observed_backward_stamps":delta_count(
+                rows,"header_backward_total"),
+        }
         if settings["mode"]=="real_time":
             check["wall_rate_pass"]=bool(
                 enough and expected and wall_mean is not None
                 and wall_mean>=.9*expected)
         checks[topic]=check
-    cadence=all(c["sim_rate_pass"] for c in checks.values())
-    rtf_mean=measure(rtfs)
-    realtime=bool(rtf_mean is not None and rtf_mean>=.98 and
-                  cadence and all(c.get("wall_rate_pass",False)
-                                  for c in checks.values()))
-    return {
-        "avg_rtf":rtf_mean,"minimum_rtf":min(rtfs) if rtfs else None,
-        "sample_count":len(samples),
-        "cadence_pass":cadence,
-        "coverage_note":(
-            "Parked baseline: Nav2 processes exist but costmaps are not "
-            "lifecycle-activated; this is not a complete active navigation test."
-            if settings["profile"]=="full_idle"
-            else "Full mission requires an active global costmap, as well as "
-                 "RGB, depth, IMU, magnetometer, scans, odometry and EKF."
-        ),
-        "real_time_rate_pass":realtime if settings["mode"]=="real_time" else None,
-        "checks":checks,
+    cadence=bool(usable) and all(x["sim_rate_pass"] for x in checks.values())
+
+    nav2_samples=[x["monitor"].get("nav2",{}) for x in usable]
+    lifecycle={}
+    for name in ("planner_server","controller_server","global_costmap"):
+        states=[x.get("lifecycle",{}).get(name,{}) for x in nav2_samples]
+        seen=[v.get("state") for v in states]
+        lifecycle[name]={
+            "active_observed":"active" in seen,
+            "last_state":next((v for v in reversed(seen) if v), "unavailable"),
+            "services":list(dict.fromkeys(
+                v.get("service") for v in states if v.get("service"))),
+        }
+    costmaps=[x.get("costmap",{}) for x in nav2_samples]
+    full_observed=any(x.get("full_received",False) for x in costmaps)
+    update_observed=any(x.get("update_received",False) for x in costmaps)
+    nav2_required=settings["profile"]=="full_mission"
+    nav2_pass=(
+        lifecycle["planner_server"]["active_observed"]
+        and lifecycle["controller_server"]["active_observed"]
+        and full_observed
+    ) if nav2_required else None
+    nav2_coverage={
+        "required":nav2_required,
+        "verified":nav2_pass,
+        "lifecycle":lifecycle,
+        "full_map_observed":full_observed,
+        "incremental_updates_observed":update_observed,
+        "full_map_messages":max(
+            (x.get("full_messages",0) for x in costmaps),default=0),
+        "incremental_update_messages":max(
+            (x.get("update_messages",0) for x in costmaps),default=0),
         "note":(
-            "PASS covers measured topic cadence only, NOT full-system correctness, "
-            "actual PID callback execution, YOLO inference latency, frame delivery "
-            "from Gazebo native publishers, or physical hardware deadlines. "
-            "Audit unknown/missing nodes and inspect logs before declaring readiness."
+            "Active planner + controller lifecycle AND at least one full "
+            "costmap are required to verify Nav2 coverage during mission. "
+            "Global costmap lifecycle is reported when its service exists. "
+            "Incremental updates are optional in static scenes; no fixed "
+            "costmap visualization Hz is required."
+        ),
+    }
+    warning_rows=[x.get("nav2_warnings",{}) for x in usable]
+    warnings_new=delta_count(warning_rows,"warning_total")
+    cmd_rows=[x["monitor"].get("topics",{}).get("/cmd_vel_nav",{}) for x in usable]
+    timing={
+        "nav2_wall_scheduler_warnings_in_window":warnings_new,
+        "nav2_cmd_vel_avg_sim_hz":average(
+            [r.get("sim_hz") for r in cmd_rows]),
+        "nav2_cmd_vel_available":any(r.get("count_total",0)>0 for r in cmd_rows),
+        "note":(
+            "Jazzy Nav2 ControllerServer uses rclcpp::WallRate. Warning counts "
+            "are missed WALL-clock scheduler deadlines, not proof of missing "
+            "simulation-time control cycles. cmd_vel_nav counts commands while "
+            "navigation is active; it is not a direct loop-iteration counter."
         ),
     }
 
+    rtf_mean=average(rtfs)
+    real_time=bool(rtf_mean is not None and rtf_mean>=.98 and cadence
+                   and all(x.get("wall_rate_pass",False)
+                           for x in checks.values()))
+    if not cadence:overall="sensor_cadence_not_verified"
+    elif nav2_required and not nav2_pass:overall="nav2_coverage_not_verified"
+    else:overall="topic_and_nav2_observed_timing_still_unverified"
+    return {
+        "avg_rtf":rtf_mean,"minimum_rtf":min(rtfs) if rtfs else None,
+        "sample_count":len(samples),"cadence_pass":cadence,
+        "nav2_coverage":nav2_coverage,"nav2_coverage_pass":nav2_pass,
+        "timing_quality":timing,
+        "overall_evidence":overall,
+        "coverage_note":(
+            "Parked baseline: Nav2 may not be lifecycle-active."
+            if not nav2_required else
+            "Full mission: verify planner/controller active and one latched "
+            "global costmap. Changed-cell updates are optional, not 3 Hz targets."
+        ),
+        "real_time_rate_pass":(
+            real_time if settings["mode"]=="real_time" else None),
+        "checks":checks,
+        "note":(
+            "Topic cadence alone is not closed-loop synchronization. "
+            "This benchmark does not measure actual PID/ControllerServer "
+            "callback executions, end-to-end perception age, or physical "
+            "hardware deadlines. Nav2 warning counts come from WallRate."
+        ),
+    }
 
 class Runtime:
     def __init__(self):
@@ -180,6 +263,8 @@ class Runtime:
         self.gui=GazeboGUI(ACTIVE/"gazebo_gui.log",env=self.env,cwd=ROOT)
         self.sampler=ProcessSampler(psutil,interval_s=1.5)
         self.thread_sampler=ThreadSampler(psutil,interval_s=2.0)
+        self.nav2_warning_meter=ControllerWarningMeter()
+        self.nav2_controller_hz=installed_controller_frequency()
         self.monitor_file=ACTIVE/"monitor.json"
         self.log_file=ACTIVE/"stack.log"
         self.observer_log=ACTIVE/"observer.log"
@@ -249,6 +334,8 @@ class Runtime:
                 pass
             self.sampler.reset()
             self.thread_sampler.reset()
+            self.nav2_warning_meter.reset()
+            self.nav2_controller_hz=installed_controller_frequency()
             self.audit={"status":"not_run"}
             self.gpu_at=0.
             self.gpu=None
@@ -372,6 +459,15 @@ class Runtime:
                 "launch_settings":self.run_settings,
                 "world_info":self.world_info,
                 "monitor":data,
+                "nav2_timing":{
+                    "scheduler":nav2_scheduler_expectations(
+                        data.get("rtf") if data else None,
+                        self.nav2_controller_hz),
+                    "warnings":self.nav2_warning_meter.sample(self.log_file)
+                        if running(self.stack) else
+                        self.nav2_warning_meter.snapshot(),
+                    "cmd_vel_nav":(data or {}).get("topics",{}).get("/cmd_vel_nav"),
+                },
                 "resources":self.sampler.sample(
                     self.stack.pid if running(self.stack) else None,
                     self.rviz.pid if running(self.rviz) else None),
@@ -469,8 +565,11 @@ class Runtime:
                     snapshot=json_file(self.monitor_file)
                     if snapshot and time.time()-snapshot.get("observer_wall_time",0)<=4:
                         with self.lock:
+                            warning_sample=self.nav2_warning_meter.sample(
+                                self.log_file)
                             b["samples"].append({
                                 "wall":time.time(),"monitor":snapshot,
+                                "nav2_warnings":warning_sample,
                                 "cpu":self.sampler.sample(
                                     self.stack.pid if running(self.stack) else None),
                                 "gpu":self._gpu(),
