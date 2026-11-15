@@ -1,0 +1,61 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Selection
+    Name: Selection
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Enabled: true
+  Global Options:
+    Fixed Frame: base_footprint
+    Background Color: 28; 34; 40
+    Frame Rate: 20
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Plane: XY
+      Cell Size: 0.25
+      Plane Cell Count: 20
+    - Class: rviz_default_plugins/RobotModel
+      Name: Robot links
+      Enabled: true
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 0.9
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+      Links:
+        All Links Enabled: true
+      Mass Properties:
+        Inertia: false
+        Mass: false
+    - Class: rviz_default_plugins/TF
+      Name: TF axes
+      Enabled: true
+      Show Axes: true
+      Show Arrows: true
+      Show Names: true
+      Marker Scale: 0.18
+      Frames:
+        All Enabled: true
+      Tree: {}
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 2.5
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0.1
+      Pitch: 0.65
+      Yaw: 0.8
+      Target Frame: base_footprint
+      Value: Orbit (rviz_default_plugins)
