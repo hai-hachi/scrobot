@@ -27,6 +27,7 @@ from core import DEFAULTS, RATE_NAMES, validate
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lab_configs import path_for as lab_yaml_path, read as read_lab_yaml, save as save_lab_yaml
 from shared.lab_ui import GazeboGUI, log_tail as lab_log_tail
+from shared.sim_speed import get as read_speed, save as save_speed, cap_world, response as speed_response
 
 HERE=Path(__file__).resolve().parent
 REPO=HERE.parents[1]
@@ -188,8 +189,11 @@ class Lab:
                 rates_of(config),controllers,ekf
             )
             self.log=(OUT/"gazebo.log").open("ab")
+            source = REPO / "src/scrobot_simulation/worlds/badminton_court.sdf"
+            capped = cap_world(source, OUT / "rtf_world.sdf", read_speed("odometry"))
             cmd=[
                 "ros2","launch","scrobot_simulation","odometry_lab.launch.py",
+                "world:="+capped,
                 "use_magnetometer:="+str(config["use_magnetometer"]).lower(),
                 "imu_rate_hz:="+str(config["imu_hz"]),
                 "magnetometer_rate_hz:="+str(config["magnetometer_hz"]),
@@ -332,6 +336,8 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/":
                 return self.send_data(200,(HERE/"index.html").read_bytes(),
                                       "text/html; charset=utf-8")
+            if path=="/api/sim-speed":
+                return self.send_data(200,speed_response("odometry",lab_running(self.server.lab.proc)))
             if path=="/api/status":
                 return self.send_data(200,self.server.lab.status())
             if path=="/api/result":
@@ -345,7 +351,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body=self.body()
             lab=self.server.lab
-            if path=="/api/settings":
+            if path=="/api/sim-speed":
+                if set(body)!={"max_rtf"}:raise ValueError("Set only max_rtf")
+                result={"max_rtf":save_speed("odometry",body["max_rtf"]),
+                        "restart_required":True}
+            elif path=="/api/settings":
                 result=lab.change_settings(body)
             elif path=="/api/gazebo-gui/open":
                 if body != {}:raise ValueError("GUI open expects empty object")
