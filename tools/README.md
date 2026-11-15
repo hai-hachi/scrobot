@@ -11,6 +11,7 @@ backend, tests and resources should remain inside the owning folder.
 | [mobility_lab/](mobility_lab/) | Wheel contact/motor and PID calibration: `python3 tools/mobility_lab/server.py` |
 | [odometry_lab/](odometry_lab/) | Wheel/IMU/magnetometer odometry experiments: `python3 tools/odometry_lab/server.py` |
 | [yolo_lab/](yolo_lab/) | Shuttle datasets, labels, training, comparison: `bash tools/yolo_lab/start.sh` |
+| [mesh_lab/](mesh_lab/) | Gazebo visual/collision/frame inspection, optional RViz and benchmark: `python3 tools/mesh_lab/server.py` |
 | [nav2_lab/](nav2_lab/) | Nav2 planner experiments, RViz costmaps, saved lab inputs: `python3 tools/nav2_lab/web_server.py` |
 | [real_comparison/](real_comparison/) | Full mission evaluation runner; no lab YAML ownership |
 | [hardware/](hardware/) | Physical STM32/serial bench diagnostics, not a Gazebo lab |
@@ -38,6 +39,7 @@ python3 -m unittest discover -s tools/camera_lab/tests -p 'test_*.py' -v
 python3 -m unittest discover -s tools/mobility_lab/tests -p 'test_*.py' -v
 python3 -m unittest discover -s tools/odometry_lab/tests -p 'test_*.py' -v
 python3 -m unittest discover -s tools/yolo_lab/tests -p 'test_*.py' -v
+python3 -m unittest discover -s tools/mesh_lab/tests -p 'test_*.py' -v
 node tools/lighting_lab/tests/test_dashboard_boot.js
 ```
 
