@@ -43,6 +43,7 @@ def generate_launch_description():
     mag = LaunchConfiguration("use_magnetometer")
     sim = include("scrobot_simulation", "simulation.launch.py", {
         "use_sim_time": "true",
+        "world": LaunchConfiguration("world"),
         "headless": "true",
         "x": "0.0", "y": "0.0", "z": "0.003", "yaw": "0.0",
         "enable_depth_camera": "false",
@@ -79,6 +80,7 @@ def generate_launch_description():
         ) for name in ("joint_state_broadcaster", "diff_drive_controller")
     ]
     return LaunchDescription([
+        DeclareLaunchArgument("world", default_value=str(sim_share / "worlds/badminton_court.sdf")),
         DeclareLaunchArgument("use_magnetometer", default_value="true",
                               choices=["true", "false"]),
         DeclareLaunchArgument("imu_rate_hz", default_value=str(rates["imu_hz"])),
