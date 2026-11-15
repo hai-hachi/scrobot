@@ -337,7 +337,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_data(200,(HERE/"index.html").read_bytes(),
                                       "text/html; charset=utf-8")
             if path=="/api/sim-speed":
-                return self.send_data(200,speed_response("odometry",lab_running(self.server.lab.proc)))
+                return self.send_data(200,speed_response("odometry",bool(self.server.lab.proc and self.server.lab.proc.poll() is None)))
             if path=="/api/status":
                 return self.send_data(200,self.server.lab.status())
             if path=="/api/result":
