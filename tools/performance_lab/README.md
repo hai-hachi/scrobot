@@ -25,11 +25,14 @@ the same domain/partition. Gazebo server is headless; use the optional buttons
 to open/close Gazebo GUI or RViz. These viewers may reduce FPS, so close them
 for reproducible performance numbers.
 
-The production launch was extended **only** to accept optional
-`headless`, `world` and `mission_enabled` arguments. All three retain the
-original defaults (GUI on, installed production court, mission on) for ordinary
-`ros2 launch scrobot_bringup sim.launch.py`. **Rebuilding `scrobot_bringup`
-is necessary** before running this lab.
+The production launch accepts optional `headless`, `world`,
+`mission_enabled` and `mission_autostart` arguments. The mission package
+also accepts `autostart`. These retain the original defaults (GUI on,
+installed production court, mission included and mission autostart true)
+for ordinary `ros2 launch scrobot_bringup sim.launch.py`.
+**Rebuild `scrobot_bringup` and `scrobot_mission`** before running
+this updated Performance Lab, so the installed launch files accept
+`mission_autostart`.
 
 ## Four tabs
 
@@ -69,7 +72,10 @@ The metric engine logs:
 - **Wall Hz**: ROS arrivals / monotonic wall-clock elapsed.
 - **Sim Hz**: ROS arrivals / elapsed `/clock` time.
 - **RTF**: elapsed simulation seconds / monotonic wall seconds.
-- **Header-age / large timestamp gaps** where message headers were sampled.
+- **Header-minus-/clock offset / large timestamp gaps** where message headers
+  were sampled. Negative offsets can happen because a sensor callback
+  receives a newer stamp before the observer sees the next /clock update;
+  this is not negative network latency.
   Image/PointCloud2 streams use **raw serialized subscriptions** to limit
   monitor overhead; header-age is deliberately not sampled for large payloads.
 - **Clock paused/restarted** indicators; reports insufficient evidence
@@ -86,12 +92,17 @@ phase is separate; this initial lab does not introduce a custom scheduler.
 ## Workload fidelity
 
 `full_idle`: launch Gazebo, both RGB/depth cameras, controller stack,
-localization, perception/AprilTags/YOLO, Nav2, 50 shuttles (configurable)
-and everything normally present in production, but **do not auto-start
-the mission**. Robot remains parked. This is the full-stack idle baseline.
+localization, perception/AprilTags/YOLO, Nav2 and collection processes,
+50 shuttles (configurable) and everything normally present in production,
+but set mission manager `autostart:=false`. Robot remains parked. **Nav2
+lifecycle and its costmap remain inactive**, because the normal mission
+activates Nav2 after initial tag relocalization. This is a parked CPU/sensor
+baseline, not a complete active navigation acceptance test.
 
 `full_mission`: the same complete stack **with normal shuttle collection
-mission enabled**. The real mission/ROS algorithms run unmodified.
+mission enabled**. The real mission/ROS algorithms run unmodified; the
+benchmark additionally checks active global costmap publication as part
+of the full-mission topic-rate coverage.
 
 The launch consumes the **published** config from the production
 `src/scrobot_simulation/config/` and the production world, not automatically
