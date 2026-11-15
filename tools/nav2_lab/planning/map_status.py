@@ -56,25 +56,34 @@ def marker(ns,mid,kind,frame="map",color=(.85,.90,.95,1.0)):
     return m
 
 
-def endpoints(marker_obj,segments,height=.26):
-    for x1,y1,x2,y2 in segments:
-        marker_obj.points.extend([Point(x=x1,y=y1,z=height),
-                                  Point(x=x2,y=y2,z=height)])
-    return marker_obj
+def court_box_markers(geometry):
+    """Solid, fixed-orientation CUBE markers. No viewer-facing ribbon strips."""
+    result=MarkerArray()
+    styles=(
+        ("court_line_boxes",(1.0,1.0,.94,1.0)),
+        ("court_outline_boxes",(.55,1.0,.25,1.0)),
+        ("clearance_outline_boxes",(1.0,.32,.65,1.0)),
+    )
+    for group,color in styles:
+        for item in geometry[group]:
+            solid=marker("fixed_"+group,len(result.markers),
+                         Marker.CUBE,frame="map",color=color)
+            solid.pose.position.x=float(item["x"])
+            solid.pose.position.y=float(item["y"])
+            solid.pose.position.z=.27  # above the Nav2 occupancy overlay
+            angle=float(item["yaw"])
+            solid.pose.orientation.z=math.sin(angle/2)
+            solid.pose.orientation.w=math.cos(angle/2)
+            solid.scale.x=float(item["length"])
+            solid.scale.y=float(item["width"])
+            solid.scale.z=.016
+            result.markers.append(solid)
+    return result
 
 
 def scene_markers(geometry,robot,goal,footprint=None):
-    """Stable IDs, simple court outline and clearance + colored pose arrows."""
+    """Robot and goal poses remain independent of fixed court geometry."""
     results=MarkerArray()
-    for mid,key,color,thickness in (
-        (0,"court_lines",(1.0,1.0,.95,1.),.045),
-        (1,"court_outline",(.55,1.0,.25,1.),.075),
-        (2,"clearance_outline",(1.0,.32,.65,1.),.095),
-    ):
-        line=marker("court",mid,Marker.LINE_LIST,color=color)
-        line.scale.x=thickness
-        endpoints(line,geometry[key])
-        results.markers.append(line)
     for mid,name,pose,color in (
         (0,"robot",robot,(1.,.73,.28,1.)),
         (1,"goal",goal,(.28,.80,1.,1.)),
@@ -179,6 +188,8 @@ class Monitor(Node):
         self.create_timer(.5,self.tick)
         self.last_write=0.
         self.last_publish=0.
+        self.court_published=False
+        self.fixed_court=court_box_markers(self.geometry)
 
     def received(self,topic,msg):
         now=time.monotonic()
@@ -206,13 +217,15 @@ class Monitor(Node):
 
     def publish_visuals(self):
         robot,goal=self._read_poses()
-        all_markers=scene_markers(self.geometry,robot,goal,self.footprint)
-        court=MarkerArray(markers=all_markers.markers[:3])
-        pose=MarkerArray(markers=all_markers.markers[3:])
+        poses=scene_markers(self.geometry,robot,goal,self.footprint)
+        # Static geometry is published ONCE with reliable/transient-local QoS
+        # and zero timestamp: RViz never reprojects it using changing time/TF.
+        if not self.court_published:
+            self.court_pub.publish(self.fixed_court)
+            self.court_published=True
         stamp=self.get_clock().now().to_msg()
-        for obj in all_markers.markers:obj.header.stamp=stamp
-        self.court_pub.publish(court)
-        self.poses_pub.publish(pose)
+        for obj in poses.markers:obj.header.stamp=stamp
+        self.poses_pub.publish(poses)
         camera=camera_link_marker()
         camera.header.stamp=stamp
         self.camera_pub.publish(camera)
