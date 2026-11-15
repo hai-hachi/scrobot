@@ -25,28 +25,28 @@ def config():
 
 def test_generated_court_reuses_sdf_and_landmarks(tmp_path):
     geom=court_geometry(WORLD,LANDMARKS)
-    assert geom["floor_width_m"]==20.0
+    assert geom["floor_width_m"]==21.0
     assert geom["floor_height_m"]==12.0
     assert len(geom["poles"])==2
     assert sorted(round(p["y"],2) for p in geom["poles"])==[-3.05,3.05]
     assert len(geom["tag_mounts"])==4
     map_yaml,_=write_court_map(WORLD,LANDMARKS,tmp_path)
     saved=yaml.safe_load(map_yaml.read_text())
-    assert saved["origin"]==[-10.0,-6.0,0.0]
+    assert saved["origin"]==[-10.5,-6.0,0.0]
     assert saved["resolution"]==.05
     payload=(tmp_path/"court_static.pgm").read_bytes()
-    assert payload.startswith(b"P5\n400 240\n255\n")
-    pixels=payload[len(b"P5\n400 240\n255\n"):]
-    assert pixels[120*400+200]==254  # court/net center is navigable
+    assert payload.startswith(b"P5\n420 240\n255\n")
+    pixels=payload[len(b"P5\n420 240\n255\n"):]
+    assert pixels[120*420+210]==254  # court/net center is navigable
     assert any(p==0 for p in pixels)
-    assert len(pixels)==400*240
+    assert len(pixels)==420*240
 
 
 def test_static_map_only_poles_and_tags():
     geom=court_geometry(WORLD,LANDMARKS)
     nx,ny,pix=occupancy(geom["floor_width_m"],geom["floor_height_m"],.05,
                         geom["poles"]+geom["tag_mounts"])
-    assert nx==400 and ny==240
+    assert nx==420 and ny==240
     # A random court interior line has no static occupancy.
     assert pix[(ny-1-120)*nx+100]==254
 
