@@ -221,4 +221,4 @@ def test_clock_observer_restart_is_separate_from_full_simulation():
 def test_no_full_stack_success_is_inferred_from_topic_proxy():
     report=summary_of_samples([],DEFAULTS)
     assert report["cadence_pass"] is False
-    assert "NOT full-system correctness" in report["note"]
+    assert "not closed-loop synchronization" in report["note"]
