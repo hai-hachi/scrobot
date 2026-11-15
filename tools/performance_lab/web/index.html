@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SCROBOT · Performance Lab</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+  <header class="lab-head">
+    <div class="branding"><div class="brandmark">SC</div>
+      <div><strong>SCROBOT</strong><span>SIMULATION LABORATORY</span></div>
+    </div>
+    <nav aria-label="Performance Lab tabs">
+      <button data-tab="overview" class="tab active">Overview</button>
+      <button data-tab="synchronization" class="tab">Clock &amp; Sync</button>
+      <button data-tab="profiler" class="tab">Profiler</button>
+      <button data-tab="results" class="tab">Results</button>
+    </nav>
+    <div id="connection" class="connection">Connecting…</div>
+  </header>
+
+  <main class="content">
+    <div class="hero">
+      <div><div class="eyebrow">SYSTEM-WIDE VALIDATION · REAL-COMPARISON</div>
+        <h1>Performance <em>Lab</em></h1>
+        <p>Run the actual complete SCROBOT simulation. Verify simulated-time
+           synchronization first, then evaluate real-time headroom.</p>
+      </div>
+      <div class="top-status" id="top-status">Simulation stopped</div>
+    </div>
+    <div id="notice" class="notice" role="status" hidden></div>
+
+    <section id="tab-overview" class="tab-pane active">
+      <section class="panel">
+        <div class="panel-heading"><h2>1 · Full-stack run setup</h2>
+          <span>Actual scrobot_bringup.sim.launch.py · production calibration</span></div>
+        <div class="form-grid">
+          <div class="field"><label for="mode">Validation mode</label>
+            <select id="mode">
+              <option value="synchronized">Synchronized simulation · sim-time cadence</option>
+              <option value="real_time">Real-time performance · wall-time cadence</option>
+            </select>
+            <p class="small-muted">In synchronized mode, RTF below 1.0 is acceptable if
+              nodes and sensor streams maintain their rates per simulated second.</p>
+          </div>
+          <div class="field"><label for="profile">Full-stack workload</label>
+            <select id="profile">
+              <option value="full_idle">Full stack idle — cameras, control, localization, YOLO, Nav2</option>
+              <option value="full_mission">Full mission — same stack plus shuttle collection mission</option>
+            </select>
+            <p class="small-muted">Both profiles retain RGB, depth, physics and perception.
+              Idle disables only automatic mission execution.</p>
+          </div>
+          <div class="field"><label for="max_rtf">Maximum simulation speed
+            <strong id="rtf-choice">1.00×</strong></label>
+            <input type="range" id="max_rtf" min=".10" max="1" step=".05" value="1">
+            <p class="small-muted">RTF cap, not a guarantee. A slow computer may run below
+              the cap. Physics step size, sensor FPS and controller frequencies stay unchanged.</p>
+          </div>
+          <div class="split">
+            <div class="field"><label for="duration_s">Measurement (wall seconds)</label>
+              <input id="duration_s" type="number" min="10" max="600" step="5"></div>
+            <div class="field"><label for="warmup_s">Warm-up (wall seconds)</label>
+              <input id="warmup_s" type="number" min="0" max="120" step="5"></div>
+          </div>
+          <div class="split">
+            <div class="field"><label for="shuttle_count">Shuttle count</label>
+              <input id="shuttle_count" type="number" min="0" max="200" step="1"></div>
+            <div class="field"><label for="shuttle_seed">Repeatable seed</label>
+              <input id="shuttle_seed" type="number" min="0" max="2147483647" step="1"></div>
+          </div>
+          <div class="split">
+            <div class="field"><label for="yolo_device">YOLO device</label>
+              <input id="yolo_device" type="text" placeholder="0 or cpu"></div>
+            <div class="field"><label for="ros_domain_id">ROS domain</label>
+              <input id="ros_domain_id" type="number" min="1" max="232"></div>
+          </div>
+          <div class="field wide"><label for="model_path">YOLO model path
+            <span>(leave empty to use SCROBOT_YOLO_MODEL)</span></label>
+            <input id="model_path" type="text" placeholder="Production weights path, or SCROBOT_YOLO_MODEL env">
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="btn primary" id="start">Start full-stack simulation</button>
+          <button class="btn danger" id="stop">Stop simulation</button>
+          <button class="btn secondary" id="save">Save Performance Lab YAML</button>
+          <button class="btn secondary" id="bench-start">Run timed benchmark</button>
+          <button class="btn outline" id="bench-cancel">Cancel benchmark</button>
+        </div>
+        <p class="fineprint" id="run-info">Start the full simulator, then measure a repeatable warm-up and test window.</p>
+        <p class="fineprint">The lab copies the production court into
+          <code>evaluation_results/performance_lab/_active</code> and modifies
+          only its RTF cap. Production launch defaults and calibration files are unchanged.
+          Settings applied while the stack is already running require a restart.</p>
+      </section>
+
+      <div class="metric-grid">
+        <div class="metric"><small>Actual Gazebo RTF</small>
+          <strong id="rtf">—</strong><span id="rtf-sub">Waiting for /clock</span></div>
+        <div class="metric"><small>RGB · wall / sim</small>
+          <strong id="rgb-rate">—</strong><span>Target: saved production camera FPS</span></div>
+        <div class="metric"><small>Depth cloud · wall / sim</small>
+          <strong id="depth-rate">—</strong><span id="depth-note">Gazebo → ROS</span></div>
+        <div class="metric"><small>Wheel odom · wall / sim</small>
+          <strong id="odom-rate">—</strong><span>Proxy; not direct PID callback measurement</span></div>
+        <div class="metric"><small>Lab CPU / one core</small>
+          <strong id="cpu">—</strong><span>Can exceed 100% with multiple cores</span></div>
+        <div class="metric"><small>GPU utilization</small>
+          <strong id="gpu">—</strong><span>NVIDIA, whole device only</span></div>
+      </div>
+
+      <section class="panel">
+        <div class="panel-heading"><h2>2 · Real-time factor trend</h2>
+          <span>Measured sim seconds / wall seconds · last 2 minutes</span></div>
+        <svg id="rtf-chart" viewBox="0 0 850 150" preserveAspectRatio="none"
+             aria-label="Recent Gazebo real-time factor" role="img">
+          <line x1="0" y1="72" x2="850" y2="72" stroke="#668396" stroke-dasharray="5 5"/>
+          <text x="8" y="16" fill="#95acbe" font-size="11">1.0× target</text>
+          <path id="rtf-line" fill="none" stroke="#4bd8b1" stroke-width="2.5"/>
+        </svg>
+        <p class="fineprint" id="clock-note">Wall-clock rates naturally fall with RTF.
+          Sim-time rates should remain at the target unless updates are missed.</p>
+      </section>
+      <section class="panel">
+        <div class="panel-heading"><h2>3 · Calibration provenance</h2>
+          <span>Read-only snapshots · not auto-published</span></div>
+        <div id="calibration" class="calibration-grid">No input snapshot yet.</div>
+        <p class="fineprint">The production full-stack launch reads its published
+          Camera, Mobility and Odometry settings. Saved lab YAML checksums are
+          included for traceability; a saved calibration is not automatically
+          equivalent to a published one.</p>
+      </section>
+    </section>
+
+    <section id="tab-synchronization" class="tab-pane">
+      <section class="panel">
+        <div class="panel-heading"><h2>Clock &amp; topic synchronization</h2>
+          <span>Message arrival measured in both time domains</span></div>
+        <div class="sync-heading">
+          <div>Simulation clock <strong id="simclock">—</strong></div>
+          <div>Clock state <strong id="clock-state">Waiting</strong></div>
+          <div>Clock resets <strong id="clock-jumps">—</strong></div>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>ROS topic</th><th>Target sim Hz</th><th>Wall Hz</th>
+            <th>Sim Hz</th><th>Header age (sim s)</th>
+            <th>Large header gaps</th><th>Assessment</th></tr></thead>
+          <tbody id="topic-rows"><tr><td colspan="7">Start simulation to measure topic rates.</td></tr></tbody>
+        </table></div>
+        <p class="fineprint">Wall Hz is measured against monotonic wall time.
+          Sim Hz divides message arrivals by the /clock progression in the same window.
+          Image/PointCloud2 payloads are monitored as serialized messages to avoid
+          extra deserialization; their header-age field is intentionally unavailable.
+          Missing streams are unknown, not passed. Header gaps are indications,
+          not proof of publisher drops.</p>
+      </section>
+      <section class="panel">
+        <div class="panel-heading"><h2>ROS node clock audit</h2>
+          <button id="audit-start" class="btn secondary">Check use_sim_time parameters</button>
+        </div>
+        <p id="audit-note" class="fineprint">Checks discovered ROS nodes in the lab domain.
+          A true use_sim_time parameter does not prove a custom node never calls wall timers.</p>
+        <div class="table-wrap"><table class="audit-table">
+          <thead><tr><th>ROS node</th><th>Time source</th><th>Details</th></tr></thead>
+          <tbody id="audit-rows"><tr><td colspan="3">No audit yet.</td></tr></tbody>
+        </table></div>
+      </section>
+      <section class="panel">
+        <h2>Correct interpretation</h2>
+        <p class="fineprint">At 0.5× RTF, a correctly synchronized 30-Hz
+          simulated depth camera normally produces about 15 messages/second
+          in wall time. A 100-Hz simulated ROS timer normally fires about
+          50 times per wall second. We flag unexpectedly low/high simulated-time
+          cadence separately from a valid wall-clock slowdown.</p>
+        <p class="fineprint">Important limitation: <strong>shared /clock does
+          not guarantee lockstep</strong> between Gazebo and callbacks.
+          We still have to inspect queueing, timestamp age, simulated
+          timeouts and controller deadline warnings. This initial lab
+          measures synchronization; it does not implement an acknowledgment-based
+          global stepping scheduler.</p>
+      </section>
+    </section>
+
+    <section id="tab-profiler" class="tab-pane">
+      <section class="panel">
+        <div class="panel-heading"><h2>CPU · RAM · GPU</h2>
+          <span>Scoped to full-stack launch and its descendant processes</span></div>
+        <div class="metric-grid">
+          <div class="metric"><small>CPU (one core = 100%)</small><strong id="proc-cpu">—</strong></div>
+          <div class="metric"><small>Process RSS (MiB)</small><strong id="proc-ram">—</strong></div>
+          <div class="metric"><small>Whole-machine CPU</small><strong id="host-cpu">—</strong></div>
+          <div class="metric"><small>Whole-machine RAM</small><strong id="host-ram">—</strong></div>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Process category</th><th>CPU / 1 core (%)</th>
+            <th>RSS (MiB)</th><th>PIDs</th></tr></thead>
+          <tbody id="process-rows"><tr><td colspan="4">Start the simulation.</td></tr></tbody>
+        </table></div>
+        <p class="fineprint">CPU percentages are relative to one logical
+          core and may exceed 100%; summed RSS can count shared memory pages
+          more than once. GPU utilization is whole-device if nvidia-smi
+          is available. Neither a high thread count nor CPU affinity guarantees
+          an algorithm runs in parallel.</p>
+      </section>
+      <section class="panel">
+        <h2>GPU and rendering</h2>
+        <div id="gpu-details" class="small-muted">No GPU measurements.</div>
+        <p class="fineprint">Profile full-stack load without permanently
+          disabling sensors or changing calibrated camera resolution. Gazebo's
+          OGRE2 rendering backend, illumination/shadows, physics and transport
+          can each be limiting even if many CPU cores are idle.</p>
+      </section>
+    </section>
+
+    <section id="tab-results" class="tab-pane">
+      <section class="panel">
+        <div class="panel-heading"><h2>Benchmark outcome</h2><span id="bench-status">No current benchmark</span></div>
+        <div id="run-summary" class="run-summary">A completed timed benchmark will report cadence acceptance and RTF separately.</div>
+        <p class="fineprint">A pass here means only that measured topic
+          frequencies met their targets. It is not a proof of 100-Hz
+          controller-loop execution, YOLO inference accuracy, absence of ROS
+          queue delays or physical hardware real-time safety.</p>
+      </section>
+      <section class="panel">
+        <div class="panel-heading"><h2>Saved performance experiments</h2>
+          <button class="btn secondary" id="history-refresh">Refresh</button></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Run</th><th>Profile</th><th>Mode</th><th>Avg RTF</th>
+            <th>Sim cadence</th><th>Outcome</th><th>Artifact</th><th>Delete</th></tr></thead>
+          <tbody id="history-rows"><tr><td colspan="8">No experiments saved.</td></tr></tbody>
+        </table></div>
+        <p class="fineprint">Experiments include sampled topic rates, RTF,
+          process CPU/RAM, GPU observations and frozen input checksums. Deletion
+          requires confirmation and never touches calibration YAMLs or active
+          Gazebo files.</p>
+      </section>
+    </section>
+
+    <section class="panel runtime-logs">
+      <div class="panel-heading"><h2>Runtime logs</h2><span>Visible in every tab</span></div>
+      <details><summary>Full production simulation stack</summary><pre id="stack-log">Not started.</pre></details>
+      <details><summary>ROS clock observer</summary><pre id="observer-log">Not started.</pre></details>
+      <details><summary>Gazebo GUI client</summary><pre id="gazebo-log">Not opened.</pre></details>
+      <details><summary>RViz</summary><pre id="rviz-log">Not opened.</pre></details>
+      <div class="button-row">
+        <button id="gazebo-open" class="btn secondary">Open Gazebo GUI</button>
+        <button id="gazebo-close" class="btn outline">Close Gazebo GUI</button>
+        <button id="rviz-open" class="btn secondary">Open RViz</button>
+        <button id="rviz-close" class="btn outline">Close RViz</button>
+      </div>
+    </section>
+  </main>
+  <footer>SCROBOT · PERFORMANCE LAB · SAVED LAB YAML IS SEPARATE FROM PRODUCTION</footer>
+</div>
+</body>
+</html>
