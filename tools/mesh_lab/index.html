@@ -315,8 +315,7 @@ async function poll(){try{const r=await fetch('/api/status');if(!r.ok)throw Erro
  else if(data.result)$('benchmarkResult').textContent=JSON.stringify({file:data.result.file,averages:data.result.averages,samples:data.result.sample_count,notes:data.result.measurement_note},null,2);
  }catch(e){$('connection').textContent=e.message}}
 poll();refreshAudit();setInterval(poll,1000);
-</script>
-<script>
+
 /* Shared lab-only Gazebo RTF cap; source sensor/controller rates never scale. */
 (function(){
   async function initRtfControl(){
