@@ -139,6 +139,11 @@
       <section class="panel">
         <div class="panel-heading"><h2>Clock &amp; topic synchronization</h2>
           <span>Message arrival measured in both time domains</span></div>
+        <div class="button-row">
+          <button id="monitor-restart" class="btn secondary" type="button">
+            Restart clock observer</button>
+          <span class="small-muted">Restarts monitoring only; Gazebo and controllers keep running.</span>
+        </div>
         <div class="sync-heading">
           <div>Simulation clock <strong id="simclock">—</strong></div>
           <div>Clock state <strong id="clock-state">Waiting</strong></div>
@@ -175,6 +180,13 @@
           in wall time. A 100-Hz simulated ROS timer normally fires about
           50 times per wall second. We flag unexpectedly low/high simulated-time
           cadence separately from a valid wall-clock slowdown.</p>
+        <p class="fineprint"><strong>Nav2 controller warning:</strong>
+          A log line saying the 25 Hz controller missed its rate while showing
+          a higher "current loop rate" is possible. The reported figure is
+          calculated from computation time for that cycle; the warning comes
+          from the rate scheduler missing its wake-up deadline. Do not lower
+          the configured controller Hz until sim-time cadence, costmap timing,
+          TF availability and scheduler behavior are checked.</p>
         <p class="fineprint">Important limitation: <strong>shared /clock does
           not guarantee lockstep</strong> between Gazebo and callbacks.
           We still have to inspect queueing, timestamp age, simulated
