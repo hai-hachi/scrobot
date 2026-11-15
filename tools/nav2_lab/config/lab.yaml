@@ -1,4 +1,6 @@
-# Dedicated Nav2 Lab settings. Never edit production Nav2 from this file.
+# First-run default template only. Canonical SAVED Nav2 Lab state is
+# tools/configs/labs/nav2_lab.yaml, written by the Save YAML button.
+# Keep these initial defaults conservative; never publish to production.
 planner: NavFn
 controller: RPP
 mode: plan
