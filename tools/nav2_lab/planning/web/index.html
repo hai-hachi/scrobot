@@ -7,7 +7,7 @@
 <aside class="sidebar">
  <header><div class="monogram">S·</div><div><strong>SCROBOT</strong><small>ROBOTICS LABORATORY</small></div></header>
  <div class="label-upper">NAV2 LAB · PLANNING</div>
- <nav><div class="tab active">▦ &nbsp; Scene + planning + results</div></nav>
+ <nav><div class="tab active">▦ &nbsp; Planner</div></nav>
  <div class="sidebar-bottom"><span id="stack-dot" class="dot"></span> <b id="stack-state">Simulation stopped</b>
  <p>One workflow: set court scene, test planner paths in RViz, and compare results.</p>
  <p>The court selector below is for choosing poses; RViz remains the source of truth for costmaps and paths.</p></div>
@@ -27,21 +27,22 @@
 
  <section class="panel" id="scene-panel">
    <div class="between"><h2>1 · Scene setup</h2><span>Shared court pose picker, inspired by AprilTags Lab</span></div>
-   <p class="muted">Click the court to choose a robot pose, goal, cube location, or either end of the walking route. The selector edits coordinates; Gazebo and RViz show the actual scene.</p>
+   <p class="muted">For robot and goal: click to place, then drag toward the desired heading (same gesture as YOLO Lab). For moving cylinders, click A then B; repeat A then B to add another.</p>
    <div class="grid scene-layout">
     <div>
       <div class="field"><label for="court-pick">Click-to-place mode</label><select id="court-pick">
         <option value="robot">Robot starting pose</option>
         <option value="goal">Planner goal</option>
         <option value="box">Cube center</option>
-        <option value="human-a">Walking human: point A</option>
-        <option value="human-b">Walking human: point B</option>
+        <option value="human">Walking cylinder: A → B → A → B…</option>
+
       </select></div>
       <svg id="courtMap" viewBox="0 0 760 430" role="img" tabindex="0"
-          aria-label="Interactive badminton court coordinate picker, click or keyboard arrows to choose a location">
+          aria-label="Interactive badminton court: drag robot or goal heading, or click walking-route points A then B">
         <g id="courtSurface"></g><g id="courtObstacles"></g><g id="courtDraft"></g>
       </svg>
-      <p class="fineprint" id="court-coordinates">Venue loaded from Lighting Lab · robot arrow indicates heading</p>
+      <p class="fineprint" id="court-coordinates">Venue loaded from Lighting Lab · drag from position to set yaw</p>
+      <p class="fineprint"><strong id="pick-next">Robot: click then drag to set heading.</strong></p>
       <div class="legend">
         <span><i style="background:#f2bf71"></i> Robot</span>
         <span><i style="background:#5bd7b6"></i> Goal</span>
@@ -77,7 +78,7 @@
    <div class="grid">
      <div class="scene-subsection">
        <h3>Walking obstacle · fixed human dimensions</h3>
-       <p class="fineprint">A human-shaped 1.74 m-tall, 0.48 m-diameter solid model moves back and forth on the segment A ↔ B. Choose A and B by clicking the court or entering values.</p>
+       <p class="fineprint">A simple cylinder (1.74 m tall, 0.48 m diameter) moves between A and B. Select Walking cylinder and click A, then B; the next two clicks define another route. Speed uses the slider.</p>
        <div class="quad">
          <label>Point A · X (m)<input id="human-ax" type="number" value="-1.5" step=".1"></label>
          <label>Point A · Y (m)<input id="human-ay" type="number" value="-0.7" step=".1"></label>
@@ -86,7 +87,7 @@
        </div>
        <div class="field"><label for="human-speed">Walking speed <b id="human-speed-value">0.60 m/s</b></label>
        <input type="range" id="human-speed" min=".1" max="2" step=".05" value=".6"></div>
-       <button class="btn secondary" id="add-human">Add walking human</button>
+       <button class="btn secondary" id="add-human">Add cylinder from entered A/B</button>
        <p class="fineprint">Walking speed follows Gazebo simulation time from <code>/clock</code>. Pausing Gazebo also pauses the route.</p>
      </div>
      <div class="scene-subsection">
@@ -119,12 +120,19 @@
     </div>
     <div>
      <div class="switchline"><label for="depth-enabled">Use RealSense depth obstacle layer</label><input id="depth-enabled" type="checkbox"></div>
-     <div class="field"><label for="resolution">Map cell size</label><select id="resolution">
-       <option value="0.02">0.02 m</option><option value="0.05">0.05 m</option><option value="0.1">0.10 m</option>
-     </select></div>
+     <div class="field"><label for="resolution">Cell size / map resolution (m)</label><input id="resolution" type="number" min="0.02" max="0.20" step="0.01" value="0.05"></div>
      <p class="fineprint">Changing map resolution, depth layer or saved calibration requires a simulation restart.</p>
     </div>
    </div>
+ </section>
+
+ <section class="panel" id="performance-panel">
+   <div class="between"><h2>Performance · live topic frequencies</h2><span>Measured ROS message arrival rate (wall-clock Hz)</span></div>
+   <div class="table-wrap"><table class="frequency-table">
+      <thead><tr><th>Topic</th><th>Actual Hz</th><th>Last message</th><th>Meaning</th></tr></thead>
+      <tbody id="topic-rate-rows"><tr><td colspan="4">Start simulation to measure topics.</td></tr></tbody>
+   </table></div>
+   <p class="fineprint">Measured topic rates, not configured sensor FPS. A static /map is latched rather than periodic. Rates decrease when Gazebo runs slower than real time.</p>
  </section>
 
  <section class="panel" id="rviz-panel">
