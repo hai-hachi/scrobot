@@ -55,6 +55,7 @@ def generate_launch_description():
     headless = LaunchConfiguration('headless')
     world = LaunchConfiguration('world')
     mission_enabled = LaunchConfiguration('mission_enabled')
+    mission_autostart = LaunchConfiguration('mission_autostart')
     use_magnetometer = LaunchConfiguration('use_magnetometer')
 
     model_path = LaunchConfiguration('model_path')
@@ -159,6 +160,7 @@ def generate_launch_description():
         'sweep_mission.launch.py',
         {
             'use_sim_time': use_sim_time,
+            'autostart': mission_autostart,
             'return_to_idle': return_to_idle,
             'idle_x': robot_x,
             'idle_y': robot_y,
@@ -183,6 +185,10 @@ def generate_launch_description():
                 / 'worlds/badminton_court.sdf'),
         ),
         DeclareLaunchArgument('mission_enabled', default_value='true',
+                              choices=['true', 'false']),
+        # Full-stack idle performance test uses mission_autostart:=false to
+        # launch Nav2 and collection components without initiating movement.
+        DeclareLaunchArgument('mission_autostart', default_value='true',
                               choices=['true', 'false']),
         DeclareLaunchArgument(
             'use_magnetometer',
