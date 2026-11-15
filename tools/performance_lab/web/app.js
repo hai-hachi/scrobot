@@ -178,6 +178,22 @@ function renderResources(resources,gpu){
     cell(tr,(p.pids||[]).join(', '));tbody.append(tr);
   }
 }
+function renderThreads(stats){
+  const body=$('thread-rows');body.replaceChildren();
+  if(!stats?.rows?.length){
+    body.append(emptyRow(5,stats?.hint||'No thread CPU samples yet.'));
+    return;
+  }
+  for(const thread of stats.rows){
+    const tr=document.createElement('tr');
+    cell(tr,thread.name);
+    cell(tr,thread.process);
+    cell(tr,fmt(thread.cpu_percent,1));
+    cell(tr,String(thread.pid));
+    cell(tr,String(thread.tid));
+    body.append(tr);
+  }
+}
 function renderAudit(audit){
   const lines=$('audit-rows');lines.replaceChildren();
   $('audit-note').textContent=
@@ -298,6 +314,7 @@ async function refresh(){
     renderChart(meter?.rtf);
     renderTopics(meter);
     renderResources(result.resources,result.gpu);
+    renderThreads(result.threads);
     renderAudit(result.audit);
     renderSummary(result);
     renderProvenance(result.calibration);
