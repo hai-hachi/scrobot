@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -50,11 +51,24 @@ def status_file(path):
     except (ValueError,FileNotFoundError):return None
 
 
-def log_tail(path,limit=3400):
+# Gazebo/ROS/terminal progress output uses ANSI SGR/OSC and carriage returns.
+# Remove whole control sequences, not just the ESC byte (which leaves "[0m").
+ANSI_CSI = re.compile(r"\\x1b\\[[0-?]*[ -/]*[@-~]")
+ANSI_OSC = re.compile(r"\\x1b\\][^\\x07\\x1b]*(?:\\x07|\\x1b\\\\)")
+ANSI_SINGLE = re.compile(r"\\x1b[@-_]")
+def sanitize_log(text):
+    text=ANSI_OSC.sub("",text)
+    text=ANSI_CSI.sub("",text)
+    text=ANSI_SINGLE.sub("",text)
+    text=text.replace("\\r\\n","\\n").replace("\\r","\\n")
+    return "".join(ch for ch in text if ch in "\\n\\t" or ord(ch)>=32)
+
+def log_tail(path,limit=6000):
     if not path or not path.exists():return ""
+    # Read extra bytes so color sequences split by the file seek are unlikely.
     with path.open("rb") as f:
-        f.seek(max(0,path.stat().st_size-limit))
-        return f.read().decode("utf-8","replace")
+        f.seek(max(0,path.stat().st_size-limit*2))
+        return sanitize_log(f.read().decode("utf-8","replace"))[-limit:]
 
 
 def running(proc):
@@ -78,7 +92,8 @@ def preflight(env):
     required={"nav2_map_server","nav2_planner","nav2_navfn_planner",
               "nav2_smac_planner","nav2_theta_star_planner",
               "nav2_lifecycle_manager","ros_gz_sim","scrobot_simulation",
-              "scrobot_control","scrobot_localization","scrobot_perception"}
+              "scrobot_perception","pointcloud_to_laserscan","tf2_ros",
+              "ros_gz_bridge"}
     missing=sorted(required-installed)
     if missing:
         raise RuntimeError("Missing ROS packages: "+", ".join(missing))
@@ -111,6 +126,14 @@ class Service:
         previous=self.config()["planning"]["start"]
         self.scene=load_scene(default={"robot":previous,"obstacles":[]})
         self.active_robot=None
+        self._pose_file=None
+
+    def _write_pose_file(self,robot,goal):
+        if self._pose_file is None:return
+        data={"robot":robot,"goal":goal}
+        temp=self._pose_file.with_suffix(".tmp")
+        temp.write_text(json.dumps(data))
+        temp.replace(self._pose_file)
 
     def scene_status(self):
         return {"scene":deepcopy(self.scene),
@@ -204,6 +227,9 @@ class Service:
             cfg["simulation"]["start_yaw"]=__import__("math").radians(
                 self.scene["robot"]["yaw_deg"])
             validate(cfg)
+            if self._pose_file is not None and running(self.stack):
+                self._write_pose_file(self.active_robot or self.scene["robot"],
+                                      cfg["planning"]["goal"])
             if self.config_path == CONFIG:
                 save_lab_yaml("nav2",cfg,validator=validate)
             else:
@@ -234,6 +260,9 @@ class Service:
             self.active_dir=root/"_planning_active"
             self.active_dir.mkdir(parents=True,exist_ok=True)
             (self.active_dir/"map_status.json").unlink(missing_ok=True)
+            pose_file=self.active_dir/"pose_display.json"
+            self._pose_file=pose_file
+            self._write_pose_file(cfg["planning"]["start"],cfg["planning"]["goal"])
             # Build world + ROS overrides from validated saved owner YAMLs.
             # These are frozen for the entire Gazebo session.
             scene=build_world(calibration,self.active_dir,loaded_scene)
@@ -269,6 +298,7 @@ class Service:
             dw,dh=map(int,camera["depth"].split("x"))
             robot=loaded_scene["robot"]
             launch_values={
+                "pose_file":str(self._pose_file),
                 "robot_x":robot["x"], "robot_y":robot["y"],
                 "robot_yaw_rad":__import__("math").radians(robot["yaw_deg"]),
                 "map_status_file":str(self.active_dir/"map_status.json"),
@@ -453,6 +483,7 @@ class Service:
             self.loaded_config=None
             self.loaded_inputs=None
             self.active_robot=None
+            self._pose_file=None
             return self.status()
 
     def status(self):
