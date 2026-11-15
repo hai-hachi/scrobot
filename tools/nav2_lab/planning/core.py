@@ -59,8 +59,9 @@ def nav2_params(production, config, map_yaml, geometry):
     global_costmap = deepcopy(production["global_costmap"])
     cost = global_costmap["global_costmap"]["ros__parameters"]
     cost["global_frame"] = "map"
-    cost["width"] = geometry["floor_width_m"]
-    cost["height"] = geometry["floor_height_m"]
+    # Nav2 Costmap2DROS declares width/height as integers (metres).
+    cost["width"] = int(math.ceil(geometry["floor_width_m"]))
+    cost["height"] = int(math.ceil(geometry["floor_height_m"]))
     cost["origin_x"] = -geometry["floor_width_m"]/2
     cost["origin_y"] = -geometry["floor_height_m"]/2
     cost["resolution"] = config["planning"]["resolution_m"]
