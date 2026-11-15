@@ -119,6 +119,9 @@ def test_environment_isolated_and_browser_controls_exist():
     assert "use_sim_time" in html
     assert "/api/benchmark/start" in js
     assert "/api/history/delete" in js
+    assert "/api/observer/restart" in js
+    assert 'id="monitor-restart"' in html
+    assert "CLOCK OBSERVER OFFLINE" in js
 
 
 def test_history_name_cannot_escape_run_root():
@@ -129,6 +132,20 @@ def test_history_name_cannot_escape_run_root():
                 "performance_20261115T172330_ab12cd.yaml",
                 "_active/monitor.json"):
         assert not RUN_NAME.fullmatch(bad)
+
+
+def test_clock_observer_restart_is_separate_from_full_simulation():
+    server=(HERE/"server.py").read_text()
+    assert "def observer_restart(self):" in server
+    assert '"/api/observer/restart"' in server
+    assert 'kill_group(self.observer)' in server
+    assert 'self.monitor_file.unlink(missing_ok=True)' in server
+    assert "Clock observer stopped unexpectedly" in server
+    # The monitor API must not be implemented by restarting Gazebo.
+    method=server.split("    def observer_restart(self):",1)[1].split(
+        "    def gui_open(self):",1)[0]
+    assert "kill_group(self.stack)" not in method
+    assert "self.start()" not in method
 
 
 def test_no_full_stack_success_is_inferred_from_topic_proxy():
