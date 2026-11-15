@@ -80,6 +80,8 @@
     .statusvalue{justify-self:end;font-variant-numeric:tabular-nums;font-size:11px}
     @media(max-width:1350px){.panelgrid{grid-template-columns:1fr 1fr}.panelgrid>.panel:last-child{grid-column:1/-1}.views{gap:7px}}
     @media(max-width:850px){main{padding:12px}.views,.panelgrid{grid-template-columns:1fr}.panelgrid>.panel:last-child{grid-column:auto}.metrics{grid-template-columns:repeat(2,1fr)}header{padding:12px}.sub{display:none}}
+    .lablog{white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;background:#0b151e;border:1px solid var(--line);border-radius:7px;padding:12px;font-size:11px;color:var(--mute)}
+    details{margin:10px 0}summary{cursor:pointer;color:var(--fg);font-size:12px}
   </style>
 </head>
 <body>
@@ -91,6 +93,7 @@
   </div>
   <div style="display:flex;align-items:center;gap:10px">
     <span class="scope">LOCAL · 127.0.0.1</span>
+    <button id="toggleGazeboGui" onclick="toggleGazeboGui()" type="button">Open Gazebo UI</button>
     <span id="conn">Starting Gazebo…</span>
   </div>
 </header>
@@ -290,11 +293,21 @@
       <p class="note">Brightness and clipping are image-based proxies, NOT calibrated lux. Compare the same robot pose, camera settings and shuttle layout before choosing an illumination profile. RTF and FPS indicate computational cost, not illumination quality.</p>
     </article>
   </section>
-  <div class="status"><span id="toast">Open Gazebo camera feeds and adjust calibration sliders. No mission is started.</span><span class="scope" id="worldlabel">WORLD: badminton_court</span></div>
+<div class="status"><span id="toast">Open Gazebo camera feeds and adjust calibration sliders. No mission is started.</span><span class="scope" id="worldlabel">WORLD: badminton_court</span></div>
+ <section class="panel" style="margin-top:16px">
+   <div class="paneltitle"><h2>Runtime logs</h2><small>Most recent process output · opt-in Gazebo desktop</small></div>
+   <details><summary>Gazebo server / ROS launch</summary><pre id="labGazeboLog" class="lablog">No Gazebo log yet.</pre></details>
+   <details><summary>Gazebo GUI client</summary><pre id="labGuiLog" class="lablog">GUI closed.</pre></details>
+ </section>
 </main>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
+let gazeboGuiLive = false;
+async function toggleGazeboGui(){
+ const path = gazeboGuiLive ? "/api/gazebo-gui/close" : "/api/gazebo-gui/open";
+ await action(path,{}, "toggleGazeboGui");
+}
 const lightSpecs = [
   ["rows","Rows",1,8,1,""],["cols","Columns",1,12,1,""],
   ["reach_x","X reach from center",0,10,.25,"m"],["reach_y","Y reach from center",0,8,.25,"m"],
@@ -661,6 +674,11 @@ async function getStatus(){
    $("follow-orbit").checked=gui.following;
 
   }
+  gazeboGuiLive=!!s.gazebo_gui?.running;
+  $("toggleGazeboGui").textContent=gazeboGuiLive?"Close Gazebo UI":"Open Gazebo UI";
+  $("toggleGazeboGui").disabled=s.gazebo_alive===false;
+  $("labGazeboLog").textContent=s.logs?.gazebo||"No Gazebo log yet.";
+  $("labGuiLog").textContent=s.logs?.gazebo_gui||"Gazebo GUI has not been opened.";
   const active=s.gazebo_alive!==false && s.sim.stats_age_s!==null&&s.sim.stats_age_s<5;
   $("conn").textContent=s.gazebo_alive===false?"Gazebo exited":(active?"● Gazebo live":"◌ Connecting…");
   $("conn").style.color=active?"var(--primary)":"var(--yellow)";

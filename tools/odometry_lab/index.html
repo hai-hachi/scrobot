@@ -4,8 +4,10 @@
 <style>
 :root{color-scheme:dark;--bg:#0b121b;--panel:#15202b;--sub:#1f2d3c;--border:#344457;--text:#edf5fa;--muted:#a6b6c4;--mint:#42d0c2;--amber:#f7b964;--violet:#aaa2ec;--rose:#ed8ca8}*{box-sizing:border-box}
 body{background:linear-gradient(135deg,#0a1721,#0b1119);font:14px system-ui,sans-serif;color:var(--text);margin:0}header{background:#111d27;border-bottom:1px solid var(--border);padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.eyebrow{letter-spacing:2px;font-size:11px;color:var(--mint);font-weight:700}h1{font-size:25px;margin:5px 0}h2{font-size:16px;margin:0 0 14px}h3{font-size:14px;margin:0 0 12px}p,.hint{color:var(--muted);line-height:1.55;font-size:12px;margin:6px 0}.shell{max-width:1480px;margin:auto;padding:20px}.layout{display:grid;grid-template-columns:minmax(290px,360px) minmax(0,1fr);gap:18px}.panel{border:1px solid var(--border);background:var(--panel);border-radius:12px;padding:18px;margin-bottom:16px}.field{margin:12px 0}.field label{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px;margin-bottom:6px}.field output{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:var(--mint)}select{width:100%;font:inherit;background:var(--sub);color:var(--text);border:1px solid var(--border);padding:10px;border-radius:7px}button{background:#27394b;color:var(--text);padding:10px 13px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font:inherit;font-weight:600}button:hover:not(:disabled){filter:brightness(1.2)}button:disabled{opacity:.42;cursor:default}.primary{background:#0c7c75;border-color:#12b2a5}.danger{background:#573040}.buttons{display:flex;gap:9px;flex-wrap:wrap;margin:13px 0}.status{background:var(--sub);border-radius:16px;padding:6px 12px;font-size:12px;color:var(--muted)}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.tile{background:var(--sub);padding:12px;border-radius:9px;min-height:88px}.tile small{color:var(--muted);display:block;font-size:11px}.tile strong{display:block;font-size:20px;margin-top:8px;font-variant-numeric:tabular-nums}.plot{width:100%;height:260px;border:1px solid var(--border);border-radius:8px;background:#101925;display:block}.legend{display:flex;flex-wrap:wrap;gap:13px;font-size:11px;color:var(--muted);margin:8px 0 15px}.legend span:before{content:"";display:inline-block;width:15px;height:3px;margin-right:5px;vertical-align:middle;background:var(--key)}.row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.frequency{width:100%;border-collapse:collapse;font-size:12px}.frequency th,.frequency td{text-align:left;border-bottom:1px solid var(--border);padding:8px 5px}.frequency th{color:var(--muted);font-weight:500}.mono{font-variant-numeric:tabular-nums}.notice{border-left:3px solid var(--amber);padding:10px;background:#49391b4d;color:#edd9bb;font-size:12px;line-height:1.5;border-radius:4px;margin-top:10px}#error{color:var(--rose);min-height:18px;font-size:12px}.ok{color:var(--mint)}.warn{color:var(--amber)}code{font-size:11px}.compare{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.compare .tile{min-height:110px}.inline{display:flex;align-items:center;gap:7px}.switch{display:flex;justify-content:space-between;align-items:center;background:var(--sub);padding:10px 12px;border-radius:8px}.switch input{accent-color:var(--mint)}@media(max-width:950px){.layout{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}}@media(max-width:550px){.shell{padding:12px}.panel{padding:12px}.compare{grid-template-columns:1fr}}
+details{margin:10px 0}summary{cursor:pointer;color:var(--text);font-size:12px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101925;border:1px solid var(--border);border-radius:8px;padding:12px;max-height:260px;overflow:auto;font-size:11px;color:var(--muted)}
 </style></head><body>
-<header><div><div class="eyebrow">SCROBOT · REAL COMPARISON</div><h1>Odometry Lab</h1><p>Wheel encoders · D435i IMU · magnetic heading · Madgwick · EKF · independent Gazebo truth</p></div><div class="row"><span id="stage" class="status">Connecting</span><span id="readiness" class="hint">Waiting for sensors</span></div></header>
+<header><div><div class="eyebrow">SCROBOT · REAL COMPARISON</div><h1>Odometry Lab</h1><p>Wheel encoders · D435i IMU · magnetic heading · Madgwick · EKF · independent Gazebo truth</p></div><div class="row"><span id="stage" class="status">Connecting</span><span id="readiness" class="hint">Waiting for sensors</span><button id="toggleGazeboGui">Open Gazebo UI</button></div></header>
 <main class="shell layout">
  <aside>
   <div class="panel"><h2>01 · Test trajectory</h2>
@@ -26,13 +28,13 @@ body{background:linear-gradient(135deg,#0a1721,#0b1119);font:14px system-ui,sans
    <p>Controller and STM32 PID run at 100 Hz. These are requested simulation publication/update rates; the table shows measured topic rates, jitter and ages.</p>
    <div id="rate-controls"></div>
    <div class="switch"><label for="use_magnetometer">Fuse magnetometer in Madgwick</label><input id="use_magnetometer" type="checkbox" checked></div>
-   <div class="buttons"><button id="apply">Save Odometry Lab YAML</button><button id="restart">Restart Gazebo with rates</button></div>
+   <div class="buttons"><button id="restart">Restart Gazebo with rates</button></div>
    <p id="rateStatus" class="hint"></p>
    <div class="notice">Changing Gazebo sensor update rates or EKF rate needs a restart. More Hz improves temporal resolution only if real sensors provide fresh data and CPU / simulator throughput can keep up.</div>
   </div>
   <div class="panel"><h2>03 · Publish after validation</h2>
    <p>Publish saved frequencies to <code>src/scrobot_simulation/config/odometry_calibration.yaml</code>. The normal simulator then uses them; real hardware settings remain unchanged.</p>
-   <div class="buttons"><button id="publish" class="primary">Publish to Simulation</button></div>
+   <div class="buttons"><button id="apply">Save Odometry Lab YAML</button><button id="publish" class="primary">Publish to Simulation</button></div>
    <p id="publishStatus" class="hint">Checking configuration...</p>
 <p id="labYamlStatus" class="hint">Odometry Lab YAML: not saved yet.</p>
 <p id="mobilityYamlStatus" class="hint">Mobility Lab YAML handoff: checking.</p>
@@ -78,6 +80,13 @@ body{background:linear-gradient(135deg,#0a1721,#0b1119);font:14px system-ui,sans
   <p>CSV logs include raw gyro, accelerometer, magnetic vector, wheel positions/velocities, EKF pose, simulation truth, rates, and relative-motion error report. Gazebo tests cannot establish real-world accuracy without equivalent real-sensor/ground-truth logs.</p>
  </section>
 </main>
+<div class="shell" style="padding-top:0">
+ <section class="panel">
+  <h2>Runtime logs</h2>
+  <details><summary>Gazebo server / ROS launch</summary><pre id="labGazeboLog">No Gazebo log yet.</pre></details>
+  <details><summary>Gazebo GUI client</summary><pre id="labGuiLog">Gazebo GUI closed.</pre></details>
+ </section>
+</div>
 <script>
 const $=id=>document.getElementById(id);
 const descriptors={
@@ -86,6 +95,11 @@ const descriptors={
 };
 const keys=["profile","linear_m_s","angular_rad_s","pre_s","use_magnetometer","wheel_odom_hz","imu_hz","magnetometer_hz","ground_truth_hz","ekf_hz"];
 let first=false,busy=false,last=null;
+$("toggleGazeboGui").onclick=()=>invoke(async()=>{
+ const closing=Boolean(last?.gazebo_gui?.running);
+ await api(closing?"/api/gazebo-gui/close":"/api/gazebo-gui/open",{});
+ show(closing?"Gazebo desktop closed; simulation unchanged.":"Gazebo desktop opened.");
+});
 for(const [parent,controls] of Object.entries(descriptors))for(const [id,label,min,max,step,unit]of controls){
  const box=document.createElement("div");box.className="field";
  box.innerHTML='<label for="'+id+'">'+label+'<output id="out-'+id+'"></output></label><input id="'+id+'" type="range" min="'+min+'" max="'+max+'" step="'+step+'">';
@@ -193,6 +207,10 @@ function graph(name,trajectory){
 }
 function display(s){
  last=s;if(!first&&s.settings)load(s.settings);
+ $("toggleGazeboGui").textContent=s.gazebo_gui?.running?"Close Gazebo UI":"Open Gazebo UI";
+ $("toggleGazeboGui").disabled=!s.gazebo_gui?.running&&!s.gazebo_alive;
+ $("labGazeboLog").textContent=s.logs?.gazebo||"No Gazebo log yet.";
+ $("labGuiLog").textContent=s.logs?.gazebo_gui||"Gazebo GUI not launched.";
  $("stage").textContent=s.state.toUpperCase();$("clock").textContent="Simulation "+fmt(s.sim_time)+" s";
  $("readiness").textContent=s.ready?"Wheel controller ready":"Waiting for controller";
  $("motorInfo").textContent="Motor response: "+(s.motor_model||"unknown")+

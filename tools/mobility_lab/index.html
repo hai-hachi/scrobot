@@ -7,12 +7,14 @@
 <style>
 :root{color-scheme:dark;--bg:#0c121b;--panel:#141e2a;--panel2:#1d2a38;--line:#293b4c;--text:#eaf1f6;--muted:#a1b2c1;--teal:#3ed8c5;--amber:#fac06e;--pink:#ed88a9;--violet:#a8a0f3}
 *{box-sizing:border-box}body{margin:0;background:linear-gradient(155deg,#0b1721 0%,#0b111a 65%);font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;color:var(--text);font-size:14px}header{padding:22px max(26px,calc((100vw - 1470px)/2));border-bottom:1px solid var(--line);background:#0e1722bd;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.eyebrow{text-transform:uppercase;font-size:11px;letter-spacing:2.5px;color:var(--teal);font-weight:700}h1{font-size:26px;letter-spacing:-.5px;margin:5px 0 2px}h2{font-size:15px;font-weight:700;margin:0 0 14px}p{margin:0;color:var(--muted);line-height:1.55}.wrap{max-width:1510px;margin:auto;padding:22px 24px 55px}.layout{display:grid;grid-template-columns:minmax(300px,380px) minmax(460px,1fr);gap:18px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:0 9px 30px #0002}.panel+.panel{margin-top:16px}.control{margin:14px 0}.control label{display:flex;justify-content:space-between;gap:8px;margin-bottom:7px;font-size:12px;color:var(--muted)}.control output{font-variant-numeric:tabular-nums;color:var(--text);font-weight:700}input[type=range]{width:100%;accent-color:var(--teal);cursor:pointer}select{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:10px;border-radius:7px;width:100%;font:inherit}button{font:inherit;padding:10px 14px;border:1px solid var(--line);border-radius:8px;cursor:pointer;background:#29394a;color:var(--text);font-weight:600}button:hover{filter:brightness(1.2)}button:disabled{opacity:.4;cursor:not-allowed}.primary{background:#087f7a;border-color:#0bb4a2;color:#fff}.danger{background:#573145;border-color:#925672}.buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}small,.hint{font-size:11px;color:var(--muted);line-height:1.5}.tag{font-size:11px;padding:5px 9px;border:1px solid var(--line);border-radius:15px;background:var(--panel2);color:var(--muted)}.good{color:var(--teal)}.warn{color:var(--amber)}.bad{color:var(--pink)}.statusline{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.dot{width:8px;height:8px;border-radius:50%;background:var(--pink)}.dot.ready{background:var(--teal)}.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}.metric{background:var(--panel2);border-radius:9px;padding:13px;min-height:80px}.metric strong{font-size:19px;display:block;margin-top:7px;letter-spacing:-.3px;font-variant-numeric:tabular-nums}.metric small{display:block}.chart{width:100%;height:256px;display:block;border:1px solid var(--line);border-radius:9px;background:#101924}.wheel-plot-stack{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}.wheel-plot{min-width:0}.wheel-chart{height:240px}.path-chart{height:230px}.trajectory-section{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:11px}.key{width:15px;height:3px;display:inline-block;vertical-align:middle;margin-right:5px}.split{display:grid;grid-template-columns:1fr 270px;gap:14px}.note{border-left:3px solid var(--amber);background:#4432213b;border-radius:3px;padding:10px 12px;color:#edd5b2;font-size:12px;line-height:1.5;margin:12px 0}.upload{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.upload input{max-width:260px;color:var(--muted)}.tabs{display:flex;gap:9px;align-items:center}.error{color:#ff9fae;margin:8px 0;min-height:16px;font-size:12px}.inline{display:flex;justify-content:space-between;align-items:center;gap:8px}footer{color:var(--muted);font-size:11px;line-height:1.6;margin-top:16px}@media(max-width:1000px){.layout{grid-template-columns:1fr}.split{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}}@media(max-width:520px){.wrap{padding:14px}.panel{padding:13px}.row{grid-template-columns:1fr}.metrics{gap:8px}h1{font-size:21px}}
+details{margin-top:10px}summary{cursor:pointer;font-size:12px;color:var(--text)}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101924;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:260px;overflow:auto;font-size:11px;color:var(--muted)}
 </style>
 </head>
 <body>
 <header>
   <div><div class="eyebrow">SCROBOT · CALIBRATION TOOLS</div><h1>Mobility Lab</h1><p>Floor-loaded wheel dynamics and tire contact calibration</p></div>
-  <div class="statusline"><span id="stage" class="tag">Connecting</span><span id="readyDot" class="dot"></span><span id="readiness" class="hint">Waiting for /joint_states</span></div>
+  <div class="statusline"><span id="stage" class="tag">Connecting</span><span id="readyDot" class="dot"></span><span id="readiness" class="hint">Waiting for /joint_states</span><button id="toggleGazeboGui">Open Gazebo UI</button></div>
 </header>
 <main class="wrap layout">
 <section>
@@ -34,14 +36,14 @@
   <h2>03 · Floor and drivetrain physics</h2>
   <div id="controls-physics"></div>
   <p class="hint"><b>Contact friction</b> acts at tire/caster-floor contacts. <b>Joint damping</b> is bearing-like viscous resistance—not ground friction. <b>Contact slip</b> adjusts force-dependent rolling/lateral slip (not a viscous damping coefficient). Wheel width affects contact geometry. Gazebo's default velocity interface can largely mask damping in wheel RPM; measure the separate ground-truth robot motion to assess contact changes.</p>
-  <div class="buttons"><button id="apply">Save Mobility Lab YAML</button><button id="restart">Restart Gazebo with physics</button></div>
+  <div class="buttons"><button id="restart">Restart Gazebo with physics</button></div>
   <p class="hint" style="margin-top:9px" id="physicsStatus">Physics changes require respawning the floor-loaded robot.</p>
  </div>
  <div class="panel">
   <h2>04 · Publish to main simulation</h2>
   <p>After you validate the wheel response and floor contact, explicitly publish the <b>saved</b> calibration. This updates only <code>src/scrobot_simulation/config/mobility_calibration.yaml</code>, with a backup of the previous values.</p>
   <div class="note">Publishing does not change the real robot, main court scene, or live Gazebo process. Rebuild as needed and restart the normal simulation to apply. If the first-order motor model is selected, the main simulation inserts a <b>simulation-only</b> motor response between the collision monitor and differential-drive controller.</div>
-  <div class="buttons"><button id="publish" class="primary">Publish to Simulation</button></div>
+  <div class="buttons"><button id="apply">Save Mobility Lab YAML</button><button id="publish" class="primary">Publish to Simulation</button></div>
   <p id="publishStatus" class="hint" style="margin-top:10px">Checking published calibration...</p>
 <p id="labYamlStatus" class="hint">Shared Mobility Lab YAML: not saved yet.</p>
  </div>
@@ -97,6 +99,13 @@
  <footer>Calibration-only environment. Physical friction and joint damping are applied when Gazebo respawns. The lab does not overwrite your production URDF, world, lighting settings, or normal velocity pipeline. Repeated tests start from rest; use Restart Gazebo for identical starting poses.</footer>
 </section>
 </main>
+<div class="wrap" style="padding-top:0">
+ <section class="panel">
+  <h2>Runtime logs</h2>
+  <details><summary>Gazebo server / ROS launch</summary><pre id="labGazeboLog">No Gazebo log yet.</pre></details>
+  <details><summary>Gazebo GUI client</summary><pre id="labGuiLog">Gazebo GUI closed.</pre></details>
+ </section>
+</div>
 <script>
 const $=id=>document.getElementById(id);
 const groups={
@@ -105,6 +114,11 @@ const groups={
  "controls-physics":[["drive_contact_mu","Drive-wheel ground μ",0.05,10,0.05,""],["caster_contact_mu","Caster ground μ",0,2,0.01,""],["wheel_joint_damping","Wheel-joint damping",0,0.5,0.005," N·m·s/rad"],["drive_slip1","Rolling contact slip",0,0.02,0.0005,""],["drive_slip2","Lateral contact slip",0,0.02,0.0005,""],["wheel_collision_width","Tire collision width",0.001,0.03,0.001," m"]]
 };
 let initial=false,last=null,config={},busy=false;
+$("toggleGazeboGui").onclick=()=>invoke(async()=>{
+ const closing=Boolean(last?.gazebo_gui?.running);
+ await api(closing?"/api/gazebo-gui/close":"/api/gazebo-gui/open",{});
+ notify(closing?"Gazebo desktop closed; simulation remains active.":"Gazebo desktop opened.");
+});
 for(const [parent,items] of Object.entries(groups))for(const [key,label,min,max,step,unit]of items){
  const block=document.createElement("div");block.className="control";block.innerHTML='<label for="'+key+'">'+label+'<output id="out-'+key+'"></output></label><input id="'+key+'" type="range" min="'+min+'" max="'+max+'" step="'+step+'">';
  $(parent).append(block);$(key).oninput=()=>{$("out-"+key).textContent=Number($(key).value).toFixed(step<0.001?4:step<0.01?3:step<0.1?2:1)+unit};
@@ -208,6 +222,10 @@ function display(data){
  last=data;
  if(!initial&&data.settings)loadConfig(data.settings);
  $("stage").textContent=(data.stage||"idle").toUpperCase();
+ $("toggleGazeboGui").textContent=data.gazebo_gui?.running?"Close Gazebo UI":"Open Gazebo UI";
+ $("toggleGazeboGui").disabled=!data.gazebo_gui?.running&&!data.gazebo_alive;
+ $("labGazeboLog").textContent=data.logs?.gazebo||"No Gazebo log yet.";
+ $("labGuiLog").textContent=data.logs?.gazebo_gui||"Gazebo GUI not launched.";
  $("readyDot").className="dot"+(data.controller_ready&&data.gazebo_alive?" ready":"");
  $("readiness").textContent=data.controller_ready?"Wheel feedback online":"Waiting for wheel controllers";
  $("clock").textContent="Sim "+number(data.sim_time,2)+" s";

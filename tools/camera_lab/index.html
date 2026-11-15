@@ -106,12 +106,7 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
    </table></div>
    <p class="hint">CPU includes each process's children. 100% = one fully occupied logical CPU core; multi-core usage may exceed 100%. RAM is summed RSS and can double-count shared pages.</p>
   </section>
-  <section class="card">
-   <h2>Startup diagnostics</h2>
-   <details><summary>Gazebo log</summary><pre id="gazeboLog"></pre></details>
-   <details><summary>ROS bridge log</summary><pre id="bridgeLog"></pre></details>
-   <details><summary>Monitor log</summary><pre id="monitorLog"></pre></details>
-  </section>
+
  </div>
 </div>
 <section class="card" id="tagPane" hidden>
@@ -243,6 +238,13 @@ pre{font-size:11px;max-height:175px;overflow:auto;background:#10202d;padding:12p
   <div class="scroll"><table><thead><tr><th>Distance / angle</th><th>Detector frames</th><th>Detection %</th><th>3D RMSE (m)</th><th>Bearing RMSE (°)</th><th>Detector FPS</th><th>P95 latency (ms)</th></tr></thead><tbody id="sweepRows"></tbody></table></div>
   <p class="hint">Each point is a static Gazebo pose. Empty or missed detections are recorded as missing, never zero error. All sweep JSON files are saved under <code>evaluation_results/camera_lab/tag_sweeps/</code>.</p>
  </section>
+</section>
+<section class="card" id="labRuntimeLogs">
+ <h2>Runtime logs</h2>
+ <details><summary>Gazebo server</summary><pre id="gazeboLog"></pre></details>
+ <details><summary>Image bridge</summary><pre id="bridgeLog"></pre></details>
+ <details><summary>Camera / tag monitor</summary><pre id="monitorLog"></pre></details>
+ <details><summary>Gazebo GUI client</summary><pre id="labGuiLog"></pre></details>
 </section>
 </main>
 <script>
@@ -772,6 +774,7 @@ function update(s){
  const guiRunning=!!gui.running;
  $("toggleGazeboGui").textContent=guiRunning?"Close Gazebo UI":"Open Gazebo UI";
  $("toggleGazeboGui").disabled=!guiRunning&&!s.processes?.gazebo;
+ $("labGuiLog").textContent=s.logs?.gazebo_gui||"Gazebo GUI client has not been opened.";
  $("gazeboGuiLog").textContent=s.logs?.gazebo_gui||
    "No Gazebo GUI client has been launched by this lab.";
  $("gazeboGuiStatus").textContent=guiRunning?
