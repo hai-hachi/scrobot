@@ -58,6 +58,7 @@ function setButtons(){
   const liveTrial=running&&status?.trial_mode==='live';
   const buttons={
     start:!live,stop:live,plan:live&&!running,cancel:running,save:true,
+    'clear-history':!running,
     'scene-save':!running||liveTrial,'scene-load':!live,
     'place-robot':!running,
     'gui-open':live&&!status?.gazebo_gui?.running,
@@ -502,7 +503,7 @@ async function refreshHistory(){
     const area=$('history');area.replaceChildren();
     if(!records.length){area.textContent='No saved experiments yet.';return;}
     const table=document.createElement('table'),header=document.createElement('tr');
-    ['Run','Status','Plans passed','Planning time (ms)'].forEach(v=>{
+    ['Run','Status','Plans passed','Planning time (ms)','Delete'].forEach(v=>{
       const th=document.createElement('th');th.textContent=v;header.append(th);
     });table.append(header);
     for(const row of records){
@@ -513,6 +514,21 @@ async function refreshHistory(){
         times.length?fmt(Math.min(...times),1)+'…'+fmt(Math.max(...times),1):'—'];
       const tr=document.createElement('tr');
       vals.forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td);});
+      const action=document.createElement('td');
+      const deleteButton=document.createElement('button');
+      deleteButton.className='btn small danger';
+      deleteButton.textContent='Delete';
+      deleteButton.disabled=busy||Boolean(status?.trial_running);
+      deleteButton.title='Permanently delete this Planner Lab experiment folder';
+      deleteButton.onclick=()=>{
+        if(!window.confirm('Permanently delete experiment '+row.name+'? This cannot be undone.'))return;
+        operation(async()=>{
+          await api('/api/history/delete',{name:row.name});
+          await refreshHistory();
+          notify('Deleted experiment '+row.name+'.');
+        });
+      };
+      action.append(deleteButton);tr.append(action);
       table.append(tr);
     }
     area.append(table);
@@ -542,6 +558,16 @@ async function refresh(){
     setButtons();
   }catch(e){$('connection').textContent='Disconnected';$('action-state').textContent=e.message;}
 }
+$('clear-history').onclick=()=>{
+  if(busy||status?.trial_running)return;
+  if(!window.confirm('Permanently delete ALL saved Planner Lab experiments? '+
+                     'The scene YAML and calibration files will be kept.'))return;
+  operation(async()=>{
+    const result=await api('/api/history/clear',{confirm:true});
+    await refreshHistory();
+    notify('Deleted '+result.deleted.length+' saved Planner Lab experiment(s).');
+  });
+};
 $('save').onclick=()=>operation(async()=>{
   await savePlan();notify('Saved Nav2 planner settings to shared lab YAML.');
 });
