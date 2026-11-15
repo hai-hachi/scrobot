@@ -32,6 +32,7 @@ def include(pkg, filename, kwargs=None):
 def generate_launch_description():
     args = [
         "nav2_params_file", "path_cache", "world", "map_status_file", "pose_file",
+        "scan_params",
         "controller_params", "robot_x", "robot_y", "robot_yaw_rad",
         "color_width", "color_height", "color_fps",
         "depth_width", "depth_height", "depth_fps",
@@ -44,9 +45,6 @@ def generate_launch_description():
     desc_share = get_package_share_directory("scrobot_description")
     sim_prefix = get_package_prefix("scrobot_simulation")
     gz_share = get_package_share_directory("ros_gz_sim")
-    perception_config = os.path.join(
-        get_package_share_directory("scrobot_perception"), "config", "perception.yaml"
-    )
 
     # Reuse model and plugin resources from scrobot_simulation/gazebo.launch.py,
     # but bridge only the depth cloud and /clock, not expensive RGB/depth images.
@@ -99,14 +97,14 @@ def generate_launch_description():
     cloud_to_scan = Node(
         package="pointcloud_to_laserscan",
         executable="pointcloud_to_laserscan_node", name="depth_pointcloud_to_scan",
-        output="screen", parameters=[perception_config, {"use_sim_time": True}],
+        output="screen", parameters=[v["scan_params"], {"use_sim_time": True}],
         remappings=[("cloud_in", "/camera/camera/depth/points"),
                     ("scan", "/camera/camera/depth/scan_raw")],
     )
     scan_filter = Node(
         package="scrobot_perception", executable="depth_scan_self_filter",
         name="depth_scan_self_filter", output="screen",
-        parameters=[perception_config, {"use_sim_time": True}],
+        parameters=[v["scan_params"], {"use_sim_time": True}],
     )
     map_server = Node(
         package="nav2_map_server", executable="map_server",
