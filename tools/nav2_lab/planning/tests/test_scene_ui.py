@@ -64,13 +64,23 @@ def test_planner_tab_drag_clicks_cell_size_and_performance():
     assert "renderRates(status.map_status?.topic_hz)" in SCRIPT
 
 
-def test_rviz_camera_only_poses_and_calibrated_lines():
+def test_rviz_robot_body_collision_footprint_and_calibrated_lines():
     displays={d.get("Name"):d for d in RVIZ["Visualization Manager"]["Displays"]}
-    assert not any(d.get("Class")=="rviz_default_plugins/RobotModel"
-                   for d in displays.values())
+    model=displays["Simplified SCROBOT body"]
+    assert model["Class"]=="rviz_default_plugins/RobotModel"
+    assert model["Visual Enabled"] is True
     assert displays["Court markings and outer clearance"]["Topic"]["Value"]=="/nav2_lab/court_lines"
     assert displays["Robot and goal arrows"]["Topic"]["Value"]=="/nav2_lab/pose_arrows"
     assert displays["Camera link only"]["Topic"]["Value"]=="/nav2_lab/camera_link"
+    assert RVIZ["Visualization Manager"]["Displays"][1]["Alpha"]<=.35
+    assert displays["Live global costmap"]["Alpha"]<=.25
+    assert displays["Live global costmap"]["Draw Behind"] is True
+    overlay=(ROOT/"map_status.py").read_text()
+    assert "def read_footprint(" in overlay
+    assert 'marker("robot_footprint",0,Marker.LINE_STRIP' in overlay
+    launch=(ROOT/"launch"/"planning.launch.py").read_text()
+    assert '"robot_visual_mode": "simple"' in launch
+    assert '"--nav2-params", v["nav2_params_file"]' in launch
 
 
 def test_lite_launch_avoids_unneeded_pipeline_nodes():
@@ -111,3 +121,29 @@ def test_log_color_escapes_are_removed():
     cleaned=sanitize_log(colored)
     assert cleaned=="[INFO] ready\nplain"
     assert "\x1b" not in cleaned
+
+
+def test_moving_cylinder_uses_explicit_add_button():
+    handler=SCRIPT.split("$('courtMap').addEventListener('pointerdown'")[1]
+    handler=handler.split("$('courtMap').addEventListener('pointermove'")[0]
+    assert "placed(p[0],p[1],'human-'+endpoint)" in handler
+    assert "nextRoutePoint=endpoint==='a'?'b':'a'" in handler
+    assert "/api/obstacles/add" not in handler
+    assert "$('add-human').onclick=" in SCRIPT
+    assert 'id="add-human">Add cylinder</button>' in PAGE
+
+
+def test_live_planning_all_plugins_route_and_controls():
+    runner=(ROOT/"runner.py").read_text()
+    service=(ROOT/"web_server.py").read_text()
+    assert "def run_live(" in runner
+    assert "names=list(PLANNERS)" in runner
+    assert "while not STOP:" in runner
+    assert "--live-interval-s" in runner
+    assert '"mode":"live"' in runner
+    assert '"/api/plan":lambda x:self.service.trial_start(x)' in service
+    assert 'self.trial_mode!="live"' in service
+    assert 'id="planning-mode"' in PAGE
+    assert 'id="live-interval"' in PAGE
+    assert "renderResults(status.summary)" in SCRIPT
+    assert "summary?.mode==='live'" in SCRIPT
