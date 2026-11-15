@@ -36,7 +36,7 @@ from tools.nav2_lab.planning.process_metrics import ProcessSampler
 from tools.performance_lab.thread_metrics import ThreadSampler
 from tools.performance_lab.nav2_timing import (
     ControllerWarningMeter,installed_controller_frequency,
-    nav2_scheduler_expectations,
+    nav2_scheduler_expectations,installed_sim_clock_overlay,
 )
 
 try:import psutil
@@ -265,6 +265,7 @@ class Runtime:
         self.thread_sampler=ThreadSampler(psutil,interval_s=2.0)
         self.nav2_warning_meter=ControllerWarningMeter()
         self.nav2_controller_hz=installed_controller_frequency()
+        self.nav2_overlay=installed_sim_clock_overlay()
         self.monitor_file=ACTIVE/"monitor.json"
         self.log_file=ACTIVE/"stack.log"
         self.observer_log=ACTIVE/"observer.log"
@@ -310,6 +311,16 @@ class Runtime:
             if not shutil.which("gz"):
                 raise RuntimeError("gz not in PATH; source Gazebo Harmonic")
             if not WORLD.is_file():raise RuntimeError("Production court world is missing")
+            self.nav2_overlay=installed_sim_clock_overlay()
+            if (self.settings["mode"]=="synchronized"
+                    and not self.nav2_overlay["active"]):
+                raise RuntimeError(
+                    "Synchronized mode requires the ROS-time Nav2 controller "
+                    "AND velocity smoother overlay. Run: "
+                    "python3 tools/performance_lab/prepare_nav2_sim_clock.py --build; "
+                    "source install/setup.bash; restart this lab server. "
+                    "The installed upstream Jazzy packages still use wall clocks."
+                )
             # Prevent late stale report from appearing as a new successful run.
             ACTIVE.mkdir(parents=True,exist_ok=True)
             self.monitor_file.unlink(missing_ok=True)
@@ -460,9 +471,11 @@ class Runtime:
                 "world_info":self.world_info,
                 "monitor":data,
                 "nav2_timing":{
+                    "overlay":self.nav2_overlay,
                     "scheduler":nav2_scheduler_expectations(
                         data.get("rtf") if data else None,
-                        self.nav2_controller_hz),
+                        self.nav2_controller_hz,
+                        self.nav2_overlay["active"]),
                     "warnings":self.nav2_warning_meter.sample(self.log_file)
                         if running(self.stack) else
                         self.nav2_warning_meter.snapshot(),
