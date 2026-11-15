@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lab_configs import (path_for as lab_yaml_path, read as read_lab_yaml,
                          save as save_lab_yaml, matches as matches_lab_yaml)
 from lighting_source import calibration as lighting_calibration
+from shared.sim_speed import get as read_speed, save as save_speed, cap_world, response as speed_response
 from log_text import tail as clean_tail
 
 HERE = Path(__file__).resolve().parent
@@ -199,6 +200,7 @@ class Lab:
             try:
                 light_settings = lighting_calibration()
                 path = world(cfg, RESULTS / "world.sdf", lighting=light_settings)
+                cap_world(path, path, read_speed("camera"))
                 self.lighting_used = light_settings
                 # Gazebo is headless; no GUI, controllers, tags or YOLO.
                 self.launch("gazebo", ["gz", "sim", "-r", "-s", "-v", "3", path])
@@ -261,6 +263,7 @@ class Lab:
                 model, params = generate_tags(tag, RESULTS)
                 path = tag_world(cfg, tag, RESULTS / "world.sdf", model,
                                  lighting=light_settings)
+                cap_world(path, path, read_speed("camera"))
                 self.lighting_used = light_settings
                 detector = detector_yaml(
                     tag, RESULTS / "tag_detector.yaml")
@@ -831,6 +834,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
             self.wfile.write(payload)
+        elif route == "/api/sim-speed":
+            lab = self.server.lab
+            self.respond(200, speed_response("camera", bool(lab.procs.get("gazebo") and lab.procs["gazebo"].poll() is None)))
         elif route == "/api/status":
             self.respond(200, self.server.lab.status())
         elif route == "/api/modes":
@@ -870,7 +876,11 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Invalid request size")
             data = json.loads(self.rfile.read(size))
             lab = self.server.lab
-            if route == "/api/start":
+            if route == "/api/sim-speed":
+                if set(data) != {"max_rtf"}:raise ValueError("Set only max_rtf")
+                result={"max_rtf":save_speed("camera",data["max_rtf"]),
+                        "restart_required":True}
+            elif route == "/api/start":
                 result = lab.start(data)
             elif route == "/api/tag/start":
                 result = lab.start_tags(data)
