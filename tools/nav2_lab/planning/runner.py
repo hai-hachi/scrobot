@@ -254,17 +254,105 @@ def run(config,run_dir,cache,planner_pid=None):
     return 0 if output["status"]=="success" else 1
 
 
+def run_live(config, run_dir, cache, interval_s, planner_pid=None):
+    """Continuously recompute all four Nav2 paths from the latest costmap."""
+    validate(config)
+    interval=float(interval_s)
+    if not math.isfinite(interval) or not .5<=interval<=10.0:
+        raise ValueError("Live replanning interval must be 0.5–10 seconds")
+    run_dir=Path(run_dir);run_dir.mkdir(parents=True,exist_ok=True)
+    cache=Path(cache);cache.mkdir(parents=True,exist_ok=True)
+    names=list(PLANNERS)
+    output={
+        "phase":"live_path_planning","mode":"live","requested":names,
+        "start":config["planning"]["start"],"goal":config["planning"]["goal"],
+        "depth_obstacles":config["planning"]["depth_obstacles"],
+        "interval_s":interval,"cycle":0,"completed_cycles":0,
+        "status":"starting","started_wall_time":time.time(),
+        "resource_note":"CPU/RSS includes shared planner_server callbacks and costmap; plugin memory is not isolated.",
+        "counts":{name:{"success":0,"failure":0} for name in names},
+        "results":{},
+    }
+    summary=run_dir/"summary.json"
+    write_summary(summary,output)
+    node=None
+    rclpy.init()
+    try:
+        node=PlannerTrial(config)
+        node.ready()
+        if node.map.header.frame_id!="map":
+            raise RuntimeError("Static map is not in court-fixed map frame")
+        output["camera_scan_messages_seen"]=node.scan_count
+        output["map_frame"]=node.map.header.frame_id
+        output["map_dimensions"]=[node.map.info.width,node.map.info.height]
+        output["status"]="running"
+        while not STOP:
+            started=time.monotonic()
+            output["cycle"]+=1
+            hashes=[]
+            output["results"]={}
+            for name in names:
+                if STOP:break
+                profiler=ProcessProfile(planner_pid)
+                try:
+                    record=node.plan_one(name,profiler)
+                    snapshot={"planner":name,"points":record.pop("path"),"frame_id":"map"}
+                    output["results"][name]=record
+                    output["counts"][name]["success"]+=1
+                    (run_dir/(name+".json")).write_text(json.dumps(snapshot))
+                    cached=cache/(name+".json")
+                    tmp=cached.with_suffix(".tmp")
+                    tmp.write_text(json.dumps(snapshot))
+                    tmp.replace(cached)
+                    hashes.append(record["costmap_hash_start"])
+                except Exception as exc:
+                    output["results"][name]={"status":"error","error":str(exc),
+                                             **profiler.end()}
+                    output["counts"][name]["failure"]+=1
+                    (cache/(name+".json")).unlink(missing_ok=True)
+                output["last_planner"]=name
+                output["last_updated_wall_time"]=time.time()
+                write_summary(summary,output)
+            if STOP:break
+            output["completed_cycles"]+=1
+            output["costmap_consistent"]=len(set(hashes))<=1
+            output["last_cycle_wall_s"]=round(time.monotonic()-started,3)
+            output["last_updated_wall_time"]=time.time()
+            write_summary(summary,output)
+            # Never pile up Nav2 action requests when four plans exceed
+            # the selected interval.
+            remaining=started+interval-time.monotonic()
+            while not STOP and remaining>0:
+                rclpy.spin_once(node,timeout_sec=min(.1,remaining))
+                remaining=started+interval-time.monotonic()
+        output["status"]="stopped"
+    except Exception as exc:
+        output["status"]="stopped" if STOP else "error"
+        if not STOP:output["error"]=str(exc)
+    finally:
+        output["ended_wall_time"]=time.time()
+        write_summary(summary,output)
+        if node:node.destroy_node()
+        rclpy.shutdown()
+    return 0 if output["status"]=="stopped" else 1
+
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--config",required=True,type=Path)
     parser.add_argument("--output",required=True,type=Path)
     parser.add_argument("--cache",required=True,type=Path)
     parser.add_argument("--planner-pid",type=int)
+    parser.add_argument("--live-interval-s",type=float,default=None,
+                        help="Replan all four plugins every N wall seconds (minimum cycle period)")
     a=parser.parse_args()
     signal.signal(signal.SIGINT,cancel_signal)
     signal.signal(signal.SIGTERM,cancel_signal)
-    raise SystemExit(run(yaml.safe_load(a.config.read_text()),
-                         a.output,a.cache,a.planner_pid))
+    settings=yaml.safe_load(a.config.read_text())
+    if a.live_interval_s is not None:
+        raise SystemExit(run_live(settings,a.output,a.cache,
+                                  a.live_interval_s,a.planner_pid))
+    raise SystemExit(run(settings,a.output,a.cache,a.planner_pid))
 
 
 if __name__=="__main__":main()
