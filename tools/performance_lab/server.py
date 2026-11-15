@@ -305,7 +305,8 @@ def summary_of_samples(samples,settings):
             "Topic cadence alone is not closed-loop synchronization. "
             "This benchmark does not measure actual PID/ControllerServer "
             "callback executions, end-to-end perception age, or physical "
-            "hardware deadlines. Nav2 warning counts come from WallRate."
+            "hardware deadlines. Deadline warning timebase follows the installed "
+            "Nav2 controller scheduler (ROS clock when the overlay is active)."
         ),
     }
 
