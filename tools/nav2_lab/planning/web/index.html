@@ -179,7 +179,7 @@
      <span><i style="background:#ff52a6"></i> Venue clearance</span>
      <span><i style="background:#ff40d9"></i> Robot collision footprint</span>
    </div>
-   <p class="fineprint">The simplified SCROBOT body and its actual Nav2 collision footprint are displayed together. Static map opacity: 30%; global costmap opacity: 22%. The collision outline shows the robot footprint, not the inflation radius.</p>
+   <p class="fineprint">The simplified robot body is hidden in RViz. The thin magenta outline is the actual Nav2 collision footprint, not the inflation radius. Court lines and both outlines are fixed solid box geometry in the map frame, not moving line ribbons.</p>
    <p class="fineprint">RViz Fixed Frame: <code>map</code>. Static map uses transient-local QoS. The global costmap uses a separate Map display with reliable/volatile reception. Inspect the messages above if either remains blank.</p>
  </section>
 
@@ -199,7 +199,12 @@
      <tbody id="results"></tbody>
    </table></div>
    <p class="fineprint">Process CPU/RSS include the shared Nav2 planner server; RSS is not isolated per algorithm.</p>
-   <h3>Recent experiments</h3><div id="history" class="table-wrap">No saved experiments.</div>
+   <div class="between history-actions">
+     <h3>Recent experiments</h3>
+     <button id="clear-history" class="btn small danger" type="button">Delete all experiments</button>
+   </div>
+   <p class="fineprint">Delete individual runs below, or clear all saved Planner Lab experiments. This permanently removes run folders and metrics, but never the scene YAML, simulation configuration, or the active Gazebo workspace.</p>
+   <div id="history" class="table-wrap">No saved experiments.</div>
  </section>
 
  <section class="panel lab-logs">
