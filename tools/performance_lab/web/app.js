@@ -95,6 +95,7 @@ function rateStatus(row){
     sim_rate_low:['Low (sim time)','bad'],
     sim_rate_high:['High (sim time)','bad'],
     sim_jitter_high:['High jitter (sim time)','bad'],
+    repeated_source_stamps:['Repeated source stamps','bad'],
     rtf_low:['RTF low','warn'],
     observed:['Observed','ok'],
     unknown:['Unknown','warn'],
@@ -104,7 +105,7 @@ function renderTopics(monitor){
   const records=monitor?.topics||{};
   const body=$('topic-rows');body.replaceChildren();
   if(!Object.keys(records).length){
-    body.append(emptyRow(9,'Start simulation and wait for live ROS /clock and topics.'));
+    body.append(emptyRow(11,'Start simulation and wait for live ROS /clock and topics.'));
     return;
   }
   for(const[topic,data]of Object.entries(records)){
@@ -113,6 +114,9 @@ function renderTopics(monitor){
     cell(tr,data.expected_sim_hz==null?'—':fmt(data.expected_sim_hz));
     cell(tr,fmt(data.wall_hz));
     cell(tr,fmt(data.sim_hz));
+    cell(tr,fmt(data.source_unique_hz));
+    cell(tr,data.header_sample_count>1?
+      String(data.header_duplicate_count??0):'—');
     cell(tr,fmt(data.header_interval_p95_ms,2));
     cell(tr,fmt(data.header_abs_jitter_p95_ms,2));
     cell(tr,data.header_sample_count>1?String(data.header_large_gap_total):'—');
@@ -127,7 +131,8 @@ function renderTopics(monitor){
   $('clock-jumps').textContent=String(monitor.clock_jumps||0);
   const clues=[];
   for(const [topic,data]of Object.entries(records))
-    if(['sim_rate_low','sim_rate_high','sim_jitter_high'].includes(data.status))
+    if(['sim_rate_low','sim_rate_high','sim_jitter_high',
+        'repeated_source_stamps'].includes(data.status))
       clues.push(data.label+': '+data.status.replace('_',' '));
   $('clock-note').textContent=clues.length?
     clues.slice(0,4).join('; ')+'. Check rates, timestamps, queues and logs.':
