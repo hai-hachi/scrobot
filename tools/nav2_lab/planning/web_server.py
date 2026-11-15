@@ -39,6 +39,7 @@ LAB=HERE.parent
 REPO=HERE.parents[2]
 sys.path.insert(0,str(REPO/"tools"))
 from shared.lab_ui import GazeboGUI
+from shared.sim_speed import get as read_speed, save as save_speed, cap_world, response as speed_response
 from shared.lab_configs import (path_for as lab_yaml_path, read as read_lab_yaml,
                                 save as save_lab_yaml)
 CONFIG=lab_yaml_path("nav2")
@@ -274,6 +275,7 @@ class Service:
             # Build world + ROS overrides from validated saved owner YAMLs.
             # These are frozen for the entire Gazebo session.
             scene=build_world(calibration,self.active_dir,loaded_scene)
+            cap_world(scene["world_path"],scene["world_path"],read_speed("nav2"))
             self.active_robot=deepcopy(loaded_scene["robot"])
             self.process_sampler.reset()
             profiles=generate_rate_profiles(calibration,self.active_dir)
@@ -601,6 +603,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path=urlparse(self.path).path
         try:
+            if path=="/api/sim-speed":return self.json_reply(speed_response("nav2",running(self.service.stack)))
             if path=="/api/config":return self.json_reply(self.service.config())
             if path=="/api/scene":return self.json_reply(self.service.scene_status())
             if path=="/api/calibration":return self.json_reply(
@@ -624,6 +627,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path=urlparse(self.path).path
         mapping={
+            "/api/sim-speed":lambda x:{"max_rtf":save_speed("nav2",x["max_rtf"]),
+                                           "restart_required":True} if set(x)=={"max_rtf"}
+                                           else (_ for _ in ()).throw(ValueError("Set only max_rtf")),
             "/api/save":lambda x:{"config":self.service.save(x)},
             "/api/scene/save":lambda x:self.service.save_scene(x),
             "/api/scene/load":lambda x:self.service.load_scene(),
