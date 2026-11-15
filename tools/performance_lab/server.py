@@ -219,6 +219,18 @@ class Runtime:
                 json.dumps(self.inputs,indent=2))
             self.run_settings=dict(self.settings)
             self._output_environment()
+            # Prevent mixing topic samples with another /clock in this domain.
+            try:
+                graph=subprocess.run(
+                    ["ros2","topic","list"],env=self.env,
+                    capture_output=True,text=True,timeout=5,check=False)
+                if (graph.returncode==0
+                    and "/clock" in graph.stdout.splitlines()):
+                    raise RuntimeError(
+                        "ROS_DOMAIN_ID "+str(self.settings["ros_domain_id"])+
+                        " already has /clock. Stop that simulator or change domains.")
+            except (OSError,subprocess.TimeoutExpired):
+                pass
             self.sampler.reset()
             self.audit={"status":"not_run"}
             self.gpu_at=0.
@@ -333,6 +345,14 @@ class Runtime:
                     "rviz":log_tail(self.rviz_log,3000),
                 },
                 "calibration":self.inputs,
+                "warnings":(
+                    ["No YOLO model configured: set model_path or "
+                     "SCROBOT_YOLO_MODEL to run complete perception."]
+                    if running(self.stack) and not (
+                        (self.run_settings or {}).get("model_path") or
+                        self.env.get("SCROBOT_YOLO_MODEL"))
+                    else []
+                ),
             }
 
     def _bench_status(self):
