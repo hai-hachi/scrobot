@@ -245,7 +245,10 @@ class Runtime:
                 "ros2","launch","scrobot_bringup","sim.launch.py",
                 "use_sim_time:=true","headless:=true",
                 "world:="+self.world_info["path"],
-                "mission_enabled:="+(
+                # Launch Nav2/collection even when the parked idle
+                # mission manager is not commanded to move.
+                "mission_enabled:=true",
+                "mission_autostart:="+(
                     "true" if self.settings["profile"]=="full_mission" else "false"),
                 "shuttle_count:="+str(self.settings["shuttle_count"]),
                 "shuttle_seed:="+str(self.settings["shuttle_seed"]),
@@ -382,6 +385,12 @@ class Runtime:
                        if running(self.stack) and not (
                            (self.run_settings or {}).get("model_path") or
                            self.env.get("SCROBOT_YOLO_MODEL"))
+                       else [])
+                    + (["Idle profile: Nav2 and collection nodes are launched, "
+                        "but Nav2 lifecycle/costmaps remain inactive until "
+                        "mission initialization; /global_costmap is not expected."]
+                       if running(self.stack) and
+                          (self.run_settings or {}).get("profile")=="full_idle"
                        else [])
                 ),
             }
