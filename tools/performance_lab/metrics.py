@@ -27,7 +27,7 @@ TOPIC_SPECS={
     "/cmd_vel_approach":(None,"Local collection SMC output; active only"),
     "/cmd_vel_auto":(None,"Autonomous mux output"),
     "/cmd_vel_smoothed":(None,"Velocity smoother output"),
-    "/cmd_vel_motor_target":(100.0,"Simulation motor-response target"),
+    "/cmd_vel_motor_target":(None,"Motor response input; follows velocity smoother"),
     "/diff_drive_controller/cmd_vel":(100.0,"Simulation motor-response output"),
     "/perception/shuttle_detections":(None,"YOLO detections if published"),
 }
