@@ -33,6 +33,7 @@ from tools.performance_lab.settings import (
 )
 from tools.shared.lab_ui import GazeboGUI,log_tail
 from tools.nav2_lab.planning.process_metrics import ProcessSampler
+from tools.performance_lab.thread_metrics import ThreadSampler
 
 try:import psutil
 except ImportError:psutil=None
@@ -164,6 +165,7 @@ class Runtime:
         self.rviz=None
         self.gui=GazeboGUI(ACTIVE/"gazebo_gui.log",env=self.env,cwd=ROOT)
         self.sampler=ProcessSampler(psutil,interval_s=1.5)
+        self.thread_sampler=ThreadSampler(psutil,interval_s=2.0)
         self.monitor_file=ACTIVE/"monitor.json"
         self.log_file=ACTIVE/"stack.log"
         self.observer_log=ACTIVE/"observer.log"
@@ -232,6 +234,7 @@ class Runtime:
             except (OSError,subprocess.TimeoutExpired):
                 pass
             self.sampler.reset()
+            self.thread_sampler.reset()
             self.audit={"status":"not_run"}
             self.gpu_at=0.
             self.gpu=None
@@ -280,6 +283,7 @@ class Runtime:
             kill_group(self.stack)
             self.stack=self.observer=self.rviz=None
             self.sampler.reset()
+            self.thread_sampler.reset()
             return {"stopped":True}
 
     def gui_open(self):
@@ -335,6 +339,8 @@ class Runtime:
                     self.stack.pid if running(self.stack) else None,
                     self.rviz.pid if running(self.rviz) else None),
                 "gpu":self._gpu() if running(self.stack) else None,
+                "threads":self.thread_sampler.sample(
+                    self.stack.pid if running(self.stack) else None),
                 "audit":self.audit,
                 "benchmark":self._bench_status(),
                 "last_result":self.last_result,
