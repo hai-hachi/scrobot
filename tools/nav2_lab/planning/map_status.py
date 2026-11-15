@@ -199,7 +199,7 @@ class Monitor(Node):
             self.clock_marks.append((now,self.sim_time_s))
         self.topic_times[topic].append(now)
         self.topic_sim_times[topic].append(self.sim_time_s)
-        elif topic in ("/map","/global_costmap/costmap"):
+        if topic in ("/map","/global_costmap/costmap"):
             # Counting every occupied cell at 3Hz wastes CPU on large grids.
             self.records[topic]={
                 "received":True,"frame":msg.header.frame_id,
