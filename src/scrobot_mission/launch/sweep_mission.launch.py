@@ -15,6 +15,7 @@ def generate_launch_description():
 
     sweep_params = os.path.join(mission_pkg, 'config', 'sweep_params.yaml')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    autostart = LaunchConfiguration('autostart')
     return_to_idle = LaunchConfiguration('return_to_idle')
     idle_x = LaunchConfiguration('idle_x')
     idle_y = LaunchConfiguration('idle_y')
@@ -55,6 +56,7 @@ def generate_launch_description():
             sweep_params,
             {
                 'use_sim_time': use_sim_time,
+                'autostart': autostart,
                 'return_to_idle': return_to_idle,
                 'idle_x': idle_x,
                 'idle_y': idle_y,
@@ -69,6 +71,10 @@ def generate_launch_description():
             default_value='true',
             choices=['true', 'false'],
         ),
+        # Performance Lab can run all nodes while keeping the mission parked.
+        # Normal production defaults still autostart the mission.
+        DeclareLaunchArgument('autostart', default_value='true',
+                              choices=['true', 'false']),
         DeclareLaunchArgument(
             'return_to_idle',
             default_value='false',
