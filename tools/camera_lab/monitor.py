@@ -69,6 +69,9 @@ class CameraMeter(Node):
                 "sim_fps": round(sim_fps, 2) if sim_fps is not None else None,
                 "mb_s": round(mb_s, 3) if mb_s is not None else None,
                 "last_age_s": round(now - records[-1][0], 2) if records else None,
+                "last_stamp_sim_s": round(records[-1][1], 6) if records else None,
+                "measured_rtf": round(sim_span / wall_span, 3)
+                    if n >= 2 and wall_span > 0 and sim_span >= 0 else None,
                 "nonmonotonic_stamps": self.bad_stamps[name],
             }
         payload = {
