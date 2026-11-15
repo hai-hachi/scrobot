@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
-from metrics import ClockMeter,assess
+from metrics import ClockMeter,assess,serialized_header_stamp
 
 
 def test_slow_simulation_keeps_100_sim_hz():
@@ -92,3 +92,50 @@ def test_assessment_never_marks_unknown_as_success():
     assert assess({"sim_hz":None,"expected_sim_hz":30},.5,False)=="unknown"
     assert assess({"sim_hz":18,"expected_sim_hz":30},.5,False)=="sim_rate_low"
     assert assess({"sim_hz":30,"expected_sim_hz":30},.5,False)=="pass"
+
+
+def test_serialized_big_and_little_endian_camera_header_stamps():
+    import struct
+    little=b"\\x00\\x01\\x00\\x00"+struct.pack("<iI",12,250000000)
+    big=b"\\x00\\x00\\x00\\x00"+struct.pack(">iI",19,500000000)
+    assert serialized_header_stamp(little)==12.25
+    assert serialized_header_stamp(memoryview(big))==19.5
+    assert serialized_header_stamp(b"bad")==None
+    assert serialized_header_stamp(b"\\x00\\x01\\x00\\x00"+struct.pack("<iI",1,1000000000)) is None
+
+
+def test_jitter_percentiles_and_unique_header_gap_totals():
+    meter=ClockMeter({"/camera":(30.,"RGB image")},window_s=5.)
+    stamps=[.1,.1333333333,.1666666667,.2666666667,.3]
+    for i,stamp in enumerate(stamps):
+        meter.clock(stamp,wall=20.+i*.05)
+        meter.topic("/camera",wall=20.+i*.05,header_stamp=stamp)
+    result=meter.snapshot(wall=20.25)["topics"]["/camera"]
+    assert result["header_interval_samples"]==4
+    assert result["header_interval_max_ms"]>99.
+    assert result["header_abs_jitter_p95_ms"]>20.
+    assert result["header_large_gap_count"]==1
+    assert result["header_large_gap_total"]==1
+    # A second snapshot sees the SAME historical gap without incrementing total.
+    assert meter.snapshot(wall=20.3)["topics"]["/camera"][
+        "header_large_gap_total"]==1
+    meter.clock(.3333333333,wall=20.3)
+    meter.topic("/camera",wall=20.3,header_stamp=.3333333333)
+    assert meter.snapshot(wall=20.31)["topics"]["/camera"][
+        "header_large_gap_total"]==1
+
+
+def test_costmap_latched_full_map_is_activity_not_hz_target():
+    meter=ClockMeter({
+        "/global_costmap/costmap":(None,"full"),
+        "/global_costmap/costmap_updates":(None,"updates"),
+    })
+    meter.clock(10.,wall=20.)
+    meter.topic("/global_costmap/costmap",wall=20.,header_stamp=10.)
+    for i in range(1,30):
+        meter.clock(10.+i*.1,wall=20.+i*.1)
+    result=meter.snapshot(wall=23.)["topics"]
+    assert result["/global_costmap/costmap"]["count_total"]==1
+    assert result["/global_costmap/costmap"]["status"]=="observed"
+    assert result["/global_costmap/costmap"]["sim_hz"] is None
+    assert result["/global_costmap/costmap_updates"]["status"]=="unknown"
