@@ -183,8 +183,8 @@ def build_world(inputs, output_dir, scene=None):
         raise RuntimeError("Canonical AprilTags generator produced no model")
     world.append(copy.deepcopy(model))
     if scene is not None:
-        from scene import validate_scene
-        from obstacles import sdf_fixture, entity_name
+        from planning.scene import validate_scene
+        from planning.obstacles import sdf_fixture, entity_name
         for i, fixture in enumerate(validate_scene(scene)["obstacles"], start=1):
             data = ET.fromstring(sdf_fixture(fixture,entity_name(fixture["kind"],i)))
             element = data.find("model")
