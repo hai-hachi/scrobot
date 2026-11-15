@@ -23,6 +23,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tools.shared.lab_ui import GazeboGUI, log_tail as lab_log_tail
+from tools.shared.sim_speed import get as read_speed, save as save_speed, cap_world, response as speed_response
 from tools.mesh_lab.audit import audit
 from tools.mesh_lab.scene import build_world
 from tools.mesh_lab.settings import DEFAULTS, ROOT, read_lighting, read_settings, save_settings, validate
@@ -145,6 +146,7 @@ class Runtime:
             return
         worldfile = self.workdir / "mesh_lab_world.sdf"
         worldfile.write_text(build_world(WORLD_FILE, self.lighting, self.settings))
+        cap_world(worldfile, worldfile, read_speed("mesh"))
         log = (self.workdir / "gazebo.log").open("a")
         self.logs["gazebo"] = log
         self.proc = subprocess.Popen(self.command(), stdout=log,
@@ -358,6 +360,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
+            elif path == "/api/sim-speed":
+                self.send_json(200,speed_response("mesh", bool(self.lab.proc and self.lab.proc.poll() is None)))
             elif path == "/api/status":
                 self.send_json(200, self.lab.status())
             elif path == "/api/audit":
@@ -373,7 +377,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path not in ("/api/apply", "/api/save", "/api/rviz/open",
                         "/api/rviz/close", "/api/benchmark",
-                        "/api/gazebo-gui/open", "/api/gazebo-gui/close"):
+                        "/api/gazebo-gui/open", "/api/gazebo-gui/close",
+                        "/api/sim-speed"):
             self.send_json(404, {"error": "Unknown endpoint"})
             return
         try:
@@ -384,7 +389,11 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("Expected an object")
             with self.lab.lock:
-                if path == "/api/apply":
+                if path == "/api/sim-speed":
+                    if set(payload) != {"max_rtf"}:raise ValueError("Set only max_rtf")
+                    speed=save_speed("mesh",payload["max_rtf"])
+                    msg=f"Saved {speed:.2f}x RTF cap; restart Gazebo to apply"
+                elif path == "/api/apply":
                     self.lab.restart(payload)
                     msg = "Restarted temporary inspection world; saved YAML unchanged"
                 elif path == "/api/save":
