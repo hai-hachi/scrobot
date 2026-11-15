@@ -48,11 +48,12 @@
           </div>
           <div class="field"><label for="profile">Full-stack workload</label>
             <select id="profile">
-              <option value="full_idle">Full stack idle — cameras, control, localization, YOLO, Nav2</option>
+              <option value="full_idle">Parked full-stack baseline — Nav2 launched, mission inactive</option>
               <option value="full_mission">Full mission — same stack plus shuttle collection mission</option>
             </select>
-            <p class="small-muted">Both profiles retain RGB, depth, physics and perception.
-              Idle disables only automatic mission execution.</p>
+            <p class="small-muted">Both profiles retain RGB, depth, physics, perception, navigation and collection processes.
+              Parked mode prevents mission movement but leaves Nav2 lifecycle/costmaps
+              inactive until mission initialization. Use Full mission for active navigation.</p>
           </div>
           <div class="field"><label for="max_rtf">Maximum simulation speed
             <strong id="rtf-choice">1.00×</strong></label>
@@ -151,16 +152,18 @@
         </div>
         <div class="table-wrap"><table>
           <thead><tr><th>ROS topic</th><th>Target sim Hz</th><th>Wall Hz</th>
-            <th>Sim Hz</th><th>Header age (sim s)</th>
+            <th>Sim Hz</th><th>Clock − header offset (s)</th>
             <th>Large header gaps</th><th>Assessment</th></tr></thead>
           <tbody id="topic-rows"><tr><td colspan="7">Start simulation to measure topic rates.</td></tr></tbody>
         </table></div>
         <p class="fineprint">Wall Hz is measured against monotonic wall time.
           Sim Hz divides message arrivals by the /clock progression in the same window.
           Image/PointCloud2 payloads are monitored as serialized messages to avoid
-          extra deserialization; their header-age field is intentionally unavailable.
-          Missing streams are unknown, not passed. Header gaps are indications,
-          not proof of publisher drops.</p>
+          extra deserialization; their header offset is intentionally unavailable.
+          Offset is last observed /clock minus message stamp, not processing latency.
+          A small negative offset can occur because of callback ordering.
+          Missing streams are unknown, not passed. Header gaps can indicate
+          skips or jitter, but are not proof of publisher drops.</p>
       </section>
       <section class="panel">
         <div class="panel-heading"><h2>ROS node clock audit</h2>
