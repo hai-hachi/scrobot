@@ -312,6 +312,9 @@ async function refresh(){
       'Running '+result.launch_settings?.profile+
       '. Saved settings changed during runtime apply only after restart.':
       'Start simulation to profile complete robot software.';
+    if(result.warnings?.length){
+      $('run-info').textContent+=' · Warning: '+result.warnings.join(' ');
+    }
     buttons();
   }catch(e){
     $('connection').textContent='Disconnected';
