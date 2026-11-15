@@ -138,12 +138,12 @@
  </section>
 
  <section class="panel" id="performance-panel">
-   <div class="between"><h2>Performance · live topic frequencies</h2><span>Measured ROS message arrival rate (wall-clock Hz)</span></div>
+   <div class="between"><h2>Performance · live topic frequencies</h2><span>Measured wall Hz and simulated Hz (from /clock)</span></div>
    <div class="table-wrap"><table class="frequency-table">
-      <thead><tr><th>Topic</th><th>Actual Hz</th><th>Last message</th><th>Meaning</th></tr></thead>
-      <tbody id="topic-rate-rows"><tr><td colspan="4">Start simulation to measure topics.</td></tr></tbody>
+      <thead><tr><th>Topic</th><th>Wall Hz</th><th>Sim Hz</th><th>Last message</th><th>Meaning</th></tr></thead>
+      <tbody id="topic-rate-rows"><tr><td colspan="5">Start simulation to measure topics.</td></tr></tbody>
    </table></div>
-   <p class="fineprint">Measured topic rates, not configured sensor FPS. A static /map is latched rather than periodic. Rates decrease when Gazebo runs slower than real time.</p>
+   <p class="fineprint">Measured reception Hz uses two time domains. At 0.25 RTF a healthy 30 simulated Hz camera arrives at roughly 7.5 wall Hz. Static /map and full costmap are event-based, not periodic Hz targets.</p>
    <h3>Resource utilization · CPU and RAM</h3>
    <div class="metrics process-metrics">
      <div class="metric"><small>Gazebo real-time factor</small><strong id="rtf-value">—</strong><span id="fps-estimate">Expected effective depth FPS: —</span></div>
