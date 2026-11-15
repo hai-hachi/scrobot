@@ -27,15 +27,15 @@ def number(value, field, lo, hi):
     return float(value)
 
 
-def validate_scene(value):
+def validate_scene(value, check_overlap=True):
     if not isinstance(value, dict) or set(value) != {"robot", "obstacles"}:
         raise ValueError("Scene must contain robot and obstacles only")
     p = value["robot"]
     if not isinstance(p, dict) or set(p) != {"x", "y", "yaw_deg"}:
         raise ValueError("Robot pose requires x, y and yaw_deg")
     robot = {
-        "x": number(p["x"], "robot.x", -9.0, 9.0),
-        "y": number(p["y"], "robot.y", -5.0, 5.0),
+        "x": number(p["x"], "robot.x", -8.5, 8.5),
+        "y": number(p["y"], "robot.y", -4.5, 4.5),
         "yaw_deg": number(p["yaw_deg"], "robot.yaw_deg", -180, 180),
     }
     obs = value["obstacles"]
@@ -69,7 +69,7 @@ def validate_scene(value):
             entry = {"kind":"human", "point_a":a, "point_b":b,
                      "speed_mps":number(o["speed_mps"], "human.speed_mps", .1, 2.0)}
         entries.append(entry)
-    for i,o in enumerate(entries):
+    for i,o in enumerate(entries if check_overlap else []):
         # Avoid starting inside or directly overlapping the robot.
         if o["kind"] == "box":
             coords = [(o["x"],o["y"])]
