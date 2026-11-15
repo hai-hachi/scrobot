@@ -30,7 +30,7 @@ def classify(cmdline, name=""):
     for label, keywords in BY_PROCESS[1:]:
         if any(keyword in exe for keyword in keywords):
             return label
-    if ("gz sim -s" in full or "gz-sim-server" in full) and "launch" not in full:
+    if ("gz sim " in full and " -s" in full or "gz-sim-server" in full) and "launch" not in full:
         return "Gazebo server"
     if "map_status.py" in full:return "Scene / topic monitor"
     if "path_display.py" in full:return "Path overlay"
