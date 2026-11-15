@@ -370,6 +370,7 @@ class Workflow:
             generated = build_dataset(
                 camera, yolo, self.lab_output / "dataset_world.sdf",
                 lighting=lighting_calibration())
+            generated=self.lab.apply_rtf_world(generated)
             self.lab.camera = camera
             self.lab.yolo = yolo
             self.lab.phase = "generating_dataset"
