@@ -164,6 +164,7 @@ class Monitor(Node):
         self.clock_marks=deque(maxlen=1024)
         self.records={}
         self.topic_times={name:deque(maxlen=256) for name,_,_ in TOPICS}
+        self.topic_sim_times={name:deque(maxlen=256) for name,_,_ in TOPICS}
         self.buffer=Buffer()
         self.listener=TransformListener(self.buffer,self)
         qos_map=QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -193,10 +194,11 @@ class Monitor(Node):
 
     def received(self,topic,msg):
         now=time.monotonic()
-        self.topic_times[topic].append(now)
         if topic=="/clock":
             self.sim_time_s=msg.clock.sec+msg.clock.nanosec*1e-9
             self.clock_marks.append((now,self.sim_time_s))
+        self.topic_times[topic].append(now)
+        self.topic_sim_times[topic].append(self.sim_time_s)
         elif topic in ("/map","/global_costmap/costmap"):
             # Counting every occupied cell at 3Hz wastes CPU on large grids.
             self.records[topic]={
@@ -275,12 +277,24 @@ class Monitor(Node):
         for topic,_,qos in TOPICS:
             samples=self.topic_times[topic]
             age=round(now-samples[-1],2) if samples else None
+            recent=[(wall,sim) for wall,sim in
+                    zip(samples,self.topic_sim_times[topic])
+                    if wall>=now-5. and sim is not None]
+            sim_span=recent[-1][1]-recent[0][1] if len(recent)>=2 else 0.
+            # Full OccupancyGrid publications are change/latch events, not
+            # periodic targets; do not report a misleading low Hz.
+            event_topic=(topic in ("/map","/global_costmap/costmap"))
+            wall_hz=None if event_topic else frequency(samples,now)
+            sim_hz=(round((len(recent)-1)/sim_span,1)
+                    if not event_topic and sim_span>1e-6 else None)
             status["topic_hz"][topic]={
-                "hz":None if qos=="latched" else frequency(samples,now),
+                "hz":wall_hz,  # Legacy display/API compatibility.
+                "wall_hz":wall_hz,"sim_hz":sim_hz,
+                "rate_basis":"arrival /clock progression",
                 "received":bool(samples),
                 "samples":len(samples),
                 "age_s":age,
-                "latched":qos=="latched",
+                "latched":event_topic,
             }
         status["uptime_wall_s"]=round(now-self.started,1)
         status["sim_time_s"]=self.sim_time_s
