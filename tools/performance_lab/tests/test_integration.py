@@ -71,6 +71,10 @@ def test_expected_pub_rates_are_production_not_saved_drafts():
     assert "camera_calibration.yaml" in mon
     assert "odometry_calibration.yaml" in mon
     assert "raw=large" in mon
+    assert "/global_costmap/costmap_updates" in mon
+    assert "DurabilityPolicy.TRANSIENT_LOCAL" in mon
+    assert "poll_lifecycle" in mon
+    assert "serialized_header_stamp" in mon
     assert "self.create_subscription(" in mon
     assert "Clock,\"/clock\"" in mon
     settings=yaml.safe_load(
@@ -82,8 +86,6 @@ def test_expected_pub_rates_are_production_not_saved_drafts():
 
 
 def test_sync_pass_vs_real_time_rate_pass():
-    # All published sensor and odom/scan topics are required, rather than
-    # passing from a hand-picked subset while RGB/IMU/EKF silently fall behind.
     targets={
         "/camera/camera/color/image_raw":30.,
         "/camera/camera/depth/image_raw":30.,
@@ -95,24 +97,50 @@ def test_sync_pass_vs_real_time_rate_pass():
         "/diff_drive_controller/odom":100.,
         "/odometry/filtered":100.,
         "/joint_states":100.,
-        "/global_costmap/costmap":3.,
     }
-    def sample(rtf,missed=None):
+    def sample(rtf,idx=0,missed=None,nav_active=True,map_received=True,
+               updates=False):
         topics={}
         for name,target in targets.items():
-            correct=(name!=missed)
+            correct=name!=missed
             topics[name]={
                 "sim_hz":target if correct else .7*target,
                 "wall_hz":rtf*target if correct else rtf*.7*target,
                 "expected_sim_hz":target,
+                "header_large_gap_total":idx if name=="/joint_states" else 0,
+                "header_backward_total":0,
+                "header_interval_p95_ms":10. if target==100. else 33.3,
+                "header_abs_jitter_p95_ms":.5,
             }
-        return {"monitor":{"rtf":rtf,"topics":topics}}
+        topics["/cmd_vel_nav"]={"sim_hz":24.,"count_total":10+idx}
+        return {
+            "monitor":{
+                "rtf":rtf,"topics":topics,
+                "nav2":{
+                    "lifecycle":{
+                        k:{"state":"active" if nav_active else "inactive"}
+                        for k in ("planner_server","controller_server",
+                                  "global_costmap")
+                    },
+                    "costmap":{
+                        "full_received":map_received,
+                        "full_messages":1 if map_received else 0,
+                        "update_received":updates,
+                        "update_messages":10 if updates else 0,
+                    },
+                },
+            },
+            "nav2_warnings":{"warning_total":100+idx*2},
+        }
 
-    samples=[sample(.5) for _ in range(4)]
+    samples=[sample(.5,i) for i in range(4)]
     sync=summary_of_samples(samples,{**DEFAULTS,"mode":"synchronized"})
     assert sync["cadence_pass"] is True
     assert sync["real_time_rate_pass"] is None
+    assert sync["nav2_coverage_pass"] is None
     assert "Parked baseline" in sync["coverage_note"]
+    assert sync["checks"]["/joint_states"]["observed_large_header_gaps"]==3
+
     rt=summary_of_samples(samples,{**DEFAULTS,"mode":"real_time"})
     assert rt["cadence_pass"] is True
     assert rt["real_time_rate_pass"] is False
@@ -120,20 +148,28 @@ def test_sync_pass_vs_real_time_rate_pass():
     mission=summary_of_samples(samples,{
         **DEFAULTS,"profile":"full_mission"})
     assert mission["cadence_pass"] is True
-    assert "/global_costmap/costmap" in mission["checks"]
+    assert mission["nav2_coverage_pass"] is True
+    assert mission["nav2_coverage"]["full_map_observed"] is True
+    assert mission["nav2_coverage"]["incremental_updates_observed"] is False
+    assert "/global_costmap/costmap" not in mission["checks"]
+    assert mission["timing_quality"][
+        "nav2_wall_scheduler_warnings_in_window"]==6
+
     broken=summary_of_samples(
-        [sample(.5,missed="/camera/camera/imu") for _ in range(4)],
+        [sample(.5,i,missed="/camera/camera/imu") for i in range(4)],
         DEFAULTS)
     assert broken["cadence_pass"] is False
     assert broken["checks"]["/camera/camera/imu"]["sim_rate_pass"] is False
-    missing_nav=summary_of_samples(
-        [ {"monitor":{"rtf":.5,"topics":{
-            k:v for k,v in sample(.5)["monitor"]["topics"].items()
-            if k!="/global_costmap/costmap"
-        }}} for _ in range(4)],
+    no_full_map=summary_of_samples(
+        [sample(.5,i,map_received=False) for i in range(4)],
         {**DEFAULTS,"profile":"full_mission"})
-    assert missing_nav["cadence_pass"] is False
-    assert missing_nav["checks"]["/global_costmap/costmap"]["sim_rate_pass"] is False
+    assert no_full_map["cadence_pass"] is True
+    assert no_full_map["nav2_coverage_pass"] is False
+    assert no_full_map["overall_evidence"]=="nav2_coverage_not_verified"
+    no_lifecycle=summary_of_samples(
+        [sample(.5,i,nav_active=False) for i in range(4)],
+        {**DEFAULTS,"profile":"full_mission"})
+    assert no_lifecycle["nav2_coverage_pass"] is False
     missing=summary_of_samples([],DEFAULTS)
     assert missing["cadence_pass"] is False
 
