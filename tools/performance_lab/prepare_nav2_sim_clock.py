@@ -40,7 +40,7 @@ def installed_version(ros_distro="jazzy"):
                 f"Installed {pkg} not found: {manifest}; source ROS Jazzy first"
             )
         value = ET.parse(manifest).getroot().findtext("version")
-        if not value or not re.fullmatch(r"1\\.3\\.\\d+", value):
+        if not value or not re.fullmatch(r"1\.3\.\d+", value):
             raise RuntimeError(f"Unexpected {pkg} version: {value!r}")
         versions.append(value)
     if versions[0] != versions[1]:
@@ -61,20 +61,20 @@ def replace_exact(text, old, new, count=1):
 def patch_controller(source):
     old = "rclcpp::WallRate loop_rate(controller_frequency_);"
     new = (
-        "// SCROBOT: simulate at 25 iterations per ROS second, regardless of RTF.\\n"
-        "    // Preserve steady wall-clock scheduling for real hardware.\\n"
-        "    const bool sim_timing = get_parameter(\"use_sim_time\").as_bool();\\n"
-        "    auto loop_clock = sim_timing ? get_clock() :\\n"
-        "      std::make_shared<rclcpp::Clock>(RCL_STEADY_TIME);\\n"
+        "// SCROBOT: simulate at 25 iterations per ROS second, regardless of RTF.\n"
+        "    // Preserve steady wall-clock scheduling for real hardware.\n"
+        "    const bool sim_timing = get_parameter(\"use_sim_time\").as_bool();\n"
+        "    auto loop_clock = sim_timing ? get_clock() :\n"
+        "      std::make_shared<rclcpp::Clock>(RCL_STEADY_TIME);\n"
         "    rclcpp::Rate loop_rate(controller_frequency_, loop_clock);"
     )
     return replace_exact(source, old, new)
 
 
 SMOOTHER_TIMER = re.compile(
-    r"(?P<indent>^[ ]*)timer_ = this->create_wall_timer\\(\\n"
-    r"[ ]*std::chrono::milliseconds\\(static_cast<int>\\(timer_duration_ms\\)\\),\\n"
-    r"[ ]*std::bind\\(&VelocitySmoother::smootherTimer, this\\)\\);",
+    r"(?P<indent>^[ ]*)timer_ = this->create_wall_timer\(\n"
+    r"[ ]*std::chrono::milliseconds\(static_cast<int>\(timer_duration_ms\)\),\n"
+    r"[ ]*std::bind\(&VelocitySmoother::smootherTimer, this\)\);",
     re.MULTILINE,
 )
 
@@ -85,17 +85,17 @@ def patch_smoother(source):
         i = spaces + "  "
         j = spaces + "    "
         args = (
-            "std::chrono::milliseconds(static_cast<int>(timer_duration_ms)),\\n"
+            "std::chrono::milliseconds(static_cast<int>(timer_duration_ms)),\n"
             + j + "std::bind(&VelocitySmoother::smootherTimer, this));"
         )
         # Timer input period always retains 1 / smoothing_frequency.
         # A simple parameter scaling would make acceleration wrong because
         # Nav2 also computes max delta = max_accel / smoothing_frequency.
         return (
-            spaces + 'if (get_parameter("use_sim_time").as_bool()) {\\n'
-            + i + "timer_ = this->create_timer(\\n" + j + args + "\\n"
-            + spaces + "} else {\\n"
-            + i + "timer_ = this->create_wall_timer(\\n" + j + args + "\\n"
+            spaces + 'if (get_parameter("use_sim_time").as_bool()) {\n'
+            + i + "timer_ = this->create_timer(\n" + j + args + "\n"
+            + spaces + "} else {\n"
+            + i + "timer_ = this->create_wall_timer(\n" + j + args + "\n"
             + spaces + "}"
         )
 
@@ -110,16 +110,16 @@ def patch_smoother(source):
 def write_marker(package_dir, version):
     marker = package_dir / "scrobot_sim_clock_patch.txt"
     marker.write_text(
-        f"{SIGNATURE}\\n"
-        f"nav2_version={version}\\n"
-        "when_use_sim_time=true:controller_and_smoother_use_ros_clock\\n"
-        "when_use_sim_time=false:retain_steady_wall_clock\\n"
+        f"{SIGNATURE}\n"
+        f"nav2_version={version}\n"
+        "when_use_sim_time=true:controller_and_smoother_use_ros_clock\n"
+        "when_use_sim_time=false:retain_steady_wall_clock\n"
     )
     cmake = package_dir / "CMakeLists.txt"
     cmake.write_text(
         cmake.read_text()
-        + "\\n# Provenance marker used by SCROBOT Performance Lab.\\n"
-        + "install(FILES scrobot_sim_clock_patch.txt DESTINATION share/${PROJECT_NAME})\\n"
+        + "\n# Provenance marker used by SCROBOT Performance Lab.\n"
+        + "install(FILES scrobot_sim_clock_patch.txt DESTINATION share/${PROJECT_NAME})\n"
     )
 
 
