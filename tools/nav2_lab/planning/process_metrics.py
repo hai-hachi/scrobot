@@ -17,6 +17,30 @@ BY_PROCESS = (
     ("RViz", ("rviz2",)),
     ("Scene / topic monitor", ("map_status.py",)),
     ("Path overlay", ("path_display.py",)),
+    # Full-stack Performance Lab reuses this sampler. Keep categories by
+    # executable name so its CPU/RAM table does not hide the real workloads
+    # behind a giant "Other lab process" bucket.
+    ("RGB / depth image bridge", ("image_bridge",)),
+    ("Gazebo control plugin", ("gz_ros2_control",)),
+    ("Controller manager", ("controller_manager", "ros2_control_node")),
+    ("Control spawner", ("spawner",)),
+    ("Velocity smoothing", ("velocity_smoother",)),
+    ("Collision monitor", ("collision_monitor",)),
+    ("Manual / command mux", ("manual_mode_manager", "twist_mux")),
+    ("Diff-drive control", ("diff_drive_controller",)),
+    ("IMU transformer", ("imu_transformer",)),
+    ("Madgwick attitude", ("imu_filter_madgwick",)),
+    ("EKF localization", ("ekf_node",)),
+    ("AprilTag detection", ("apriltag_node",)),
+    ("YOLO inference", ("yolo_shuttle_detector",)),
+    ("Depth registration", ("depth_to_color",)),
+    ("Nav2 controller", ("controller_server",)),
+    ("Nav2 navigator", ("bt_navigator",)),
+    ("Nav2 smoother", ("smoother_server",)),
+    ("Nav2 lifecycle", ("lifecycle_manager",)),
+    ("Mission manager", ("sweep_mission_manager",)),
+    ("Motor response", ("sim_motor_response",)),
+
 )
 
 
