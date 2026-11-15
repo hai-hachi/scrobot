@@ -156,7 +156,7 @@ def inputs_fingerprint(loaded):
             for name, info in loaded["provenance"].items()}
 
 
-def build_world(inputs, output_dir):
+def build_world(inputs, output_dir, scene=None):
     """Saved Lighting + AprilTags geometry, original court and Gazebo systems."""
     import copy
     import xml.etree.ElementTree as ET
@@ -182,6 +182,15 @@ def build_world(inputs, output_dir):
     if model is None:
         raise RuntimeError("Canonical AprilTags generator produced no model")
     world.append(copy.deepcopy(model))
+    if scene is not None:
+        from scene import validate_scene
+        from obstacles import sdf_fixture, entity_name
+        for i, fixture in enumerate(validate_scene(scene)["obstacles"], start=1):
+            data = ET.fromstring(sdf_fixture(fixture,entity_name(fixture["kind"],i)))
+            element = data.find("model")
+            if element is None:
+                raise ValueError("Invalid generated obstacle model")
+            world.append(element)
     target = directory / "nav2_saved_calibration_court.sdf"
     ET.indent(document, space="  ")
     document.write(target, encoding="utf-8", xml_declaration=True)
