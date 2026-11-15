@@ -8,11 +8,11 @@ import yaml
 HERE=Path(__file__).resolve().parents[1]
 LAB=HERE.parent
 REPO=HERE.parents[2]
-sys.path.insert(0,str(HERE))
+sys.path.insert(0,str(LAB))
 
-from map_builder import court_geometry, occupancy, write_court_map
-from core import PLANNERS, nav2_params, path_length, path_turning, validate
-from obstacles import sdf_fixture, validate_placement
+from planning.map_builder import court_geometry, occupancy, write_court_map
+from planning.core import PLANNERS, nav2_params, path_length, path_turning, validate
+from planning.obstacles import sdf_fixture, validate_placement
 
 WORLD=REPO/"src"/"scrobot_simulation"/"worlds"/"badminton_court.sdf"
 LANDMARKS=REPO/"src"/"scrobot_localization"/"config"/"court_landmarks.yaml"
