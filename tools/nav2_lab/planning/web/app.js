@@ -173,8 +173,8 @@ function modeHint(){
     robot:'Robot: click to place, then drag to set yaw.',
     goal:'Goal: click to place, then drag to set yaw.',
     box:'Cube: click to set center, then Add cube.',
-    human:'Moving cylinder: click '+(nextRoutePoint==='a'?'A':'B')+
-      ' of the next route. A → B automatically creates a cylinder.'
+    human:'Moving cylinder preview: click '+(nextRoutePoint==='a'?'A':'B')+
+      '. Click Add cylinder to create ONE A ↔ B obstacle.'
   };
   $('pick-next').textContent=hints[mode]||'';
 }
@@ -205,21 +205,12 @@ $('courtMap').addEventListener('pointerdown',event=>{
   event.preventDefault();
   const mode=$('court-pick').value;
   if(mode==='human'){
-    const part=nextRoutePoint;
-    placed(p[0],p[1],'human-'+part);
-    if(part==='a'){nextRoutePoint='b';modeHint();}
-    else{
-      nextRoutePoint='a';modeHint();
-      const obstacle={kind:'human',
-        point_a:{x:n('human-ax'),y:n('human-ay')},
-        point_b:{x:n('human-bx'),y:n('human-by')},
-        speed_mps:n('human-speed')};
-      operation(async()=>{
-        const result=await api('/api/obstacles/add',{obstacle});
-        scene=result.scene;renderObstacles(scene.obstacles);showScene();
-        notify('Cylinder route A → B added. Click A, then B for another.');
-      });
-    }
+    const endpoint=nextRoutePoint;
+    placed(p[0],p[1],'human-'+endpoint);
+    // Reuse the same pending A/B pair. Never spawn on a court click;
+    // Add cylinder, like Add cube, is the only creation action.
+    nextRoutePoint=endpoint==='a'?'b':'a';
+    modeHint();
     return;
   }
   placed(p[0],p[1],mode);
@@ -563,7 +554,7 @@ $('add-human').onclick=()=>operation(async()=>{
     kind:'human',point_a:{x:n('human-ax'),y:n('human-ay')},
     point_b:{x:n('human-bx'),y:n('human-by')},speed_mps:n('human-speed')}});
   scene=result.scene;renderObstacles(scene.obstacles);showScene();
-  notify('Moving human added to '+(status?.stack_running?'Gazebo':'the staged scene')+'.');
+  notify('One moving cylinder added. Further A/B clicks only edit the next preview.');
 });
 $('clear-obstacles').onclick=()=>operation(async()=>{
   const result=await api('/api/obstacles/clear',{});
