@@ -1,16 +1,13 @@
-"""Depth-visible Gazebo scene fixtures: adjustable cubes and two-point humans.
+"""Collision-enabled Gazebo cubes and smooth native-plugin moving cylinders.
 
-A plain cylinder is 0.48m diameter / 1.74m tall. Its Gazebo pose
-moves back and forth between A/B. The requested m/s is paced in wall time;
-actual Gazebo simulated-time speed may differ when real-time factor != 1.
+Moving obstacles are driven by libnav2_moving_cylinder_system.so inside the
+Gazebo simulation loop (no external gz service pose polling or timers).
 """
 from copy import deepcopy
-import json
 import math
 from pathlib import Path
 import subprocess
 import threading
-import time
 from xml.sax.saxutils import escape
 
 WORLD="badminton_court"
@@ -25,25 +22,41 @@ def entity_name(kind,serial):
 
 
 def pose_along_segment(a,b,speed_mps,elapsed_s):
-    """Ping-pong at constant configured speed (wall time)."""
+    """Reference linear A/B triangle wave, retained for existing tests."""
     dx=b["x"]-a["x"]
     dy=b["y"]-a["y"]
     d=math.hypot(dx,dy)
     if d<=0:raise ValueError("Route endpoints must differ")
     phase=(speed_mps*max(0,elapsed_s)/d)%2.0
-    f=phase if phase<=1 else 2-phase
-    return {"x":a["x"]+f*dx,"y":a["y"]+f*dy}
+    factor=phase if phase<=1 else 2-phase
+    return {"x":a["x"]+factor*dx,"y":a["y"]+factor*dy}
+
+
+def eased_pose_along_segment(a,b,speed_mps,elapsed_s):
+    """Exact reference for the Gazebo C++ cosine-eased travel profile.
+
+    Speed is average distance per simulated second; instantaneous velocity
+    smoothly reaches zero at both ends rather than reversing abruptly.
+    """
+    dx=b["x"]-a["x"]
+    dy=b["y"]-a["y"]
+    d=math.hypot(dx,dy)
+    if d<=0:raise ValueError("Route endpoints must differ")
+    phase=(speed_mps*max(0.0,elapsed_s)/d)%2.0
+    fraction=phase if phase<=1 else 2-phase
+    eased=.5*(1-math.cos(math.pi*fraction))
+    return {"x":a["x"]+eased*dx,"y":a["y"]+eased*dy}
 
 
 def sdf_fixture(spec,name):
-    """Physical collision + camera-visible geometry, spawned at model pose."""
+    """Build an SDF fixture visible to depth sensors and costmap."""
     from planning.scene import validate_scene
-    # Reuse validation for structure and dimensional bounds, but don't check
-    # robot overlap here: the scene server already validates the full scene.
-    fixture=validate_scene({"robot":{"x":0.,"y":0.,"yaw_deg":0.},
-                            "obstacles":[spec]},check_overlap=False)["obstacles"][0]
+    fixture=validate_scene({
+        "robot":{"x":0.,"y":0.,"yaw_deg":0.},
+        "obstacles":[spec],
+    },check_overlap=False)["obstacles"][0]
     if not isinstance(name,str) or not name.startswith("nav2_lab_"):
-        raise ValueError("Unsafe fixture name")
+        raise ValueError("Unsafe obstacle name")
     if fixture["kind"]=="box":
         size=fixture["size"]
         x,y=fixture["x"],fixture["y"]
@@ -56,8 +69,10 @@ def sdf_fixture(spec,name):
           <geometry>{geometry}</geometry><material>
           <ambient>0.54 0.37 0.20 1</ambient><diffuse>0.70 0.49 0.29 1</diffuse>
           </material></visual>"""
+        plugin=""
     else:
-        x,y=fixture["point_a"]["x"],fixture["point_a"]["y"]
+        a,b=fixture["point_a"],fixture["point_b"]
+        x,y=a["x"],a["y"]
         body=f"""
         <collision name="body_collision"><pose>0 0 {HUMAN_HEIGHT/2:.4f} 0 0 0</pose>
           <geometry><cylinder><radius>{HUMAN_RADIUS}</radius>
@@ -66,13 +81,19 @@ def sdf_fixture(spec,name):
           <geometry><cylinder><radius>{HUMAN_RADIUS}</radius>
           <length>{HUMAN_HEIGHT}</length></cylinder></geometry>
           <material><ambient>0.12 0.28 0.60 1</ambient>
-          <diffuse>0.20 0.45 0.82 1</diffuse></material></visual>
-"""
+          <diffuse>0.20 0.45 0.82 1</diffuse></material></visual>"""
+        plugin=f"""
+    <plugin filename="libnav2_moving_cylinder_system.so"
+            name="scrobot_simulation::Nav2MovingCylinderSystem">
+      <ax>{a["x"]:.6f}</ax><ay>{a["y"]:.6f}</ay>
+      <bx>{b["x"]:.6f}</bx><by>{b["y"]:.6f}</by>
+      <speed_mps>{fixture["speed_mps"]:.6f}</speed_mps>
+    </plugin>"""
     return f"""<?xml version="1.0"?>
 <sdf version="1.9">
   <model name="{escape(name)}">
     <static>true</static><pose>{x:.6f} {y:.6f} 0 0 0 0</pose>
-    <link name="fixture">{body}</link>
+    <link name="fixture">{body}</link>{plugin}
   </model>
 </sdf>
 """
@@ -84,8 +105,7 @@ def gz_call(command,env,timeout=10):
     if result.returncode:
         raise RuntimeError("Gazebo command failed: "+
                            (result.stderr or result.stdout)[-800:])
-    stdout=result.stdout.lower()
-    if "data: false" in stdout:
+    if "data: false" in result.stdout.lower():
         raise RuntimeError("Gazebo rejected command: "+result.stdout[-500:])
     return result.stdout
 
@@ -95,26 +115,21 @@ class Obstacles:
         self.root=Path(root)
         self.root.mkdir(parents=True,exist_ok=True)
         self.env=env
-        self.clock_path=Path(clock_path) if clock_path else None
         self.entities={}
         self.counter=0
         self.lock=threading.RLock()
-        self.stop_event=threading.Event()
+        # Interface retained for web status compatibility; motion errors
+        # originate in Gazebo's stack log, not a Python subprocess loop.
         self.last_move_error=""
         for spec in initial_specs:
             self.register_existing(spec)
-        self.thread=threading.Thread(target=self._move_loop,daemon=True)
-        self.thread.start()
 
     def register_existing(self,spec):
-        """The fixture has already been included in the generated world SDF."""
+        """The fixture is already included in the generated world SDF."""
         with self.lock:
             self.counter+=1
             name=entity_name(spec["kind"],self.counter)
-            self.entities[name]={"name":name,"spec":deepcopy(spec),
-                                  "spawn_time":time.monotonic(),
-                                  "start_sim_time":None,
-                                  "last_position":None}
+            self.entities[name]={"name":name,"spec":deepcopy(spec)}
             return name
 
     def spawn(self,spec):
@@ -127,13 +142,10 @@ class Obstacles:
             x,y=(spec["x"],spec["y"]) if spec["kind"]=="box" else (
                 spec["point_a"]["x"],spec["point_a"]["y"])
             gz_call(["ros2","run","ros_gz_sim","create","-world",WORLD,
-                    "-file",str(model),"-name",name,
-                    "-x",str(x),"-y",str(y),"-z","0"],self.env,timeout=15)
+                     "-file",str(model),"-name",name,
+                     "-x",str(x),"-y",str(y),"-z","0"],self.env,timeout=15)
             self.counter+=1
-            self.entities[name]={"name":name,"spec":deepcopy(spec),
-                                  "spawn_time":time.monotonic(),
-                                  "start_sim_time":None,
-                                  "last_position":None}
+            self.entities[name]={"name":name,"spec":deepcopy(spec)}
             return self.list()
 
     def delete(self,name):
@@ -149,8 +161,8 @@ class Obstacles:
 
     def list(self):
         with self.lock:
-            return [{"name":o["name"],**deepcopy(o["spec"])}
-                    for o in self.entities.values()]
+            return [{"name":e["name"],**deepcopy(e["spec"])}
+                    for e in self.entities.values()]
 
     def clear(self):
         with self.lock:
@@ -160,53 +172,6 @@ class Obstacles:
         return self.list()
 
     def shutdown(self):
-        self.stop_event.set()
-        self.thread.join(timeout=3)
-
-    def _sim_time(self):
-        if self.clock_path is None:
-            return None
-        try:
-            data=json.loads(self.clock_path.read_text())
-            stamp=data.get("sim_time_s")
-            return float(stamp) if stamp is not None and math.isfinite(stamp) else None
-        except (OSError,ValueError,TypeError):
-            return None
-
-    def _move_loop(self):
-        while not self.stop_event.wait(.25):
-            now=self._sim_time()
-            if now is None:
-                # Wait for real Gazebo /clock measurements; do not invent time.
-                continue
-            with self.lock:
-                moving=[]
-                for o in self.entities.values():
-                    if o["spec"]["kind"]!="human":
-                        continue
-                    if o["start_sim_time"] is None or now < o["start_sim_time"]:
-                        o["start_sim_time"]=now
-                    elapsed=max(0.0,now-o["start_sim_time"])
-                    spec=o["spec"]
-                    pos=pose_along_segment(
-                        spec["point_a"],spec["point_b"],spec["speed_mps"],elapsed)
-                    previous=o["last_position"]
-                    if previous is not None and math.hypot(
-                        pos["x"]-previous["x"],pos["y"]-previous["y"]) < .008:
-                        continue
-                    moving.append((o["name"],pos))
-            for name,pos in moving:
-                if self.stop_event.is_set():return
-                request=(f'name: "{name}" '
-                         f'position: {{x: {pos["x"]:.5f} y: {pos["y"]:.5f} z: 0}}')
-                try:
-                    gz_call(["gz","service","-s",f"/world/{WORLD}/set_pose",
-                             "--reqtype","gz.msgs.Pose",
-                             "--reptype","gz.msgs.Boolean","--timeout","1400",
-                             "--req",request],self.env,timeout=2.5)
-                    with self.lock:
-                        if name in self.entities:
-                            self.entities[name]["last_position"]=pos
-                    self.last_move_error=""
-                except (RuntimeError,subprocess.TimeoutExpired,FileNotFoundError) as exc:
-                    self.last_move_error=str(exc)[-450:]
+        # Gazebo owns every cylinder's motion; shutting down the lab will
+        # unload its plugins with the world.
+        pass
