@@ -7,3 +7,92 @@
 .calibration-row small{display:block;margin-top:7px;color:var(--muted);font-size:10px;line-height:1.55}
 .calibration-origin{flex-shrink:0;padding:5px 6px;background:#164536;color:#8af3cd;border:1px solid #31775f;border-radius:5px;font-size:9px;white-space:nowrap}
 .calibration-origin.fallback{background:#423522;color:#f9d295;border-color:#897345}
+
+
+/* Shared SCROBOT developer-lab design: top navigation, dark navy tiles,
+   muted secondary text and teal action states (Lighting/Mobility/Odometry). */
+:root{
+  --bg:#0b121b;--side:#111d27;--panel:#15202b;--sub:#1f2d3c;
+  --line:#344457;--text:#edf5fa;--muted:#a6b6c4;--accent:#42d0c2;
+  --blue:#75abff;
+}
+body{background:linear-gradient(135deg,#0a1721,#0b1119 68%);font-size:14px;line-height:1.5}
+.shell{display:block;min-height:100vh}
+.sidebar{
+  position:relative;top:auto;height:auto;min-height:0;width:auto;
+  padding:14px max(24px,calc((100vw - 1480px)/2));
+  display:flex;align-items:center;flex-direction:row;flex-wrap:wrap;
+  gap:20px;background:#111d27;border-right:0;border-bottom:1px solid var(--line);
+}
+.sidebar header{padding:0;flex-shrink:0;gap:12px}
+.sidebar header strong{font-size:18px;letter-spacing:.5px}
+.sidebar header small{font-size:10px;letter-spacing:1.2px}
+.monogram{
+  display:grid;place-items:center;background:#123f38;color:var(--accent);
+  border:1px solid #206e5e;border-radius:9px;padding:0;width:39px;height:39px;
+}
+.sidebar .label-upper{padding:0;color:var(--muted);font-size:10px}
+.sidebar nav{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.sidebar .tab{
+  background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  margin:0;padding:10px 14px;width:auto;white-space:nowrap;font-size:12px;
+}
+.sidebar .tab.active{
+  color:#a9ffed;background:#153b3c;border-color:#258679;
+  box-shadow:inset 0 -2px 0 var(--accent);
+}
+.sidebar-bottom{display:none}
+.topline{display:none}
+.content{max-width:1510px;margin:auto;padding:21px 24px 24px}
+.hero{margin:0 0 20px}
+.eyebrow{font-size:11px;color:var(--accent);letter-spacing:2px}
+.hero h1{font-size:25px;letter-spacing:-.4px;margin:4px 0 6px}
+.hero em{font-weight:700;font-style:normal}
+.hero p{font-size:12px;margin:0}
+.metric,.panel{
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;box-shadow:0 8px 28px #0002;
+}
+.metric{background:var(--sub);padding:13px;min-height:96px}
+.metric strong{font-size:20px;margin:8px 0 4px}
+.metric small{font-size:11px;letter-spacing:.03em}
+.metrics{gap:10px;margin-bottom:16px}
+.panel{padding:18px;margin-bottom:16px}
+.panel h2{font-size:16px;font-weight:700}
+.panel .between{border-bottom:1px solid var(--line);margin-bottom:12px;padding-bottom:3px}
+.field label,.triplet label{font-weight:500;font-size:12px;color:var(--muted)}
+.field input,.field select,.triplet input{background:var(--sub);border-color:var(--line);border-radius:7px}
+.field input:focus,.field select:focus,.triplet input:focus{outline:2px solid #42d0c23b;border-color:var(--accent)}
+.switchline{border:0;border-radius:8px;background:var(--sub);padding:11px 12px}
+.btn{background:#27394b;color:var(--text);border:1px solid var(--line);font-size:12px;border-radius:8px;padding:10px 13px}
+.btn.primary{background:#0c7c75;border-color:#12b2a5;color:#fff}
+.btn.secondary{background:#27394b}
+.btn.outline{background:#1f2d3c}
+.actionbar{
+  position:relative;left:auto;right:auto;bottom:auto;
+  max-width:1462px;margin:0 auto 18px;
+  padding:14px 17px;background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;box-shadow:none;
+}
+.lab-logs{max-width:1462px;margin:0 auto 35px}
+.lab-logs details{margin-top:11px}
+.lab-logs summary{cursor:pointer;color:var(--text);font-size:12px}
+.lab-logs pre{max-height:275px;background:#101925;color:var(--muted)}
+.calibration-row{background:var(--sub);border-radius:9px}
+.block{background:var(--sub);border-radius:9px}
+@media(max-width:1100px){
+  .sidebar{padding:14px 20px;gap:12px}
+  .actionbar{margin:0 18px 16px}
+  .lab-logs{margin:0 18px 30px}
+}
+@media(max-width:720px){
+  .shell{display:block}
+  .sidebar{position:relative;display:block;height:auto;width:auto;padding:13px}
+  .sidebar nav{display:flex;flex-wrap:wrap;overflow:visible;margin-top:12px}
+  .sidebar .tab{flex:1}
+  .content{padding:15px 12px 15px}
+  .hero h1{font-size:22px}
+  .actionbar{position:relative;left:auto;padding:12px;margin:0 12px 16px}
+  .lab-logs{margin:0 12px 24px}
+  .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+}

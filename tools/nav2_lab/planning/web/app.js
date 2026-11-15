@@ -55,6 +55,8 @@ function updateButtons(){
   const live=Boolean(status?.stack_running),trial=Boolean(status?.trial_running);
   for(const [name,enabled] of Object.entries({
     start:!live,stop:live,plan:live&&!trial,cancel:trial,
+    'gui-open':live&&!status?.gazebo_gui?.running,
+    'gui-close':live&&Boolean(status?.gazebo_gui?.running),
     'rviz-open':live&&!status?.rviz_running,
     'rviz-close':live&&status?.rviz_running,
     'add-obstacle':live&&!trial,'clear-obstacles':live&&!trial,save:true
@@ -185,7 +187,10 @@ async function refresh(){
     $('stack-state').textContent=status.stack_running?'Simulation running':'Simulation stopped';
     $('action-state').textContent=status.trial_running?'Planning experiment in progress':
       status.stack_running?'Planner stack running · ready for a request':'Simulation stopped';
-    $('log').textContent=(status.trial_running?status.trial_log:status.stack_log)||'No logs yet.';
+    $('log').textContent=status.stack_log||'No stack logs yet.';
+    $('navTrialLog').textContent=status.trial_log||'No benchmark logs yet.';
+    $('navGuiLog').textContent=status.gui_log||'Gazebo GUI not opened.';
+    $('navRvizLog').textContent=status.rviz_log||'RViz not opened.';
     if(status.summary?.error)$('log').textContent+='\n\nLast error: '+status.summary.error;
     $('move-error').textContent=status.moving_obstacle_error?('Moving obstacle: '+status.moving_obstacle_error):'';
     renderResults(status);
@@ -250,6 +255,8 @@ $('stop').onclick=()=>operation(async()=>{
   await api('/api/stop',{});await refreshCalibration();
   showNotice('Stopping isolated simulation.');
 });
+$('gui-open').onclick=()=>operation(async()=>{await api('/api/gazebo-gui/open',{});showNotice('Opening Gazebo desktop GUI; simulation remains running.');});
+$('gui-close').onclick=()=>operation(async()=>{await api('/api/gazebo-gui/close',{});showNotice('Gazebo GUI closed; simulation remains running.');});
 $('rviz-open').onclick=()=>operation(async()=>{await api('/api/rviz/open',{});showNotice('RViz opening with planner path and costmap displays.');});
 $('rviz-close').onclick=()=>operation(async()=>{await api('/api/rviz/close',{});showNotice('Closing RViz.');});
 $('plan').onclick=()=>operation(async()=>{

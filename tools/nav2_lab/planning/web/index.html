@@ -98,9 +98,7 @@
         </div>
         <p class="muted">RViz displays all four saved paths on separate topics, plus the static map, live costmap, depth scan and robot. Paths remain visible after each planner request.</p>
       </article>
-      <article class="panel"><div class="between"><h2>Runtime logs</h2><span>Planner &amp; simulation</span></div>
-        <pre id="log">No simulation started.</pre>
-      </article>
+
     </section>
 
     <section id="obstacles" class="pane">
@@ -149,11 +147,20 @@
       <button class="btn outline" id="save">Save YAML</button>
       <button class="btn secondary" id="start">Start simulation</button>
       <button class="btn danger" id="stop">Stop simulation</button>
+      <button class="btn outline" id="gui-open">Open Gazebo UI</button>
+      <button class="btn outline" id="gui-close">Close Gazebo UI</button>
       <button class="btn outline" id="rviz-open">Open RViz</button>
       <button class="btn outline" id="rviz-close">Close RViz</button>
       <button class="btn primary" id="plan">Plan / compare</button>
       <button class="btn danger" id="cancel">Cancel</button>
     </div>
   </footer>
+  <article class="panel lab-logs">
+    <div class="between"><h2>Runtime logs</h2><span>Latest available server and viewer output</span></div>
+    <details open><summary>Nav2 / Gazebo stack</summary><pre id="log">No simulation started.</pre></details>
+    <details><summary>Planner benchmark</summary><pre id="navTrialLog">No benchmark started.</pre></details>
+    <details><summary>Gazebo GUI client</summary><pre id="navGuiLog">Gazebo GUI closed.</pre></details>
+    <details><summary>RViz2</summary><pre id="navRvizLog">RViz closed.</pre></details>
+  </article>
 </main></div>
 </body></html>

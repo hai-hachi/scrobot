@@ -375,6 +375,7 @@ class Service:
                 "rviz_running":running(self.rviz),
                 "gazebo_gui":self.gui.status() if self.gui else {"running":False},
                 "gui_log":log_tail(self.gui.log_path) if self.gui else "",
+                "rviz_log":log_tail(self.active_dir/"rviz.log") if self.active_dir else "",
                 "trial_running":running(self.trial),
                 "trial_exit_code":self.trial.poll() if self.trial else None,
                 "run_name":self.run_dir.name if self.run_dir else None,
