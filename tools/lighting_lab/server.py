@@ -42,6 +42,7 @@ from light_frames import GEOMETRY_KEYS, create_marker_batch, extent
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from shared.lab_ui import GazeboGUI, log_tail as lab_log_tail
+from shared.sim_speed import get as read_speed, save as save_speed, cap_world, response as speed_response
 
 
 SOURCE = Path(__file__).resolve().parents[2] / (
@@ -734,6 +735,7 @@ class Lab:
             self.source,
             preview_world_settings(self.settings, self.adapter.preview_shadow_free)
         ))
+        cap_world(worldfile, worldfile, read_speed("lighting"))
         robot = self.settings["robot"]
         command = [
             "ros2", "launch", "scrobot_simulation", "simulation.launch.py",
@@ -985,6 +987,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/":
             self.reply(200, HTML.read_bytes(), "text/html; charset=utf-8")
+        elif path == "/api/sim-speed":
+            self.reply(200, speed_response("lighting", self.lab.proc is not None and self.lab.proc.poll() is None))
         elif path == "/api/status":
             result = self.lab.adapter.status()
             result["gazebo_alive"] = (
@@ -1014,7 +1018,8 @@ class Handler(BaseHTTPRequestHandler):
                         "/api/venue", "/api/orbit", "/api/config",
                         "/api/publish", "/api/preview",
                         "/api/light_frames", "/api/render_budget",
-                        "/api/gazebo-gui/open", "/api/gazebo-gui/close"):
+                        "/api/gazebo-gui/open", "/api/gazebo-gui/close",
+                        "/api/sim-speed"):
             self.reply(404, {"error": "Unknown action"})
             return
         size = int(self.headers.get("Content-Length", "0"))
@@ -1038,7 +1043,12 @@ class Handler(BaseHTTPRequestHandler):
                         self.reply(200, {"ok": True, "superseded": True,
                                          "message": "Replaced by a newer request"})
                         return
-                if path == "/api/gazebo-gui/open":
+                if path == "/api/sim-speed":
+                    if set(payload) != {"max_rtf"}:
+                        raise ValueError("Set only max_rtf")
+                    speed = save_speed("lighting", payload["max_rtf"])
+                    text = f"Saved {speed:.2f}x RTF cap. Restart Gazebo to apply."
+                elif path == "/api/gazebo-gui/open":
                     if payload:
                         raise ValueError("Gazebo GUI open expects empty object")
                     if self.lab.owns_simulation and (
