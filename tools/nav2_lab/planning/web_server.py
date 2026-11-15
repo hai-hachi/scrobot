@@ -44,6 +44,7 @@ RVIZ=HERE/"config"/"planning.rviz"
 WORLD=REPO/"src"/"scrobot_simulation"/"worlds"/"badminton_court.sdf"
 LANDMARKS=REPO/"src"/"scrobot_localization"/"config"/"court_landmarks.yaml"
 PRODUCTION_NAV2=REPO/"src"/"scrobot_navigation"/"config"/"nav2_params.yaml"
+PRODUCTION_PERCEPTION=REPO/"src"/"scrobot_perception"/"config"/"perception.yaml"
 
 
 def status_file(path):
@@ -292,6 +293,12 @@ class Service:
             self.stack_log=self.active_dir/"stack.log"
             self.gui = GazeboGUI(self.active_dir/"gazebo_gui.log", env=self.env, cwd=REPO)
             camera=calibration["camera"]
+            # Keep LaserScan metadata synchronized with saved D435i depth FPS.
+            scan_config=yaml.safe_load(PRODUCTION_PERCEPTION.read_text())
+            scan_config["depth_pointcloud_to_scan"]["ros__parameters"]["scan_time"]=(
+                1.0/float(camera["depth_fps"]))
+            scan_params=self.active_dir/"depth_scan.yaml"
+            scan_params.write_text(yaml.safe_dump(scan_config,sort_keys=False))
             mobility=calibration["mobility"]["physics"]
             rates=calibration["odometry"]
             cw,ch=map(int,camera["color"].split("x"))
@@ -299,6 +306,7 @@ class Service:
             robot=loaded_scene["robot"]
             launch_values={
                 "pose_file":str(self._pose_file),
+                "scan_params":str(scan_params),
                 "robot_x":robot["x"], "robot_y":robot["y"],
                 "robot_yaw_rad":__import__("math").radians(robot["yaw_deg"]),
                 "map_status_file":str(self.active_dir/"map_status.json"),
