@@ -64,7 +64,8 @@ def test_expected_pub_rates_are_production_not_saved_drafts():
     assert "camera_calibration.yaml" in mon
     assert "odometry_calibration.yaml" in mon
     assert "raw=large" in mon
-    assert "use_sim_time" not in mon.split("class TimingObserver")[0]
+    assert "self.create_subscription(" in mon
+    assert "Clock,\"/clock\"" in mon
     settings=yaml.safe_load(
         (ROOT/"tools/configs/labs/performance_lab.yaml").read_text())
     assert settings["lab"]=="performance"
