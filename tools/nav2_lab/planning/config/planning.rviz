@@ -17,7 +17,7 @@ Visualization Manager:
     - Class: rviz_default_plugins/Map
       Name: Static poles and tags
       Enabled: true
-      Alpha: 0.90
+      Alpha: 0.30
       Color Scheme: map
       Draw Behind: true
       Topic:
@@ -30,15 +30,29 @@ Visualization Manager:
     - Class: rviz_default_plugins/Map
       Name: Live global costmap
       Enabled: true
-      Alpha: 0.60
+      Alpha: 0.22
       Color Scheme: costmap
-      Draw Behind: false
+      Draw Behind: true
       Topic:
         Depth: 1
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /global_costmap/costmap
+      Value: true
+    - Class: rviz_default_plugins/RobotModel
+      Name: Simplified SCROBOT body
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 0.85
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Name: Court markings and outer clearance
