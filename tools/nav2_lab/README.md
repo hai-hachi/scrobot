@@ -21,43 +21,49 @@ planner selection, map diagnostics, calibration provenance, benchmarks, logs.
 The simulation is headless; use the existing Open/Close Gazebo GUI and RViz
 buttons to inspect the world without affecting the server.
 
-## Scene setup — one reusable court pose picker
+## Planner tab and scene controls
 
-The small SVG court is the same kind of *coordinate input* used by the
-AprilTags Lab, **not** a browser replacement for RViz. Choose a placement mode
-and click on the venue floor, or type exact values:
+The navigation tab is named **Planner**. Scene setup, planner selection,
+performance, results and logs remain on one page.
 
-- **Robot pose:** X, Y, heading in degrees. A new live placement restarts the
-  Nav2-only simulation to reset odometry and regenerate `map -> odom` TF.
-  No controller commands are sent to move the robot.
-- **Goal pose:** X, Y, heading in the fixed badminton-court `map` frame.
-- **Cube:** select its center and side length **0.20–1.50 m** using the slider;
-  a fixed collision + visual box is created in Gazebo.
-- **Walking human:** pick independent A and B points, then a speed
-  **0.10–2.00 m/s**. The fixture has a fixed 0.48 m diameter, 1.74 m height
-  and walks A -> B -> A repeatedly. Speed and pause handling are based on
-  **Gazebo /clock simulation seconds**. This is a simple collision-enabled
-  human-shaped geometry, not animated human skeletal motion.
-- **Active obstacles:** remove individual items or clear the scene, before or
-  during a simulation (but not mid-benchmark).
+- Choose Robot or Goal and click the court to set X/Y, then **drag in the
+  heading direction** to set yaw. This reuses the gesture from YOLO Lab.
+- Choose Cube, click its center and select side length 0.20 to 1.50 m.
+- Choose Walking cylinder, then click A followed by B. The B click creates
+  a moving obstacle; the picker immediately cycles back to A for the next
+  cylinder (A, B, A, B, ...). Each cylinder is 1.74 m tall and 0.48 m
+  in diameter. The walking-speed slider sets 0.10 to 2.00 m per simulated
+  second, based on Gazebo /clock. Numeric A/B input also remains available.
+- Use the **Cell size** numeric field (0.02 to 0.20 m per cell) for the
+  planner costmap. Changing it requires restarting the simulation.
 
-Use **Save Scene YAML** to persist the complete robot/obstacle layout to:
+**Save Scene YAML** writes tools/configs/labs/nav2_scene.yaml (robot pose,
+cube dimensions, cylinder endpoints and speed). **Save Lab YAML** writes
+tools/configs/labs/nav2_lab.yaml (planner options, goal, cell size, depth
+layer). Neither button publishes to the production simulation.
 
-```text
-tools/configs/labs/nav2_scene.yaml
-```
+## Lightweight planner-only launch
 
-This is separate from the **Save Lab YAML** button, which saves planner
-selection, goals and costmap parameters through the common lab registry at:
+The former full simulation/controller/localization/perception graph is
+replaced by a dedicated minimal launch. The active ROS nodes are:
 
-```text
-tools/configs/labs/nav2_lab.yaml
-```
+- Headless Gazebo and the existing robot spawn / robot_state_publisher
+- ROS/Gazebo bridge for /clock and native depth PointCloud2 only
+- pointcloud_to_laserscan and the existing depth self-filter
+- Two fixed frame publishers for map -> odom -> base_footprint
+- Nav2 map_server, planner_server and lifecycle manager
+- Path overlay publisher and one combined map/topic-rate/RViz monitor
 
-Load Saved Scene works with simulation stopped. The scene file is *not* a
-production publication. The scene is loaded when the Nav2 Lab starts.
-At startup all saved obstacle models are inserted directly into the generated
-Gazebo world, so they do not race the Gazebo create service during launch.
+No diff-drive controller spawners, command mux, velocity smoother,
+collision monitor, EKF, IMU filter, AprilTag detector, YOLO, color image
+bridge or depth-to-color alignment nodes are started. The underlying Gazebo
+robot model still contains its color sensor and gz_ros2_control plugin;
+removing those would require a separate lab-specific URDF variant.
+
+**Performance** measures actual wall-clock message Hz for /clock, depth
+cloud, raw scan, filtered scan, /map and the global costmap. The /map
+rate is displayed as **Latched** instead of inventing a periodic rate.
+ANSI color escape codes are stripped from all four log windows.
 
 ## RViz map/costmap visibility fixes
 
@@ -68,8 +74,11 @@ These are now integer values. The other important correction is the frame:
 - The court occupancy image, map server and global costmap all use the
   **court-fixed `map` frame**.
 - For robot spawn pose `(x, y, yaw)`, an explicit static
-  `map -> odom` transform is published. The existing wheel odometry and
-  localization continue to publish `odom -> base_footprint`.
+  `map -> odom` transform is published. The stationary planner publishes an additional static
+  `odom -> base_footprint` frame, without starting wheel odometry or EKF.
+- RViz shows only a camera-link marker (no full RobotModel), yellow robot
+  and blue goal arrows, the source SDF badminton court lines, court outline,
+  and outermost venue clearance line. These are visualization overlays only.
 - RViz's Fixed Frame is `map`, with an independently configured static
   `/map` display (reliable/transient-local QoS) and live
   `/global_costmap/costmap` display (reliable/volatile QoS).
@@ -89,7 +98,7 @@ read its specific hint and the stack log below the dashboard.
 The *permanent* occupancy map marks only the net poles and conservative
 AprilTag mount footprints. Court paint and the suspended net are not
 navigation obstacles. The physical floor remains a support collision.
-The optional cubes/human **do not** go into the static map: they must enter
+The optional cubes/cylinders **do not** go into the static map: they must enter
 the obstacle layer through the calibrated RealSense depth pipeline and be
 within its actual field of view/range.
 
