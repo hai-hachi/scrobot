@@ -54,6 +54,10 @@ velocity_smoother:
     scale_velocities: true
     feedback: "OPEN_LOOP"
     enable_stamped_cmd_vel: true
+    # Stamp the smoothed command at its actual publication time. Without this
+    # Jazzy reuses the input header while interpolating, obscuring timing and
+    # potentially sending unnecessarily old cmd_vel timestamps downstream.
+    stamp_smoothed_velocity_with_smoothing_time: true
 
     # Each wheel is limited to 0.50 m/s (0.05 m radius ~= 95.5 RPM).
     # Straight-only body limit: 0.50 m/s. Spin-only limit: 2*0.50/0.42
