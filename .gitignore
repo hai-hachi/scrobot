@@ -56,3 +56,7 @@ rosbag2_*/
 # IMPORTANT: never ignore tools/configs/labs/*.yaml; these are the
 # intentional lab-owned saved configurations. Production YAMLs in src/
 # remain tracked separately.
+
+# Generated, version-matched Nav2 Jazzy ROS-clock source overlay.
+# Recreate locally with tools/performance_lab/prepare_nav2_sim_clock.py.
+/src/_scrobot_nav2_sim_clock/
