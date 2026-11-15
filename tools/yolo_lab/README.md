@@ -13,10 +13,11 @@ and `scrobot_debug`, without requiring a second source checkout.
 cd ~/scrobot_ws
 git switch real-comparison
 git pull --ff-only
-bash tools/yolo_lab/start.sh
+python3 tools/yolo_lab/server.py
 ```
 
-Dashboard: **http://127.0.0.1:8770**
+Dashboard (opens a new tab by default): **http://127.0.0.1:8770**.
+Use `--no-browser` if desired; the Gazebo desktop stays closed until requested.
 
 The server and Gazebo use ROS domain **83** and isolated Gazebo partition
 `scrobot_yolo_lab_<uid>_83`. Gazebo runs headless until requested via
@@ -39,8 +40,8 @@ The server and Gazebo use ROS domain **83** and isolated Gazebo partition
   Jazzy packages if versions are compatible.
 - Existing compiled `scrobot_simulation` and `ros_gz_sim` packages
   must be installed for Gazebo to resolve models and `ros2 run`.
-- Use `bash tools/yolo_lab/start.sh`, **not** `./start.sh`: repository
-  API writes do not necessarily preserve executable flags.
+- Directly use `python3 tools/yolo_lab/server.py` after sourcing ROS and
+  the workspace. `bash tools/yolo_lab/start.sh` remains a compatible wrapper.
 
 ## Ownership and shared YAML
 

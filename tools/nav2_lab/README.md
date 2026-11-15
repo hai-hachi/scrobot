@@ -86,10 +86,13 @@ git pull
 sudo apt install ros-jazzy-navigation2 python3-yaml python3-psutil
 colcon build --symlink-install
 source install/setup.bash
-python3 tools/nav2_lab/web_server.py
+python3 tools/nav2_lab/server.py
 ```
 
-Open **http://127.0.0.1:8772**.
+The dashboard opens **http://127.0.0.1:8772** in a new browser tab unless
+`--no-browser` is specified. The simulator starts headlessly. Use the
+**Open Gazebo UI / Close Gazebo UI** and **Open RViz / Close RViz** buttons
+without stopping the planning stack. Logs are always available at the end.
 
 1. Start simulation; give Gazebo, localization, static map, perception, and
    planner lifecycle servers time to activate.

@@ -19,6 +19,6 @@ for command in gz ros2 python3; do
     exit 2
   fi
 done
-printf 'Starting standalone Camera & AprilTags Lab (browser opens manually).\n'
+printf 'Starting standalone Camera & AprilTags Lab (new browser tab opens by default).\n'
 printf 'Camera mode uses RGB/depth bridge; AprilTags mode also starts the detector.\n'
 exec python3 "$DIR/server.py" "$@"

@@ -13,7 +13,9 @@ source install/setup.bash
 python3 tools/mesh_lab/server.py
 ```
 
-Dashboard: http://127.0.0.1:8770. Gazebo desktop is the actual 3D viewer.
+Dashboard: http://127.0.0.1:8771. Gazebo starts headlessly and the desktop is an optional 3D viewer.
+Click Open Gazebo UI to inspect, Close Gazebo UI before benchmarks.
+The browser opens a new tab automatically unless --no-browser is given.
 Use its View / Entity Tree / Component Inspector controls for collision, wireframe,
 joint frames, inertia, center of mass and entity pose. Exact controls depend on
 installed Gazebo GUI plugins. RViz opens separately with a minimal RobotModel/TF
