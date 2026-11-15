@@ -1,0 +1,158 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Court grid
+      Enabled: true
+      Alpha: 0.25
+      Cell Size: 1
+      Color: 100; 100; 100
+      Plane: XY
+      Value: true
+    - Class: rviz_default_plugins/Map
+      Name: Static poles and tags
+      Enabled: true
+      Alpha: 0.75
+      Color Scheme: map
+      Draw Behind: true
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /map
+      Value: true
+    - Class: rviz_default_plugins/Map
+      Name: Live global costmap
+      Enabled: true
+      Alpha: 0.35
+      Color Scheme: costmap
+      Draw Behind: false
+      Topic:
+        Depth: 1
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /global_costmap/costmap
+      Value: true
+    - Class: rviz_default_plugins/RobotModel
+      Name: SCROBOT
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 0.9
+      Value: true
+    - Class: rviz_default_plugins/LaserScan
+      Name: Depth camera scan
+      Enabled: true
+      Alpha: 1
+      Color: 0; 255; 255
+      Color Transformer: FlatColor
+      Size (Pixels): 4
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /camera/camera/depth/scan
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 238; 179; 69
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.035
+      Name: NavFn - Dijkstra
+      Pose Style: None
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nav2_lab/paths/NavFnDijkstra
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 82; 162; 239
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.035
+      Name: NavFn - A star
+      Pose Style: None
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nav2_lab/paths/NavFnAStar
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 54; 214; 154
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.035
+      Name: Smac 2D
+      Pose Style: None
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nav2_lab/paths/Smac2D
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 195; 135; 240
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.035
+      Name: Theta star
+      Pose Style: None
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nav2_lab/paths/ThetaStar
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 20; 26; 35
+    Fixed Frame: odom
+    Frame Rate: 20
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/Measure
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Current View
+      Target Frame: odom
+      Scale: 60
+      Angle: 0
+    Saved: ~
