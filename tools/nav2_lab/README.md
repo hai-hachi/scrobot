@@ -77,16 +77,21 @@ These are now integer values. The other important correction is the frame:
 - For robot spawn pose `(x, y, yaw)`, an explicit static
   `map -> odom` transform is published. The stationary planner publishes an additional static
   `odom -> base_footprint` frame, without starting wheel odometry or EKF.
-- RViz now displays a **simplified robot body** via RobotModel (lightweight
-  URDF proxy visual), plus the **actual Nav2 global-costmap collision
-  footprint** as a magenta polygon. This polygon is the robot footprint
-  configured for Nav2 collision checks; it is not the inflated costmap radius
-  or an estimate from the STL mesh.
-- Court lines are bright white; the court outline is lime and the outermost
-  venue clearance boundary is pink. Static map opacity is **0.30**, global
-  costmap opacity **0.22**, both drawn behind the high-contrast overlays.
-  Robot and goal heading arrows, camera-link marker and four planner paths
-  remain visible.
+- RViz no longer displays the simplified SCROBOT RobotModel. Only the
+  camera-link marker, robot/goal arrows and the **actual Nav2 global-costmap
+  collision footprint** remain. The thin magenta polygon is the footprint
+  used by Nav2 for collision checking, not the inflated costmap radius or
+  an estimate from the visual STL. Its line width is now **0.025 m**.
+- RViz no longer uses moving `LINE_LIST` ribbons for court paint or
+  boundaries. It renders **fixed, solid oriented CUBE markers** extracted
+  directly from the Gazebo court-markings SDF box sizes and positions, plus
+  fixed prisms for the official mat outline and outermost venue boundary.
+  The markers are anchored to the world-fixed `map` frame, published only
+  once with transient-local QoS, and lifted slightly above the map surface
+  to avoid depth fighting with occupancy layers.
+- Court paint is white, the mat outline lime, the outer clearance pink.
+  Static map opacity is **0.30**, global costmap **0.22**. Robot/goal arrows,
+  thin collision footprint, camera link and four planner paths remain.
 - RViz's Fixed Frame is `map`, with an independently configured static
   `/map` display (reliable/transient-local QoS) and live
   `/global_costmap/costmap` display (reliable/volatile QoS).
@@ -109,6 +114,33 @@ navigation obstacles. The physical floor remains a support collision.
 The optional cubes/cylinders **do not** go into the static map: they must enter
 the obstacle layer through the calibrated RealSense depth pipeline and be
 within its actual field of view/range.
+
+### Smooth cylinder motion
+
+Moving cylinders are now driven by a native **Gazebo Harmonic model system**
+(`libnav2_moving_cylinder_system.so`) attached to each generated model SDF.
+It commands the model's pose inside Gazebo `PreUpdate` at up to **60 Hz of
+simulation time**, instead of starting a `gz service /set_pose` subprocess
+every 250 ms and polling a slow JSON clock file. The result should be smoother,
+with far less process overhead. Cosine easing makes the cylinder slow down
+before reversing at A or B. Speed is its **average speed over each leg**;
+instantaneous speed is not constant during acceleration/deceleration.
+The model stays a simple collision-enabled cylinder visible to the camera.
+
+**Important: rebuild after pulling** because this change adds a C++ Gazebo
+plugin to `scrobot_simulation`:
+
+```bash
+cd ~/scrobot_ws
+git switch real-comparison
+git pull --ff-only origin real-comparison
+colcon build --symlink-install --packages-select scrobot_simulation
+source install/setup.bash
+python3 tools/nav2_lab/server.py
+```
+
+The production robot/court configuration is unchanged; the new plugin
+attaches only to optional Nav2 Lab cylinders.
 
 ### Manual ROS checks if the displays are still empty
 
@@ -252,6 +284,21 @@ shared planner_server RSS / RSS delta, success/error, and a costmap
 fingerprint. These are **shared process** RAM numbers, not per-plugin
 exclusive allocations. For a strictly isolated per-algorithm memory test
 we would restart the Nav2 process between trials.
+
+## Delete experiment history
+
+The **Recent experiments** section provides a **Delete** button beside each
+past run and a **Delete all experiments** button. Both request explicit
+confirmation and permanently delete the respective output folders, including
+path JSON, snapshots and metrics. Deletion is **refused while any planner
+trial is running**. The backend validates each timestamped
+`YYYYMMDD_HHMMSS_planning_xxxxx` directory under the configured Nav2
+result root and refuses path traversal/symlinks.
+
+**Never deleted:** `_planning_active` (Gazebo/runtime map cache), saved
+`nav2_scene.yaml`, saved planner YAML, other labs' calibration, and any
+unrelated folders in the results directory. Results deleted this way cannot
+be recovered without a backup.
 
 ## Test and limitations
 
