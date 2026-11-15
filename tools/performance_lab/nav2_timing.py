@@ -32,7 +32,35 @@ def installed_controller_frequency(default=DEFAULT_CONTROLLER_HZ):
         return float(default)
 
 
-def nav2_scheduler_expectations(rtf,configured_hz=DEFAULT_CONTROLLER_HZ):
+def installed_sim_clock_overlay():
+    """Verify *installed*, active ament-index packages; source files alone do not count."""
+    marker_name="scrobot_sim_clock_patch.txt"
+    signature="SCROBOT_NAV2_ROS_CLOCK_V1"
+    details={}
+    for pkg in ("nav2_controller","nav2_velocity_smoother"):
+        try:
+            from ament_index_python.packages import get_package_share_directory
+            marker=Path(get_package_share_directory(pkg))/marker_name
+            body=marker.read_text()
+            details[pkg]={
+                "installed":signature in body,
+                "marker":str(marker),
+                "nav2_version":next(
+                    (line.split("=",1)[1] for line in body.splitlines()
+                     if line.startswith("nav2_version=")),None),
+            }
+        except (ImportError,LookupError,OSError):
+            details[pkg]={"installed":False}
+    versions={x.get("nav2_version") for x in details.values()}
+    active=all(x["installed"] for x in details.values()) and len(versions)==1
+    return {"active":active,"packages":details,"clock_domain":
+            "ros_when_simulated" if active else "upstream_wall",
+            "note":("Both Nav2 timing packages must be rebuilt and their overlay "
+                    "sourced. An unpatched apt Nav2 remains wall-clock scheduled.")}
+
+
+def nav2_scheduler_expectations(rtf,configured_hz=DEFAULT_CONTROLLER_HZ,
+                                overlay_active=False):
     """What upstream Jazzy's WallRate means at the current measured RTF.
 
     Output topic frequency is observed separately; these are theoretical
@@ -41,20 +69,33 @@ def nav2_scheduler_expectations(rtf,configured_hz=DEFAULT_CONTROLLER_HZ):
     hz=float(configured_hz)
     ratio=float(rtf) if rtf is not None else None
     valid=ratio is not None and ratio>.01
+    if overlay_active:
+        return {
+            "configured_controller_hz":hz,
+            "scheduler":"rclcpp::Rate(node ROS clock; SCROBOT Jazzy overlay)",
+            "clock_domain":"ros_sim",
+            "expected_wall_hz_for_sim_cadence":round(hz*ratio,2) if valid else None,
+            "theoretical_sim_hz_if_wallrate_sustained":None,
+            "upstream_source":JAZZY_SOURCE,
+            "note":(
+                "SCROBOT's version-matched controller overlay waits on ROS time "
+                "when use_sim_time=true, and uses steady wall time on hardware. "
+                "Its smoother uses the same conditional clock behavior. "
+                "Output cadence and jitter still require a live measurement."
+            ),
+        }
     return {
         "configured_controller_hz":hz,
-        "scheduler":"rclcpp::WallRate (upstream Nav2 Jazzy)",
+        "scheduler":"rclcpp::WallRate (upstream Nav2 Jazzy; NOT synchronized)",
         "clock_domain":"wall",
         "expected_wall_hz_for_sim_cadence":round(hz*ratio,2) if valid else None,
         "theoretical_sim_hz_if_wallrate_sustained":round(hz/ratio,2)
             if valid else None,
         "upstream_source":JAZZY_SOURCE,
         "note":(
-            "25 Hz WallRate targets 25 actual wakeups/second; at 0.25x that "
-            "equals 100 iterations per simulated second if sustained, not "
-            "the desired 25/sim-second cadence. Rate warnings report missed "
-            "wall-clock scheduler deadlines; they do not prove a simulated-"
-            "time control deadline was missed. cmd_vel_nav is an output proxy."
+            "UNPATCHED: Jazzy wall-based controller and smoother can oversample "
+            "simulated time at low RTF. Prepare the version-matched overlay. "
+            "Changing controller_frequency to 6.25 is NOT an equivalent fix."
         ),
     }
 
