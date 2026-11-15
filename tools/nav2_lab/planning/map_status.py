@@ -24,7 +24,7 @@ from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import LaserScan, PointCloud2
 from tf2_ros import Buffer, TransformListener
 from visualization_msgs.msg import Marker, MarkerArray
-from planning.court_visual import court_lines
+from court_visual import court_lines
 
 
 TOPICS = (
