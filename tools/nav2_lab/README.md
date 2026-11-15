@@ -167,6 +167,45 @@ Nav2 paths, planner CPU/RAM and timing results, and logs.
 If an upstream saved YAML changes, restart the simulator to apply a new
 snapshot. The main `src/` simulation and all other labs remain unchanged.
 
+## Performance diagnostics (why depth is below 30 Hz)
+
+The **Performance** section now has two related measurement blocks:
+
+1. Topic arrival rates for /clock, native depth PointCloud2, raw LaserScan,
+   filtered LaserScan, /map and the live global costmap.
+2. CPU (% of **one** logical core, so multithreaded processes can exceed
+   100%) and resident RAM (RSS in MB) for **this lab's** Gazebo server,
+   depth bridge, pointcloud-to-laserscan, depth scan filter, Nav2 planner,
+   map server, robot_state_publisher and RViz if opened. There are also
+   totals and whole-system CPU/RAM. Requires `python3-psutil`.
+
+**Gazebo real-time factor** is computed from /clock versus wall-clock time.
+If Gazebo runs at 0.5× speed and your Camera Lab calibration is 30
+simulated FPS, approximately **15 wall-clock depth FPS** is expected, even if
+the sensor is configured correctly. Compare:
+
+- **Depth cloud Hz** against `depth_fps × real_time_factor`. A deficit at
+  this first stage suggests Gazebo rendering or bridge throughput.
+- **Raw scan Hz** against depth cloud Hz. A significant drop here suggests
+  pointcloud-to-laserscan conversion, transform availability or scheduling.
+- **Filtered scan Hz** against raw scan Hz. A drop here suggests self-filter
+  or scheduling overhead.
+
+The diagnostics are **heuristics**, not proof of a particular bottleneck.
+A high Gazebo CPU rate suggests costly simulation but a depth camera is
+often **GPU-render-bound**, which CPU and RAM alone cannot confirm. Monitor
+the GPU separately (e.g. `nvidia-smi` on a supported NVIDIA driver).
+The Python monitor uses ROS serialized subscription for the large depth cloud
+to avoid unnecessary Python PointCloud2 deserialization.
+
+### RViz style
+
+Robot and goal markers use explicit two-point RViz ARROW geometry: **0.35 m
+shaft + 0.35 m taper**, shaft diameter **0.10 m** (one third thinner than
+the former 0.15 m), pointed head diameter **0.16 m**. The four planner
+paths are now **0.08 m** wide instead of 0.035 m. These are overlay
+settings only, not robot dimensions or collision geometry.
+
 ## Planner benchmark
 
 Choose NavFn Dijkstra, NavFn A*, Smac 2D, Theta*, or **all four**.
