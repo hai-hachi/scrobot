@@ -11,8 +11,11 @@ published calibration works concurrently in a full simulation.
 cd ~/scrobot_ws
 git switch real-comparison
 git pull --ff-only origin real-comparison
-colcon build --symlink-install --packages-up-to scrobot_bringup
 source /opt/ros/jazzy/setup.bash
+# Upstream Jazzy Nav2 schedules controller and smoother in wall time.
+# Required once (or after an installed Nav2 apt version update):
+python3 tools/performance_lab/prepare_nav2_sim_clock.py --build
+colcon build --symlink-install --packages-up-to scrobot_bringup
 source install/setup.bash
 sudo apt install python3-yaml python3-psutil
 python3 tools/performance_lab/server.py
@@ -96,24 +99,34 @@ phase is separate; this initial lab does not introduce a custom scheduler.
 
 ## Jazzy Nav2 timing and costmap correctness
 
-Nav2 Jazzy's `nav2_controller` uses `rclcpp::WallRate` to schedule
-`ControllerServer::computeControl()`, even with `use_sim_time: true`.
-At 0.25× real-time factor, an ideal **25 Hz per simulated second**
-controller would be triggered **6.25 times per wall second**, while
-the upstream Jazzy WallRate still requests 25 times per wall second.
-The Performance Lab reports both theoretical expectations from the
-installed `controller_frequency` parameter and the observed
-`/cmd_vel_nav` output rate while goals are active. Neither output rate
-nor the printed "current loop rate" in the warning is an actual
-ControllerServer iteration trace.
+Upstream Nav2 Jazzy schedules `ControllerServer::computeControl()` with
+`rclcpp::WallRate` and `nav2_velocity_smoother` with a wall timer.
+At RTF=0.25, unchanged 25 Hz targets therefore run up to 100 simulated
+cycles/second instead of 25. Rescaling either YAML frequency to 6.25 is
+**not** correct: the smoother divides configured acceleration by that
+frequency and would change the physical acceleration envelope.
 
-The lab counts `Control loop missed its desired rate` warning log lines
-incrementally without duplicating previous log tails. Counts are clearly
-labeled **missed wall-rate wakeups**, not failed simulated-time
-controller cycles. The source audit is based on the upstream Jazzy
-ControllerServer implementation; check installed Nav2 binaries before
-assuming all patched builds use the same loop. No controller frequency,
-ROS parameters, Gazebo callbacks or production source is changed here.
+Run `python3 tools/performance_lab/prepare_nav2_sim_clock.py --build`
+before launching synchronized mode. This script checks the installed Jazzy
+Nav2 versions, downloads exactly those release-tag source packages into an
+ignored workspace overlay and changes **only scheduling**: controller uses
+`rclcpp::Rate(..., get_clock())`, smoother uses ROS-time `create_timer`.
+When `use_sim_time=false`, original wall/steady-clock behavior is retained.
+Neither the system-installed Nav2 nor its unrelated packages are overwritten.
+After building, source `install/setup.bash` and restart the Performance Lab
+server. The lab refuses synchronized mode without installed version-matched
+provenance markers for *both* Nav2 packages. If Nav2 apt upgrades, regenerate
+with `--force --build`.
+
+Configured production rates remain 25 Hz controller, 25 Hz smoother, and
+100 Hz ros2_control. The lab now checks source-stamped controller and smoother
+outputs separately, as well as wheel-odometry jitter. Published command
+rates still remain **output proxies**, not direct internal callback traces.
+Even with ROS-clock scheduling, Gazebo/callbacks are not deterministic
+lockstep; end-to-end latency and jitter still require runtime verification.
+
+The warning log counter remains available, but upstream WallRate wakeup
+warnings are only meaningful for the *unpatched* ControllerServer.
 
 The global costmap uses **reliable TRANSIENT_LOCAL** publishers:
 `/global_costmap/costmap` (OccupancyGrid) contains the full map, and
