@@ -55,7 +55,7 @@ class YoloShuttleDetector(Node):
         self.declare_parameter("imgsz", 960)
         self.declare_parameter("confidence_threshold", 0.10)
         self.declare_parameter("iou_threshold", 0.70)
-        self.declare_parameter("max_detection_rate", 15.0)
+        self.declare_parameter("max_detection_rate", 30.0)
 
         self.declare_parameter(
             "color_topic",
@@ -204,7 +204,7 @@ class YoloShuttleDetector(Node):
             raise ValueError("min_valid_depth_pixels must be > 0")
 
         self._min_period = 1.0 / self.max_detection_rate
-        self._last_inference_wall = 0.0
+        self._last_inference_stamp = None
         self._camera_info: CameraInfo | None = None
 
         self._frames_processed = 0
@@ -265,7 +265,7 @@ class YoloShuttleDetector(Node):
         self.get_logger().info(
             "YOLO shuttle detector ready: "
             f"imgsz={self.imgsz}, conf={self.conf_threshold:.2f}, "
-            f"device={self.device}, rate<={self.max_detection_rate:.1f} Hz, "
+            f"device={self.device}, sim_rate<={self.max_detection_rate:.1f} Hz, "
             f"camera_depth_valid={self.min_depth_range:.2f}-"
             f"{self.max_depth_range:.2f} m"
         )
@@ -293,10 +293,21 @@ class YoloShuttleDetector(Node):
         color_msg: Image,
         depth_msg: Image,
     ) -> None:
+        # Throttle by source frame timestamps, not the host wall clock.
+        # At RTF=0.25 the camera is ~7.5 wall Hz but remains 30 sim Hz.
+        stamp = color_msg.header.stamp
+        frame_time = float(stamp.sec) + float(stamp.nanosec) * 1e-9
+        if frame_time <= 0.0:
+            frame_time = self.get_clock().now().nanoseconds * 1e-9
+        previous = self._last_inference_stamp
+        if previous is not None:
+            elapsed = frame_time - previous
+            # Reset on /clock jumps. Allow 1 ms tolerance for the
+            # quantized 33/34 ms timestamps of a nominal 30 Hz camera.
+            if elapsed >= 0.0 and elapsed + 0.001 < self._min_period:
+                return
+        self._last_inference_stamp = frame_time
         now_wall = time.perf_counter()
-        if now_wall - self._last_inference_wall < self._min_period:
-            return
-        self._last_inference_wall = now_wall
 
         if self._camera_info is None:
             if now_wall - self._last_camera_info_warning_wall >= 2.0:
