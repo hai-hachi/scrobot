@@ -3,6 +3,60 @@
 This lab is deliberately scoped to **path planning** first. Controller
 tracking and full Nav2 integration are not started by this phase.
 
+## Shared calibration — source of truth
+
+**This lab consumes the saved YAML from your other labs, not their last
+publication to the main simulation.** The canonical YAML registry is
+`tools/shared/lab_configs.py`, and the five inputs are:
+
+| Owner | Saved YAML | Values applied to Nav2 Lab |
+| --- | --- | --- |
+| Lighting | `tools/configs/labs/lighting_lab.yaml` | Lights, shadows, colors, resized physical venue/court floor |
+| Camera | `tools/configs/labs/camera_lab.yaml` | RealSense RGB/depth widths, heights, frame rates and depth enablement |
+| AprilTags | `tools/configs/labs/apriltags_lab.yaml` | Actual generated tag size, height and mount geometry |
+| Mobility | `tools/configs/labs/mobility_lab.yaml` | Calibrated wheel contact friction/slip/damping and motor model snapshot |
+| Odometry | `tools/configs/labs/odometry_lab.yaml` | Wheel odometry, IMU, magnetometer, ground-truth and EKF rates |
+
+The Nav2 Lab saves **its own** experiment settings at
+`tools/configs/labs/nav2_lab.yaml` on **Save YAML**, using the same
+versioned `{schema_version: 1, lab: nav2, settings: ...}` contract.
+The historical `tools/nav2_lab/config/lab.yaml` is a first-run template,
+not the authority once saved.
+
+Lighting, Camera and AprilTags saved YAMLs are **required** for the scene.
+If any is missing, startup fails with an actionable message; it will not
+silently use production defaults. Saved Mobility and Odometry YAMLs may exist
+only on your local workstation and are not committed in this branch. They
+are used when present. Otherwise the lab explicitly labels an individual
+`published_fallback` and shows a warning instead of claiming it is a
+saved measurement.
+
+**At launch** the lab snapshots every loaded input, including source file
+paths and SHA-256 hashes, into
+`evaluation_results/nav2_lab/_planning_active/calibration_snapshot.yaml`.
+The simulator receives an entirely **generated** SDF with your saved
+Lighting and tag assets, and passes the saved D435i modes, Mobility physics
+and Odometry rates as launch-time overrides. Odometry Lab's existing
+`odometry_rate_config.prepare_configurations` creates temporary controller
+and EKF YAMLs. The current Gazebo robot stays stationary in the
+**planner-only** test, so Mobility's first-order motor response is recorded
+for later tracking but is not needed for planner computation.
+
+If any upstream saved calibration changes, the lab refuses further
+benchmarks until you restart, preventing mismatched world/map/sensor settings.
+Each run copies its own calibration snapshot. The lab never writes the
+upstream YAMLs, ROS production configuration or production court SDF.
+
+The saved Camera Lab settings currently checked into `real-comparison` are
+**RGB 1920×1080 @30 Hz and depth 1280×720 @30 Hz**, rather than the
+original 1280×720 @15 Hz / 848×480 @15 Hz Gazebo defaults.
+FOV remains the existing simulated D435i lens FOV. Saved Lighting currently
+specifies a 2×3 light array with six shadow casters and resized venue
+clearance. Your current local YAMLs take precedence over repository snapshots.
+
+YOLO Lab owns training and shuttle detection; its YAML is intentionally not
+used for depth-based path planning.
+
 ## Purpose
 
 Compare the *actual* Nav2 Jazzy global planner plugins on the existing SCROBOT
@@ -54,15 +108,12 @@ Open **http://127.0.0.1:8772**.
 The lab **does not edit** the production simulation, lighting, camera or Nav2
 configuration. It uses:
 
-- `src/scrobot_simulation/worlds/badminton_court.sdf`: court floor width/height
-  (20 × 12 m venue surface) and physical net-pole center/radius.
-- `src/scrobot_localization/config/court_landmarks.yaml`: tag-mount positions,
-  tag plate width and orientations.
+- `src/scrobot_simulation/worlds/badminton_court.sdf`: pole geometry and static court objects. The floor is resized from the saved Lighting Lab venue clearances (currently 21 × 12 m).
+- `src/scrobot_localization/config/court_landmarks.yaml`: baseline pole positions and tag headings; size/height/mount radius are regenerated using **saved AprilTags Lab YAML**.
 - Production `src/scrobot_navigation/config/nav2_params.yaml`: robot footprint,
   obstacle-layer ranges and inflation parameters, copied and overlaid into a
   temporary **planner-only** YAML.
-- Production `scrobot_perception` scan: the same D435i-simulated
-  **848 × 480 @ 15 FPS**, approx **90.5° HFOV**, depth cloud and filtered scan.
+- Production `scrobot_perception` scan with **saved Camera Lab** RGB/depth resolution and rates (currently depth **1280 × 720 @ 30 FPS**), retaining approximately **90.5° depth HFOV** and the existing depth cloud / scan pipeline.
 
 The generated free-space occupancy map contains **only** poles and the
 conservative 2D envelopes of the AprilTag mounting plates as permanent
@@ -129,6 +180,8 @@ PID cannot be resolved, resource values are unavailable rather than guessed.
 
 Each run gets a timestamped directory with:
 
+- `calibration_snapshot.yaml`: exact validated saved Lighting, Camera, AprilTags, Mobility and Odometry inputs plus provenance;
+
 - `config_snapshot.yaml`: start/goal, selected planner and depth settings;
 - `nav2_params_snapshot.yaml`: exact generated planner configuration;
 - `NavFnDijkstra.json`, `NavFnAStar.json`, `Smac2D.json`,
@@ -137,7 +190,7 @@ Each run gets a timestamped directory with:
   CPU/RAM and costmap fingerprints;
 - `trial.log`: ROS action runtime logs.
 
-The active generated static map (PGM, YAML and extracted geometry), runtime
+The active generated calibrated court world and tag meshes, generated sensor/odom controller YAMLs, static map (PGM, YAML and extracted geometry), runtime
 Nav2 YAML and RViz overlay cache live under
 `evaluation_results/nav2_lab/_planning_active/`.
 
