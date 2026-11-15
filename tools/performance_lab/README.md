@@ -128,6 +128,27 @@ lockstep; end-to-end latency and jitter still require runtime verification.
 The warning log counter remains available, but upstream WallRate wakeup
 warnings are only meaningful for the *unpatched* ControllerServer.
 
+### Diagnosing 100 Hz encoder / joint-state jitter
+
+The November 15, 2026 benchmark with the ROS-clock Nav2 overlay active
+showed zero Nav2 scheduler warnings and good 25 Hz command cadence, but
+`/diff_drive_controller/odom` and `/joint_states` had approximately
+22.6 ms p95 source-stamp intervals despite reporting ~100 arrival-Hz.
+Both streams are produced by the same `gz_ros2_control` controller manager,
+so a shared-source problem is more likely than a Nav2 output issue.
+Do **not** rescale `controller_manager.update_rate` or simply restamp
+encoder messages: that would hide potential missed updates.
+
+The Clock & Sync table now distinguishes (a) transport arrival simulated
+Hz, (b) unique increasing source-stamp Hz, (c) repeated source stamp
+counts and (d) large positive header gaps. It also records active ROS
+publisher names and counts for both topics in each benchmark JSON.
+This helps determine whether multiple publishers, duplicated timestamps,
+or a Gazebo controller-manager update cadence problem is involved.
+Even when the repeated stamp count is zero, a large p95 interval can
+still flag genuine jitter. Investigation must precede changing physics
+step, ros2_control rates, EKF rates, or source timestamps.
+
 The global costmap uses **reliable TRANSIENT_LOCAL** publishers:
 `/global_costmap/costmap` (OccupancyGrid) contains the full map, and
 `/global_costmap/costmap_updates` (OccupancyGridUpdate) contains
