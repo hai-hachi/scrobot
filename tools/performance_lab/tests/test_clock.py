@@ -139,3 +139,40 @@ def test_costmap_latched_full_map_is_activity_not_hz_target():
     assert result["/global_costmap/costmap"]["status"]=="observed"
     assert result["/global_costmap/costmap"]["sim_hz"] is None
     assert result["/global_costmap/costmap_updates"]["status"]=="unknown"
+
+
+def test_encoder_source_repeats_are_not_counted_as_new_100hz_updates():
+    # Transport delivers 100 messages per simulated second, but an
+    # intentionally repeated controller stamp exposes only 80 unique cycles.
+    name="/diff_drive_controller/odom"
+    meter=ClockMeter({name:(100.0,"wheel encoder")},window_s=5.)
+    previous=0.01
+    for i in range(401):
+        stamp=i*.01+0.01
+        if i>0 and i%5==0:
+            stamp=previous
+        previous=stamp
+        wall=100.+i*.04
+        meter.clock(.01+i*.01,wall=wall)
+        meter.topic(name,wall=wall,header_stamp=stamp)
+    row=meter.snapshot(wall=116.01)["topics"][name]
+    assert 98.0<row["sim_hz"]<102.0
+    assert row["source_unique_hz"]<90.0
+    assert row["header_duplicate_count"]>0
+    assert row["header_duplicate_total"]>0
+    assert row["status"]=="repeated_source_stamps"
+
+
+def test_100hz_controller_source_without_repeats_has_distinct_stamps():
+    name="/joint_states"
+    meter=ClockMeter({name:(100.0,"joints")},window_s=5.)
+    for i in range(401):
+        stamp=.01+i*.01
+        wall=100.+i*.04
+        meter.clock(stamp,wall=wall)
+        meter.topic(name,wall=wall,header_stamp=stamp)
+    row=meter.snapshot(wall=116.01)["topics"][name]
+    assert row["header_duplicate_count"]==0
+    assert row["header_duplicate_total"]==0
+    assert row["source_unique_hz"]>=99.0
+    assert row["status"]=="pass"
