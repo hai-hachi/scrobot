@@ -387,6 +387,85 @@ function renderRates(rateData){
     rows.append(tr);
   }
 }
+function renderProcessResources(resources,health,inputs){
+  const processRows=$('process-rows');
+  processRows.replaceChildren();
+  const rtf=health?.real_time_factor;
+  const configuredFps=Number(inputs?.camera?.depth_fps||0);
+  const effective=configuredFps>0&&typeof rtf==='number'?
+    configuredFps*rtf:null;
+  const cloud=health?.topic_hz?.['/camera/camera/depth/points']?.hz;
+  const raw=health?.topic_hz?.['/camera/camera/depth/scan_raw']?.hz;
+  const filtered=health?.topic_hz?.['/camera/camera/depth/scan']?.hz;
+  $('rtf-value').textContent=typeof rtf==='number'?fmt(rtf,2)+'×':'—';
+  $('fps-estimate').textContent=effective==null?
+    'Waiting for Gazebo /clock':
+    'Expected at '+rtf.toFixed(2)+'×: ~'+fmt(effective,1)+' depth FPS (target '+
+    configuredFps+')';
+  $('lab-cpu').textContent=typeof resources?.totals?.cpu_percent_one_core==='number'?
+    fmt(resources.totals.cpu_percent_one_core,1)+'%':'—';
+  $('lab-ram').textContent=typeof resources?.totals?.rss_mb==='number'?
+    fmt(resources.totals.rss_mb,1)+' MB':'—';
+  $('host-cpu').textContent=typeof resources?.system?.cpu_percent==='number'?
+    fmt(resources.system.cpu_percent,1)+'%':'—';
+  $('host-ram').textContent=resources?.system?
+    'RAM '+fmt(resources.system.ram_percent,1)+'% ('+
+    fmt(resources.system.ram_used_mb/1024,1)+' / '+
+    fmt(resources.system.ram_total_mb/1024,1)+' GiB)':
+    'Whole-system CPU/RAM unavailable';
+  if(!resources?.available){
+    const row=document.createElement('tr'),cell=document.createElement('td');
+    cell.colSpan=4;cell.textContent=resources?.hint||'Start the simulator to sample CPU and RAM.';
+    row.append(cell);processRows.append(row);
+  }else if(!resources.processes?.length){
+    const row=document.createElement('tr'),cell=document.createElement('td');
+    cell.colSpan=4;cell.textContent='No Planner Lab processes currently running.';
+    row.append(cell);processRows.append(row);
+  }else{
+    for(const p of resources.processes){
+      const row=document.createElement('tr');
+      [
+        p.name,
+        typeof p.cpu_percent==='number'?fmt(p.cpu_percent,1)+'%':'Sampling…',
+        fmt(p.rss_mb,1),
+        (p.pids||[]).join(', ')
+      ].forEach(value=>{
+        const td=document.createElement('td');td.textContent=value;row.append(td);
+      });
+      processRows.append(row);
+    }
+  }
+  const hints=[];
+  if(typeof rtf==='number'&&rtf<.85){
+    hints.push('Gazebo is running at '+fmt(rtf,2)+'× real time. At this speed, '+
+      configuredFps+' simulated FPS corresponds to about '+fmt(effective||0,1)+
+      ' wall-clock FPS. Check Gazebo server CPU and GPU/rendering load.');
+  }
+  if(typeof cloud==='number'&&effective!==null&&effective>1&&cloud<effective*.78){
+    hints.push('Depth cloud arrives at '+fmt(cloud,1)+
+      ' Hz, below the real-time-factor-adjusted expectation ('+
+      fmt(effective,1)+' Hz). Gazebo depth rendering or bridge delivery may be limiting.');
+  }
+  if(typeof cloud==='number'&&typeof raw==='number'&&cloud>2&&raw<cloud*.78){
+    hints.push('Raw scan is slower than the depth cloud ('+fmt(raw,1)+' vs '+
+      fmt(cloud,1)+' Hz): check Pointcloud to scan CPU and TF availability.');
+  }
+  if(typeof raw==='number'&&typeof filtered==='number'&&raw>2&&filtered<raw*.78){
+    hints.push('Filtered scan is slower than the raw scan ('+fmt(filtered,1)+
+      ' vs '+fmt(raw,1)+' Hz): inspect the depth scan filter process.');
+  }
+  if(resources?.system?.cpu_percent>=90){
+    hints.push('Host CPU utilization is above 90%; CPU scheduling may be a bottleneck.');
+  }
+  if(!hints.length){
+    hints.push(!health?
+      'Start the simulation to compare configured depth FPS, Gazebo speed and scan stages.':
+      'No obvious throughput bottleneck identified yet. Compare depth cloud, raw scan and filtered scan Hz, then inspect process CPU/RAM. GPU load is not measured.');
+  }
+  $('depth-diagnosis').textContent=hints.join(' ');
+  $('resource-note').textContent=resources?.note||
+    'CPU is measured from process CPU-time deltas; GPU utilization is not measured.';
+}
 function renderResults(summary){
   const rows=$('results');rows.replaceChildren();
   for(const [name,result]of Object.entries(summary?.results||{})){
@@ -450,6 +529,7 @@ async function refresh(){
     $('run-name').textContent=status.run_name||'No experiment';
     updateMapStatus(status.map_status);
     renderRates(status.map_status?.topic_hz);
+    renderProcessResources(status.process_resources,status.map_status,calibration);
     renderResults(status.summary);
     setButtons();
   }catch(e){$('connection').textContent='Disconnected';$('action-state').textContent=e.message;}
