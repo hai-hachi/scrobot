@@ -34,6 +34,7 @@ from publish import publish_saved_calibration, published_status
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lab_configs import path_for as lab_yaml_path, read as read_lab_yaml, save as save_lab_yaml
 from shared.lab_ui import GazeboGUI, log_tail as lab_log_tail
+from shared.sim_speed import get as read_speed, save as save_speed, cap_world, response as speed_response
 
 HERE = Path(__file__).resolve().parent
 OUTPUT = Path.home() / "scrobot_ws/evaluation_results/mobility_lab"
@@ -160,7 +161,10 @@ class Lab:
             if not shutil_which("ros2"):
                 raise RuntimeError("Cannot find 'ros2'; source ROS 2 Jazzy and the SCROBOT install.")
             self.log = (OUTPUT / "gazebo.log").open("ab")
-            cmd = ["ros2", "launch", "scrobot_simulation", "mobility_lab.launch.py"]
+            source = Path(__file__).resolve().parents[2] / "src/scrobot_simulation/worlds/badminton_court.sdf"
+            capped = cap_world(source, OUTPUT / "rtf_world.sdf", read_speed("mobility"))
+            cmd = ["ros2", "launch", "scrobot_simulation", "mobility_lab.launch.py",
+                   "world:=" + capped]
             cmd += [f"{key}:={cfg[key]}" for key in PHYSICS]
             self.proc = subprocess.Popen(
                 cmd, stdout=self.log, stderr=subprocess.STDOUT,
@@ -352,6 +356,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if route == "/":
                 return self.respond(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
+            if route == "/api/sim-speed":
+                return self.respond(200, speed_response("mobility", self.lab.proc is not None and self.lab.proc.poll() is None))
             if route == "/api/status":
                 return self.respond(200, self.lab.status())
             if route == "/api/result":
@@ -369,7 +375,12 @@ class Handler(BaseHTTPRequestHandler):
         route = urlsplit(self.path).path
         try:
             body = self.request_json()
-            if route == "/api/settings":
+            if route == "/api/sim-speed":
+                if set(body) != {"max_rtf"}:
+                    raise ValueError("Set only max_rtf")
+                result = speed_response("mobility", True)
+                result["max_rtf"] = save_speed("mobility", body["max_rtf"])
+            elif route == "/api/settings":
                 if not isinstance(body, dict):
                     raise ValueError("Settings body must be a JSON object")
                 result = self.lab.change_settings(body)
