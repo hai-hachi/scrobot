@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LABS = ["lighting_lab", "camera_lab", "mobility_lab", "odometry_lab",
-        "yolo_lab", "mesh_lab", "nav2_lab"]
+        "yolo_lab", "mesh_lab", "nav2_lab", "performance_lab"]
 HTML = {
     "lighting_lab": ROOT / "tools/lighting_lab/index.html",
     "camera_lab": ROOT / "tools/camera_lab/index.html",
@@ -20,6 +20,7 @@ HTML = {
     "yolo_lab": ROOT / "tools/yolo_lab/index.html",
     "mesh_lab": ROOT / "tools/mesh_lab/index.html",
     "nav2_lab": ROOT / "tools/nav2_lab/planning/web/index.html",
+    "performance_lab": ROOT / "tools/performance_lab/web/index.html",
 }
 SERVERS = {
     "nav2_lab": ROOT / "tools/nav2_lab/planning/web_server.py",
@@ -55,8 +56,12 @@ class LabInterfaceTests(unittest.TestCase):
             self.assertIn("'headless'", source)
         for name in ("mobility_lab.launch.py", "odometry_lab.launch.py"):
             self.assertIn("headless", (launch / name).read_text())
-        self.assertIn('"headless": "true"',
-                      (ROOT / "tools/nav2_lab/planning/launch/planning.launch.py").read_text())
+        # Planner Lab invokes gz -s directly rather than passing a
+        # headless argument into gazebo.launch.py.
+        nav2 = (ROOT / "tools/nav2_lab/planning/launch/planning.launch.py").read_text()
+        self.assertIn('"gz_args": ["-r -s -v 3 "', nav2)
+        performance = (ROOT / "tools/performance_lab/server.py").read_text()
+        self.assertIn('"use_sim_time:=true","headless:=true"', performance)
 
     def test_optional_viewer_routes(self):
         for lab in ("lighting_lab", "mobility_lab", "odometry_lab", "mesh_lab"):
@@ -69,6 +74,10 @@ class LabInterfaceTests(unittest.TestCase):
         for route in ("/api/gazebo-gui/open", "/api/gazebo-gui/close",
                       "/api/rviz/open", "/api/rviz/close"):
             self.assertIn(route, nav)
+        perf = SERVERS["performance_lab"].read_text()
+        for route in ("/api/gazebo/open", "/api/gazebo/close",
+                      "/api/rviz/open", "/api/rviz/close"):
+            self.assertIn(route, perf)
 
     def test_publish_adjacent_to_yaml_save(self):
         for lab in ("mobility_lab", "odometry_lab"):
