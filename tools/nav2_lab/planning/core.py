@@ -43,10 +43,11 @@ def validate(config):
     check(("planning","timeout_s"), 3, 120)
     check(("planning","resolution_m"), .02, .20)
     check(("simulation","ros_domain_id"), 1, 232)
-    # Fixed robot pose is critical: world/odom court map alignment.
-    for dim in ("start_x","start_y","start_yaw"):
-        if abs(float(config["simulation"][dim])) > 1e-9:
-            raise ValueError("Planning phase requires simulated robot spawn at (0,0,0) to align court with odom")
+    # World and costmap use the court-fixed map frame. A static map->odom TF
+    # accounts for the robot's chosen spawn pose, so odom can stay robot-local.
+    for dim,low,high in (("start_x",-9,9),("start_y",-5,5),
+                         ("start_yaw",-math.pi,math.pi)):
+        check(("simulation",dim),low,high)
     if not isinstance(planning.get("depth_obstacles"), bool):
         raise ValueError("planning.depth_obstacles must be boolean")
     return config
@@ -57,13 +58,15 @@ def nav2_params(production, config, map_yaml, geometry):
     validate(config)
     global_costmap = deepcopy(production["global_costmap"])
     cost = global_costmap["global_costmap"]["ros__parameters"]
-    cost["global_frame"] = "odom"
+    cost["global_frame"] = "map"
     cost["width"] = geometry["floor_width_m"]
     cost["height"] = geometry["floor_height_m"]
     cost["origin_x"] = -geometry["floor_width_m"]/2
     cost["origin_y"] = -geometry["floor_height_m"]/2
     cost["resolution"] = config["planning"]["resolution_m"]
     cost["track_unknown_space"] = False
+    cost["map_vis_z"] = 0.04
+    cost["always_send_full_costmap"] = True
     cost["rolling_window"] = False
     cost["plugins"] = (["static_layer", "obstacle_layer", "inflation_layer"]
                        if config["planning"]["depth_obstacles"]
@@ -106,7 +109,7 @@ def nav2_params(production, config, map_yaml, geometry):
     return {
         "map_server": {"ros__parameters":{
             "use_sim_time": True, "yaml_filename": str(map_yaml),
-            "topic_name": "map", "frame_id": "odom",
+            "topic_name": "map", "frame_id": "map",
         }},
         "planner_server": {"ros__parameters": planner},
         "global_costmap": global_costmap,
