@@ -208,17 +208,48 @@ def summary_of_samples(samples,settings):
     }
     warning_rows=[x.get("nav2_warnings",{}) for x in usable]
     warnings_new=delta_count(warning_rows,"warning_total")
-    cmd_rows=[x["monitor"].get("topics",{}).get("/cmd_vel_nav",{}) for x in usable]
+    def command_quality(topic,target):
+        rows=[x["monitor"].get("topics",{}).get(topic,{}) for x in usable]
+        active=[r for r in rows if r.get("sim_hz") is not None]
+        mean=average([r["sim_hz"] for r in active])
+        header_p95=average([r.get("header_interval_p95_ms") for r in active])
+        enough=len(active)>=max(3,int(len(usable)*.20))
+        # Header p95 rejects a seemingly correct mean with frequent long gaps.
+        good=bool(enough and mean is not None
+                  and .90*target<=mean<=1.15*target
+                  and header_p95 is not None
+                  and header_p95<=1500.0/target)
+        return {
+            "expected_sim_hz":target,"avg_sim_hz":mean,
+            "header_interval_p95_ms":header_p95,
+            "active_windows":len(active),"verified":good,
+            "note":"Topic output during active control, not an internal callback trace.",
+        }
+
+    cmd_quality=command_quality("/cmd_vel_nav",25.0)
+    smoother_quality=command_quality("/cmd_vel_smoothed",25.0)
+    odom_quality=checks.get("/diff_drive_controller/odom",{})
+    odom_stable=bool(
+        odom_quality.get("header_interval_p95_ms") is not None
+        and odom_quality["header_interval_p95_ms"]<=15.0)
+    overlay_active=installed_sim_clock_overlay()["active"]
+    control_pass=bool(
+        overlay_active and cmd_quality["verified"]
+        and smoother_quality["verified"])
     timing={
         "nav2_wall_scheduler_warnings_in_window":warnings_new,
-        "nav2_cmd_vel_avg_sim_hz":average(
-            [r.get("sim_hz") for r in cmd_rows]),
-        "nav2_cmd_vel_available":any(r.get("count_total",0)>0 for r in cmd_rows),
+        "nav2_cmd_vel_avg_sim_hz":cmd_quality["avg_sim_hz"],
+        "nav2_cmd_vel_available":cmd_quality["active_windows"]>0,
+        "nav2_sim_clock_overlay_active":overlay_active,
+        "nav2_controller":cmd_quality,
+        "velocity_smoother":smoother_quality,
+        "controller_and_smoother_cadence_pass":control_pass,
+        "wheel_odom_header_jitter_pass":odom_stable,
         "note":(
-            "Jazzy Nav2 ControllerServer uses rclcpp::WallRate. Warning counts "
-            "are missed WALL-clock scheduler deadlines, not proof of missing "
-            "simulation-time control cycles. cmd_vel_nav counts commands while "
-            "navigation is active; it is not a direct loop-iteration counter."
+            "Controller/smoother require installed ROS-clock overlays AND "
+            "25 simulated Hz output with reasonable header jitter. "
+            "This still does not instrument internal Nav2 loop executions. "
+            "Wheel odometry timestamp jitter is assessed separately."
         ),
     }
 
@@ -228,7 +259,9 @@ def summary_of_samples(samples,settings):
                            for x in checks.values()))
     if not cadence:overall="sensor_cadence_not_verified"
     elif nav2_required and not nav2_pass:overall="nav2_coverage_not_verified"
-    else:overall="topic_and_nav2_observed_timing_still_unverified"
+    elif not control_pass:overall="controller_or_smoother_timing_not_verified"
+    elif not odom_stable:overall="wheel_odom_timestamp_jitter_not_verified"
+    else:overall="observed_cadence_verified_not_deterministic_lockstep"
     return {
         "avg_rtf":rtf_mean,"minimum_rtf":min(rtfs) if rtfs else None,
         "sample_count":len(samples),"cadence_pass":cadence,
