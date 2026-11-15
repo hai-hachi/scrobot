@@ -146,7 +146,11 @@ function showScene(){
       y2:y-22*Math.sin(yaw),stroke:'#f5cb82','stroke-width':4,'stroke-linecap':'round'}));
     plotLabel(draft,robot.x,robot.y,'Robot');
   }
-  plotCircle(draft,n('goal-x'),n('goal-y'),6,'#5bd7b6');
+  const [gx,gy]=plotCircle(draft,n('goal-x'),n('goal-y'),7,'#5bd7b6');
+  const goalYaw=n('goal-yaw')*Math.PI/180;
+  draft.append(tag('line',{x1:gx,y1:gy,x2:gx+22*Math.cos(goalYaw),
+    y2:gy-22*Math.sin(goalYaw),stroke:'#5bd7b6','stroke-width':4,
+    'stroke-linecap':'round'}));
   plotLabel(draft,n('goal-x'),n('goal-y'),'Goal');
   const [cx,cy]=worldToPixel(n('obstacle-x'),n('obstacle-y'));
   const size=n('box-size');
@@ -160,41 +164,110 @@ function showScene(){
   plotCircle(draft,n('human-ax'),n('human-ay'),5,'#7aabfa');
   plotCircle(draft,n('human-bx'),n('human-by'),5,'#7aabfa');
 }
-function picked(x,y){
+// Same drag-to-orient interaction used by the YOLO Lab.
+let pointerDrag=null;
+let nextRoutePoint='a';
+function modeHint(){
   const mode=$('court-pick').value;
+  const hints={
+    robot:'Robot: click to place, then drag to set yaw.',
+    goal:'Goal: click to place, then drag to set yaw.',
+    box:'Cube: click to set center, then Add cube.',
+    human:'Moving cylinder: click '+(nextRoutePoint==='a'?'A':'B')+
+      ' of the next route. A → B automatically creates a cylinder.'
+  };
+  $('pick-next').textContent=hints[mode]||'';
+}
+function svgToWorld(event){
+  const svg=$('courtMap'),matrix=svg.getScreenCTM();
+  if(!matrix)return null;
+  const point=svg.createSVGPoint();
+  point.x=event.clientX;point.y=event.clientY;
+  const local=point.matrixTransform(matrix.inverse());
+  if(local.x<40||local.x>720||local.y<45||local.y>385)return null;
+  return pixelToWorld(local.x,local.y);
+}
+function placed(x,y,mode){
   const ids={
     robot:['robot-x','robot-y'],goal:['goal-x','goal-y'],
     box:['obstacle-x','obstacle-y'],
-    'human-a':['human-ax','human-ay'],'human-b':['human-bx','human-by']
+    'human-a':['human-ax','human-ay'],
+    'human-b':['human-bx','human-by']
   }[mode];
   if(!ids)return;
   $(ids[0]).value=x;$(ids[1]).value=y;
   showScene();
 }
-$('courtMap').addEventListener('click',event=>{
-  const svg=$('courtMap'),matrix=svg.getScreenCTM();
-  if(!matrix)return;
-  const point=svg.createSVGPoint();point.x=event.clientX;point.y=event.clientY;
-  const local=point.matrixTransform(matrix.inverse());
-  if(local.x<40||local.x>720||local.y<45||local.y>385)return;
-  picked(...pixelToWorld(local.x,local.y));
+$('courtMap').addEventListener('pointerdown',event=>{
+  if(event.button!==0&&event.pointerType==='mouse')return;
+  const p=svgToWorld(event);
+  if(!p||busy)return;
+  event.preventDefault();
+  const mode=$('court-pick').value;
+  if(mode==='human'){
+    const part=nextRoutePoint;
+    placed(p[0],p[1],'human-'+part);
+    if(part==='a'){nextRoutePoint='b';modeHint();}
+    else{
+      nextRoutePoint='a';modeHint();
+      const obstacle={kind:'human',
+        point_a:{x:n('human-ax'),y:n('human-ay')},
+        point_b:{x:n('human-bx'),y:n('human-by')},
+        speed_mps:n('human-speed')};
+      operation(async()=>{
+        const result=await api('/api/obstacles/add',{obstacle});
+        scene=result.scene;renderObstacles(scene.obstacles);showScene();
+        notify('Cylinder route A → B added. Click A, then B for another.');
+      });
+    }
+    return;
+  }
+  placed(p[0],p[1],mode);
+  if(mode==='robot'||mode==='goal'){
+    pointerDrag={id:event.pointerId,mode,x:p[0],y:p[1]};
+    $('courtMap').setPointerCapture(event.pointerId);
+  }
 });
+$('courtMap').addEventListener('pointermove',event=>{
+  if(!pointerDrag||pointerDrag.id!==event.pointerId)return;
+  const p=svgToWorld(event);
+  if(!p)return;
+  const dx=p[0]-pointerDrag.x,dy=p[1]-pointerDrag.y;
+  if(Math.hypot(dx,dy)>.08){
+    $(pointerDrag.mode+'-yaw').value=(
+      Math.atan2(dy,dx)*180/Math.PI).toFixed(1);
+    showScene();
+  }
+});
+function releaseCourtPointer(event){
+  if(!pointerDrag||pointerDrag.id!==event.pointerId)return;
+  if($('courtMap').hasPointerCapture(event.pointerId)){
+    $('courtMap').releasePointerCapture(event.pointerId);
+  }
+  pointerDrag=null;
+}
+$('courtMap').addEventListener('pointerup',releaseCourtPointer);
+$('courtMap').addEventListener('pointercancel',releaseCourtPointer);
+$('court-pick').addEventListener('change',()=>{nextRoutePoint='a';modeHint();});
 $('courtMap').addEventListener('keydown',event=>{
   if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;
   event.preventDefault();
+  const mode=$('court-pick').value;
+  const key=mode==='human'?'human-'+nextRoutePoint:mode;
   const ids={
     robot:['robot-x','robot-y'],goal:['goal-x','goal-y'],
     box:['obstacle-x','obstacle-y'],
     'human-a':['human-ax','human-ay'],'human-b':['human-bx','human-by']
-  }[$('court-pick').value];
+  }[key];
   if(!ids)return;
   let x=n(ids[0]),y=n(ids[1]);
   if(event.key==='ArrowLeft')x-=.1;
   if(event.key==='ArrowRight')x+=.1;
   if(event.key==='ArrowUp')y+=.1;
   if(event.key==='ArrowDown')y-=.1;
-  picked(+x.toFixed(2),+y.toFixed(2));
+  placed(+x.toFixed(2),+y.toFixed(2),key);
 });
+modeHint();
 for(const id of ['robot-x','robot-y','robot-yaw','goal-x','goal-y','goal-yaw',
    'obstacle-x','obstacle-y','human-ax','human-ay','human-bx','human-by']){
   $(id).addEventListener('input',showScene);
@@ -288,6 +361,32 @@ function updateMapStatus(health){
     'No global costmap message received';
   $('map-hint').textContent=health.hint||'Checking ROS topics…';
 }
+const TOPIC_LABELS={
+  '/clock':'Gazebo time',
+  '/camera/camera/depth/points':'RealSense depth cloud',
+  '/camera/camera/depth/scan_raw':'Cloud → scan',
+  '/camera/camera/depth/scan':'Filtered depth scan',
+  '/map':'Static occupancy',
+  '/global_costmap/costmap':'Live planner costmap'
+};
+function renderRates(rateData){
+  const rows=$('topic-rate-rows');rows.replaceChildren();
+  for(const [topic,meaning]of Object.entries(TOPIC_LABELS)){
+    const record=rateData?.[topic];
+    const tr=document.createElement('tr');
+    const values=[topic,
+      record?.latched?(record.received?'Latched':'—'):
+        (record?.hz==null?'—':fmt(record.hz,1)),
+      record?.age_s==null?'No data':fmt(record.age_s,1)+' s ago',
+      meaning];
+    values.forEach((v,i)=>{
+      const td=document.createElement('td');td.textContent=v;
+      if(i===1)td.className=record?.received?'pass':'error';
+      tr.append(td);
+    });
+    rows.append(tr);
+  }
+}
 function renderResults(summary){
   const rows=$('results');rows.replaceChildren();
   for(const [name,result]of Object.entries(summary?.results||{})){
@@ -350,6 +449,7 @@ async function refresh(){
     $('navRvizLog').textContent=status.rviz_log||'RViz not opened.';
     $('run-name').textContent=status.run_name||'No experiment';
     updateMapStatus(status.map_status);
+    renderRates(status.map_status?.topic_hz);
     renderResults(status.summary);
     setButtons();
   }catch(e){$('connection').textContent='Disconnected';$('action-state').textContent=e.message;}
