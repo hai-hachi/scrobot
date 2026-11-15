@@ -21,5 +21,7 @@ jobs:
       - run: pip install pyyaml pytest
       - name: Compile Nav2 Lab Python sources
         run: python -m compileall -q tools/nav2_lab
+      - name: Check browser JavaScript syntax
+        run: node --check tools/nav2_lab/planning/web/app.js
       - name: Validate config and geometric metrics
-        run: python -m pytest -q tools/nav2_lab/tests
+        run: python -m pytest -q tools/nav2_lab/tests tools/nav2_lab/planning/tests
