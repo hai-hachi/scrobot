@@ -18,6 +18,7 @@ into their own YAML or having to publish to main simulation first.
 | Odometry | `tools/configs/labs/odometry_lab.yaml` | `src/scrobot_simulation/config/odometry_calibration.yaml` |
 | YOLO | `tools/configs/labs/yolo_lab.yaml` | No automatic production publication; model training, validation and live inference run locally |
 | Nav2 | `tools/configs/labs/nav2_lab.yaml` | No production publication; consumes saved Lighting/Camera/AprilTags/Mobility/Odometry lab YAMLs |
+| Mesh | `tools/configs/labs/mesh_lab.yaml` | No production publication; inspects existing robot/shuttle geometry and consumes saved Lighting YAML |
 
 ## Rules
 
@@ -62,6 +63,10 @@ into their own YAML or having to publish to main simulation first.
    YAML reader/writer used for the modern labs. Lighting Lab retains its
    historic unwrapped `lights/colors/venue` YAML schema for compatibility;
    other lab YAMLs use `schema_version: 1`, `lab: <id>`, and `settings:`.
+
+The Mesh Lab reads a validated snapshot of the saved Lighting YAML at startup,
+generates a temporary court world and never publishes geometry or settings to production.
+Its saved YAML contains inspection preferences, not mesh edits.
 
 ## Concrete workflow
 
