@@ -199,6 +199,10 @@ class Service:
                         if coord in values[section]:
                             cfg["planning"][section][coord]=values[section][coord]
             cfg["planning"]["start"]=deepcopy(self.scene["robot"])
+            cfg["simulation"]["start_x"]=self.scene["robot"]["x"]
+            cfg["simulation"]["start_y"]=self.scene["robot"]["y"]
+            cfg["simulation"]["start_yaw"]=__import__("math").radians(
+                self.scene["robot"]["yaw_deg"])
             validate(cfg)
             if self.config_path == CONFIG:
                 save_lab_yaml("nav2",cfg,validator=validate)
@@ -218,6 +222,10 @@ class Service:
             cfg=self.config()
             loaded_scene=validate_scene(self.scene)
             cfg["planning"]["start"]=deepcopy(loaded_scene["robot"])
+            cfg["simulation"]["start_x"]=loaded_scene["robot"]["x"]
+            cfg["simulation"]["start_y"]=loaded_scene["robot"]["y"]
+            cfg["simulation"]["start_yaw"]=__import__("math").radians(
+                loaded_scene["robot"]["yaw_deg"])
             calibration=load_inputs()
             self.env=self.env_for(cfg)
             preflight(self.env)
@@ -296,6 +304,10 @@ class Service:
             if self.scene["robot"] != self.active_robot:
                 raise RuntimeError("Robot pose changed: restart simulation before planning.")
             cfg["planning"]["start"]=deepcopy(self.active_robot)
+            cfg["simulation"]["start_x"]=self.active_robot["x"]
+            cfg["simulation"]["start_y"]=self.active_robot["y"]
+            cfg["simulation"]["start_yaw"]=__import__("math").radians(
+                self.active_robot["yaw_deg"])
             if inputs_fingerprint(load_inputs()) != inputs_fingerprint(self.loaded_inputs):
                 raise RuntimeError(
                     "Another lab's saved calibration changed since Nav2 launch. "
