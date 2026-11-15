@@ -91,7 +91,7 @@ class ClockMeter:
         clock_active=self.last_clock_wall is not None and now-self.last_clock_wall<=1.5
         # Pausing may keep /clock publications alive with frozen sim stamps.
         recent_clock=[v for v in self.clock_samples if v[0]>=now-4.0]
-        rtf=frequency(recent_clock,0)  # not used for RTF; avoid misleading rate.
+        rtf=None
         if len(recent_clock)>=2:
             wall_delta=recent_clock[-1][0]-recent_clock[0][0]
             sim_delta=recent_clock[-1][1]-recent_clock[0][1]
@@ -109,7 +109,7 @@ class ClockMeter:
             sim_hz=frequency(items,1) if fresh and clock_active else None
             ages=[item[1]-item[2] for item in items
                   if item[2] is not None]
-            header_age=round(ages[-1],4) if ages else None
+            clock_header_offset=round(ages[-1],4) if ages else None
             backwards=0
             large_gaps=0
             if expected:
@@ -122,7 +122,7 @@ class ClockMeter:
                 "label":label,"expected_sim_hz":expected,
                 "wall_hz":wall_hz,"sim_hz":sim_hz,
                 "last_message_wall_age_s":age,
-                "header_age_sim_s":header_age,
+                "header_clock_offset_sim_s":clock_header_offset,
                 "header_backward_count":backwards,
                 "header_large_gap_count":large_gaps,
                 "header_sample_count":len(ages),
@@ -143,6 +143,10 @@ class ClockMeter:
                 "Sim Hz is arrival count per /clock progression; wall Hz is actual "
                 "receipt rate. ROS reception is not proof that Gazebo generated every "
                 "configured frame. Header gaps suggest dropped/delayed frames but "
-                "are not definitive. Joint-state/odom rates do not prove PID loop timing."
+                "are not definitive. A negative clock-header offset can occur "
+                "when a message callback runs ahead of the last /clock callback; "
+                "the offset is NOT one-way transport latency. Best-effort observer "
+                "subscriptions can themselves miss frames under load. "
+                "Joint-state/odom rates do not prove PID loop timing."
             ),
         }
