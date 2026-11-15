@@ -39,10 +39,8 @@ def sdf_fixture(spec,name):
     from scene import validate_scene
     # Reuse validation for structure and dimensional bounds, but don't check
     # robot overlap here: the scene server already validates the full scene.
-    robot={"x":-99.,"y":-99.,"yaw_deg":0.}
-    # pass a valid temporary pose far from fixtures (still within bounds).
-    robot={"x":9.,"y":5.,"yaw_deg":0.}
-    fixture=validate_scene({"robot":robot,"obstacles":[spec]})["obstacles"][0]
+    fixture=validate_scene({"robot":{"x":0.,"y":0.,"yaw_deg":0.},
+                            "obstacles":[spec]},check_overlap=False)["obstacles"][0]
     if not isinstance(name,str) or not name.startswith("nav2_lab_"):
         raise ValueError("Unsafe fixture name")
     if fixture["kind"]=="box":
