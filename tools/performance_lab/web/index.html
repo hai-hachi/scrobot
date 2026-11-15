@@ -152,18 +152,22 @@
         </div>
         <div class="table-wrap"><table>
           <thead><tr><th>ROS topic</th><th>Target sim Hz</th><th>Wall Hz</th>
-            <th>Sim Hz</th><th>Header p95 interval (ms)</th>
+            <th>Sim Hz</th><th>Unique source Hz</th>
+            <th>Header repeats</th><th>Header p95 interval (ms)</th>
             <th>Header p95 jitter (ms)</th><th>Unique header gaps</th>
             <th>Clock − header offset (s)</th><th>Assessment</th></tr></thead>
-          <tbody id="topic-rows"><tr><td colspan="9">Start simulation to measure topic rates.</td></tr></tbody>
+          <tbody id="topic-rows"><tr><td colspan="11">Start simulation to measure topic rates.</td></tr></tbody>
         </table></div>
         <p class="fineprint">Wall Hz is measured against monotonic wall time.
           Sim Hz divides message arrivals by the /clock progression in the same window.
           Image and PointCloud2 payloads are received as serialized messages;
           the monitor reads only their CDR header timestamps, not their pixel
           or point data. Header interval p95 and jitter come from source stamps,
-          while sim Hz still comes from /clock progression.
-          Unique gap totals count intervals over 1.5× nominal since observer
+          while sim Hz still comes from /clock progression. Unique
+          source Hz counts *increasing* source timestamps rather than message
+          arrivals; a repeated timestamp is not a new control sample.
+          Header repeats are the number of adjacent equal timestamps in the
+          current window. Unique gap totals count intervals over 1.5× nominal since observer
           startup; they are not necessarily dropped frames or controller
           deadline misses. Costmap full and update streams are non-periodic:
           an initial latched map can be valid without further updates.
