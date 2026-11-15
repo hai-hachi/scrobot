@@ -8,7 +8,7 @@ Visualization Manager:
   Displays:
     - Class: rviz_default_plugins/Grid
       Name: Court grid
-      Enabled: true
+      Enabled: false
       Alpha: 0.25
       Cell Size: 1
       Color: 100; 100; 100
@@ -40,19 +40,35 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /global_costmap/costmap
       Value: true
-    - Class: rviz_default_plugins/RobotModel
-      Name: SCROBOT
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Court markings and outer clearance
       Enabled: true
-      Description Source: Topic
-      Description Topic:
-        Depth: 5
-        Durability Policy: Volatile
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /robot_description
-      Visual Enabled: true
-      Collision Enabled: false
-      Alpha: 0.9
+        Value: /nav2_lab/court_lines
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Robot and goal arrows
+      Enabled: true
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nav2_lab/pose_arrows
+      Value: true
+    - Class: rviz_default_plugins/Marker
+      Name: Camera link only
+      Enabled: true
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /nav2_lab/camera_link
       Value: true
     - Class: rviz_default_plugins/LaserScan
       Name: Depth camera scan
