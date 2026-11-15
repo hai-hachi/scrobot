@@ -6,12 +6,14 @@ Robot and goal are ARROW markers; only a small camera-frame cube is drawn,
 not the heavy robot mesh. Pose display updates from a tiny JSON file.
 """
 import argparse
+import ast
 from collections import deque
 import json
 import math
 import os
 from pathlib import Path
 import time
+import yaml
 
 import rclpy
 from geometry_msgs.msg import Point
@@ -54,20 +56,20 @@ def marker(ns,mid,kind,frame="map",color=(.85,.90,.95,1.0)):
     return m
 
 
-def endpoints(marker_obj,segments,height=.13):
+def endpoints(marker_obj,segments,height=.26):
     for x1,y1,x2,y2 in segments:
         marker_obj.points.extend([Point(x=x1,y=y1,z=height),
                                   Point(x=x2,y=y2,z=height)])
     return marker_obj
 
 
-def scene_markers(geometry,robot,goal):
+def scene_markers(geometry,robot,goal,footprint=None):
     """Stable IDs, simple court outline and clearance + colored pose arrows."""
     results=MarkerArray()
     for mid,key,color,thickness in (
-        (0,"court_lines",(.77,.88,.85,.8),.025),
-        (1,"court_outline",(.18,.87,.60,1.),.046),
-        (2,"clearance_outline",(.95,.67,.33,.95),.060),
+        (0,"court_lines",(1.0,1.0,.95,1.),.045),
+        (1,"court_outline",(.55,1.0,.25,1.),.075),
+        (2,"clearance_outline",(1.0,.32,.65,1.),.095),
     ):
         line=marker("court",mid,Marker.LINE_LIST,color=color)
         line.scale.x=thickness
@@ -94,7 +96,38 @@ def scene_markers(geometry,robot,goal):
         arrow.scale.y=.16     # slim, distinguishable triangular head
         arrow.scale.z=head_length
         results.markers.append(arrow)
+    if footprint:
+        # Production Nav2 global footprint is the true 2-D collision zone;
+        # rotate it with robot heading, do not infer from visual meshes.
+        perimeter=marker("robot_footprint",0,Marker.LINE_STRIP,
+                         color=(1.,.25,.85,1.))
+        perimeter.scale.x=.07
+        angle=math.radians(float(robot["yaw_deg"]))
+        ca,sa=math.cos(angle),math.sin(angle)
+        px,py=float(robot["x"]),float(robot["y"])
+        for bx,by in list(footprint)+[footprint[0]]:
+            perimeter.points.append(Point(
+                x=px+ca*bx-sa*by,y=py+sa*bx+ca*by,z=.24))
+        results.markers.append(perimeter)
     return results
+
+
+def read_footprint(config_path):
+    """Extract actual global collision footprint from the generated Nav2 YAML."""
+    params=yaml.safe_load(Path(config_path).read_text())
+    value=params["global_costmap"]["global_costmap"]["ros__parameters"]["footprint"]
+    coords=ast.literal_eval(value) if isinstance(value,str) else value
+    if not isinstance(coords,list) or len(coords)<3:
+        raise ValueError("Nav2 collision footprint needs >= 3 vertices")
+    result=[]
+    for pair in coords:
+        if not isinstance(pair,(list,tuple)) or len(pair)!=2:
+            raise ValueError("Invalid footprint vertex")
+        x,y=map(float,pair)
+        if not math.isfinite(x) or not math.isfinite(y):
+            raise ValueError("Non-finite footprint vertex")
+        result.append((x,y))
+    return result
 
 
 def camera_link_marker():
@@ -109,13 +142,14 @@ def camera_link_marker():
 
 
 class Monitor(Node):
-    def __init__(self,output,world,pose_file):
+    def __init__(self,output,world,pose_file,nav2_params):
         super().__init__("nav2_lab_map_status",
             parameter_overrides=[Parameter("use_sim_time",Parameter.Type.BOOL,True)],
             automatically_declare_parameters_from_overrides=True)
         self.output=Path(output)
         self.pose_file=Path(pose_file)
         self.geometry=court_lines(world)
+        self.footprint=read_footprint(nav2_params)
         self.started=time.monotonic()
         self.sim_time_s=None
         self.clock_marks=deque(maxlen=1024)
@@ -172,7 +206,7 @@ class Monitor(Node):
 
     def publish_visuals(self):
         robot,goal=self._read_poses()
-        all_markers=scene_markers(self.geometry,robot,goal)
+        all_markers=scene_markers(self.geometry,robot,goal,self.footprint)
         court=MarkerArray(markers=all_markers.markers[:3])
         pose=MarkerArray(markers=all_markers.markers[3:])
         stamp=self.get_clock().now().to_msg()
@@ -259,9 +293,10 @@ def main():
     p.add_argument("--output",required=True,type=Path)
     p.add_argument("--world",required=True,type=Path)
     p.add_argument("--pose-file",required=True,type=Path)
+    p.add_argument("--nav2-params",required=True,type=Path)
     args=p.parse_args()
     rclpy.init()
-    node=Monitor(args.output,args.world,args.pose_file)
+    node=Monitor(args.output,args.world,args.pose_file,args.nav2_params)
     try:rclpy.spin(node)
     except KeyboardInterrupt:pass
     finally:node.destroy_node();rclpy.shutdown()
