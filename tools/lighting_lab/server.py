@@ -115,6 +115,7 @@ class GazeboAdapter:
         self.frames = {}
         self.frame_times = {key: deque(maxlen=20) for key in CAMERAS}
         self.sensor_times = {key: deque(maxlen=80) for key in CAMERAS}
+        self.sensor_stamps = {key: deque(maxlen=80) for key in CAMERAS}
         self.exposures = {}
         self.image_costs = {key: deque(maxlen=25) for key in CAMERAS}
         self.frame_sizes = {}
@@ -209,8 +210,17 @@ class GazeboAdapter:
     def on_image(self, key, message):
         # Avoid expensive conversion of the full 1280x720 robot image.
         now = time.monotonic()
+        try:
+            stamp = message.header.stamp
+            stamp_seconds = float(stamp.sec) + float(stamp.nsec) * 1e-9
+            if not math.isfinite(stamp_seconds) or stamp_seconds <= 0:
+                stamp_seconds = None
+        except (AttributeError, TypeError, ValueError):
+            stamp_seconds = None
         with self.lock:
             self.sensor_times[key].append(now)
+            if stamp_seconds is not None:
+                self.sensor_stamps[key].append((now, stamp_seconds))
             last = self.frame_times[key][-1] if self.frame_times[key] else 0
             profile = PREVIEW_PROFILES[self.preview_mode]
         # Throttle expensive JPEG conversion independently of the Gazebo
@@ -633,12 +643,19 @@ class GazeboAdapter:
                     (len(raw) - 1) / (raw[-1] - raw[0])
                     if len(raw) >= 2 and raw[-1] > raw[0] else 0.0
                 )
+                stamped = [x for x in self.sensor_stamps[key] if now - x[0] <= 3.0]
+                sim_span = stamped[-1][1] - stamped[0][1] if len(stamped) >= 2 else 0.0
+                sim_fps = ((len(stamped) - 1) / sim_span
+                           if sim_span > 0 else None)
                 preview_fps = (
                     (len(frames) - 1) / (frames[-1] - frames[0])
                     if len(frames) >= 2 and frames[-1] > frames[0] else 0.0
                 )
                 frame_info[key] = {
                     "fps": round(sensor_fps, 1),
+                    "wall_fps": round(sensor_fps, 1),
+                    "sim_fps": round(sim_fps, 1) if sim_fps is not None else None,
+                    "rate_basis": "source timestamps" if sim_fps is not None else "wall only",
                     "preview_fps": round(preview_fps, 1),
                     "age_s": round(now - timestamps[-1], 1) if timestamps else None,
                     "exposure": self.exposures.get(key),
@@ -824,6 +841,8 @@ class Lab:
                 timestamps.clear()
             for timestamps in self.adapter.sensor_times.values():
                 timestamps.clear()
+            for timestamps in self.adapter.sensor_stamps.values():
+                timestamps.clear()
         self._launch_simulation()
         self.adapter.last_action = (
             f"Venue clearance X={venue['clearance_x']:.2f}m, "
@@ -995,6 +1014,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.lab.proc.poll() is None if self.lab.proc is not None else None
             )
             result["gazebo_gui"] = self.lab.gui.status()
+            result["rtf_cap"] = read_speed("lighting")
             result["logs"] = {"gazebo": lab_log_tail(self.lab.log),
                               "gazebo_gui": lab_log_tail(self.lab.gui.log_path)}
             self.reply(200, result)
