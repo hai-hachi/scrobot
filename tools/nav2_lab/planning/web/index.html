@@ -87,7 +87,7 @@
        <div class="field"><label for="human-speed">Walking speed <b id="human-speed-value">0.60 m/s</b></label>
        <input type="range" id="human-speed" min=".1" max="2" step=".05" value=".6"></div>
        <button class="btn secondary" id="add-human">Add walking human</button>
-       <p class="fineprint">Speed is currently paced against wall time; when Gazebo runs below 1× real time, simulated-time speed may differ.</p>
+       <p class="fineprint">Walking speed follows Gazebo simulation time from <code>/clock</code>. Pausing Gazebo also pauses the route.</p>
      </div>
      <div class="scene-subsection">
        <div class="between"><h3>Current obstacles</h3><button id="clear-obstacles" class="btn small danger">Clear all</button></div>
