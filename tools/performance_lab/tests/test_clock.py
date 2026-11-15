@@ -96,12 +96,12 @@ def test_assessment_never_marks_unknown_as_success():
 
 def test_serialized_big_and_little_endian_camera_header_stamps():
     import struct
-    little=b"\\x00\\x01\\x00\\x00"+struct.pack("<iI",12,250000000)
-    big=b"\\x00\\x00\\x00\\x00"+struct.pack(">iI",19,500000000)
+    little=bytes([0,1,0,0])+struct.pack("<iI",12,250000000)
+    big=bytes([0,0,0,0])+struct.pack(">iI",19,500000000)
     assert serialized_header_stamp(little)==12.25
     assert serialized_header_stamp(memoryview(big))==19.5
     assert serialized_header_stamp(b"bad")==None
-    assert serialized_header_stamp(b"\\x00\\x01\\x00\\x00"+struct.pack("<iI",1,1000000000)) is None
+    assert serialized_header_stamp(bytes([0,1,0,0])+struct.pack("<iI",1,1000000000)) is None
 
 
 def test_jitter_percentiles_and_unique_header_gap_totals():
