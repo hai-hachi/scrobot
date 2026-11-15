@@ -23,10 +23,10 @@ TOPIC_SPECS={
     "/camera/camera/depth/scan":(30.0,"Filtered scan"),
     "/global_costmap/costmap":(None,"Nav2 full costmap (latched)"),
     "/global_costmap/costmap_updates":(None,"Nav2 incremental costmap updates"),
-    "/cmd_vel_nav":(None,"Nav2 output; wall-scheduled controller"),
-    "/cmd_vel_approach":(None,"Local collection SMC output; active only"),
+    "/cmd_vel_nav":(25.0,"Nav2 controller output; only while navigating"),
+    "/cmd_vel_approach":(30.0,"Local collection SMC output; active only"),
     "/cmd_vel_auto":(None,"Autonomous mux output"),
-    "/cmd_vel_smoothed":(None,"Velocity smoother output"),
+    "/cmd_vel_smoothed":(25.0,"Velocity smoother output; ROS time"),
     "/cmd_vel_motor_target":(None,"Motor response input; follows velocity smoother"),
     "/diff_drive_controller/cmd_vel":(100.0,"Simulation motor-response output"),
     "/perception/shuttle_detections":(None,"YOLO detections if published"),
@@ -224,7 +224,16 @@ class ClockMeter:
             row.update(interval_quality(items,expected))
             if name in NONPERIODIC_TOPICS:
                 row["status"]="observed" if row["count_total"] else "unknown"
-            else:row["status"]=assess(row,rtf,paused,mode)
+            else:
+                row["status"]=assess(row,rtf,paused,mode)
+                # Mean Hz alone masks periodic missing control updates.
+                # Only check windows with sufficient unique header samples;
+                # message-duplicating relay nodes are handled separately.
+                p95=row.get("header_interval_p95_ms")
+                if (row["status"]=="pass" and expected and p95 is not None
+                        and row["header_interval_samples"]>=12
+                        and p95>1500.0/expected):
+                    row["status"]="sim_jitter_high"
             result[name]=row
         return {
             "wall_now":time.time(),"sim_now":self.sim_time,
