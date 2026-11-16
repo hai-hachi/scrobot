@@ -7,6 +7,7 @@
   let dirty = false;
   let saving = false;
   let current = null;
+  let lastMessage = '';
 
   const label = (number) =>
     typeof number === 'number' && Number.isFinite(number) ?
@@ -47,7 +48,8 @@
         ' cap, 30 sim-Hz corresponds to at most ' + (30 * requested).toFixed(2) +
         ' wall-Hz, and 100 sim-Hz to at most ' + (100 * requested).toFixed(2) +
         ' wall-Hz. Actual rates follow measured RTF, not the requested cap.';
-      note.textContent = (pending ? 'Unsaved slider setting. ' : '') +
+      note.textContent = lastMessage +
+        (pending ? 'Unsaved slider setting. ' : '') +
         equivalent + ' ROS rates and production calibration are not rescaled.';
 
       if (current) {
@@ -86,6 +88,7 @@
 
     slider.addEventListener('input', () => {
       dirty = true;
+      lastMessage = '';
       show();
     });
     button.addEventListener('click', async () => {
@@ -104,13 +107,13 @@
         saved = Number(result.max_rtf);
         dirty = false;
         slider.value = String(saved);
+        lastMessage = 'Saved ' + label(saved) +
+          ' for both Nav2 tabs. A running simulation with a different ' +
+          'applied cap needs its own restart. ';
         show();
-        note.textContent = 'Saved ' + label(saved) +
-          ' for both Nav2 tabs. Any tab running with a different applied cap ' +
-          'must restart its own Gazebo process. Sensor/controller simulated-Hz ' +
-          'targets remain unchanged.';
       } catch (error) {
-        note.textContent = 'Unable to save shared Gazebo speed cap: ' + error.message;
+        lastMessage = 'Unable to save shared Gazebo speed cap: ' + error.message + '. ';
+        show();
       } finally {
         saving = false;
         show();
@@ -123,6 +126,7 @@
     setInterval(() => {
       if (document.visibilityState === 'visible') refresh();
     }, 8000);
+    show();
     refresh();
   }
   if (document.readyState === 'loading')
