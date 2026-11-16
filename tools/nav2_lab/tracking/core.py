@@ -21,11 +21,11 @@ def reference(kind,step=.075):
     if kind=="straight":
         vertices=[(-4.,0.),(4.,0.)]
     elif kind=="circle":
-        # One full lap followed by a short tangent exit: a distinct end pose
-        # prevents Nav2 from instantly accepting a goal at the start point.
-        vertices=[(2.3*math.cos(i*2*math.pi/256),
-                   2.3*math.sin(i*2*math.pi/256)) for i in range(257)]
-        vertices.extend([(2.3,y) for y in (.15,.30,.45,.60)])
+        # A circular 300-degree sweep (not a closed loop). A closed path
+        # starts and finishes at the same location, so FollowPath's goal
+        # checker may succeed immediately without executing a full lap.
+        vertices=[(2.3*math.cos(i*5*math.pi/(3*240)),
+                   2.3*math.sin(i*5*math.pi/(3*240))) for i in range(241)]
     elif kind=="curve":
         vertices=[(-4.5+9*i/360,
                    1.15*math.sin(math.pi*(-4.5+9*i/360)/3))
