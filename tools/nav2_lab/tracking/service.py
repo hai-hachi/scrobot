@@ -75,11 +75,6 @@ def preflight(env):
 
 
 TRACKER_DOMAIN_CANDIDATES=tuple(range(78,90))
-TRACKER_ACTIVE_TOPICS=frozenset((
-    "/clock","/evaluation/ground_truth_odom",
-    "/diff_drive_controller/odom",
-    "/tracker/reference_path","/tracker/cmd_vel_safe",
-))
 # An unrelated ROS participant in a candidate domain is also sufficient
 # reason not to put the Tracker there. Unique per-session GZ_PARTITION prevents
 # Gazebo transport from attaching to a previous orphaned simulation.
