@@ -392,7 +392,7 @@ function renderRates(rateData){
     rows.append(tr);
   }
 }
-function renderProcessResources(resources,health,inputs){
+function renderProcessResources(resources,health,inputs,appliedRtfCap){
   const processRows=$('process-rows');
   processRows.replaceChildren();
   const rtf=health?.real_time_factor;
@@ -406,7 +406,7 @@ function renderProcessResources(resources,health,inputs){
   $('fps-estimate').textContent=effective==null?
     'Waiting for Gazebo /clock':
     'Expected at '+rtf.toFixed(2)+'×: ~'+fmt(effective,1)+' depth FPS (target '+
-    configuredFps+')';
+    configuredFps+'; applied RTF cap '+(appliedRtfCap??'—')+'×)';
   $('lab-cpu').textContent=typeof resources?.totals?.cpu_percent_one_core==='number'?
     fmt(resources.totals.cpu_percent_one_core,1)+'%':'—';
   $('lab-ram').textContent=typeof resources?.totals?.rss_mb==='number'?
@@ -478,6 +478,7 @@ function renderResults(summary){
     const values=[name,result.status,
       fmt(typeof result.planning_nav2_s==='number'?result.planning_nav2_s*1000:NaN,1),
       fmt(typeof result.planning_wall_s==='number'?result.planning_wall_s*1000:NaN,1),
+      fmt(typeof result.planning_sim_s==='number'?result.planning_sim_s*1000:NaN,1),
       fmt(result.path_length_m),fmt(result.min_costmap_lethal_clearance_m),
       fmt(typeof result.planner_process_cpu_s==='number'?result.planner_process_cpu_s*1000:NaN,1),
       fmt(result.planner_process_rss_mb,1),fmt(result.planner_process_rss_delta_mb)];
@@ -485,7 +486,7 @@ function renderResults(summary){
       if(i===1)td.className=result.status==='success'?'pass':'error';row.append(td);});
     rows.append(row);
     if(result.error){const extra=document.createElement('tr'),td=document.createElement('td');
-      td.colSpan=9;td.className='error';td.textContent=name+': '+result.error;
+      td.colSpan=10;td.className='error';td.textContent=name+': '+result.error;
       extra.append(td);rows.append(extra);}
   }
   $('result-note').textContent=summary?
@@ -560,7 +561,7 @@ async function refresh(){
     $('run-name').textContent=status.run_name||'No experiment';
     updateMapStatus(status.map_status);
     renderRates(status.map_status?.topic_hz);
-    renderProcessResources(status.process_resources,status.map_status,calibration);
+    renderProcessResources(status.process_resources,status.map_status,calibration,status.applied_max_rtf);
     renderResults(status.summary);
     setButtons();
   }catch(e){$('connection').textContent='Disconnected';$('action-state').textContent=e.message;}
