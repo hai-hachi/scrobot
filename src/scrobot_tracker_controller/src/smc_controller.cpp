@@ -50,12 +50,19 @@ public:
     base_speed_=declare("linear_speed",0.30);
     cross_gain_=declare("cross_gain",1.8);
     heading_gain_=declare("heading_gain",2.0);
+    surface_lambda_=declare("surface_lambda",1.0);
     switch_gain_=declare("switch_gain",1.1);
     boundary_=declare("boundary_layer",0.30);
     lookahead_=declare("lookahead_m",0.32);
+    feedforward_gain_=declare("feedforward_gain",1.0);
+    goal_heading_gain_=declare("goal_heading_gain",2.0);
+    goal_align_threshold_=declare("goal_align_threshold_m",0.14);
+    max_angular_cmd_=declare("max_angular_cmd",2.3);
     if (base_speed_<=0 || base_speed_>.50 || cross_gain_<=0 ||
-        heading_gain_<=0 || switch_gain_<=0 || boundary_<=0 ||
-        lookahead_<=0)
+        heading_gain_<=0 || surface_lambda_<=0 || switch_gain_<=0 ||
+        boundary_<=0 || lookahead_<=0 || feedforward_gain_<0 ||
+        goal_heading_gain_<=0 || goal_align_threshold_<=0 ||
+        max_angular_cmd_<=0 || max_angular_cmd_>2.3)
       throw std::runtime_error("Invalid SMC tracking gains");
   }
   void cleanup() override { plan_.poses.clear(); lengths_.clear(); node_.reset(); }
@@ -93,9 +100,11 @@ public:
 
     // Near the end, align to exact final goal yaw. The Nav2 goal checker
     // still owns success/failure; this controller doesn't fake completion.
-    if(goal_dist<0.14) {
+    if(goal_dist<goal_align_threshold_) {
+      const double max_final_yaw=std::min(
+        {max_angular_cmd_,1.2,kMaxWheelMps/kWheelHalfBase});
       command.twist.angular.z=std::clamp(
-        2.0*wrap(goal_yaw-yaw),-1.2,1.2);
+        goal_heading_gain_*wrap(goal_yaw-yaw),-max_final_yaw,max_final_yaw);
       return command;
     }
 
@@ -133,7 +142,8 @@ public:
                      (y-best_y)*std::cos(best_yaw);
     const double heading_error=wrap(yaw-best_yaw);
     // Sliding surface combines heading and lateral error.
-    const double surface=heading_error+std::atan(cross_gain_*ey);
+    const double surface=surface_lambda_*heading_error+
+                         std::atan(cross_gain_*ey);
     // Reference curvature feed-forward over a short lookahead span.
     const double ahead_s=best_s+lookahead_;
     double ahead_yaw=best_yaw;
@@ -151,9 +161,10 @@ public:
                       std::max(0.08,0.85*goal_dist));
     if(std::abs(heading_error)>0.8)v*=0.55;
     if(std::abs(heading_error)>1.3)v=0.0;
-    double omega=v*curvature-heading_gain_*heading_error-
+    double omega=feedforward_gain_*v*curvature-
+                 heading_gain_*heading_error-
                  switch_gain_*sat(surface/boundary_);
-    omega=std::clamp(omega,-2.3,2.3);
+    omega=std::clamp(omega,-max_angular_cmd_,max_angular_cmd_);
     // Hard coupled constraint is repeated in the external command router.
     double demand=std::abs(v)+kWheelHalfBase*std::abs(omega);
     if(demand>kMaxWheelMps) {
@@ -175,8 +186,10 @@ private:
   nav_msgs::msg::Path plan_;
   std::vector<double> lengths_;
   double last_s_{-1},speed_ratio_{1},base_speed_{.30};
-  double cross_gain_{1.8},heading_gain_{2},switch_gain_{1.1},
-         boundary_{.30},lookahead_{.32};
+  double cross_gain_{1.8},heading_gain_{2},surface_lambda_{1.0},
+         switch_gain_{1.1},boundary_{.30},lookahead_{.32},
+         feedforward_gain_{1.0},goal_heading_gain_{2.0},
+         goal_align_threshold_{.14},max_angular_cmd_{2.3};
 };
 }  // namespace scrobot_tracker_controller
 
