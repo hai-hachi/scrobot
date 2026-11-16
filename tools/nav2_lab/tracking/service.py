@@ -135,7 +135,7 @@ class TrackingService:
             raise FileNotFoundError("Experiment not found")
         return folder
 
-    def history(self):
+    def _history_rows(self):
         if not self.root.exists():return []
         rows=[]
         for folder in sorted(self.root.iterdir(),reverse=True):
@@ -144,7 +144,10 @@ class TrackingService:
             summary=read_json(folder/"summary.json")
             if summary:
                 rows.append({"name":folder.name,"summary":summary})
-        return rows[:50]
+        return rows
+
+    def history(self):
+        return self._history_rows()[:50]
 
     def delete(self,body):
         with self.lock:
@@ -164,7 +167,7 @@ class TrackingService:
                 raise RuntimeError("Stop tracking before deleting experiments")
             if body.get("confirm") is not True:
                 raise ValueError("Confirm clearing tracking history")
-            names=[entry["name"] for entry in self.history()]
+            names=[entry["name"] for entry in self._history_rows()]
             for name in names:shutil.rmtree(self._safe_folder(name))
             if self.run_dir is not None and self.run_dir.name in names:
                 self.run_dir=None;self.run_log=None
