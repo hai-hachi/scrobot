@@ -30,3 +30,16 @@ def controller_failure(log_path):
     return ("Nav2 controller_server crashed: " + detail +
             ". Stop and restart the Tracker simulation after correcting the "
             "configuration; Gazebo wheel controllers alone cannot follow a path.")
+
+
+def ready_for_tracking(sim_clock_s, ground_truth_samples, wheel_odom_samples,
+                       action_server_available, controller_lifecycle_active):
+    """Require actual Nav2 lifecycle ACTIVE, not merely an advertised action.
+
+    Jazzy creates the FollowPath endpoint before the lifecycle manager
+    transitions controller_server to ACTIVE. A goal sent during that gap
+    is rejected even when server_is_ready() already returned True.
+    """
+    return (sim_clock_s > .1 and ground_truth_samples >= 4 and
+            wheel_odom_samples >= 4 and bool(action_server_available) and
+            bool(controller_lifecycle_active))
