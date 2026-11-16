@@ -43,6 +43,53 @@ cube dimensions, cylinder endpoints and speed). **Save Lab YAML** writes
 tools/configs/labs/nav2_lab.yaml (planner options, goal, cell size, depth
 layer). Neither button publishes to the production simulation.
 
+## Publish tested planners to the main simulation
+
+The **Planner** page now includes **Publish planners to main simulation**,
+with four checkboxes (NavFn Dijkstra, NavFn A*, Smac 2D, Theta*), a
+**Default planner** dropdown restricted to the enabled selection, and a
+**Publish Planners to Main** button next to **Save Lab YAML**.
+
+This is deliberately distinct from saving the Nav2 Lab YAML or running an
+experiment. Only pressing the Publish button, then confirming, edits:
+
+`src/scrobot_navigation/config/nav2_params.yaml`
+
+The writer changes **only the top-level `planner_server` YAML section**.
+It copies the plugin configurations actually used by the Planner Lab:
+NavFn Dijkstra vs A* (`use_astar`), Smac 2D and Theta* settings. Everything
+else—BT navigator, controllers, both costmaps, depth/odometry calibration,
+other lab YAMLs, and 0.25 RTF—remains untouched, including all unrelated
+production YAML comments.
+
+**Mission compatibility:** `NavigateToPose` continues using the legacy
+`GridBased` planner ID. The publisher maps that ID to your chosen default
+algorithm, and also loads each selected named planner ID for optional explicit
+requests. The default alias and its named ID are separate Nav2 instances.
+
+The publish action displays the currently published planners, validates
+the selected IDs, requires browser confirmation **and** backend confirmation,
+rejects attempts to overwrite a production config modified since the browser
+read it, creates a dated backup under
+`evaluation_results/nav2_lab/_planner_publish_backups/`, then atomically
+writes the production YAML. The backup is outside the main source tree.
+This updates the production file **on the checked-out `real-comparison`
+branch only**; it does not commit to Git's `main` branch or change any
+already-running Nav2 process.
+
+After publishing, load the new production parameters:
+
+```bash
+cd ~/scrobot_ws
+colcon build --symlink-install --packages-select scrobot_navigation
+source install/setup.bash
+# Restart the main simulation / Nav2 stack to load the changed planner IDs.
+```
+
+If a selected planner works in the stationary Planner Lab, it still must
+pass a moving-robot full-mission validation. Publishing a planner does not
+publish a corresponding controller or claim tracking safety.
+
 ## Lightweight planner-only launch
 
 The former full simulation/controller/localization/perception graph is
