@@ -42,7 +42,7 @@ LAB=HERE.parent
 REPO=HERE.parents[2]
 sys.path.insert(0,str(REPO/"tools"))
 from shared.lab_ui import GazeboGUI
-from shared.sim_speed import get as read_speed, save as save_speed, cap_world, response as speed_response
+from shared.sim_speed import get as read_speed, save as save_speed, cap_world
 from shared.lab_configs import (path_for as lab_yaml_path, read as read_lab_yaml,
                                 save as save_lab_yaml)
 CONFIG=lab_yaml_path("nav2")
@@ -614,6 +614,38 @@ class Service:
 class Handler(BaseHTTPRequestHandler):
     service=None
     tracking=None
+
+    def shared_speed_status(self):
+        """One saved speed cap; each tab reports its own applied world cap."""
+        saved = read_speed("nav2")
+        planner_applied = (
+            self.service.loaded_config.get("simulation", {}).get("max_rtf")
+            if running(self.service.stack) and self.service.loaded_config
+            else None)
+        tracker_applied = (
+            self.tracking.applied_rtf if running(self.tracking.stack) else None)
+        applied = {"planner": planner_applied, "tracker": tracker_applied}
+        return {
+            "max_rtf": saved,
+            "applied": applied,
+            "restart_required": {
+                name: value is not None and abs(value - saved) > 1e-6
+                for name, value in applied.items()
+            },
+            "note": (
+                "Planner and Tracker share the saved Gazebo RTF cap. "
+                "Each running simulation keeps its launch-time cap until "
+                "that tab's simulator is restarted. ROS simulated-Hz targets "
+                "and production calibration remain unchanged."
+            ),
+        }
+
+    def save_shared_speed(self, body):
+        if set(body) != {"max_rtf"}:
+            raise ValueError("Set only max_rtf")
+        save_speed("nav2", body["max_rtf"])
+        return self.shared_speed_status()
+
     def json_reply(self,data,code=200):
         body=json.dumps(data).encode()
         self.send_response(code)
@@ -631,7 +663,7 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/tracker/status":return self.json_reply(self.tracking.status())
             if path=="/api/tracker/history":return self.json_reply(self.tracking.history())
             if path=="/api/tracker/speed":return self.json_reply(self.tracking.sim_speed())
-            if path=="/api/sim-speed":return self.json_reply(speed_response("nav2",running(self.service.stack)))
+            if path=="/api/sim-speed":return self.json_reply(self.shared_speed_status())
             if path=="/api/config":return self.json_reply(self.service.config())
             if path=="/api/planners/production":return self.json_reply(self.service.production_planners())
             if path=="/api/scene":return self.json_reply(self.service.scene_status())
@@ -639,6 +671,15 @@ class Handler(BaseHTTPRequestHandler):
                 self.service.calibration_status())
             if path=="/api/status":return self.json_reply(self.service.status())
             if path=="/api/history":return self.json_reply(self.service.history())
+            if path=="/lab-rtf.js":
+                body=(LAB/"shared"/"rtf_control.js").read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/javascript; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             tracker_file={"/tracker":"index.html","/tracker/":"index.html",
                           "/tracker/index.html":"index.html",
                           "/tracker/app.js":"app.js",
@@ -685,9 +726,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/tracker/gazebo/close":lambda x:self.tracking.close_gui(),
             "/api/tracker/history/delete":lambda x:self.tracking.delete(x),
             "/api/tracker/history/clear":lambda x:self.tracking.clear_history(x),
-            "/api/sim-speed":lambda x:{"max_rtf":save_speed("nav2",x["max_rtf"]),
-                                           "restart_required":True} if set(x)=={"max_rtf"}
-                                           else (_ for _ in ()).throw(ValueError("Set only max_rtf")),
+            "/api/sim-speed":lambda x:self.save_shared_speed(x),
             "/api/save":lambda x:{"config":self.service.save(x)},
             "/api/planners/publish":lambda x:self.service.publish_planners(x),
             "/api/scene/save":lambda x:self.service.save_scene(x),
