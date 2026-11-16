@@ -122,3 +122,17 @@ input[type=range]{accent-color:var(--accent);padding:0;cursor:pointer}
   .readiness{grid-template-columns:1fr}.scene-layout{grid-template-columns:1fr}
   .actionbar{position:sticky;bottom:0}.content{padding-bottom:35px}
   #courtMap{max-width:100%}}
+
+
+/* One Gazebo RTF control for the Planner and Tracker tabs. */
+.lab-rtf-panel{margin-bottom:19px;padding:16px 20px}
+.lab-rtf-panel .between h2{margin:0}
+.lab-rtf-panel .between span{font-size:11px;color:var(--muted)}
+.lab-rtf-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.lab-rtf-label{font-size:12px;min-width:170px;color:var(--text);font-weight:600}
+#lab-rtf-slider{flex:1;min-width:150px;accent-color:var(--accent)}
+#lab-rtf-value{font-size:17px;min-width:62px;text-align:right;font-variant-numeric:tabular-nums;color:var(--accent)}
+#lab-rtf-save{flex-shrink:0}
+#lab-rtf-note,#lab-rtf-applied{margin:10px 0 0;font-size:11px;line-height:1.6;color:var(--muted)}
+#lab-rtf-applied.lab-rtf-warning{color:#f3c88b}
+@media(max-width:650px){.lab-rtf-panel{padding:13px}.lab-rtf-row{gap:10px}.lab-rtf-label{width:100%}#lab-rtf-slider{min-width:110px}#lab-rtf-save{width:100%}}
