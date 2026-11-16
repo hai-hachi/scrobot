@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SCROBOT | Nav2 Tracker Lab</title>
 <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/tracker/style.css">
-<script defer src="/tracker/app.js"></script></head>
+<script defer src="/tracker/app.js"></script><script defer src="/lab-rtf.js"></script></head>
 <body><div class="shell">
 <aside class="sidebar">
 <header><div class="monogram">S·</div><div><strong>SCROBOT</strong><small>ROBOTICS LABORATORY</small></div></header>
@@ -88,11 +88,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
 <input id="desired-speed" type="number" min=".05" max=".40" step=".05" value=".3"></div>
 <div class="field"><label for="max-duration">Max trial duration (simulated seconds)</label>
 <input id="max-duration" type="number" min="10" max="360" step="10" value="120"></div>
-<div class="field"><label for="max-rtf">Gazebo real-time factor cap</label>
-<input id="max-rtf" type="range" min=".1" max="1" step=".05" value=".25">
-<div class="between"><small class="fineprint">Physics 1 ms · controller 25 sim-Hz · wheel loop 100 sim-Hz</small><strong id="max-rtf-text">0.25×</strong></div></div>
-<button class="btn secondary" id="save-speed" type="button">Save RTF cap (restart required)</button>
-<p class="fineprint">At 0.25 RTF the 25 sim-Hz Nav2 controller runs at roughly 6.25 wall-Hz and the 100 sim-Hz wheel loop at 25 wall-Hz. Controller frequencies are NOT divided by four.</p>
+<p class="fineprint">Physics runs at 1 ms steps, the Nav2 controller at 25 simulated Hz, and the wheel loop at 100 simulated Hz. The shared Gazebo speed cap is controlled above the Lab heading, identically in both Planner and Tracker tabs. It never divides controller frequencies by four.</p>
 </div>
 <div>
 <h3>SMC gains</h3>
