@@ -1,0 +1,8 @@
+<library path="scrobot_smc_controller">
+  <class
+    name="scrobot_tracker_controller::SMCController"
+    type="scrobot_tracker_controller::SMCController"
+    base_class_type="nav2_core::Controller">
+    <description>Bounded sliding-mode path tracker for differential-drive SCROBOT experiments.</description>
+  </class>
+</library>
