@@ -108,13 +108,13 @@ class TrackingService:
         return checked
 
     def sim_speed(self):
-        return {"max_rtf":speed_get("tracking"),
+        return {"max_rtf":speed_get("nav2"),
                 "applied_max_rtf":self.applied_rtf if running(self.stack) else None,
                 "restart_required":running(self.stack)}
 
     def set_speed(self,value):
         with self.lock:
-            speed_save("tracking",value)
+            speed_save("nav2",value)
             return self.sim_speed()
 
     def preview(self,values):
@@ -183,7 +183,7 @@ class TrackingService:
         self.root.mkdir(parents=True,exist_ok=True)
         self.active_dir=self.root/"_tracking_active"
         self.active_dir.mkdir(parents=True,exist_ok=True)
-        self.applied_rtf=speed_get("tracking")
+        self.applied_rtf=speed_get("nav2")
         world=write_world(self.active_dir/"tracking_flat_world.sdf",self.applied_rtf)
         profiles=generate(checked,self.active_dir)
         physics=profiles["inputs"]["mobility"]["physics"]
