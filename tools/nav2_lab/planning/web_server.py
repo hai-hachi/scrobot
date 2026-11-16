@@ -275,7 +275,9 @@ class Service:
             # Build world + ROS overrides from validated saved owner YAMLs.
             # These are frozen for the entire Gazebo session.
             scene=build_world(calibration,self.active_dir,loaded_scene)
-            cap_world(scene["world_path"],scene["world_path"],read_speed("nav2"))
+            actual_cap=read_speed("nav2")
+            cap_world(scene["world_path"],scene["world_path"],actual_cap)
+            cfg["simulation"]["max_rtf"]=actual_cap
             self.active_robot=deepcopy(loaded_scene["robot"])
             self.process_sampler.reset()
             profiles=generate_rate_profiles(calibration,self.active_dir)
@@ -356,6 +358,9 @@ class Service:
             if not running(self.stack):raise RuntimeError("Start simulation first")
             if running(self.trial):raise RuntimeError("Planner benchmark already running")
             cfg=self.config()
+            # The run's RTF is the APPLIED cap from this Gazebo session,
+            # not a newly saved slider value awaiting a simulation restart.
+            cfg["simulation"]["max_rtf"]=self.loaded_config["simulation"]["max_rtf"]
             if self.scene["robot"] != self.active_robot:
                 raise RuntimeError("Robot pose changed: restart simulation before planning.")
             cfg["planning"]["start"]=deepcopy(self.active_robot)
@@ -553,6 +558,8 @@ class Service:
                 "calibration":saved_summary(self.loaded_inputs)
                     if self.loaded_inputs is not None else None,
                 "loaded_depth":self.loaded_config["planning"]["depth_obstacles"]
+                    if running(self.stack) and self.loaded_config else None,
+                "applied_max_rtf":self.loaded_config["simulation"].get("max_rtf")
                     if running(self.stack) and self.loaded_config else None,
             }
 
