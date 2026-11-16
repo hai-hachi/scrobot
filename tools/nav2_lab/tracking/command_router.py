@@ -1,5 +1,7 @@
 """Common physical differential-wheel envelope for RPP and SMC commands."""
-import math
+import sys
+from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import rclpy
 from geometry_msgs.msg import TwistStamped
 from rclpy.node import Node
