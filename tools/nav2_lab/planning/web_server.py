@@ -27,6 +27,8 @@ from planning.history_store import (list_runs as saved_runs,
                                     delete_run as remove_run,
                                     delete_all as remove_all_runs)
 from planning.process_metrics import ProcessSampler
+from planning.publish import (production_status as read_production_planners,
+                              publish as write_production_planners)
 from planning.scene import load_scene, save_scene, validate_scene, SCENE_PATH
 from planning.calibration import (load_inputs, build_world, generate_rate_profiles,
                          inputs_fingerprint, saved_summary)
@@ -246,6 +248,19 @@ class Service:
                 tmp.write_text(yaml.safe_dump(cfg,sort_keys=False))
                 tmp.replace(self.config_path)
             return cfg
+
+    def production_planners(self):
+        with self.lock:
+            return read_production_planners(PRODUCTION_NAV2)
+
+    def publish_planners(self,body):
+        if body.get("confirm") is not True:
+            raise ValueError("Confirm before publishing planners to main simulation")
+        with self.lock:
+            return write_production_planners(
+                PRODUCTION_NAV2,body.get("enabled"),body.get("default"),
+                body.get("expected_sha256"),
+                self.root()/"_planner_publish_backups")
 
     def root(self):
         return Path(self.config()["experiment"]["run_root"]).expanduser()
@@ -612,6 +627,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path=="/api/sim-speed":return self.json_reply(speed_response("nav2",running(self.service.stack)))
             if path=="/api/config":return self.json_reply(self.service.config())
+            if path=="/api/planners/production":return self.json_reply(self.service.production_planners())
             if path=="/api/scene":return self.json_reply(self.service.scene_status())
             if path=="/api/calibration":return self.json_reply(
                 self.service.calibration_status())
@@ -638,6 +654,7 @@ class Handler(BaseHTTPRequestHandler):
                                            "restart_required":True} if set(x)=={"max_rtf"}
                                            else (_ for _ in ()).throw(ValueError("Set only max_rtf")),
             "/api/save":lambda x:{"config":self.service.save(x)},
+            "/api/planners/publish":lambda x:self.service.publish_planners(x),
             "/api/scene/save":lambda x:self.service.save_scene(x),
             "/api/scene/load":lambda x:self.service.load_scene(),
             "/api/scene/place-robot":lambda x:self.service.place_robot(x),
