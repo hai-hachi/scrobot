@@ -16,8 +16,32 @@ python3 tools/nav2_lab/server.py
 ```
 
 Open **http://127.0.0.1:8772/tracker** or select **Tracker** in the Planner
-Lab top navigation. Planner Lab stays at the root URL. Each lab uses its own
-isolated `ROS_DOMAIN_ID` (Planner 77, Tracker 78) and Gazebo partition.
+Lab top navigation. Planner Lab stays at the root URL. Planner uses ROS
+domain 77; Tracker **prefers domain 78, but automatically selects a free
+domain from 78–89** if an earlier Tracker/Gazebo process or another ROS
+participant is still active. Each Tracker session receives a distinct
+`GZ_PARTITION`. The Tracker status shows the selected domain, and it does
+**not** kill unrelated or orphaned ROS processes automatically.
+
+The preflight probes `ros2 topic list --no-daemon` separately for each
+candidate, avoiding false positives from ROS 2's cached discovery daemon.
+If all candidate domains are occupied, the error names the domains and
+observed topics rather than giving a generic "active simulator" message.
+
+**If a previous run was interrupted:** Stop the old simulation from its
+original Tracker UI if that server still exists. Otherwise inspect ROS domain
+78 before cleaning up any processes:
+
+```bash
+ROS_DOMAIN_ID=78 ros2 topic list --no-daemon
+ps -eo pid,ppid,pgid,cmd | grep -E 'tracking_world|tracker_|controller_server|gz sim'
+```
+
+Only stop process groups that you have positively identified as the old
+Tracker launch. Never use a broad `pkill gz` or `killall ros2`, because
+that would also affect the Planner and other simulation labs. Domain fallback
+lets the new Tracker proceed without destroying someone else's run, but
+orphaned processes still consume CPU/RAM until explicitly terminated.
 
 **Important:** the Tracker requires the Performance Lab's verified
 Nav2 Jazzy ROS-clock controller overlay, because stock Jazzy uses
