@@ -72,9 +72,18 @@ def test_all_previously_existing_lab_dashboards_have_speed_cap_and_backend():
         assert '"/api/sim-speed"' in api, lab
         assert "read_speed" in api and "save_speed" in api, lab
         assert "cap_world" in api, lab
-        assert 'id="lab-rtf-slider"' in browser, lab
-        assert "30 simulated Hz" in browser and "100 simulated Hz" in browser, lab
-        if lab != "nav2":
+        if lab == "nav2":
+            # Planner and Tracker now load one JS control; do not duplicate
+            # their slider logic as two separate inline HTML snippets.
+            tracker_html = (root / "tools/nav2_lab/tracking/web/index.html").read_text()
+            shared = (root / "tools/nav2_lab/shared/rtf_control.js").read_text()
+            assert 'src="/lab-rtf.js"' in browser
+            assert 'src="/lab-rtf.js"' in tracker_html
+            assert 'id="lab-rtf-slider"' in shared
+            assert "30 sim-Hz" in shared and "100 sim-Hz" in shared
+        else:
+            assert 'id="lab-rtf-slider"' in browser, lab
+            assert "30 simulated Hz" in browser and "100 simulated Hz" in browser, lab
             assert browser.count("<script>") == 1, lab
             assert browser.count("</script>") == 1, lab
 
