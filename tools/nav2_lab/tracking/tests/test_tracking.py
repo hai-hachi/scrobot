@@ -18,6 +18,7 @@ from tracking.core import (
 from tracking.world import write_world
 from tracking.configuration import generate,saved_physics
 from tracking.service import TrackingService
+from tracking.health import controller_failure
 
 
 def test_four_path_geometries_are_deterministic():
@@ -131,8 +132,13 @@ def test_tracker_params_preserve_real_controller_and_physics(tmp_path):
     assert cs["RPP"]["plugin"]=="nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
     assert cs["SMC"]["plugin"]=="scrobot_tracker_controller::SMCController"
     assert cs["SMC"]["linear_speed"]==.3
-    assert params["local_costmap"]["local_costmap"]["ros__parameters"]["plugins"]==[]
-    assert params["local_costmap"]["local_costmap"]["ros__parameters"]["global_frame"]=="odom"
+    local=params["local_costmap"]["local_costmap"]["ros__parameters"]
+    assert local["plugins"]==["obstacle_layer","inflation_layer"]
+    assert local["obstacle_layer"]["plugin"]=="nav2_costmap_2d::ObstacleLayer"
+    assert local["obstacle_layer"]["observation_sources"]==""
+    assert "depth_scan" not in local["obstacle_layer"]
+    assert local["inflation_layer"]["plugin"]=="nav2_costmap_2d::InflationLayer"
+    assert local["global_frame"]=="odom"
     assert Path(data["controller_params"]).exists()
     motor=data["inputs"]["mobility"]["motor"]
     assert motor["model"] in ("baseline","first_order")
@@ -207,3 +213,32 @@ def test_simulated_time_and_ground_truth_control():
     assert 'sim_motor_response' in (HERE/"launch/tracking.launch.py").read_text()
     assert '"enable_motor_response"' in (HERE/"launch/tracking.launch.py").read_text()
     assert '"sim_hz"' in monitor
+
+
+def test_tracker_detects_nav2_controller_startup_crash(tmp_path):
+    log=tmp_path/"stack.log"
+    log.write_text(
+        "[gazebo-1] [INFO] [controller_manager]: Loaded controller\n"
+        "[controller_server-12] terminate called after throwing\n"
+        "[controller_server-12]   what(): parameter_value_from failed for "
+        "parameter 'plugins': No parameter value set\n"
+        "[ERROR] [controller_server-12]: process has died [pid 6953, exit code -6]\n"
+    )
+    fatal=controller_failure(log)
+    assert "Nav2 controller_server crashed" in fatal
+    assert "parameter 'plugins'" in fatal
+    assert "Stop and restart" in fatal
+    log.write_text("[gazebo-1] normal startup\n")
+    assert controller_failure(log) is None
+    assert controller_failure(tmp_path/"missing.log") is None
+
+
+def test_tracker_waits_fail_fast_and_reports_error_to_ui():
+    runner=(HERE/"runner.py").read_text()
+    service=(HERE/"service.py").read_text()
+    frontend=(HERE/"web/app.js").read_text()
+    assert 'fatal=controller_failure(self.stack_log)' in runner
+    assert '"--stack-log",str(self.stack_log)' in service
+    assert '"controller_error":controller_failure(self.stack_log)' in service
+    assert "NAV2 CONTROLLER CRASHED" in frontend
+    assert "lastStatus?.controller_error" in frontend
