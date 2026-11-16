@@ -1,4 +1,5 @@
 """Common physical differential-wheel envelope for RPP and SMC commands."""
+import argparse
 import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
@@ -10,11 +11,13 @@ from tracking.core import clamp_wheel_envelope
 
 
 class Router(Node):
-    def __init__(self):
+    def __init__(self,use_motor_response):
         super().__init__("tracker_wheel_envelope",
             parameter_overrides=[Parameter("use_sim_time",Parameter.Type.BOOL,True)],
             automatically_declare_parameters_from_overrides=True)
-        self.output=self.create_publisher(TwistStamped,"/diff_drive_controller/cmd_vel",10)
+        destination=("/cmd_vel_motor_target" if use_motor_response else
+                     "/diff_drive_controller/cmd_vel")
+        self.output=self.create_publisher(TwistStamped,destination,10)
         self.safe=self.create_publisher(TwistStamped,"/tracker/cmd_vel_safe",10)
         self.create_subscription(TwistStamped,"/tracker/cmd_vel_raw",self.forward,10)
 
@@ -33,7 +36,10 @@ class Router(Node):
 
 
 def main():
-    rclpy.init();node=Router()
+    parser=argparse.ArgumentParser()
+    parser.add_argument("--motor-response",choices=("true","false"),required=True)
+    args=parser.parse_args()
+    rclpy.init();node=Router(args.motor_response=="true")
     try:rclpy.spin(node)
     except KeyboardInterrupt:pass
     finally:node.destroy_node();rclpy.shutdown()
