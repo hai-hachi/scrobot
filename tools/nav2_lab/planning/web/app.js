@@ -356,8 +356,10 @@ function updateMapStatus(health){
   $('map-meta').textContent=m.received?
     m.width+' × '+m.height+' cells · '+m.occupied_cells+' occupied':
     'No /map message received';
+  const u=health.global_costmap_updates||{};
   $('costmap-meta').textContent=c.received?
-    c.width+' × '+c.height+' cells · '+c.occupied_cells+' occupied':
+    c.width+' × '+c.height+' cells · '+c.occupied_cells+' occupied · '+
+    (u.received?'updates observed':'no incremental updates yet'):
     'No global costmap message received';
   $('map-hint').textContent=health.hint||'Checking ROS topics…';
 }
@@ -367,7 +369,8 @@ const TOPIC_LABELS={
   '/camera/camera/depth/scan_raw':'Cloud → scan',
   '/camera/camera/depth/scan':'Filtered depth scan',
   '/map':'Static occupancy',
-  '/global_costmap/costmap':'Live planner costmap'
+  '/global_costmap/costmap':'Full costmap snapshot (event)',
+  '/global_costmap/costmap_updates':'Incremental costmap updates (event)'
 };
 function renderRates(rateData){
   const rows=$('topic-rate-rows');rows.replaceChildren();
@@ -492,8 +495,10 @@ function renderResults(summary){
     'No planner benchmark started.';
   $('live-state').textContent=summary?.mode==='live'?
     'Live cycle '+(summary.cycle||0)+' · completed '+(summary.completed_cycles||0)+
-    ' · last cycle '+fmt(summary.last_cycle_wall_s,2)+' s · refresh requested '+
-    fmt(summary.interval_s,1)+' s. All four plugins are called sequentially; '+
+    ' · last cycle '+fmt(summary.last_cycle_wall_s,2)+' wall s · refresh requested '+
+    fmt(summary.interval_s,1)+' SIM s (~'+
+    fmt(summary.interval_s/(status?.map_status?.real_time_factor||.25),1)+
+    ' wall s at measured RTF). All four plugins are called sequentially; '+
     'a changing costmap may make their paths differ. Last updated '+
     (typeof summary.last_updated_wall_time==='number'?
        new Date(summary.last_updated_wall_time*1000).toLocaleTimeString():'—')+'.':
