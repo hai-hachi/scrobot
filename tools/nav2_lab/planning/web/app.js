@@ -2,6 +2,8 @@
 const $=id=>document.getElementById(id);
 const SVG_NS='http://www.w3.org/2000/svg';
 let saved=null,scene=null,status=null,calibration=null,busy=false;
+let productionPlannerStatus=null;
+const PUBLISH_PLANNERS={NavFnDijkstra:'NavFn — Dijkstra',NavFnAStar:'NavFn — A*',Smac2D:'Smac 2D',ThetaStar:'Theta*'};
 let venue={x:21,y:12},historyReady=false;
 
 async function api(route,body){
@@ -58,6 +60,7 @@ function setButtons(){
   const liveTrial=running&&status?.trial_mode==='live';
   const buttons={
     start:!live,stop:live,plan:live&&!running,cancel:running,save:true,
+    'publish-main':Boolean(productionPlannerStatus)&&selectedPublishPlanners().length>0,
     'clear-history':!running,
     'scene-save':!running||liveTrial,'scene-load':!live,
     'place-robot':!running,
@@ -72,9 +75,57 @@ function setButtons(){
   $('planning-mode').disabled=busy||running;
   $('planner').disabled=busy||running||$('planning-mode').value==='live';
   $('live-interval').disabled=busy||running;
+  for(const name of Object.keys(PUBLISH_PLANNERS))
+    $('publish-'+name).disabled=busy;
+  $('publish-default').disabled=busy||!selectedPublishPlanners().length;
   $('plan').textContent=$('planning-mode').value==='live'?
     'Start live replanning':'Compare planners';
   $('cancel').textContent=liveTrial?'Stop live planning':'Cancel';
+}
+function selectedPublishPlanners(){
+  return Object.keys(PUBLISH_PLANNERS).filter(name=>$('publish-'+name).checked);
+}
+function syncPublishSelection(){
+  const names=selectedPublishPlanners();
+  const current=$('publish-default').value;
+  const dropdown=$('publish-default');
+  dropdown.replaceChildren();
+  for(const name of names){
+    const option=document.createElement('option');
+    option.value=name;
+    option.textContent=PUBLISH_PLANNERS[name];
+    dropdown.append(option);
+  }
+  if(names.includes(current))dropdown.value=current;
+  else if(names.includes(productionPlannerStatus?.default))
+    dropdown.value=productionPlannerStatus.default;
+  else if(names.length)dropdown.value=names[0];
+  $('publish-warning').textContent=names.length?
+    'Selected: '+names.map(name=>PUBLISH_PLANNERS[name]).join(', ')+
+    '. Default: '+PUBLISH_PLANNERS[dropdown.value]+'.':
+    'Select at least one planner before publishing.';
+  dropdown.disabled=busy||names.length===0;
+  $('publish-main').disabled=busy||names.length===0||!productionPlannerStatus;
+}
+function renderProductionPlanners(data,initializeSelection=false){
+  productionPlannerStatus=data;
+  const enabled=(data.selected||[]);
+  if(initializeSelection){
+    for(const name of Object.keys(PUBLISH_PLANNERS))
+      $('publish-'+name).checked=enabled.includes(name);
+  }
+  syncPublishSelection();
+  const names=enabled.map(name=>PUBLISH_PLANNERS[name]||name);
+  const defaultName=PUBLISH_PLANNERS[data.default]||data.default||'unknown';
+  $('publish-state').textContent=
+    'Currently published: '+(names.join(', ')||'None recognized')+
+    ' · default '+defaultName+' (GridBased). '+
+    (data.other_plugin_ids?.length?
+      'Other plugin IDs currently loaded: '+data.other_plugin_ids.join(', ')+'. ':'')+
+    'This action does not modify running Nav2 nodes.';
+}
+async function refreshProductionPlanners(initializeSelection=false){
+  renderProductionPlanners(await api('/api/planners/production'),initializeSelection);
 }
 function tag(name,attrs={},text=''){
   const element=document.createElementNS(SVG_NS,name);
@@ -579,6 +630,33 @@ $('clear-history').onclick=()=>{
 $('save').onclick=()=>operation(async()=>{
   await savePlan();notify('Saved Nav2 planner settings to shared lab YAML.');
 });
+for(const name of Object.keys(PUBLISH_PLANNERS)){
+  $('publish-'+name).onchange=syncPublishSelection;
+}
+$('publish-main').onclick=()=>{
+  const enabled=selectedPublishPlanners();
+  const defaultPlanner=$('publish-default').value;
+  if(!productionPlannerStatus||!enabled.length){
+    notify('Select at least one production planner.',true);return;
+  }
+  const note='Publish '+enabled.map(x=>PUBLISH_PLANNERS[x]).join(', ')+
+    ' to main Nav2 configuration, with '+PUBLISH_PLANNERS[defaultPlanner]+
+    ' as the default GridBased planner? This replaces the production planner '+
+    'plugin list. Other Nav2 settings remain unchanged. A restart is required.';
+  if(!window.confirm(note))return;
+  operation(async()=>{
+    const result=await api('/api/planners/publish',{
+      enabled,default:defaultPlanner,
+      expected_sha256:productionPlannerStatus.sha256,confirm:true
+    });
+    renderProductionPlanners(result,false);
+    notify(result.changed?
+      'Published planners to src/scrobot_navigation/config/nav2_params.yaml. '+
+      'Backup saved. Rebuild/source scrobot_navigation and restart the main Nav2 stack.':
+      'Main simulation already has these planner settings; no changes made.');
+  });
+};
+
 $('scene-save').onclick=()=>operation(async()=>{
   const data=await api('/api/scene/save',{robot:readRobot()});
   scene=data.scene;showScene();
@@ -644,6 +722,7 @@ $('rviz-close').onclick=()=>operation(async()=>{await api('/api/rviz/close',{});
   try{
     populatePlan(await api('/api/config'));
     populateScene(await api('/api/scene'));
+    await refreshProductionPlanners(true);
     renderObstacles(scene.obstacles);
     await refreshCalibration();await refresh();await refreshHistory();
   }catch(e){notify(e.message,true);}
