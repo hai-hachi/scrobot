@@ -7,14 +7,46 @@ import yaml
 ROOT=Path(__file__).resolve().parents[3]
 TOOLS=ROOT/"tools"
 sys.path.insert(0,str(TOOLS))
-from planning.calibration import load_inputs,generate_rate_profiles
+from planning.calibration import (
+    _validate_mobility,_validate_odometry,generate_rate_profiles)
+from shared.lab_configs import read as read_lab,path_for
 from tracking.core import validate
 
 
 def saved_physics():
-    # Reuse exactly the Mobility and Odometry lab's already-validated configs.
-    inputs=load_inputs()
-    return inputs
+    """Read only physics / odometry calibration; no camera or court prerequisite."""
+    physics_path=ROOT/"src/scrobot_simulation/config/mobility_calibration.yaml"
+    odom_path=ROOT/"src/scrobot_simulation/config/odometry_calibration.yaml"
+    physics_doc=yaml.safe_load(physics_path.read_text())
+    odom_doc=yaml.safe_load(odom_path.read_text())
+    if physics_doc.get("schema_version")!=1 or odom_doc.get("schema_version")!=1:
+        raise ValueError("Invalid published drivetrain/odometry fallback")
+    saved=read_lab("mobility")
+    if saved is not None:
+        checked=_validate_mobility(saved)
+        physics={key:checked[key] for key in (
+            "drive_contact_mu","caster_contact_mu","wheel_joint_damping",
+            "wheel_collision_width","drive_slip1","drive_slip2")}
+        motor={key:checked[key] for key in (
+            "model","tau_left","tau_right","gain_left","gain_right")}
+        physics_source=str(path_for("mobility"))
+    else:
+        physics=physics_doc["physics"]
+        motor=physics_doc["motor"]
+        physics_source=str(physics_path)
+    saved_odometry=read_lab("odometry")
+    if saved_odometry is not None:
+        checked=_validate_odometry(saved_odometry)
+        odometry={key:float(checked[key]) for key in (
+            "wheel_odom_hz","imu_hz","magnetometer_hz",
+            "ground_truth_hz","ekf_hz")}
+        odometry_source=str(path_for("odometry"))
+    else:
+        odometry={key:float(value) for key,value in odom_doc["rates"].items()}
+        odometry_source=str(odom_path)
+    return {"mobility":{"physics":physics,"motor":motor},
+            "odometry":odometry,
+            "provenance":{"mobility":physics_source,"odometry":odometry_source}}
 
 
 def generate(settings,dirpath):
