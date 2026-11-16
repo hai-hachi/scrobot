@@ -176,9 +176,19 @@ frequent full maps as a performance failure.
   clock scheduling applies when those nodes are launched, and cannot be
   inferred from the absence of these nodes here.
 
-The shared **Nav2 speed control** is independent of the Performance Lab's
-own 0.25 setting. If you changed Nav2's slider previously, save **0.25**
-in its control, then restart the simulation.
+The **Planner and Tracker tabs share the same Nav2 speed slider**, positioned
+above the main heading in both pages and persisted in
+`tools/configs/labs/simulation_speed.yaml`. The Planner's `nav2` value
+is canonical if older files contain both `nav2` and `tracking` with
+different values. Saving in either tab updates both legacy keys without
+changing any other lab. The slider displays each tab's **applied** cap and
+indicates which running Gazebo instance needs a restart; saving never
+restarts the other tab automatically.
+
+This common Nav2 speed control remains **independent from the Performance
+Lab** and the other labs' own 0.25 settings. Save **0.25** if you want to
+restore the synchronized benchmark default, then restart whichever Nav2
+simulation was running under a different cap.
 
 ## RViz map/costmap visibility fixes
 
