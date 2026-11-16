@@ -50,9 +50,10 @@ def _read(path):
 def _selection(enabled,default):
     if not isinstance(enabled,list) or not enabled:
         raise ValueError("Select at least one planner")
-    if len(enabled)!=len(set(enabled)) or any(
-            not isinstance(name,str) or name not in PLANNERS for name in enabled):
-        raise ValueError("Unknown or repeated planner selection")
+    if any(not isinstance(name,str) or name not in PLANNERS for name in enabled):
+        raise ValueError("Unknown planner selection")
+    if len(enabled)!=len(set(enabled)):
+        raise ValueError("Repeated planner selection")
     if not isinstance(default,str) or default not in enabled:
         raise ValueError("Default planner must be one of the selected planners")
     return [name for name in PLANNERS if name in enabled],default
