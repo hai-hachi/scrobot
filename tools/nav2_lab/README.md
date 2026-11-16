@@ -61,10 +61,63 @@ bridge or depth-to-color alignment nodes are started. The underlying Gazebo
 robot model still contains its color sensor and gz_ros2_control plugin;
 removing those would require a separate lab-specific URDF variant.
 
-**Performance** measures actual wall-clock message Hz for /clock, depth
-cloud, raw scan, filtered scan, /map and the global costmap. The /map
-rate is displayed as **Latched** instead of inventing a periodic rate.
+**Performance** shows wall Hz **and** simulated Hz for /clock, depth
+cloud, raw scan and filtered scan. The /map, full global costmap, and
+incremental costmap updates are treated as **events**, not invented steady
+rates.
 ANSI color escape codes are stripped from all four log windows.
+
+## Synchronized 0.25 RTF — Performance Lab contract
+
+The Planner Lab follows the same shared speed contract as the newer
+Performance Lab. It reads the **Nav2 entry** from
+`tools/configs/labs/simulation_speed.yaml`, defaulting to **0.25**, and
+sets the maximum real-time factor in **a copy of its generated Gazebo SDF**.
+This does not change any saved Lighting/Camera/Mobility/Odometry calibration
+or publish to the production simulation. A changed slider cap requires
+**stopping and restarting** the Planner Lab Gazebo process.
+
+The target ROS sensor, scan and Nav2 costmap **simulated Hz must not be
+divided by four**. Compare actual measurements in two separate time domains:
+
+| Target | Simulated Hz | Expected wall Hz at actual 0.25 RTF |
+| --- | ---: | ---: |
+| Depth cloud and scan | 30 | 7.5 |
+| Global costmap updates (configured) | 6 | 1.5 |
+| Full global costmap publication (configured) | 3 | 0.75 |
+
+The last two values are **configuration equivalents, not guaranteed
+periodic topic observations**. Nav2 may publish a full map once and
+incremental updates only when cells change. This lab deliberately requests
+full global grids to support its RViz Map view; it reports full-grid and
+incremental update events separately instead of treating the absence of
+frequent full maps as a performance failure.
+
+- Single-planner action acknowledgement and planning deadlines now use the
+  node's **ROS simulated clock**, not wall time. The configured 25-second
+  planning limit is **25 simulated seconds**, about 100 wall seconds if
+  Gazebo achieves 0.25 RTF. A separate conservative wall watchdog and a
+  12-wall-second stalled-/clock detector prevent permanent hangs.
+- Live all-four replanning uses a **simulated-second minimum cycle period**:
+  2.0 sim seconds normally means approximately 8 wall seconds at 0.25
+  measured RTF. Four planners are still executed sequentially, not on
+  four wall timers. Longer cycles are never queued up.
+- Every planner run snapshots the **applied** Gazebo RTF cap (which may differ
+  from a slider value saved after simulation startup) and records both
+  **wall and simulation round-trip durations**. Do not compare wall latency
+  from 0.25 RTF with the unthrottled 1.0 RTF run as though they were the same
+  clock domain.
+- Gazebo's walking-cylinder plugin already advances on simulation time,
+  and the RViz path publisher uses `use_sim_time`; neither needs a
+  quarter-speed multiplier.
+- **This remains a stationary path-planning lab**, not a full-stack control
+  acceptance test. The Performance Lab's patched Jazzy controller/smoother
+  clock scheduling applies when those nodes are launched, and cannot be
+  inferred from the absence of these nodes here.
+
+The shared **Nav2 speed control** is independent of the Performance Lab's
+own 0.25 setting. If you changed Nav2's slider previously, save **0.25**
+in its control, then restart the simulation.
 
 ## RViz map/costmap visibility fixes
 
