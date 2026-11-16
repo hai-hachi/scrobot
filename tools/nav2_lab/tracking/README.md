@@ -170,6 +170,20 @@ instead of waiting 160 wall seconds. The trial also reports the live
 `/evaluation/ground_truth_odom` and wheel-odom message counts and whether
 the `/follow_path` action server is ready.
 
+**FollowPath goal rejected right before activation:** Nav2 Jazzy advertises
+the action endpoint while `controller_server` is still in the lifecycle
+`activating` transition, so `ActionClient.server_is_ready()` is not enough
+to safely send the goal. If the simulation logs show
+`Action server is inactive. Rejecting the goal.` followed by
+`Managed nodes are active`, this is a launch synchronization race, not
+a failed RPP or wheel controller. The Tracker now polls
+`/controller_server/get_state` (`lifecycle_msgs/srv/GetState`) and
+requires lifecycle **ACTIVE**, adequate Gazebo ground truth and wheel odom,
+and action endpoint availability before dispatch. It includes one bounded
+retry if a lifecycle transition races that check. The trial view displays
+the lifecycle state alongside the advertised action availability. It does
+**not** alter configured control Hz or the 0.25 RTF synchronization.
+
 For the previously observed error
 `parameter_value_from failed for parameter 'plugins': No parameter value set`,
 update the branch, **Stop** the old tracker, then **Start / Reset** so
