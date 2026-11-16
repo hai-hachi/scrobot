@@ -20,6 +20,37 @@ def test_speed_setting_is_lab_specific_atomic_and_validated(tmp_path, monkeypatc
     assert sim_speed.get("camera") == 0.25
 
 
+def test_nav2_planner_and_tracker_share_one_rtf_without_touching_other_labs(
+        tmp_path, monkeypatch):
+    file = tmp_path / "simulation_speed.yaml"
+    monkeypatch.setattr(sim_speed, "FILE", file)
+    assert sim_speed.get("nav2") == sim_speed.get("tracking") == 0.25
+    sim_speed.save("camera", .80)
+    sim_speed.save("tracking", .40)
+    assert sim_speed.get("nav2") == sim_speed.get("tracking") == .40
+    sim_speed.save("nav2", .25)
+    assert sim_speed.read_all()["nav2"] == .25
+    assert sim_speed.read_all()["tracking"] == .25
+    assert sim_speed.get("camera") == .80
+
+    # Handle older saves that used two different tab keys. Planner wins
+    # deterministically and the next save reconciles their file entries.
+    file.write_text(
+        "schema_version: 1\\nlab: simulation_speed\\nsettings:\\n"
+        "  nav2: 0.35\\n  tracking: 0.70\\n  camera: 0.80\\n")
+    assert sim_speed.get("tracking") == sim_speed.get("nav2") == .35
+    sim_speed.save("mobility", .65)
+    assert sim_speed.read_all()["tracking"] == .35
+    assert sim_speed.read_all()["nav2"] == .35
+    assert sim_speed.get("camera") == .80
+    assert sim_speed.get("mobility") == .65
+
+    file.write_text(
+        "schema_version: 1\\nlab: simulation_speed\\nsettings:\\n"
+        "  tracking: 0.45\\n")
+    assert sim_speed.get("nav2") == sim_speed.get("tracking") == .45
+
+
 def test_world_speed_copy_preserves_original_physics_and_sensor_rates(tmp_path):
     source = tmp_path / "source.sdf"
     destination = tmp_path / "capped.sdf"
