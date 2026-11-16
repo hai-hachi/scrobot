@@ -12,6 +12,7 @@ const TOPICS={
 };
 let settings=null,preview=null,live=null,lastStatus=null,busy=false;
 let lastHistoryRefresh=0,lastPreviewKey='',initializing=true,drag=null,previewSequence=0;
+let shownControllerError=null;
 
 async function api(path,body){
   const opts=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},
@@ -41,7 +42,7 @@ function setButtons(){
   const controls={
     'save-settings':!trial,'load-settings':!trial,
     'preview-button':!trial,'new-seed':!trial,
-    'start':!stack&&!trial,'run':!trial,'cancel':trial,
+    'start':!stack&&!trial,'run':!trial&&!lastStatus?.controller_error,'cancel':trial,
     'stop':stack,'reset':!trial,
     'gz-open':stack&&!lastStatus?.gazebo_gui?.running,
     'gz-close':stack&&Boolean(lastStatus?.gazebo_gui?.running),
@@ -184,10 +185,18 @@ function showStatus(s){
   const running=s.stack_running,trial=s.trial_running;
   $('stack-dot').classList.toggle('on',running);
   $('stack-state').textContent=running?'Simulation running':'Simulation stopped';
-  $('action-state').textContent=trial?'Tracking '+s.run_name:
+  $('action-state').textContent=s.controller_error?
+    'NAV2 CONTROLLER CRASHED · Stop and restart Tracker':
+    trial?'Tracking '+s.run_name:
     running?'Gazebo ready · start a FollowPath trial':'Tracking simulator stopped';
+  if(s.controller_error&&s.controller_error!==shownControllerError){
+    shownControllerError=s.controller_error;
+    notify(s.controller_error,true);
+  }
+  if(!s.controller_error)shownControllerError=null;
   $('run-name').textContent=s.run_name||'No experiment';
-  $('trial-state').textContent=trial?'Running':s.summary?.status||'Idle';
+  $('trial-state').textContent=s.controller_error?'Controller error':
+    trial?'Running':s.summary?.status||'Idle';
   $('stack-log').textContent=s.stack_log||'No stack log.';
   $('run-log').textContent=s.trial_log||'No tracking log.';
   $('gazebo-log').textContent=s.gazebo_log||'Gazebo UI closed.';
