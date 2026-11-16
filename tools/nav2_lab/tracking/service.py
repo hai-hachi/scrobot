@@ -108,9 +108,12 @@ class TrackingService:
         return checked
 
     def sim_speed(self):
-        return {"max_rtf":speed_get("nav2"),
-                "applied_max_rtf":self.applied_rtf if running(self.stack) else None,
-                "restart_required":running(self.stack)}
+        saved = speed_get("nav2")
+        applied = self.applied_rtf if running(self.stack) else None
+        return {"max_rtf": saved,
+                "applied_max_rtf": applied,
+                "restart_required": applied is not None and
+                                    abs(applied - saved) > 1e-6}
 
     def set_speed(self,value):
         with self.lock:
