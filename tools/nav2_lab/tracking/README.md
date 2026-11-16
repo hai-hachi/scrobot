@@ -105,9 +105,16 @@ teleporting the displaced robot without resetting wheel/odom state.
   requiring clipping is reported separately.
 
 The lab uses the same `use_sim_time` synchronization contract as the
-Performance Lab. The Tracker has its own 0.25 default Gazebo RTF cap under
-`tools/configs/labs/simulation_speed.yaml`. Controller/sensor settings are
-in **simulation Hz**, not divided by four.
+Performance Lab. The **Planner and Tracker tabs share one Gazebo speed cap**
+in `tools/configs/labs/simulation_speed.yaml` (the canonical `nav2`
+entry, default **0.25**). Both tabs display the **same control above the Lab
+heading**. Saving in either tab updates the common value, but a running
+Planner or Tracker keeps its own applied RTF cap until that specific Gazebo
+simulation restarts. The panel shows both applied caps and highlights a
+pending restart; it never restarts the other tab implicitly. Existing saved
+`tracking` entries are supported for migration. The other labs' speed
+settings remain independent. Controller/sensor settings stay in **simulation
+Hz**, not divided by four.
 
 The saved controller YAML under
 `evaluation_results/nav2_lab/tracking/_tracking_active/tracking_controller.yaml`
