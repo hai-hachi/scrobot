@@ -60,8 +60,12 @@ RMSE. It is **not** proof of how production EKF performs; validate feedback
 from estimated odometry later in a separate integration experiment.
 
 No planner, BT navigator, global costmap, depth processing or YOLO is started.
-The local costmap is free space and contains no obstacle plugins. This
-compares following a known geometric path, not collision avoidance.
+The local costmap is free space and has **two valid Nav2 plugin IDs**:
+`obstacle_layer` (with no observation sources and no depth subscriptions)
+and `inflation_layer`. An empty `plugins: []` list causes a Jazzy
+`InvalidParameterValueException` at ControllerServer startup; never
+use it for the tracker. This compares following a known geometric
+path, not collision avoidance.
 The reference path is published in `odom`, with visualization overlays in
 RViz's odom fixed frame.
 
@@ -121,6 +125,26 @@ The saved controller YAML under
 is lab-only. **No controller is automatically published to production.**
 The SMC algorithm and gains need real-world/controller-stability validation
 before considering it for the normal mission stack.
+
+## Tracker not moving / startup diagnostics
+
+If Gazebo and the differential-drive controller are active but the robot
+doesn't move, inspect the Tracker **Tracking simulation stack** log.
+The `controller_server` subprocess can crash while the Gazebo process
+continues, making a running simulator an invalid readiness indicator.
+
+The Tracker now detects a fatal `controller_server` crash, shows it in
+the interface, disables Run, and fails active trial startup immediately
+instead of waiting 160 wall seconds. The trial also reports the live
+`/evaluation/ground_truth_odom` and wheel-odom message counts and whether
+the `/follow_path` action server is ready.
+
+For the previously observed error
+`parameter_value_from failed for parameter 'plugins': No parameter value set`,
+update the branch, **Stop** the old tracker, then **Start / Reset** so
+`_tracking_active/tracking_controller.yaml` is regenerated with valid
+free-space costmap plugins. Merely refreshing the browser does not regenerate
+the YAML or revive a crashed Nav2 controller.
 
 ## Metrics and performance
 
