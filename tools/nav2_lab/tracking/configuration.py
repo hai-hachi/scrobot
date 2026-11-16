@@ -63,7 +63,14 @@ def generate(settings,dirpath):
     params["odom_topic"]="/diff_drive_controller/odom"
     params["controller_plugins"]=["RPP","SMC"]
     params["RPP"]=copy.deepcopy(production["controller_server"]["ros__parameters"]["FollowPath"])
-    params["RPP"]["desired_linear_vel"]=float(settings["desired_speed_mps"])
+    requested_speed=float(settings["desired_speed_mps"])
+    params["RPP"]["desired_linear_vel"]=requested_speed
+    # RPP's production minimum speeds were tuned for 0.35 m/s. They must
+    # never exceed a smaller speed selected for a fair RPP/SMC comparison.
+    for field in ("min_approach_linear_velocity",
+                  "regulated_linear_scaling_min_speed"):
+        if field in params["RPP"]:
+            params["RPP"][field]=min(float(params["RPP"][field]),requested_speed)
     # Empty local world: no obstacles; path tracking rather than avoidance.
     params["RPP"]["use_collision_detection"]=False
     params["SMC"]={
