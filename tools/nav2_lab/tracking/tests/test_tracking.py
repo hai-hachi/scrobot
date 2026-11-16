@@ -134,6 +134,10 @@ def test_tracker_params_preserve_real_controller_and_physics(tmp_path):
     assert params["local_costmap"]["local_costmap"]["ros__parameters"]["plugins"]==[]
     assert params["local_costmap"]["local_costmap"]["ros__parameters"]["global_frame"]=="odom"
     assert Path(data["controller_params"]).exists()
+    motor=data["inputs"]["mobility"]["motor"]
+    assert motor["model"] in ("baseline","first_order")
+    assert 0.005<=motor["tau_left"]<=.5
+    assert 0.005<=motor["tau_right"]<=.5
     physics=data["inputs"]["mobility"]["physics"]
     assert "drive_contact_mu" in physics
     assert "caster_contact_mu" in physics
@@ -199,4 +203,7 @@ def test_simulated_time_and_ground_truth_control():
     assert '"/evaluation/ground_truth_odom"' in tf
     assert '"odom"' in tf
     assert 'clamp_wheel_envelope' in router
+    assert '"/cmd_vel_motor_target"' in router
+    assert 'sim_motor_response' in (HERE/"launch/tracking.launch.py").read_text()
+    assert '"enable_motor_response"' in (HERE/"launch/tracking.launch.py").read_text()
     assert '"sim_hz"' in monitor
