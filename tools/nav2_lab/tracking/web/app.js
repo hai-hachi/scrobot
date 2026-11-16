@@ -207,6 +207,8 @@ function showStatus(s){
     (current.error?' · '+current.error:'')+
     ' · Ground-truth samples: '+(current.ground_truth_samples??0)+
     ' · Wheel-odom samples: '+(current.wheel_odom_samples??0)+
+    ' · Raw commands requiring wheel-envelope clipping: '+
+    (current.raw_limit_requests??0)+
     ' · Path distance: '+fmt(result.reference_length_m,2)+' m':
     'Run a controller to record ground-truth error, path and heading metrics.';
   draw();renderChart(live?.trace);
@@ -237,7 +239,7 @@ async function history(){
   for(const item of rows){
     const s=item.summary||{},r=s.results||{};
     const tr=addRow(table,[item.name,s.path||'—',s.controller||'—',
-      s.status||'—',fmt(r.cross_track_rmse_m,4),
+      s.seed??'—',s.status||'—',fmt(r.cross_track_rmse_m,4),
       fmt(r.heading_rmse_deg,2),fmt(r.duration_sim_s,1)]);
     const td=document.createElement('td'),b=document.createElement('button');
     b.className='btn small danger';b.textContent='Delete';
