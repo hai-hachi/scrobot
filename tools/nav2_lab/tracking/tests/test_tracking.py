@@ -17,7 +17,8 @@ from tracking.core import (
   cumulative,initial_pose,projection,at_fraction,clamp_wheel_envelope,metrics,wrap)
 from tracking.world import write_world
 from tracking.configuration import generate,saved_physics
-from tracking.service import TrackingService
+from tracking.service import (TrackingService, choose_tracking_domain, discover_domain_topics,
+                              TRACKER_DOMAIN_CANDIDATES)
 from tracking.health import controller_failure
 
 
@@ -242,3 +243,64 @@ def test_tracker_waits_fail_fast_and_reports_error_to_ui():
     assert '"controller_error":controller_failure(self.stack_log)' in service
     assert "NAV2 CONTROLLER CRASHED" in frontend
     assert "lastStatus?.controller_error" in frontend
+
+
+
+def test_tracker_starts_in_default_domain_when_free():
+    requested=[]
+    def probe(env,domain):
+        requested.append((env["ROS_DOMAIN_ID"],domain))
+        return set()
+    domain,occupied=choose_tracking_domain({"ROS_DOMAIN_ID":"20"},probe)
+    assert domain==78
+    assert occupied=={}
+    # Probing does not modify the caller's ROS environment.
+    assert requested==[("20",78)]
+
+
+def test_tracker_skips_orphaned_domains_but_never_kills_them():
+    checks=[]
+    def probe(env,domain):
+        checks.append(domain)
+        return {"/clock","/evaluation/ground_truth_odom"} if domain==78 else set()
+    env={"ROS_DOMAIN_ID":"1"}
+    domain,occupied=choose_tracking_domain(env,probe)
+    assert domain==79
+    assert occupied=={78:["/clock","/evaluation/ground_truth_odom"]}
+    assert checks==[78,79]
+    assert env=={"ROS_DOMAIN_ID":"1"}
+
+
+def test_tracker_reports_all_occupied_domains():
+    def probe(env,domain):
+        return {f"/busy_${domain}".replace("$","")}
+    with pytest.raises(RuntimeError,match="No free Tracker ROS domain 78-89"):
+        choose_tracking_domain({},probe)
+
+
+def test_tracker_fresh_discovery_ignores_ros_daemon(monkeypatch):
+    from tracking import service
+    calls=[]
+    class Result:
+        returncode=0
+        stdout="/rosout\n/parameter_events\n/clock\n"
+        stderr=""
+    def fake_run(command,**kwargs):
+        calls.append((command,kwargs["env"]))
+        return Result()
+    monkeypatch.setattr(service.subprocess,"run",fake_run)
+    env={"ROS_DOMAIN_ID":"22","GZ_PARTITION":"do-not-touch"}
+    topics=discover_domain_topics(env,81)
+    assert topics=={"/clock"}
+    assert calls[0][0]==["ros2","topic","list","--no-daemon"]
+    assert calls[0][1]["ROS_DOMAIN_ID"]=="81"
+    assert env["ROS_DOMAIN_ID"]=="22"
+
+
+def test_tracker_session_is_isolated_and_exposes_domain_in_status():
+    code=(HERE/"service.py").read_text()
+    assert "self.domain_id,self.occupied_domains=choose_tracking_domain(self.env)" in code
+    assert 'self.env["ROS_DOMAIN_ID"]=str(self.domain_id)' in code
+    assert 'self.env["GZ_PARTITION"]=self.partition' in code
+    assert '"ros_domain_id":self.domain_id' in code
+    assert '"occupied_ros_domains":self.occupied_domains' in code
