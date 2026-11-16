@@ -31,5 +31,6 @@ jobs:
         run: |
           node --check tools/nav2_lab/planning/web/app.js
           node --check tools/nav2_lab/tracking/web/app.js
+          node --check tools/nav2_lab/shared/rtf_control.js
       - name: Validate config and geometric metrics
         run: python -m pytest -q tools/nav2_lab/tests tools/nav2_lab/planning/tests tools/nav2_lab/tracking/tests
