@@ -19,7 +19,7 @@ from tracking.world import write_world
 from tracking.configuration import generate,saved_physics
 from tracking.service import (TrackingService, choose_tracking_domain, discover_domain_topics,
                               cleanup_owned_session, TRACKER_DOMAIN_CANDIDATES)
-from tracking.health import controller_failure
+from tracking.health import controller_failure,ready_for_tracking
 
 
 def test_four_path_geometries_are_deterministic():
@@ -343,3 +343,28 @@ def test_orphan_cleanup_never_kills_processes_outside_own_session():
     assert wrong_partition.signals==[]
     assert cleanup_owned_session("scrobot_tracker_lab_79_abcdef12",None,FakeAPI)==0
     assert cleanup_owned_session(None,79,FakeAPI)==0
+
+
+
+def test_followpath_appears_before_lifecycle_active_regression():
+    """Reproduce the pasted logs: action available, lifecycle not active."""
+    ready=lambda clock,gt,odom,action,active:ready_for_tracking(
+        clock,gt,odom,action,active)
+    assert not ready(7.,350,276,True,False)
+    assert not ready(7.,350,276,False,True)
+    assert not ready(0.,350,276,True,True)
+    assert not ready(7.,0,276,True,True)
+    assert not ready(7.,350,0,True,True)
+    assert ready(7.,350,276,True,True)
+
+
+def test_followpath_trial_checks_lifecycle_and_tolerates_one_transient_reject():
+    code=(HERE/"runner.py").read_text()
+    assert 'GetState,"/controller_server/get_state"' in code
+    assert 'self.controller_active=(current.id==State.PRIMARY_STATE_ACTIVE)' in code
+    assert 'self.create_timer(.15,self.poll_controller_lifecycle)' in code
+    assert 'ready_for_tracking(' in code
+    assert 'for attempt in range(2):' in code
+    assert 'self.controller_active=False' in code
+    assert 'goal_rejections' in code
+    assert 'self.output["controller_lifecycle_state"]' in code
