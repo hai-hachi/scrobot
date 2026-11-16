@@ -11,7 +11,7 @@ const TOPICS={
   '/tracker/cmd_vel_safe':'Saturated controller command'
 };
 let settings=null,preview=null,live=null,lastStatus=null,busy=false;
-let lastHistoryRefresh=0,lastPreviewKey='',initializing=true,drag=null;
+let lastHistoryRefresh=0,lastPreviewKey='',initializing=true,drag=null,previewSequence=0;
 
 async function api(path,body){
   const opts=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},
@@ -145,7 +145,9 @@ async function refreshPreview(){
   const x=readForm();if(!x)return;
   const key=JSON.stringify(x);
   if(key===lastPreviewKey)return;
+  const sequence=++previewSequence;
   const response=await api('/preview',x);
+  if(sequence!==previewSequence)return;
   preview=response;lastPreviewKey=key;
   const p=response.pose;
   $('pose-label').textContent=
@@ -154,9 +156,12 @@ async function refreshPreview(){
     ' reference waypoints. The same seed reproduces this exact pose.';
   draw();
 }
-async function guardedPreview(){
-  try{await refreshPreview();}
-  catch(e){$('pose-label').textContent=e.message;}
+function guardedPreview(){
+  clearTimeout(guardedPreview.timer);
+  guardedPreview.timer=setTimeout(async()=>{
+    try{await refreshPreview();}
+    catch(e){$('pose-label').textContent=e.message;}
+  },100);
 }
 function renderChart(trace){
   const grid=$('error-grid'),plot=$('error-series');
