@@ -36,8 +36,8 @@ def test_nav2_planner_and_tracker_share_one_rtf_without_touching_other_labs(
     # Handle older saves that used two different tab keys. Planner wins
     # deterministically and the next save reconciles their file entries.
     file.write_text(
-        "schema_version: 1\\nlab: simulation_speed\\nsettings:\\n"
-        "  nav2: 0.35\\n  tracking: 0.70\\n  camera: 0.80\\n")
+        "schema_version: 1\nlab: simulation_speed\nsettings:\n"
+        "  nav2: 0.35\n  tracking: 0.70\n  camera: 0.80\n")
     assert sim_speed.get("tracking") == sim_speed.get("nav2") == .35
     sim_speed.save("mobility", .65)
     assert sim_speed.read_all()["tracking"] == .35
@@ -46,8 +46,8 @@ def test_nav2_planner_and_tracker_share_one_rtf_without_touching_other_labs(
     assert sim_speed.get("mobility") == .65
 
     file.write_text(
-        "schema_version: 1\\nlab: simulation_speed\\nsettings:\\n"
-        "  tracking: 0.45\\n")
+        "schema_version: 1\nlab: simulation_speed\nsettings:\n"
+        "  tracking: 0.45\n")
     assert sim_speed.get("nav2") == sim_speed.get("tracking") == .45
 
 
