@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SCROBOT | Nav2 Tracker Lab</title>
+<link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/tracker/style.css">
+<script defer src="/tracker/app.js"></script></head>
+<body><div class="shell">
+<aside class="sidebar">
+<header><div class="monogram">S·</div><div><strong>SCROBOT</strong><small>ROBOTICS LABORATORY</small></div></header>
+<div class="label-upper">NAV2 LAB · TRACKER</div>
+<nav><a class="tab" href="/">▦ &nbsp; Planner</a><a class="tab active" href="/tracker">◎ &nbsp; Tracker</a></nav>
+<div class="sidebar-bottom"><span class="dot" id="stack-dot"></span>
+<b id="stack-state">Simulation stopped</b>
+<p>Calibrated wheel physics. Isolated floor world, RPP vs sliding-mode control.</p></div>
+</aside>
+<main>
+<div class="content">
+<section class="hero">
+  <div class="eyebrow">PHASE 2 · FIXED-PATH CONTROLLER COMPARISON</div>
+  <h1>Nav2 <em>Tracker Lab</em></h1>
+  <p>Follow identical trajectories using real Gazebo wheel physics, compare RPP and SMC, and measure error against independent ground truth. No badminton court, camera, YOLO or planner is loaded.</p>
+</section>
+<div id="notice" class="notice" hidden role="alert"></div>
+<div class="metrics">
+<div class="metric"><small>GAZEBO RTF</small><strong id="rtf-current">—</strong><span id="rtf-caption">0.25 cap default</span></div>
+<div class="metric"><small>CROSS-TRACK RMSE</small><strong id="rmse-value">—</strong><span>Metres · ground truth</span></div>
+<div class="metric"><small>HEADING RMSE</small><strong id="heading-value">—</strong><span>Degrees · path tangent</span></div>
+<div class="metric"><small>TRIAL</small><strong id="trial-state">Idle</strong><span id="run-name">No experiment</span></div>
+</div>
+<div class="section-tabs" role="tablist" aria-label="Tracker Lab sections">
+<button class="tab active" data-view="setup" type="button">1 · Setup</button>
+<button class="tab" data-view="tuning" type="button">2 · Controller tuning</button>
+<button class="tab" data-view="results" type="button">3 · Run &amp; results</button>
+<button class="tab" data-view="performance" type="button">4 · Performance</button>
+</div>
+
+<section class="tracker-view" data-view="setup">
+<div class="panel">
+<div class="between"><h2>Fixed reference path &amp; robot pose</h2><span>Click + drag to place and orient</span></div>
+<div class="grid setup-grid"><div>
+<div class="field"><label for="path-kind">Reference path</label><select id="path-kind">
+<option value="straight">Straight line</option><option value="circle">Circle — full lap + tangent exit</option>
+<option value="curve">Smooth S curve</option><option value="right_angles">Rectilinear path · 90° bends</option></select></div>
+<svg id="tracker-map" viewBox="0 0 900 450" role="img" tabindex="0"
+aria-label="Tracking world. Click to position robot, then drag for heading.">
+<g id="map-grid"></g><g id="map-path"></g><g id="map-trace"></g><g id="map-start"></g></svg>
+<div class="legend"><span><i style="background:#42d0c2"></i> Reference path</span>
+<span><i style="background:#f4bb66"></i> Gazebo robot trajectory</span>
+<span><i style="background:#7da9ff"></i> Selected initial pose</span></div>
+<p class="fineprint">The 90° corners are exact. The circle completes a lap and exits tangentially to avoid an immediate same-pose goal. The robot and reference are in the fixed world/odom coordinate system.</p>
+</div>
+<div>
+<div class="field"><label for="controller-select">Controller under test</label><select id="controller-select">
+<option value="RPP">RPP · Regulated Pure Pursuit</option><option value="SMC">SMC · Sliding Mode Control</option></select></div>
+<div class="field"><label for="spawn-mode">Initial placement</label><select id="spawn-mode">
+<option value="relative">Relative to reference path</option>
+<option value="random">Seeded random pose</option>
+<option value="manual">Manual x / y / heading</option></select></div>
+<div id="relative-fields">
+<div class="field"><label for="start-progress">Position along reference (0–75%)</label>
+<input id="start-progress" type="number" min="0" max="0.75" step="0.05" value="0"></div>
+<div class="field"><label for="lateral-offset">Lateral error (m)</label><input id="lateral-offset" type="number" min="-2" max="2" step="0.05" value="0.4"></div>
+<div class="field"><label for="heading-error">Heading error (°)</label><input id="heading-error" type="number" min="-180" max="180" step="5" value="12"></div>
+</div>
+<div id="random-fields" hidden>
+<div class="field"><label for="seed">Reproducible random seed</label><input id="seed" type="number" min="0" max="2147483647" step="1" value="2026"></div>
+<div class="field"><label for="random-lateral">Maximum lateral offset (m)</label><input id="random-lateral" type="number" min="0" max="2" step=".1" value="1"></div>
+<div class="field"><label for="random-heading">Maximum heading error (°)</label><input id="random-heading" type="number" min="0" max="180" step="5" value="55"></div>
+<button id="new-seed" class="btn outline" type="button">New random seed</button>
+</div>
+<div id="manual-fields" hidden>
+<div class="triplet">
+<label>X (m)<input id="pose-x" type="number" min="-7" max="7" step=".1" value="-4"></label>
+<label>Y (m)<input id="pose-y" type="number" min="-6" max="6" step=".1" value=".4"></label>
+<label>Yaw (°)<input id="pose-yaw" type="number" min="-360" max="360" step="5" value="12"></label>
+</div>
+</div>
+<p class="fineprint" id="pose-label">Previewing starting pose…</p>
+<button class="btn outline" id="preview-button" type="button">Refresh path / pose preview</button>
+</div></div>
+</div></section>
+
+<section class="tracker-view" data-view="tuning" hidden>
+<div class="panel">
+<div class="between"><h2>Shared physics and controller settings</h2><span>Same limits for both controllers</span></div>
+<div class="grid">
+<div>
+<div class="field"><label for="desired-speed">Desired forward speed (m/s)</label>
+<input id="desired-speed" type="number" min=".05" max=".40" step=".05" value=".3"></div>
+<div class="field"><label for="max-duration">Max trial duration (simulated seconds)</label>
+<input id="max-duration" type="number" min="10" max="360" step="10" value="120"></div>
+<div class="field"><label for="max-rtf">Gazebo real-time factor cap</label>
+<input id="max-rtf" type="range" min=".1" max="1" step=".05" value=".25">
+<div class="between"><small class="fineprint">Physics 1 ms · controller 25 sim-Hz · wheel loop 100 sim-Hz</small><strong id="max-rtf-text">0.25×</strong></div></div>
+<button class="btn secondary" id="save-speed" type="button">Save RTF cap (restart required)</button>
+<p class="fineprint">At 0.25 RTF the 25 sim-Hz Nav2 controller runs at roughly 6.25 wall-Hz and the 100 sim-Hz wheel loop at 25 wall-Hz. Controller frequencies are NOT divided by four.</p>
+</div>
+<div>
+<h3>SMC gains</h3>
+<div class="grid">
+<div class="field"><label for="smc-cross">Lateral error gain</label><input id="smc-cross" type="number" min=".1" max="6" step=".1" value="1.8"></div>
+<div class="field"><label for="smc-heading">Heading gain</label><input id="smc-heading" type="number" min=".1" max="8" step=".1" value="2"></div>
+<div class="field"><label for="smc-switch">Switch gain</label><input id="smc-switch" type="number" min=".05" max="5" step=".05" value="1.1"></div>
+<div class="field"><label for="smc-boundary">Boundary layer</label><input id="smc-boundary" type="number" min=".05" max="2" step=".05" value=".3"></div>
+<div class="field"><label for="smc-lookahead">Lookahead (m)</label><input id="smc-lookahead" type="number" min=".1" max="1.5" step=".05" value=".32"></div>
+</div>
+<p class="fineprint">RPP starts with the published production RPP parameters. SMC uses a continuous saturation boundary layer to limit switching chatter. Both controllers are limited to |v| + 0.21|ω| ≤ 0.50 m/s.</p>
+</div></div>
+<div class="panel"><h2>Physics provenance</h2>
+<p class="fineprint" id="physics-source">Physics is loaded from saved Mobility and Odometry Lab YAMLs, falling back to explicitly published calibration where necessary. The floor has no cameras, obstacles or light arrays.</p></div>
+</section>
+
+<section class="tracker-view" data-view="results" hidden>
+<div class="panel">
+<div class="between"><h2>Ground-truth tracking metrics</h2><span>Simulation time · same initial pose per comparison</span></div>
+<div class="metrics">
+<div class="metric"><small>MAX LATERAL ERROR</small><strong id="max-error">—</strong><span>Metres</span></div>
+<div class="metric"><small>TRAVEL DISTANCE</small><strong id="travel-dist">—</strong><span>Metres</span></div>
+<div class="metric"><small>DURATION</small><strong id="duration">—</strong><span>Simulated seconds</span></div>
+<div class="metric"><small>WHEEL LIMIT VIOLATIONS</small><strong id="violations">—</strong><span>After shared saturation</span></div>
+</div>
+<svg id="error-chart" viewBox="0 0 850 200" role="img" aria-label="Cross-track error versus simulated time">
+<g id="error-grid"></g><g id="error-series"></g></svg>
+<p id="trial-details" class="fineprint">Run a controller to record ground-truth error, path and heading metrics.</p></div>
+<div class="panel">
+<div class="between"><h2>Saved comparisons</h2><button id="clear-history" class="btn small danger">Delete all experiments</button></div>
+<p class="fineprint">Each run is automatically saved with its controller, path, initial pose, random seed, calibrated physics snapshot, sampled trajectory and metrics. Run RPP and SMC with the same inputs; each controller starts in a clean Gazebo world.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Run</th><th>Path</th><th>Controller</th><th>Status</th><th>Cross RMSE (m)</th><th>Heading RMSE (°)</th><th>Sim duration (s)</th><th>Delete</th></tr></thead>
+<tbody id="history-body"><tr><td colspan="8">No tracking runs yet.</td></tr></tbody></table></div>
+</div></section>
+
+<section class="tracker-view" data-view="performance" hidden>
+<div class="panel">
+<div class="between"><h2>Performance · simulation versus wall time</h2><span>Measured ROS topic Hz</span></div>
+<div class="metrics">
+<div class="metric"><small>MEASURED RTF</small><strong id="perf-rtf">—</strong><span>Sim seconds per wall second</span></div>
+<div class="metric"><small>CPU</small><strong id="perf-cpu">—</strong><span>Percent of one logical core</span></div>
+<div class="metric"><small>RAM</small><strong id="perf-ram">—</strong><span>Summed RSS (MB)</span></div>
+<div class="metric"><small>SIM CLOCK</small><strong id="perf-clock">—</strong><span>Simulated seconds</span></div>
+</div>
+<div class="table-wrap"><table>
+<thead><tr><th>Topic</th><th>Wall Hz</th><th>Sim Hz</th><th>Last message</th></tr></thead>
+<tbody id="topic-body"><tr><td colspan="4">Start Gazebo to measure timing.</td></tr></tbody></table></div>
+<h3>Process resources</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Process</th><th>CPU / core (%)</th><th>RSS MB</th><th>PIDs</th></tr></thead>
+<tbody id="resources-body"><tr><td colspan="4">No processes sampled.</td></tr></tbody></table></div>
+<p class="fineprint">The installed ROS-clock Nav2 Jazzy controller overlay is required; startup refuses an unpatched wall-time controller. Ground truth, wheel odometry and safe command rates are shown in both time domains.</p>
+</div></section>
+
+<section class="panel lab-logs">
+<div class="between"><h2>Runtime logs</h2><span>Separate tracking process and simulator logs</span></div>
+<details><summary>Tracking simulation stack</summary><pre id="stack-log">Not started.</pre></details>
+<details><summary>FollowPath action</summary><pre id="run-log">No run.</pre></details>
+<details><summary>Gazebo UI</summary><pre id="gazebo-log">Closed.</pre></details>
+<details><summary>RViz</summary><pre id="rviz-log">Closed.</pre></details>
+</section>
+</div>
+
+<footer class="actionbar"><div id="action-state">Tracker stopped</div>
+<div class="actions">
+<button class="btn outline" id="save-settings">Save Lab YAML</button>
+<button class="btn secondary" id="load-settings">Load Saved YAML</button>
+<button class="btn outline" id="reset">Reset / Respawn</button>
+<button class="btn secondary" id="start">Start simulation</button>
+<button class="btn primary" id="run">Run tracking</button>
+<button class="btn danger" id="cancel">Cancel trial</button>
+<button class="btn danger" id="stop">Stop simulation</button>
+<button class="btn outline" id="gz-open">Open Gazebo</button>
+<button class="btn outline" id="gz-close">Close Gazebo</button>
+<button class="btn outline" id="rviz-open">Open RViz</button>
+<button class="btn outline" id="rviz-close">Close RViz</button>
+</div></footer>
+</main></div></body></html>
