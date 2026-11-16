@@ -49,7 +49,7 @@ class ArchitectureContracts(unittest.TestCase):
             "scrobot_hardware", "scrobot_simulation", "scrobot_localization",
             "scrobot_perception", "scrobot_navigation", "scrobot_collection",
             "scrobot_mission", "scrobot_bringup", "scrobot_evaluation",
-            "scrobot_debug", "scrobot_scenarios",
+            "scrobot_debug", "scrobot_scenarios", "scrobot_tracker_controller",
         }
         self.assertEqual(names, required)
 
