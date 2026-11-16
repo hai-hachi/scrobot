@@ -1,6 +1,6 @@
 """Lab-only Gazebo speed cap, independent of physical calibration.
 
-Every lab stores its requested maximum real-time factor here, but never
+Planner and Tracker share one Nav2 cap. All other labs retain independent caps.\nEvery lab stores its requested maximum real-time factor here, but never
 scales sensor / controller simulated-Hz parameters. At RTF=0.25 a 100 sim-Hz
 source legitimately arrives at about 25 wall-Hz.
 """
@@ -47,11 +47,21 @@ def read_all():
     values = data.get("settings")
     if not isinstance(values, dict) or any(name not in LABS for name in values):
         raise ValueError("Unexpected simulation speed keys")
-    return {name: validate(value) for name, value in values.items()}
+    checked = {name: validate(value) for name, value in values.items()}
+    # Planner + Tracker are *tabs of the same Nav2 Lab*, not separate labs.
+    # Preserve old tracking entries for compatibility, but the Planner's
+    # nav2 setting wins if both legacy keys exist and disagree.
+    if "nav2" in checked or "tracking" in checked:
+        shared = checked.get("nav2", checked.get("tracking"))
+        checked["nav2"] = checked["tracking"] = shared
+    return checked
 
 
 def get(lab):
-    return read_all().get(_lab(lab), DEFAULT)
+    name = _lab(lab)
+    if name == "tracking":
+        name = "nav2"
+    return read_all().get(name, DEFAULT)
 
 
 def save(lab, value):
@@ -63,7 +73,12 @@ def save(lab, value):
     with lock_path.open("a+") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         values = read_all()
-        values[name] = speed
+        if name in ("nav2", "tracking"):
+            # Store both identifiers for legacy readers, but always one
+            # atomic value. No other lab's speed setting is modified.
+            values["nav2"] = values["tracking"] = speed
+        else:
+            values[name] = speed
         payload = yaml.safe_dump(
             {"schema_version": 1, "lab": "simulation_speed", "settings": values},
             sort_keys=False)
