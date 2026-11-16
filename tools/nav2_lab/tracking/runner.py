@@ -98,7 +98,7 @@ class Trial(Node):
             "start_pose":config["resolved_pose"],
             "rtf_cap":config.get("max_rtf",.25),
             "time_basis":"ros_sim",
-            "requested_speed_mps":config["desired_speed_mps"],
+            "requested_speed_mps":config["shared"]["desired_speed_mps"],
             "reference_points":len(self.points),
             "results":{},"started_wall_s":time.time(),
         }
@@ -279,7 +279,7 @@ class Trial(Node):
                     "controller_server logs and goal configuration")
             result_future=handle.get_result_async()
             self.until(result_future.done,
-                       timeout_sim=self.config["max_sim_duration_s"])
+                       timeout_sim=self.config["shared"]["max_sim_duration_s"])
             result=result_future.result()
             if result is None or result.status!=GoalStatus.STATUS_SUCCEEDED:
                 raise RuntimeError("Nav2 FollowPath status "+
@@ -332,8 +332,10 @@ def main():
     signal.signal(signal.SIGINT,stop_signal)
     signal.signal(signal.SIGTERM,stop_signal)
     config=json.loads(Path(args.config).read_text())
-    validate({key:value for key,value in config.items()
-              if key not in ("resolved_pose","max_rtf")})
+    checked=validate({key:value for key,value in config.items()
+                      if key not in ("resolved_pose","max_rtf")})
+    config={**checked,"resolved_pose":config["resolved_pose"],
+            "max_rtf":config.get("max_rtf",.25)}
     rclpy.init()
     node=Trial(config,args.output,args.stack_log)
     try:
