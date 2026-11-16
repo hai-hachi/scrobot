@@ -21,3 +21,25 @@ border-radius:8px;background:#101b26;margin:17px 0}
 .lab-logs{margin-top:20px}
 @media(max-width:1000px){.setup-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.section-tabs .tab{min-width:120px;flex:1}#tracker-map{min-height:210px}}
+
+
+/* Three independent tuning cards: shared / RPP / SMC. */
+.tracker-tuning-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+.tracker-tuning-grid .tuning-card{min-width:0;margin:0;padding:17px;display:flex;flex-direction:column;gap:11px;transition:border-color .15s ease,opacity .15s ease}
+.tracker-tuning-grid .tuning-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tracker-tuning-grid .tuning-head h2{margin:0;font-size:16px}
+.tracker-tuning-grid .tuning-head button{font-size:11px;white-space:nowrap;padding:7px 10px}
+.tracker-tuning-grid .tuning-card .fineprint{margin:0;line-height:1.55}
+.tracker-tuning-grid .tuning-fields{display:grid;grid-template-columns:minmax(0,1fr);gap:9px}
+.tracker-tuning-grid .tuning-fields .field{margin:0}
+.tracker-tuning-grid .tuning-fields .field input{width:100%;min-width:0}
+.tracker-tuning-grid .tuning-fields .field label{display:block;line-height:1.35;margin-bottom:5px}
+.tracker-tuning-grid .tuning-check{display:flex;align-items:center;gap:9px;font-size:12px;min-height:35px;cursor:pointer}
+.tracker-tuning-grid .tuning-check input{accent-color:var(--accent);flex-shrink:0;width:17px;height:17px}
+.tracker-tuning-grid .tuning-shared{border-color:#426479}
+.tracker-tuning-grid .controller-card.is-active{border-color:#2fbda7;box-shadow:inset 0 3px 0 #2fbda7}
+.tracker-tuning-grid .controller-card.is-inactive{opacity:.79}
+.tracker-tuning-grid .controller-card.is-inactive:focus-within{opacity:1}
+.tracker-tuning-grid .tuning-hint{padding-top:10px;border-top:1px solid var(--line)}
+@media (max-width:1190px){.tracker-tuning-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tracker-tuning-grid .tuning-shared{grid-column:1/-1}}
+@media (max-width:750px){.tracker-tuning-grid{grid-template-columns:minmax(0,1fr)}.tracker-tuning-grid .tuning-shared{grid-column:auto}}
