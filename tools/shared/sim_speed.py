@@ -19,7 +19,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 FILE = ROOT / "tools/configs/labs/simulation_speed.yaml"
 LABS = ("lighting", "mobility", "odometry", "camera", "apriltags",
-        "yolo", "mesh", "nav2")
+        "yolo", "mesh", "nav2", "tracking")
 DEFAULT = 0.25
 
 
