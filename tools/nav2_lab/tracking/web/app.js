@@ -10,7 +10,7 @@ const TOPICS={
   '/joint_states':'Physical wheel joints',
   '/tracker/cmd_vel_safe':'Saturated controller command'
 };
-let settings=null,preview=null,live=null,lastStatus=null,busy=false;
+let settings=null,defaultSettings=null,preview=null,live=null,lastStatus=null,busy=false;
 let lastHistoryRefresh=0,lastPreviewKey='',initializing=true,drag=null,previewSequence=0;
 let shownControllerError=null;
 let shownFallbackDomain=null;
@@ -42,6 +42,7 @@ function setButtons(){
   const stack=Boolean(lastStatus?.stack_running),trial=Boolean(lastStatus?.trial_running);
   const controls={
     'save-settings':!trial,'load-settings':!trial,
+    'reset-shared':!trial,'reset-rpp':!trial,'reset-smc':!trial,
     'preview-button':!trial,'new-seed':!trial,
     'start':!stack&&!trial,'run':!trial&&!lastStatus?.controller_error,'cancel':trial,
     'stop':stack,'reset':!trial,
@@ -64,14 +65,43 @@ function readForm(){
     seed:num('seed'),random_lateral_m:num('random-lateral'),
     random_heading_deg:num('random-heading'),
     pose:{x:num('pose-x'),y:num('pose-y'),yaw_deg:num('pose-yaw')},
-    desired_speed_mps:num('desired-speed'),max_sim_duration_s:num('max-duration'),
-    smc:{cross_gain:num('smc-cross'),heading_gain:num('smc-heading'),
-         switch_gain:num('smc-switch'),boundary_layer:num('smc-boundary'),
-         lookahead_m:num('smc-lookahead')}
+    shared:{
+      desired_speed_mps:num('desired-speed'),
+      max_sim_duration_s:num('max-duration'),
+      goal_xy_tolerance_m:num('goal-xy'),
+      goal_yaw_tolerance_deg:num('goal-yaw'),
+      progress_radius_m:num('progress-radius'),
+      progress_timeout_sim_s:num('progress-timeout')
+    },
+    rpp:{
+      lookahead_dist:num('rpp-lookahead'),
+      min_lookahead_dist:num('rpp-lookahead-min'),
+      max_lookahead_dist:num('rpp-lookahead-max'),
+      lookahead_time:num('rpp-lookahead-time'),
+      use_velocity_scaled_lookahead_dist:$('rpp-velocity-lookahead').checked,
+      use_regulated_linear_velocity_scaling:$('rpp-curvature-slow').checked,
+      regulated_linear_scaling_min_radius:num('rpp-min-radius'),
+      regulated_linear_scaling_min_speed:num('rpp-min-speed'),
+      use_rotate_to_heading:$('rpp-rotate').checked,
+      rotate_to_heading_angular_vel:num('rpp-rotate-rate'),
+      rotate_to_heading_min_angle_deg:num('rpp-rotate-threshold'),
+      max_angular_accel:num('rpp-angular-accel'),
+      min_approach_linear_velocity:num('rpp-min-approach')
+    },
+    smc:{
+      cross_gain:num('smc-cross'),heading_gain:num('smc-heading'),
+      surface_lambda:num('smc-lambda'),switch_gain:num('smc-switch'),
+      boundary_layer:num('smc-boundary'),lookahead_m:num('smc-lookahead'),
+      feedforward_gain:num('smc-feedforward'),
+      goal_heading_gain:num('smc-goal-heading'),
+      goal_align_threshold_m:num('smc-goal-threshold'),
+      max_angular_cmd:num('smc-max-angular')
+    }
   };
 }
 function setForm(x){
   settings=structuredClone(x);
+  const shared=x.shared,rpp=x.rpp,smc=x.smc;
   const fields={
     'path-kind':x.path,'controller-select':x.controller,
     'spawn-mode':x.spawn_mode,'start-progress':x.progress,
@@ -79,13 +109,43 @@ function setForm(x){
     'seed':x.seed,'random-lateral':x.random_lateral_m,
     'random-heading':x.random_heading_deg,
     'pose-x':x.pose.x,'pose-y':x.pose.y,'pose-yaw':x.pose.yaw_deg,
-    'desired-speed':x.desired_speed_mps,'max-duration':x.max_sim_duration_s,
-    'smc-cross':x.smc.cross_gain,'smc-heading':x.smc.heading_gain,
-    'smc-switch':x.smc.switch_gain,'smc-boundary':x.smc.boundary_layer,
-    'smc-lookahead':x.smc.lookahead_m
+    'desired-speed':shared.desired_speed_mps,
+    'max-duration':shared.max_sim_duration_s,
+    'goal-xy':shared.goal_xy_tolerance_m,
+    'goal-yaw':shared.goal_yaw_tolerance_deg,
+    'progress-radius':shared.progress_radius_m,
+    'progress-timeout':shared.progress_timeout_sim_s,
+    'rpp-lookahead':rpp.lookahead_dist,
+    'rpp-lookahead-min':rpp.min_lookahead_dist,
+    'rpp-lookahead-max':rpp.max_lookahead_dist,
+    'rpp-lookahead-time':rpp.lookahead_time,
+    'rpp-min-radius':rpp.regulated_linear_scaling_min_radius,
+    'rpp-min-speed':rpp.regulated_linear_scaling_min_speed,
+    'rpp-rotate-rate':rpp.rotate_to_heading_angular_vel,
+    'rpp-rotate-threshold':rpp.rotate_to_heading_min_angle_deg,
+    'rpp-angular-accel':rpp.max_angular_accel,
+    'rpp-min-approach':rpp.min_approach_linear_velocity,
+    'smc-cross':smc.cross_gain,'smc-heading':smc.heading_gain,
+    'smc-lambda':smc.surface_lambda,'smc-switch':smc.switch_gain,
+    'smc-boundary':smc.boundary_layer,'smc-lookahead':smc.lookahead_m,
+    'smc-feedforward':smc.feedforward_gain,
+    'smc-goal-heading':smc.goal_heading_gain,
+    'smc-goal-threshold':smc.goal_align_threshold_m,
+    'smc-max-angular':smc.max_angular_cmd
   };
   for(const [id,v] of Object.entries(fields))$(id).value=v;
+  $('rpp-velocity-lookahead').checked=rpp.use_velocity_scaled_lookahead_dist;
+  $('rpp-curvature-slow').checked=rpp.use_regulated_linear_velocity_scaling;
+  $('rpp-rotate').checked=rpp.use_rotate_to_heading;
   spawnVisible();
+  highlightActiveController();
+}
+function highlightActiveController(){
+  const selected=$('controller-select').value.toLowerCase();
+  for(const name of ['rpp','smc']){
+    $('card-'+name).classList.toggle('is-active',selected===name);
+    $('card-'+name).classList.toggle('is-inactive',selected!==name);
+  }
 }
 function spawnVisible(){
   $('relative-fields').hidden=$('spawn-mode').value!=='relative';
@@ -303,9 +363,17 @@ $('spawn-mode').onchange=()=>{
 };
 for(const id of ['path-kind','controller-select','start-progress','lateral-offset',
  'heading-error','seed','random-lateral','random-heading','pose-x','pose-y','pose-yaw',
- 'desired-speed','max-duration','smc-cross','smc-heading','smc-switch',
- 'smc-boundary','smc-lookahead']){
-  $(id).addEventListener('change',()=>{lastPreviewKey='';guardedPreview();});
+ 'desired-speed','max-duration','goal-xy','goal-yaw','progress-radius','progress-timeout',
+ 'rpp-lookahead','rpp-lookahead-min','rpp-lookahead-max','rpp-lookahead-time',
+ 'rpp-velocity-lookahead','rpp-curvature-slow','rpp-min-radius','rpp-min-speed',
+ 'rpp-rotate','rpp-rotate-rate','rpp-rotate-threshold','rpp-angular-accel',
+ 'rpp-min-approach','smc-cross','smc-heading','smc-lambda','smc-switch',
+ 'smc-boundary','smc-lookahead','smc-feedforward','smc-goal-heading',
+ 'smc-goal-threshold','smc-max-angular']){
+  $(id).addEventListener('change',()=>{
+    if(id==='controller-select')highlightActiveController();
+    lastPreviewKey='';guardedPreview();
+  });
 }
 $('new-seed').onclick=()=>{
   $('seed').value=Math.floor(Math.random()*2147483647);
@@ -341,6 +409,21 @@ $('tracker-map').addEventListener('pointermove',ev=>{
 });
 for(const event of ['pointerup','pointercancel'])
   $('tracker-map').addEventListener(event,()=>{drag=null;});
+for(const name of ['shared','rpp','smc']){
+  $('reset-'+name).onclick=()=>{
+    if(!defaultSettings){notify('Tracker defaults have not loaded.',true);return;}
+    const current=readForm();
+    if(!current)return;
+    // Reset exactly one category, leaving the other two, path, initial pose
+    // and controller selection unchanged.
+    current[name]=structuredClone(defaultSettings[name]);
+    setForm(current);
+    lastPreviewKey='';
+    guardedPreview();
+    notify('Reset '+name.toUpperCase()+
+      ' parameters to baseline. Save Lab YAML to keep these values.');
+  };
+}
 $('save-settings').onclick=()=>operate(async()=>{
   await api('/save',readForm());
   notify('Saved tracking_lab.yaml (independent of production simulation).');
@@ -385,6 +468,7 @@ $('clear-history').onclick=()=>{
 };
 (async()=>{
   try{
+    defaultSettings=await api('/defaults');
     const x=await api('/config');setForm(x);
     await refreshPreview();
     await refresh();await history();
