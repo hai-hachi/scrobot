@@ -58,7 +58,7 @@ jobs:
           rosdep install --from-paths src --ignore-src -r -y \
             --rosdistro jazzy --skip-keys "ament_python gz-transport13"
 
-      - name: Build all 14 SCROBOT packages
+      - name: Build all 15 SCROBOT packages
         run: |
           source /opt/ros/jazzy/setup.bash
           colcon list --base-paths src --names-only
