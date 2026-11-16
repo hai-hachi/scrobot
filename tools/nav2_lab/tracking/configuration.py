@@ -1,6 +1,7 @@
 """Lab-only ROS controller and calibration YAML generation."""
 from pathlib import Path
 import copy
+import math
 import sys
 import yaml
 
@@ -50,7 +51,7 @@ def saved_physics():
 
 
 def generate(settings,dirpath):
-    validate(settings)
+    settings=validate(settings)
     directory=Path(dirpath)
     directory.mkdir(parents=True,exist_ok=True)
     inputs=saved_physics()
@@ -62,25 +63,38 @@ def generate(settings,dirpath):
     params["controller_frequency"]=25.0
     params["odom_topic"]="/diff_drive_controller/odom"
     params["controller_plugins"]=["RPP","SMC"]
+    shared=settings["shared"]
+    requested_speed=float(shared["desired_speed_mps"])
     params["RPP"]=copy.deepcopy(production["controller_server"]["ros__parameters"]["FollowPath"])
-    requested_speed=float(settings["desired_speed_mps"])
     params["RPP"]["desired_linear_vel"]=requested_speed
-    # RPP's production minimum speeds were tuned for 0.35 m/s. They must
-    # never exceed a smaller speed selected for a fair RPP/SMC comparison.
-    for field in ("min_approach_linear_velocity",
-                  "regulated_linear_scaling_min_speed"):
-        if field in params["RPP"]:
-            params["RPP"][field]=min(float(params["RPP"][field]),requested_speed)
-    # Empty local world: no obstacles; path tracking rather than avoidance.
+    # All exposed RPP settings are copied into the generated ROS parameters.
+    # A reference-speed change is shared; do not hide a second RPP speed.
+    rpp=settings["rpp"]
+    for key,value in rpp.items():
+        if key=="rotate_to_heading_min_angle_deg":
+            params["RPP"]["rotate_to_heading_min_angle"]=math.radians(value)
+        elif key in ("regulated_linear_scaling_min_speed",
+                     "min_approach_linear_velocity"):
+            # The configured minimum must never force a faster speed than
+            # the shared user-selected reference speed.
+            params["RPP"][key]=min(float(value),requested_speed)
+        else:
+            params["RPP"][key]=value
+    # No collision checks are needed in this obstacle-free test world.
     params["RPP"]["use_collision_detection"]=False
     params["SMC"]={
       "plugin":"scrobot_tracker_controller::SMCController",
-      "linear_speed":float(settings["desired_speed_mps"]),
-      **{k:float(v) for k,v in settings["smc"].items()},
+      "linear_speed":requested_speed,
+      **{key:float(value) for key,value in settings["smc"].items()},
     }
-    params["progress_checker"]["movement_time_allowance"]=25.0
-    params["goal_checker"]["xy_goal_tolerance"]=0.12
-    params["goal_checker"]["yaw_goal_tolerance"]=0.16
+    params["progress_checker"]["required_movement_radius"]=float(
+        shared["progress_radius_m"])
+    params["progress_checker"]["movement_time_allowance"]=float(
+        shared["progress_timeout_sim_s"])
+    params["goal_checker"]["xy_goal_tolerance"]=float(
+        shared["goal_xy_tolerance_m"])
+    params["goal_checker"]["yaw_goal_tolerance"]=math.radians(
+        shared["goal_yaw_tolerance_deg"])
     cost=copy.deepcopy(production["local_costmap"])
     cfg=cost["local_costmap"]["ros__parameters"]
     cfg.update({
