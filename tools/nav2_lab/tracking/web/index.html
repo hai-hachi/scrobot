@@ -38,7 +38,7 @@
 <div class="between"><h2>Fixed reference path &amp; robot pose</h2><span>Click + drag to place and orient</span></div>
 <div class="grid setup-grid"><div>
 <div class="field"><label for="path-kind">Reference path</label><select id="path-kind">
-<option value="straight">Straight line</option><option value="circle">Circle — full lap + tangent exit</option>
+<option value="straight">Straight line</option><option value="circle">Circle · 300° sweep</option>
 <option value="curve">Smooth S curve</option><option value="right_angles">Rectilinear path · 90° bends</option></select></div>
 <svg id="tracker-map" viewBox="0 0 900 450" role="img" tabindex="0"
 aria-label="Tracking world. Click to position robot, then drag for heading.">
@@ -46,7 +46,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
 <div class="legend"><span><i style="background:#42d0c2"></i> Reference path</span>
 <span><i style="background:#f4bb66"></i> Gazebo robot trajectory</span>
 <span><i style="background:#7da9ff"></i> Selected initial pose</span></div>
-<p class="fineprint">The 90° corners are exact. The circle completes a lap and exits tangentially to avoid an immediate same-pose goal. The robot and reference are in the fixed world/odom coordinate system.</p>
+<p class="fineprint">The 90° corners are exact. The circle uses an open 300° arc because a closed loop has the same start and goal pose and can terminate immediately in Nav2. The robot and reference are in the fixed world/odom coordinate system.</p>
 </div>
 <div>
 <div class="field"><label for="controller-select">Controller under test</label><select id="controller-select">
