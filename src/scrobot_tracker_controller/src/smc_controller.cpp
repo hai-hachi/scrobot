@@ -19,7 +19,6 @@
 
 namespace scrobot_tracker_controller
 {
-constexpr double kPi=3.14159265358979323846;
 constexpr double kWheelHalfBase=0.21;
 constexpr double kMaxWheelMps=0.50;
 
@@ -102,7 +101,7 @@ public:
 
     double min_dist=std::numeric_limits<double>::infinity();
     size_t idx=0;
-    double t_best=0, best_s=0, best_x=0, best_y=0, best_yaw=0;
+    double best_s=0, best_x=0, best_y=0, best_yaw=0;
     for(size_t i=0;i+1<plan_.poses.size();++i) {
       const auto &a=plan_.poses[i].pose.position;
       const auto &b=plan_.poses[i+1].pose.position;
@@ -117,13 +116,15 @@ public:
       // initial robot placement at an arbitrary progress along the path.
       if(last_s_>=0 && (s<last_s_-.25 || s>last_s_+1.15))continue;
       if(distance<min_dist) {
-        min_dist=distance;idx=i;t_best=t;best_s=s;
+        min_dist=distance;idx=i;best_s=s;
         best_x=px;best_y=py;best_yaw=std::atan2(dy,dx);
       }
     }
     if(!std::isfinite(min_dist)) {
-      // When the robot temporarily strays far ahead of the progress window,
-      // retry the closest segment from the last valid progress anchor.
+      // Lost the last progress window: one unrestricted reacquisition is
+      // acceptable. A truly degenerate plan must fail cleanly, not recurse.
+      if(last_s_<0)throw std::runtime_error(
+          "SMC cannot project robot onto a nondegenerate path segment");
       last_s_=-1;
       return computeVelocityCommands(pose,geometry_msgs::msg::Twist{},nullptr);
     }
