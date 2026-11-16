@@ -4,6 +4,20 @@
 enabled; the robot is stationary while paths are computed. Controllers and
 NavigateToPose integration are deferred.
 
+## Phase 2 · Tracker Lab
+
+The Nav2 Lab now has a **Tracker** tab at
+**http://127.0.0.1:8772/tracker**, separate from the original
+**Planner** tab at the root URL. It tests the real ROS-clock Nav2
+`FollowPath` controller against the calibrated Gazebo SCROBOT drivetrain
+on four fixed paths (straight, open circular arc, smooth curve, exact 90°
+polyline), with manual/path-relative/seeded-random initial pose, RPP and
+experimental SMC, ground-truth RMSE, per-process and wall/sim Hz performance,
+auto-saved experiments and the existing Save/Open/Close/Log workflow.
+
+See **[tracking/README.md](tracking/README.md)** for the complete design,
+preflight requirements and current runtime-validation limitations.
+
 ## Start
 
 ```bash
