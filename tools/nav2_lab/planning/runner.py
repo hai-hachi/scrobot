@@ -134,6 +134,8 @@ class PlannerTrial(Node):
             raise ValueError("Unsupported timeout time base")
         wall_start=time.monotonic()
         sim_start=self.get_clock().now().nanoseconds*1e-9
+        last_sim=sim_start
+        last_sim_progress_wall=wall_start
         cap=self.config.get("simulation",{}).get("max_rtf",.25)
         while not STOP:
             if profiler:profiler._sample()
@@ -143,8 +145,16 @@ class PlannerTrial(Node):
                 if wall_now-wall_start>=timeout:
                     raise RuntimeError(f"Wall-time readiness timeout: {label}")
             else:
+                current_sim=self.get_clock().now().nanoseconds*1e-9
+                if current_sim > last_sim + 1e-6:
+                    last_sim=current_sim
+                    last_sim_progress_wall=wall_now
+                # A frozen /clock is not a slow 0.25 RTF simulation.
+                # Avoid waiting minutes for a simulated-time timeout.
+                if wall_now-last_sim_progress_wall > 12.:
+                    raise RuntimeError(f"Planner {label}: /clock stalled for 12 wall seconds")
                 reason=deadline_reason(
-                    sim_start,self.get_clock().now().nanoseconds*1e-9,
+                    sim_start,current_sim,
                     wall_start,wall_now,timeout,cap)
                 if reason:
                     raise RuntimeError(
