@@ -187,6 +187,7 @@ class TrackingService:
         world=write_world(self.active_dir/"tracking_flat_world.sdf",self.applied_rtf)
         profiles=generate(checked,self.active_dir)
         physics=profiles["inputs"]["mobility"]["physics"]
+        motor=profiles["inputs"]["mobility"]["motor"]
         odom=profiles["inputs"]["odometry"]
         pose=initial_pose(checked)
         (self.active_dir/"reference.json").write_text(
@@ -206,8 +207,11 @@ class TrackingService:
               "controller_params:="+profiles["controller_params"],
               "robot_x:="+str(pose["x"]),"robot_y:="+str(pose["y"]),
               "robot_yaw:="+str(math.radians(pose["yaw_deg"])),
-              "ground_truth_rate_hz:="+str(odom["ground_truth_hz"])]
+              "ground_truth_rate_hz:="+str(odom["ground_truth_hz"]),
+              "enable_motor_response:="+("true" if motor["model"]=="first_order" else "false")]
         args.extend(f"{name}:={value}" for name,value in physics.items())
+        args.extend(f"{name}:={motor[name]}" for name in (
+            "tau_left","tau_right","gain_left","gain_right"))
         self.stack_log=self.active_dir/"stack.log"
         with self.stack_log.open("w") as logfile:
             self.stack=subprocess.Popen(args,env=self.env,cwd=ROOT,
