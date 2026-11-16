@@ -13,6 +13,7 @@ const TOPICS={
 let settings=null,preview=null,live=null,lastStatus=null,busy=false;
 let lastHistoryRefresh=0,lastPreviewKey='',initializing=true,drag=null,previewSequence=0;
 let shownControllerError=null;
+let shownFallbackDomain=null;
 
 async function api(path,body){
   const opts=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},
@@ -187,8 +188,18 @@ function showStatus(s){
   $('stack-state').textContent=running?'Simulation running':'Simulation stopped';
   $('action-state').textContent=s.controller_error?
     'NAV2 CONTROLLER CRASHED · Stop and restart Tracker':
-    trial?'Tracking '+s.run_name:
-    running?'Gazebo ready · start a FollowPath trial':'Tracking simulator stopped';
+    trial?'Tracking '+s.run_name+' · ROS '+(s.ros_domain_id??'—'):
+    running?'Gazebo ready · ROS domain '+(s.ros_domain_id??'—')+
+      ' · start a FollowPath trial':'Tracking simulator stopped';
+  if(running&&s.ros_domain_id!==78&&
+      s.ros_domain_id!==shownFallbackDomain){
+    shownFallbackDomain=s.ros_domain_id;
+    const busy=Object.keys(s.occupied_ros_domains||{}).join(', ');
+    notify('A previous ROS participant was found in domain '+(busy||'78')+
+      '. This Tracker session is isolated in domain '+s.ros_domain_id+
+      '. Existing processes were not terminated; stop old sessions to free resources.');
+  }
+  if(!running)shownFallbackDomain=null;
   if(s.controller_error&&s.controller_error!==shownControllerError){
     shownControllerError=s.controller_error;
     notify(s.controller_error,true);
