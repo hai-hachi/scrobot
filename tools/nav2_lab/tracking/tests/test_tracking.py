@@ -18,7 +18,7 @@ from tracking.core import (
 from tracking.world import write_world
 from tracking.configuration import generate,saved_physics
 from tracking.service import (TrackingService, choose_tracking_domain, discover_domain_topics,
-                              TRACKER_DOMAIN_CANDIDATES)
+                              cleanup_owned_session, TRACKER_DOMAIN_CANDIDATES)
 from tracking.health import controller_failure
 
 
@@ -304,3 +304,42 @@ def test_tracker_session_is_isolated_and_exposes_domain_in_status():
     assert 'self.env["GZ_PARTITION"]=self.partition' in code
     assert '"ros_domain_id":self.domain_id' in code
     assert '"occupied_ros_domains":self.occupied_domains' in code
+
+
+
+def test_orphan_cleanup_never_kills_processes_outside_own_session():
+    class FakeProcess:
+        def __init__(self,pid,domain,partition):
+            self.pid=pid
+            self.environment={"ROS_DOMAIN_ID":domain,"GZ_PARTITION":partition}
+            self.signals=[]
+        def environ(self):
+            return self.environment
+        def is_running(self):
+            return True
+        def terminate(self):
+            self.signals.append("TERM")
+        def kill(self):
+            self.signals.append("KILL")
+
+    owned=FakeProcess(29100,"79","scrobot_tracker_lab_79_abcdef12")
+    wrong_domain=FakeProcess(29101,"78","scrobot_tracker_lab_79_abcdef12")
+    wrong_partition=FakeProcess(29102,"79","another_users_gazebo")
+    class FakeAPI:
+        @staticmethod
+        def process_iter():
+            return iter((owned,wrong_domain,wrong_partition))
+        @staticmethod
+        def wait_procs(procs,timeout):
+            assert procs==[owned]
+            assert timeout==3
+            return [],procs
+
+    count=cleanup_owned_session(
+        "scrobot_tracker_lab_79_abcdef12",79,FakeAPI)
+    assert count==1
+    assert owned.signals==["TERM","KILL"]
+    assert wrong_domain.signals==[]
+    assert wrong_partition.signals==[]
+    assert cleanup_owned_session("scrobot_tracker_lab_79_abcdef12",None,FakeAPI)==0
+    assert cleanup_owned_session(None,79,FakeAPI)==0
