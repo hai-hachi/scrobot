@@ -117,6 +117,43 @@ def choose_tracking_domain(env,probe=discover_domain_topics):
         "the lab will not kill another simulation automatically.")
 
 
+def cleanup_owned_session(partition,domain,process_api=psutil):
+    """Best-effort orphan cleanup: terminate ONLY this lab's tagged children.
+
+    A crash can make the ros2 launch parent exit before its Gazebo/ROS child
+    processes. Never broad-kill gz, ROS, or all processes in a DDS domain.
+    Unique randomized GZ_PARTITION and ROS_DOMAIN_ID must BOTH match.
+    """
+    if not partition or domain is None or process_api is None:
+        return 0
+    owned=[]
+    for process in process_api.process_iter():
+        try:
+            if process.pid==os.getpid():
+                continue
+            inherited=process.environ()
+            if (inherited.get("GZ_PARTITION")==partition and
+                    inherited.get("ROS_DOMAIN_ID")==str(domain) and
+                    process.is_running()):
+                owned.append(process)
+        except Exception:
+            # Other users' processes and kernel processes may be inaccessible.
+            # Never act on a PID whose ownership could not be verified.
+            continue
+    for process in owned:
+        try: process.terminate()
+        except Exception: pass
+    if owned:
+        try:
+            _,alive=process_api.wait_procs(owned,timeout=3)
+            for process in alive:
+                try: process.kill()
+                except Exception: pass
+        except Exception:
+            pass
+    return len(owned)
+
+
 class TrackingService:
     def __init__(self,run_root=RUNS):
         self.root=Path(run_root)
@@ -135,6 +172,7 @@ class TrackingService:
         self.domain_id=None
         self.partition=None
         self.occupied_domains={}
+        self.last_cleanup_count=0
         self.sampler=ProcessSampler(psutil,interval_s=1.5)
 
     def config(self):
@@ -366,6 +404,10 @@ class TrackingService:
                     try:self.stack.wait(timeout=5)
                     except subprocess.TimeoutExpired:
                         interrupt(self.stack,signal.SIGKILL)
+            # Crucial when ros2 launch itself has already exited. Its
+            # Gazebo/controller children may still survive and hold domain 78.
+            self.last_cleanup_count=cleanup_owned_session(
+                self.partition,self.domain_id)
             self.sampler.reset()
             self.stack=None
             self.trial=None
@@ -385,6 +427,7 @@ class TrackingService:
                 "ros_domain_id":self.domain_id if running(self.stack) else None,
                 "gazebo_partition":self.partition if running(self.stack) else None,
                 "occupied_ros_domains":self.occupied_domains,
+                "last_cleanup_count":self.last_cleanup_count,
                 "controller_error":controller_failure(self.stack_log)
                     if running(self.stack) else None,
                 "trial_running":running(self.trial),
