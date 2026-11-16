@@ -660,6 +660,7 @@ class Handler(BaseHTTPRequestHandler):
         path=urlparse(self.path).path
         try:
             if path=="/api/tracker/config":return self.json_reply(self.tracking.config())
+            if path=="/api/tracker/defaults":return self.json_reply(self.tracking.defaults())
             if path=="/api/tracker/status":return self.json_reply(self.tracking.status())
             if path=="/api/tracker/history":return self.json_reply(self.tracking.history())
             if path=="/api/tracker/speed":return self.json_reply(self.tracking.sim_speed())
