@@ -69,7 +69,7 @@ jobs:
         run: |
           source /opt/ros/jazzy/setup.bash
           source install/setup.bash
-          test "$(colcon list --base-paths src --names-only | grep -c '^scrobot_')" -eq 14
+          test "$(colcon list --base-paths src --names-only | grep -c '^scrobot_')" -eq 15
           ros2 pkg prefix scrobot_collection
           ros2 pkg prefix scrobot_navigation
           ros2 pkg prefix scrobot_scenarios
