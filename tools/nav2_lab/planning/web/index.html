@@ -116,7 +116,7 @@
         <option value="Smac2D">Smac 2D</option>
         <option value="ThetaStar">Theta*</option>
        </select></div>
-     <div class="field"><label for="timeout">Planning timeout (s)</label><input id="timeout" type="number" step="1" min="3" max="120"></div>
+     <div class="field"><label for="timeout">Planning timeout (simulated seconds)</label><input id="timeout" type="number" step="1" min="3" max="120"></div>
      <div class="field"><label for="planning-mode">Planning mode</label>
        <select id="planning-mode">
          <option value="single">Single comparison</option>
@@ -124,9 +124,9 @@
        </select>
      </div>
      <div class="field" id="live-interval-row" hidden>
-       <label for="live-interval">Live refresh interval (seconds)</label>
+       <label for="live-interval">Live refresh interval (simulated seconds)</label>
        <input id="live-interval" type="number" min="0.5" max="10.0" step="0.5" value="2.0">
-       <p class="fineprint">All four Nav2 planners replan sequentially from the stationary robot pose. The costmap can change between calls. No motion commands are sent.</p>
+       <p class="fineprint">All four Nav2 planners replan sequentially from the stationary robot pose on Gazebo /clock. At RTF 0.25, a 2-second simulated refresh means about 8 wall seconds. No motion commands are sent.</p>
      </div>
     </div>
     <div>
@@ -143,7 +143,7 @@
       <thead><tr><th>Topic</th><th>Wall Hz</th><th>Sim Hz</th><th>Last message</th><th>Meaning</th></tr></thead>
       <tbody id="topic-rate-rows"><tr><td colspan="5">Start simulation to measure topics.</td></tr></tbody>
    </table></div>
-   <p class="fineprint">Measured reception Hz uses two time domains. At 0.25 RTF a healthy 30 simulated Hz camera arrives at roughly 7.5 wall Hz. Static /map and full costmap are event-based, not periodic Hz targets.</p>
+   <p class="fineprint">Measured reception Hz uses two time domains. At measured RTF 0.25 a healthy 30 sim-Hz camera arrives at roughly 7.5 wall Hz. Static /map, full costmap, and incremental updates are change/latch events, not periodic Hz targets.</p>
    <h3>Resource utilization · CPU and RAM</h3>
    <div class="metrics process-metrics">
      <div class="metric"><small>Gazebo real-time factor</small><strong id="rtf-value">—</strong><span id="fps-estimate">Expected effective depth FPS: —</span></div>
@@ -195,7 +195,7 @@
    <p class="fineprint" id="live-state">Single planning is ready. Choose Live replan to refresh all four planner paths as moving objects cross the depth camera view.</p>
    <div class="table-wrap"><table>
      <thead><tr><th>Planner</th><th>Status</th><th>Nav2 (ms)</th><th>Roundtrip (ms)</th>
-     <th>Path (m)</th><th>Clearance (m)</th><th>CPU (ms)</th><th>RSS (MB)</th><th>Δ RSS (MB)</th></tr></thead>
+     <th>Sim roundtrip (ms)</th><th>Path (m)</th><th>Clearance (m)</th><th>CPU (ms)</th><th>RSS (MB)</th><th>Δ RSS (MB)</th></tr></thead>
      <tbody id="results"></tbody>
    </table></div>
    <p class="fineprint">Process CPU/RSS include the shared Nav2 planner server; RSS is not isolated per algorithm.</p>
