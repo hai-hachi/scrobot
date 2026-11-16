@@ -1,0 +1,75 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Tracking floor grid
+      Enabled: true
+      Alpha: 0.22
+      Cell Size: 1
+      Color: 88; 107; 124
+      Plane: XY
+    - Class: rviz_default_plugins/Path
+      Name: Fixed reference path
+      Enabled: true
+      Alpha: 1
+      Buffer Length: 1
+      Color: 67; 219; 196
+      Line Style: Lines
+      Line Width: 0.07
+      Pose Style: None
+      Topic:
+        Value: /tracker/reference_path
+        Depth: 1
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        History Policy: Keep Last
+    - Class: rviz_default_plugins/Path
+      Name: Actual robot track
+      Enabled: true
+      Alpha: 1
+      Buffer Length: 1
+      Color: 246; 186; 88
+      Line Style: Lines
+      Line Width: 0.055
+      Pose Style: None
+      Topic:
+        Value: /tracker/actual_path
+        Depth: 1
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        History Policy: Keep Last
+    - Class: rviz_default_plugins/Marker
+      Name: Robot pose arrow
+      Enabled: true
+      Topic:
+        Value: /tracker/robot_arrow
+        Depth: 1
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        History Policy: Keep Last
+  Global Options:
+    Background Color: 18; 27; 38
+    Fixed Frame: odom
+    Frame Rate: 25
+  Enabled: true
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Current View
+      Target Frame: odom
+      Scale: 40
+      Angle: 0
+    Saved: ~
