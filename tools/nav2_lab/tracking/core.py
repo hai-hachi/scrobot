@@ -118,55 +118,144 @@ def clamp_wheel_envelope(v,omega):
 
 
 def defaults():
+    """Baseline 3-part tuner, consistent with the current production RPP.
+
+    All values are lab-only and saved under shared/rpp/smc. Defaults for new
+    SMC controls reproduce the previously hard-coded controller behavior.
+    """
     return {
         "path":"straight","controller":"RPP",
         "spawn_mode":"relative","progress":0.0,"lateral_m":.4,
         "heading_deg":12.0,"seed":2026,"random_lateral_m":1.0,
         "random_heading_deg":55.0,
         "pose":{"x":-4.,"y":.4,"yaw_deg":12.},
-        "desired_speed_mps":.30,"max_sim_duration_s":120.,
-        "smc":{"cross_gain":1.8,"heading_gain":2.0,"switch_gain":1.1,
-               "boundary_layer":.30,"lookahead_m":.32},
+        "shared":{
+            "desired_speed_mps":.30,"max_sim_duration_s":120.,
+            "goal_xy_tolerance_m":.12,"goal_yaw_tolerance_deg":9.17,
+            "progress_radius_m":.10,"progress_timeout_sim_s":25.,
+        },
+        "rpp":{
+            "lookahead_dist":.32,"min_lookahead_dist":.28,
+            "max_lookahead_dist":.45,"lookahead_time":.80,
+            "use_velocity_scaled_lookahead_dist":True,
+            "use_regulated_linear_velocity_scaling":True,
+            "regulated_linear_scaling_min_radius":.50,
+            "regulated_linear_scaling_min_speed":.25,
+            "use_rotate_to_heading":True,
+            "rotate_to_heading_angular_vel":1.60,
+            "rotate_to_heading_min_angle_deg":20.,
+            "max_angular_accel":1.00,
+            "min_approach_linear_velocity":.10,
+        },
+        "smc":{
+            "cross_gain":1.8,"heading_gain":2.0,
+            "surface_lambda":1.0,"switch_gain":1.1,
+            "boundary_layer":.30,"lookahead_m":.32,
+            "feedforward_gain":1.0,"goal_heading_gain":2.0,
+            "goal_align_threshold_m":.14,
+            "max_angular_cmd":2.3,
+        },
     }
+
+
+def migrate(data):
+    """Upgrade saved pre-three-card YAML without discarding tuned SMC gains.
+
+    Unknown keys are NOT silently removed; validate still rejects them.
+    """
+    from copy import deepcopy
+    if not isinstance(data,dict):
+        raise ValueError("Tracking config must be an object")
+    cfg=deepcopy(data)
+    baseline=defaults()
+    if "shared" not in cfg:
+        cfg["shared"]=deepcopy(baseline["shared"])
+        for old in ("desired_speed_mps","max_sim_duration_s"):
+            if old in cfg:
+                cfg["shared"][old]=cfg.pop(old)
+    if "rpp" not in cfg:
+        cfg["rpp"]=deepcopy(baseline["rpp"])
+    old_smc=cfg.get("smc")
+    if isinstance(old_smc,dict) and set(old_smc)=={
+        "cross_gain","heading_gain","switch_gain","boundary_layer","lookahead_m"
+    }:
+        cfg["smc"]={**deepcopy(baseline["smc"]),**old_smc}
+    return cfg
 
 
 def validate(data):
     if not isinstance(data,dict):raise ValueError("Tracking config must be an object")
+    cfg=migrate(data)
     expected=defaults()
-    if set(data)!=set(expected):raise ValueError("Unexpected tracking config fields")
-    if data["path"] not in KINDS:raise ValueError("Unknown path")
-    if data["controller"] not in CONTROLLERS:raise ValueError("Unknown controller")
-    if data["spawn_mode"] not in ("relative","random","manual"):
+    if set(cfg)!=set(expected):raise ValueError("Unexpected tracking config fields")
+    if cfg["path"] not in KINDS:raise ValueError("Unknown path")
+    if cfg["controller"] not in CONTROLLERS:raise ValueError("Unknown controller")
+    if cfg["spawn_mode"] not in ("relative","random","manual"):
         raise ValueError("Invalid robot placement mode")
     def number(value,lo,hi,name):
         if type(value) not in (int,float) or not math.isfinite(value) or not lo<=value<=hi:
             raise ValueError("Invalid "+name)
         return float(value)
-    number(data["progress"],0,.75,"start progress")
-    number(data["lateral_m"],-2,2,"lateral offset")
-    number(data["heading_deg"],-180,180,"heading error")
-    if type(data["seed"]) is not int or not 0<=data["seed"]<=2**31-1:
+    number(cfg["progress"],0,.75,"start progress")
+    number(cfg["lateral_m"],-2,2,"lateral offset")
+    number(cfg["heading_deg"],-180,180,"heading error")
+    if type(cfg["seed"]) is not int or not 0<=cfg["seed"]<=2**31-1:
         raise ValueError("Invalid random seed")
-    number(data["random_lateral_m"],0,2,"random lateral limit")
-    number(data["random_heading_deg"],0,180,"random heading limit")
-    if not isinstance(data["pose"],dict) or set(data["pose"])!={"x","y","yaw_deg"}:
+    number(cfg["random_lateral_m"],0,2,"random lateral limit")
+    number(cfg["random_heading_deg"],0,180,"random heading limit")
+    if not isinstance(cfg["pose"],dict) or set(cfg["pose"])!={"x","y","yaw_deg"}:
         raise ValueError("Invalid manual pose")
     for field,lo,hi in (("x",-7,7),("y",-6,6),("yaw_deg",-360,360)):
-        number(data["pose"][field],lo,hi,"manual "+field)
-    number(data["desired_speed_mps"],.05,.40,"desired speed")
-    number(data["max_sim_duration_s"],10,360,"simulated trial duration")
-    if not isinstance(data["smc"],dict) or set(data["smc"])!=set(expected["smc"]):
-        raise ValueError("Invalid SMC settings")
-    for field,lo,hi in (
-        ("cross_gain",.1,6),("heading_gain",.1,8),
-        ("switch_gain",.05,5),("boundary_layer",.05,2),
-        ("lookahead_m",.1,1.5),
+        number(cfg["pose"][field],lo,hi,"manual "+field)
+    for group in ("shared","rpp","smc"):
+        if not isinstance(cfg[group],dict) or set(cfg[group])!=set(expected[group]):
+            raise ValueError("Invalid "+group+" tracking settings")
+
+    shared=cfg["shared"]
+    for key,lo,hi in (
+        ("desired_speed_mps",.05,.40),
+        ("max_sim_duration_s",10,360),
+        ("goal_xy_tolerance_m",.02,.50),
+        ("goal_yaw_tolerance_deg",1,45),
+        ("progress_radius_m",.02,1.0),
+        ("progress_timeout_sim_s",2,60),
     ):
-        number(data["smc"][field],lo,hi,"SMC "+field)
-    pose=initial_pose(data)
+        number(shared[key],lo,hi,"shared "+key)
+
+    rpp=cfg["rpp"]
+    for key,lo,hi in (
+        ("lookahead_dist",.10,1.5),
+        ("min_lookahead_dist",.10,1.5),
+        ("max_lookahead_dist",.10,2.0),
+        ("lookahead_time",.1,3.),
+        ("regulated_linear_scaling_min_radius",.1,3.),
+        ("regulated_linear_scaling_min_speed",.03,.40),
+        ("rotate_to_heading_angular_vel",.1,2.3),
+        ("rotate_to_heading_min_angle_deg",1.,100.),
+        ("max_angular_accel",.1,6.),
+        ("min_approach_linear_velocity",.02,.4),
+    ):
+        number(rpp[key],lo,hi,"RPP "+key)
+    for key in ("use_velocity_scaled_lookahead_dist",
+                "use_regulated_linear_velocity_scaling","use_rotate_to_heading"):
+        if type(rpp[key]) is not bool:
+            raise ValueError("Invalid RPP "+key+" checkbox")
+    if not rpp["min_lookahead_dist"]<=rpp["lookahead_dist"]<=rpp["max_lookahead_dist"]:
+        raise ValueError("RPP lookahead distance must lie between min and max")
+    smc=cfg["smc"]
+    for key,lo,hi in (
+        ("cross_gain",.1,6),("heading_gain",.1,8),
+        ("surface_lambda",.1,5.),("switch_gain",.05,5),
+        ("boundary_layer",.05,2),("lookahead_m",.1,1.5),
+        ("feedforward_gain",0.,3.),("goal_heading_gain",.1,8.),
+        ("goal_align_threshold_m",.04,.5),
+        ("max_angular_cmd",.2,2.3),
+    ):
+        number(smc[key],lo,hi,"SMC "+key)
+    pose=initial_pose(cfg)
     if abs(pose["x"])>7 or abs(pose["y"])>6:
         raise ValueError("Starting pose exceeds tracking floor bounds")
-    return data
+    return cfg
 
 
 def metrics(samples,points):
