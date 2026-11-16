@@ -232,8 +232,12 @@ function showStatus(s){
     (current.error?' · '+current.error:'')+
     ' · Ground-truth samples: '+(current.ground_truth_samples??0)+
     ' · Wheel-odom samples: '+(current.wheel_odom_samples??0)+
-    (current.status==='initializing'?' · FollowPath ready: '+
-      (current.action_server_ready?'yes':'no'):'')+
+    (current.status==='initializing'?
+      ' · FollowPath endpoint: '+(current.action_server_ready?'available':'unavailable')+
+      ' · Controller lifecycle: '+(current.controller_lifecycle_state||'unknown')+
+      ' · Ready to dispatch: '+(current.controller_active&&
+        current.action_server_ready?'yes':'no'):'')+
+    (current.goal_rejections?' · Rejected goal attempts: '+current.goal_rejections:'')+
     ' · Raw commands requiring wheel-envelope clipping: '+
     (current.raw_limit_requests??0)+
     ' · Path distance: '+fmt(result.reference_length_m,2)+' m':
