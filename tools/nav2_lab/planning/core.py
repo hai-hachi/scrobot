@@ -53,6 +53,34 @@ def validate(config):
     return config
 
 
+def planner_profiles():
+    """Single source of validated lab planner plugin configurations.
+
+    Shared with the explicit publish-to-production operation so an
+    algorithm selected in the lab has identical plugin parameters.
+    """
+    return {
+        "NavFnDijkstra": {
+            "plugin": PLANNERS["NavFnDijkstra"], "tolerance": .10,
+            "use_astar": False, "allow_unknown": False,
+        },
+        "NavFnAStar": {
+            "plugin": PLANNERS["NavFnAStar"], "tolerance": .10,
+            "use_astar": True, "allow_unknown": False,
+        },
+        "Smac2D": {
+            "plugin": PLANNERS["Smac2D"], "tolerance": .10,
+            "downsample_costmap": False, "allow_unknown": False,
+            "max_planning_time": 2.0, "cost_travel_multiplier": 2.0,
+        },
+        "ThetaStar": {
+            "plugin": PLANNERS["ThetaStar"], "how_many_corners": 8,
+            "w_euc_cost": 1.0, "w_traversal_cost": 2.0,
+            "allow_unknown": False,
+        },
+    }
+
+
 def nav2_params(production, config, map_yaml, geometry):
     """Build a separate planner-only Nav2 YAML. Never mutate the main config."""
     validate(config)
@@ -88,24 +116,7 @@ def nav2_params(production, config, map_yaml, geometry):
     planner = {
         "use_sim_time": True, "expected_planner_frequency": 1.0,
         "planner_plugins": list(PLANNERS),
-    }
-    planner["NavFnDijkstra"] = {
-        "plugin": PLANNERS["NavFnDijkstra"], "tolerance": .10,
-        "use_astar": False, "allow_unknown": False,
-    }
-    planner["NavFnAStar"] = {
-        "plugin": PLANNERS["NavFnAStar"], "tolerance": .10,
-        "use_astar": True, "allow_unknown": False,
-    }
-    planner["Smac2D"] = {
-        "plugin": PLANNERS["Smac2D"], "tolerance": .10,
-        "downsample_costmap": False, "allow_unknown": False,
-        "max_planning_time": 2.0, "cost_travel_multiplier": 2.0,
-    }
-    planner["ThetaStar"] = {
-        "plugin": PLANNERS["ThetaStar"], "how_many_corners": 8,
-        "w_euc_cost": 1.0, "w_traversal_cost": 2.0,
-        "allow_unknown": False,
+        **planner_profiles(),
     }
     return {
         "map_server": {"ros__parameters":{
