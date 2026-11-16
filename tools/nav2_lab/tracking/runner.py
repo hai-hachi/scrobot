@@ -68,6 +68,7 @@ class Trial(Node):
         self.points=reference(config["path"])
         self.client=ActionClient(self,FollowPath,"/follow_path")
         self.samples=[]
+        self.trace=[]
         self.gt_count=0
         self.odom_count=0
         self.last_gt=None
@@ -114,18 +115,26 @@ class Trial(Node):
         self.samples.append({"t":stamp,"x":p.position.x,
                              "y":p.position.y,"yaw":yaw,
                              "v":self.last_v,"w":self.last_w})
+        if len(self.samples)%5==1:
+            nearest=projection(self.points,p.position.x,p.position.y)
+            self.trace.append({
+                "t":round(stamp-self.samples[0]["t"],3),
+                "x":round(p.position.x,4),"y":round(p.position.y,4),
+                "e":round(nearest["cross_track_m"],4)
+            })
         wall=time.monotonic()
         if wall-self.last_write>=.5:
             self.write_progress(wall)
 
     def write_progress(self,wall):
         self.last_write=wall
-        data=metrics(self.samples,self.points)
+        # Incremental display samples a bounded recent window; final
+        # full-trajectory RMSE is computed once when the action completes.
+        data=metrics(self.samples[-250:],self.points)
         if not data["valid"]:return
-        # Limit JSON traffic: browser uses sampled XY path and latest metrics.
+        # Preserve the entire traced path, bounded to ~600 SVG points.
         status={**self.output,"results":{k:v for k,v in data.items() if k!="series"},
-                "trace":[{"x":x["x"],"y":x["y"],"e":x["error_m"],
-                          "t":x["sim_s"]} for x in data["series"]],
+                "trace":self.trace[::max(1,len(self.trace)//600)],
                 "last_truth":self.last_gt,
                 "ground_truth_samples":self.gt_count,
                 "wheel_odom_samples":self.odom_count}
