@@ -75,6 +75,7 @@ class Trial(Node):
         self.last_gt_wall=0
         self.last_v=0.
         self.last_w=0.
+        self.raw_limit_requests=0
         self.active=False
         self.last_write=0.
         self.started_sim=None
@@ -94,6 +95,8 @@ class Trial(Node):
                                  self.on_wheel_odom,10)
         self.create_subscription(TwistStamped,"/tracker/cmd_vel_safe",
                                  self.on_command,10)
+        self.create_subscription(TwistStamped,"/tracker/cmd_vel_raw",
+                                 self.on_raw,10)
 
     def on_wheel_odom(self,msg):
         self.odom_count+=1
@@ -101,6 +104,10 @@ class Trial(Node):
     def on_command(self,msg):
         self.last_v=msg.twist.linear.x
         self.last_w=msg.twist.angular.z
+
+    def on_raw(self,msg):
+        if abs(msg.twist.linear.x)+.21*abs(msg.twist.angular.z)>.502:
+            self.raw_limit_requests+=1
 
     def on_gt(self,msg):
         self.gt_count+=1
@@ -137,7 +144,8 @@ class Trial(Node):
                 "trace":self.trace[::max(1,len(self.trace)//600)],
                 "last_truth":self.last_gt,
                 "ground_truth_samples":self.gt_count,
-                "wheel_odom_samples":self.odom_count}
+                "wheel_odom_samples":self.odom_count,
+                "raw_limit_requests":self.raw_limit_requests}
         atomic_json(self.dir/"live.json",status)
 
     def clock(self):
@@ -222,6 +230,7 @@ class Trial(Node):
             self.output["results"]=data
             self.output["ground_truth_samples"]=self.gt_count
             self.output["wheel_odom_samples"]=self.odom_count
+            self.output["raw_limit_requests"]=self.raw_limit_requests
             self.output["end_sim_s"]=self.clock()
             self.output["ended_wall_s"]=time.time()
             if self.output["status"]=="success" and not data.get("valid"):
