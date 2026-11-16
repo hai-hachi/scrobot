@@ -21,6 +21,7 @@ from rclpy.parameter import Parameter
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, qos_profile_sensor_data
 
 from core import PLANNERS, minimum_clearance, path_length, path_turning, validate
+from timing import deadline_reason, wall_watchdog
 
 try: import psutil
 except ImportError: psutil=None
@@ -123,13 +124,35 @@ class PlannerTrial(Node):
         self.scan_count+=1
         self.last_scan_stamp=seconds(msg.header.stamp)
 
-    def until(self,condition,timeout,label,profiler=None):
-        deadline=time.monotonic()+timeout
-        while not STOP and time.monotonic()<deadline:
+    def until(self,condition,timeout,label,profiler=None,time_basis="wall"):
+        """Wait with explicit time bases: startup=wall, planner=ROS sim time.
+
+        Wall watchdog protects a stalled clock; it is never the benchmark
+        deadline when `time_basis='sim'`.
+        """
+        if time_basis not in ("wall","sim"):
+            raise ValueError("Unsupported timeout time base")
+        wall_start=time.monotonic()
+        sim_start=self.get_clock().now().nanoseconds*1e-9
+        cap=self.config.get("simulation",{}).get("max_rtf",.25)
+        while not STOP:
             if profiler:profiler._sample()
             if condition():return
+            wall_now=time.monotonic()
+            if time_basis=="wall":
+                if wall_now-wall_start>=timeout:
+                    raise RuntimeError(f"Wall-time readiness timeout: {label}")
+            else:
+                reason=deadline_reason(
+                    sim_start,self.get_clock().now().nanoseconds*1e-9,
+                    wall_start,wall_now,timeout,cap)
+                if reason:
+                    raise RuntimeError(
+                        f"Planner {label}: {reason} "
+                        f"(limit {timeout} simulated seconds, cap {cap} RTF, "
+                        f"wall watchdog {wall_watchdog(timeout,cap):.0f} s)")
             rclpy.spin_once(self,timeout_sec=.06)
-        raise RuntimeError("Cancelled" if STOP else f"Timeout: {label}")
+        raise RuntimeError("Cancelled")
 
     def ready(self):
         self.until(lambda:self.map is not None and self.costmap is not None,
@@ -156,15 +179,17 @@ class PlannerTrial(Node):
         # own planning_time separately.
         profiler.begin()
         began=time.monotonic()
+        began_sim=self.get_clock().now().nanoseconds*1e-9
         future=self.client.send_goal_async(goal)
-        self.until(future.done,20,"action goal acknowledgement",profiler)
+        self.until(future.done,5.0,"action goal acknowledgement",profiler,
+                   time_basis="sim")
         handle=future.result()
         if not handle or not handle.accepted:
             raise RuntimeError("Planner rejected request")
         result_future=handle.get_result_async()
         try:
             self.until(result_future.done,values["timeout_s"],
-                       f"planner {planner}",profiler)
+                       f"planner {planner}",profiler,time_basis="sim")
         except Exception:
             cancelled=handle.cancel_goal_async()
             for _ in range(15):
@@ -172,6 +197,7 @@ class PlannerTrial(Node):
                 rclpy.spin_once(self,timeout_sec=.06)
             raise
         wall=time.monotonic()-began
+        simulated=max(0.,self.get_clock().now().nanoseconds*1e-9-began_sim)
         result=result_future.result()
         if result.status!=GoalStatus.STATUS_SUCCEEDED:
             raise RuntimeError(f"Action status {result.status}")
@@ -183,6 +209,9 @@ class PlannerTrial(Node):
         return {
             "status":"success","path":coords,"path_points":len(coords),
             "planning_wall_s":round(wall,5),
+            "planning_sim_s":round(simulated,5),
+            "timeout_basis":"ros_sim",
+            "planner_timeout_sim_s":float(values["timeout_s"]),
             "planning_nav2_s":round(seconds(answer.planning_time),5),
             "path_length_m":round(path_length(coords),5),
             "total_turning_rad":round(path_turning(coords),5),
@@ -209,6 +238,8 @@ def run(config,run_dir,cache,planner_pid=None):
         "start":config["planning"]["start"],"goal":config["planning"]["goal"],
         "depth_obstacles":config["planning"]["depth_obstacles"],
         "status":"running","started_wall_time":time.time(),
+        "max_rtf_cap":config.get("simulation",{}).get("max_rtf",.25),
+        "planner_timeout_basis":"ros_sim",
         "resource_note":"CPU delta and RSS are of shared Nav2 planner_server process; plugin allocations are not isolated.",
         "results":{}
     }
@@ -269,6 +300,8 @@ def run_live(config, run_dir, cache, interval_s, planner_pid=None):
         "depth_obstacles":config["planning"]["depth_obstacles"],
         "interval_s":interval,"interval_time_basis":"ros_sim","cycle":0,"completed_cycles":0,
         "status":"starting","started_wall_time":time.time(),
+        "max_rtf_cap":config.get("simulation",{}).get("max_rtf",.25),
+        "planner_timeout_basis":"ros_sim",
         "resource_note":"CPU/RSS includes shared planner_server callbacks and costmap; plugin memory is not isolated.",
         "counts":{name:{"success":0,"failure":0} for name in names},
         "results":{},
@@ -345,7 +378,7 @@ def main():
     parser.add_argument("--cache",required=True,type=Path)
     parser.add_argument("--planner-pid",type=int)
     parser.add_argument("--live-interval-s",type=float,default=None,
-                        help="Replan all four plugins every N wall seconds (minimum cycle period)")
+                        help="Replan all four plugins every N simulated seconds (minimum cycle period)")
     a=parser.parse_args()
     signal.signal(signal.SIGINT,cancel_signal)
     signal.signal(signal.SIGTERM,cancel_signal)
