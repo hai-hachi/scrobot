@@ -19,7 +19,7 @@ HERE=Path(__file__).resolve().parents[1]
 
 
 def generate_launch_description():
-    names=("world","path_json","nav2_params","controller_params",
+    names=("world","path_json","monitor_file","nav2_params","controller_params",
            "robot_x","robot_y","robot_yaw","ground_truth_rate_hz",
            "drive_contact_mu","caster_contact_mu","wheel_joint_damping",
            "wheel_collision_width","drive_slip1","drive_slip2")
@@ -58,6 +58,7 @@ def generate_launch_description():
     router=ExecuteProcess(cmd=[sys.executable,str(HERE/"command_router.py")],output="screen")
     display=ExecuteProcess(cmd=[sys.executable,str(HERE/"viz.py"),"--path",v["path_json"]],
                            output="screen")
+    monitor=ExecuteProcess(cmd=[sys.executable,str(HERE/"monitor.py"),"--output",v["monitor_file"]],output="screen")
     broadcasters=[
         Node(package="controller_manager",executable="spawner",output="screen",
              arguments=[name,"--controller-manager","/controller_manager",
@@ -77,7 +78,7 @@ def generate_launch_description():
     return LaunchDescription([
         *[DeclareLaunchArgument(key) for key in names],
         *resources,sim,bridge,
-        feedback,router,display,
+        feedback,router,display,monitor,
         TimerAction(period=2.5,actions=[spawn]),
         TimerAction(period=5.5,actions=broadcasters),
         TimerAction(period=9.,actions=[controller,lifecycle]),
