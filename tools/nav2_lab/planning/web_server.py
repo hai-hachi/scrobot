@@ -27,6 +27,7 @@ from planning.history_store import (list_runs as saved_runs,
                                     delete_run as remove_run,
                                     delete_all as remove_all_runs)
 from planning.process_metrics import ProcessSampler
+from tracking.service import TrackingService
 from planning.publish import (production_status as read_production_planners,
                               publish as write_production_planners)
 from planning.scene import load_scene, save_scene, validate_scene, SCENE_PATH
@@ -612,6 +613,7 @@ class Service:
 
 class Handler(BaseHTTPRequestHandler):
     service=None
+    tracking=None
     def json_reply(self,data,code=200):
         body=json.dumps(data).encode()
         self.send_response(code)
@@ -625,6 +627,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path=urlparse(self.path).path
         try:
+            if path=="/api/tracker/config":return self.json_reply(self.tracking.config())
+            if path=="/api/tracker/status":return self.json_reply(self.tracking.status())
+            if path=="/api/tracker/history":return self.json_reply(self.tracking.history())
+            if path=="/api/tracker/speed":return self.json_reply(self.tracking.sim_speed())
             if path=="/api/sim-speed":return self.json_reply(speed_response("nav2",running(self.service.stack)))
             if path=="/api/config":return self.json_reply(self.service.config())
             if path=="/api/planners/production":return self.json_reply(self.service.production_planners())
@@ -633,6 +639,21 @@ class Handler(BaseHTTPRequestHandler):
                 self.service.calibration_status())
             if path=="/api/status":return self.json_reply(self.service.status())
             if path=="/api/history":return self.json_reply(self.service.history())
+            tracker_file={"/tracker":"index.html","/tracker/":"index.html",
+                          "/tracker/index.html":"index.html",
+                          "/tracker/app.js":"app.js",
+                          "/tracker/style.css":"style.css"}.get(path)
+            if tracker_file:
+                body=(HERE.parent/"tracking"/"web"/tracker_file).read_bytes()
+                mime={"html":"text/html","js":"application/javascript",
+                      "css":"text/css"}[tracker_file.split(".")[-1]]
+                self.send_response(200)
+                self.send_header("Content-Type",mime+"; charset=utf-8")
+                self.send_header("Cache-Control","no-store")
+                self.send_header("Content-Length",str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             filename={"/":"index.html","/index.html":"index.html",
                       "/app.js":"app.js","/style.css":"style.css"}.get(path)
             if not filename:return self.json_reply({"error":"Not found"},404)
@@ -650,6 +671,20 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path=urlparse(self.path).path
         mapping={
+            "/api/tracker/save":lambda x:{"settings":self.tracking.save(x)},
+            "/api/tracker/preview":lambda x:self.tracking.preview(x),
+            "/api/tracker/speed":lambda x:self.tracking.set_speed(x["max_rtf"]),
+            "/api/tracker/start":lambda x:self.tracking.start(x),
+            "/api/tracker/reset":lambda x:self.tracking.reset(x),
+            "/api/tracker/run":lambda x:self.tracking.run(x),
+            "/api/tracker/abort":lambda x:self.tracking.abort(),
+            "/api/tracker/stop":lambda x:self.tracking.stop(),
+            "/api/tracker/rviz/open":lambda x:self.tracking.open_rviz(),
+            "/api/tracker/rviz/close":lambda x:self.tracking.close_rviz(),
+            "/api/tracker/gazebo/open":lambda x:self.tracking.open_gui(),
+            "/api/tracker/gazebo/close":lambda x:self.tracking.close_gui(),
+            "/api/tracker/history/delete":lambda x:self.tracking.delete(x),
+            "/api/tracker/history/clear":lambda x:self.tracking.clear_history(x),
             "/api/sim-speed":lambda x:{"max_rtf":save_speed("nav2",x["max_rtf"]),
                                            "restart_required":True} if set(x)=={"max_rtf"}
                                            else (_ for _ in ()).throw(ValueError("Set only max_rtf")),
@@ -699,6 +734,7 @@ def main():
     p.add_argument("--no-browser",action="store_true")
     a=p.parse_args()
     Handler.service=Service()
+    Handler.tracking=TrackingService()
     server=ThreadingHTTPServer(("127.0.0.1",a.port),Handler)
     print(f"SCROBOT Nav2 Path Planning Lab: http://127.0.0.1:{a.port}",flush=True)
     if not a.no_browser:webbrowser.open_new_tab(f"http://127.0.0.1:{a.port}")
@@ -706,6 +742,7 @@ def main():
     except KeyboardInterrupt:pass
     finally:
         Handler.service.stop()
+        Handler.tracking.stop()
         server.server_close()
 
 
