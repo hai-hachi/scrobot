@@ -12,6 +12,7 @@ from pathlib import Path
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE.parent))
 from tracking.core import metrics,reference,validate,projection,wrap
+from tracking.health import controller_failure
 
 import rclpy
 from action_msgs.msg import GoalStatus
@@ -59,12 +60,13 @@ def ros_path(points,stamp):
 
 
 class Trial(Node):
-    def __init__(self,config,run_dir):
+    def __init__(self,config,run_dir,stack_log=None):
         super().__init__("tracker_ground_truth_trial",
             parameter_overrides=[Parameter("use_sim_time",Parameter.Type.BOOL,True)],
             automatically_declare_parameters_from_overrides=True)
         self.config=config
         self.dir=Path(run_dir)
+        self.stack_log=Path(stack_log) if stack_log else None
         self.points=reference(config["path"])
         self.client=ActionClient(self,FollowPath,"/follow_path")
         self.samples=[]
@@ -158,9 +160,15 @@ class Trial(Node):
         last_sim=sim_start
         cap=self.config.get("max_rtf",.25)
         guard=max(60.,3*(timeout_sim or 30.)/max(.1,cap))
+        last_controller_check=0.
         while not STOP:
             if condition():return
             now=time.monotonic();sim=self.clock()
+            if self.stack_log and now-last_controller_check>=.5:
+                last_controller_check=now
+                fatal=controller_failure(self.stack_log)
+                if fatal:
+                    raise RuntimeError(fatal)
             if sim>last_sim+1e-6:
                 last_sim=sim;last_progress=now
             if timeout_sim is None:
@@ -253,6 +261,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--config",required=True)
     parser.add_argument("--output",required=True)
+    parser.add_argument("--stack-log",default=None)
     args=parser.parse_args()
     signal.signal(signal.SIGINT,stop_signal)
     signal.signal(signal.SIGTERM,stop_signal)
@@ -260,7 +269,7 @@ def main():
     validate({key:value for key,value in config.items()
               if key not in ("resolved_pose","max_rtf")})
     rclpy.init()
-    node=Trial(config,args.output)
+    node=Trial(config,args.output,args.stack_log)
     try:
         done=node.execute()
     finally:
