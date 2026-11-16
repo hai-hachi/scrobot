@@ -42,6 +42,13 @@ Tracker launch. Never use a broad `pkill gz` or `killall ros2`, because
 that would also affect the Planner and other simulation labs. Domain fallback
 lets the new Tracker proceed without destroying someone else's run, but
 orphaned processes still consume CPU/RAM until explicitly terminated.
+When you press **Stop** in a server that still owns a Tracker session, the
+lab now attempts to clean up any surviving descendants **only when both**
+their randomized Gazebo partition and ROS domain match that particular
+session. This protects Planner, Performance, and all other Gazebo instances.
+An old session abandoned by an already terminated lab server has no retained
+owner token in the new server, so it is left untouched and isolated instead
+of being killed without verification.
 
 **Important:** the Tracker requires the Performance Lab's verified
 Nav2 Jazzy ROS-clock controller overlay, because stock Jazzy uses
