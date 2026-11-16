@@ -24,6 +24,7 @@ from planning.process_metrics import ProcessSampler
 from tracking.core import defaults,validate,reference,initial_pose
 from tracking.world import write_world
 from tracking.configuration import generate
+from tracking.health import controller_failure
 
 try:
     import psutil
@@ -248,6 +249,9 @@ class TrackingService:
                     checked!=self.settings_at_launch):
                 self.stop()
                 self._stack_start(checked)
+            fatal=controller_failure(self.stack_log)
+            if fatal:
+                raise RuntimeError(fatal)
             self.root.mkdir(parents=True,exist_ok=True)
             self.run_dir=self.root/(datetime.now().strftime("%Y%m%d_%H%M%S")+
                               "_tracking_"+uuid.uuid4().hex[:5])
@@ -263,7 +267,8 @@ class TrackingService:
                             self.run_dir/"nav2_params_snapshot.yaml")
             self.run_log=self.run_dir/"trial.log"
             command=[sys.executable,str(HERE/"runner.py"),
-                     "--config",str(path_file),"--output",str(self.run_dir)]
+                     "--config",str(path_file),"--output",str(self.run_dir),
+                     "--stack-log",str(self.stack_log)]
             with self.run_log.open("w") as logfile:
                 self.trial=subprocess.Popen(command,env=self.env,cwd=HERE.parent,
                     stdout=logfile,stderr=subprocess.STDOUT,start_new_session=True)
@@ -334,6 +339,8 @@ class TrackingService:
             live=read_json(self.run_dir/"live.json") if self.run_dir else None
             return {
                 "stack_running":running(self.stack),
+                "controller_error":controller_failure(self.stack_log)
+                    if running(self.stack) else None,
                 "trial_running":running(self.trial),
                 "stack_exit_code":self.stack.poll() if self.stack else None,
                 "trial_exit_code":self.trial.poll() if self.trial else None,
