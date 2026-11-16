@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SCROBOT | Nav2 Path Planning Lab</title>
-<link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script>
+<link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script><script defer src="/lab-rtf.js"></script>
 </head><body><div class="shell">
 <aside class="sidebar">
  <header><div class="monogram">S·</div><div><strong>SCROBOT</strong><small>ROBOTICS LABORATORY</small></div></header>
@@ -163,7 +163,7 @@
       <thead><tr><th>Topic</th><th>Wall Hz</th><th>Sim Hz</th><th>Last message</th><th>Meaning</th></tr></thead>
       <tbody id="topic-rate-rows"><tr><td colspan="5">Start simulation to measure topics.</td></tr></tbody>
    </table></div>
-   <p class="fineprint">Measured reception Hz uses two time domains. At measured RTF 0.25 a healthy 30 sim-Hz camera arrives at roughly 7.5 wall Hz. Static /map, full costmap, and incremental updates are change/latch events, not periodic Hz targets.</p>
+   <p class="fineprint">Measured reception Hz uses two time domains. For example, at measured RTF 0.25 a healthy 30 sim-Hz camera arrives at roughly 7.5 wall Hz. Static /map, full costmap, and incremental updates are change/latch events, not periodic Hz targets.</p>
    <h3>Resource utilization · CPU and RAM</h3>
    <div class="metrics process-metrics">
      <div class="metric"><small>Gazebo real-time factor</small><strong id="rtf-value">—</strong><span id="fps-estimate">Expected effective depth FPS: —</span></div>
@@ -250,59 +250,5 @@
   </div>
 </footer>
 </main></div>
-<script>
-/* Shared lab-only Gazebo RTF cap; source sensor/controller rates never scale. */
-(function(){
-  async function initRtfControl(){
-    if(typeof document.querySelector!=="function")return;
-    const main=document.querySelector("main");
-    if(!main || document.getElementById("lab-rtf-control"))return;
-    const box=document.createElement("section");
-    box.id="lab-rtf-control";
-    box.style.cssText="grid-column:1/-1;max-width:100%;background:var(--panel,#142331);border:1px solid var(--line,var(--border,#344457));border-radius:11px;padding:13px 17px;margin:10px 0 16px;color:inherit";
-    box.innerHTML='<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">'+
-      '<strong style="min-width:150px">Gazebo speed cap</strong>'+
-      '<input type="range" id="lab-rtf-slider" min="0.10" max="1.00" step="0.05" value="1.00" aria-label="Maximum Gazebo real-time factor" style="flex:1;min-width:135px;accent-color:var(--mint,var(--teal,var(--accent,#34c8b2)))">'+
-      '<strong id="lab-rtf-value" style="min-width:54px;font-variant-numeric:tabular-nums">1.00×</strong>'+
-      '<button type="button" id="lab-rtf-save">Save RTF cap</button></div>'+
-      '<p id="lab-rtf-note" style="font-size:12px;opacity:.80;margin:8px 0 0">100 simulated Hz is ~100 wall Hz at 1.00×. Changing the cap requires restarting this lab simulation; no sensor/controller Hz is modified.</p>';
-    main.insertBefore(box,main.firstChild);
-    const slider=box.querySelector("#lab-rtf-slider");
-    const value=box.querySelector("#lab-rtf-value");
-    const note=box.querySelector("#lab-rtf-note");
-    const btn=box.querySelector("#lab-rtf-save");
-    const show=()=>{
-      const cap=Number(slider.value);
-      value.textContent=cap.toFixed(2)+"×";
-      note.textContent="At this cap, 30 simulated Hz corresponds to up to "+
-        (30*cap).toFixed(2)+" wall Hz and 100 simulated Hz to up to "+
-        (100*cap).toFixed(2)+" wall Hz. Actual wall rates depend on measured RTF. Restart Gazebo after saving.";
-    };
-    slider.addEventListener("input",show);
-    try{
-      const r=await fetch("/api/sim-speed",{cache:"no-store"});
-      if(!r.ok)throw new Error("RTF settings HTTP "+r.status);
-      const info=await r.json();
-      slider.value=String(info.max_rtf);
-      show();
-    }catch(e){note.textContent="Unable to load RTF cap: "+e.message;}
-    btn.addEventListener("click",async()=>{
-      btn.disabled=true;
-      try{
-        const r=await fetch("/api/sim-speed",{
-          method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({max_rtf:Number(slider.value)})
-        });
-        const result=await r.json();
-        if(!r.ok || result.error)throw new Error(result.error||"HTTP "+r.status);
-        note.textContent="Saved "+Number(result.max_rtf??slider.value).toFixed(2)+
-          "× Gazebo RTF cap. Stop and restart this lab simulation to apply. Production YAML and simulated-Hz targets are unchanged.";
-      }catch(e){note.textContent="Unable to save RTF cap: "+e.message;}
-      finally{btn.disabled=false;}
-    });
-  }
-  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",initRtfControl);
-  else initRtfControl();
-})();
-</script>
+
 </body></html>
