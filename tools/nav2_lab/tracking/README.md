@@ -44,8 +44,13 @@ The robot is the real `scrobot_simulation` xacro with unchanged mass,
 inertial properties, wheel/caster joints, friction, contact width and
 `gz_ros2_control` drivetrain. The lab reads saved Mobility and Odometry Lab
 calibration YAMLs (explicit published fallback when unsaved), independent of
-Camera, Lighting and AprilTag saves. The physical wheel feedback stays
-100 simulated Hz.
+Camera, Lighting and AprilTag saves. It also reuses the existing
+`scrobot_simulation/sim_motor_response` first-order wheel RPM response
+surrogate with the saved `tau_left`, `tau_right`, and gain values whenever
+the Mobility Lab's motor model is `first_order`. The `baseline` model
+bypasses that surrogate and sends safe commands directly to ros2_control.
+Both RPP and SMC pass through the **same selected motor model**.
+The physical wheel feedback stays 100 simulated Hz.
 
 **Deliberate isolation:** both controllers use a perfect simulation ground-
 truth TF `odom -> base_footprint`, published from Gazebo's independent
