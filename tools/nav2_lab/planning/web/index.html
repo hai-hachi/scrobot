@@ -137,6 +137,26 @@
    </div>
  </section>
 
+ <section class="panel" id="publish-planners-panel">
+   <div class="between"><h2>Publish planners to main simulation</h2><span>Selected global planners only</span></div>
+   <p class="fineprint">Choose which tested planners the production Nav2 server should load. The default is exposed as <code>GridBased</code> so the existing mission's NavigateToPose behavior tree continues to work.</p>
+   <div class="grid">
+     <div>
+       <h3>Enabled global planners</h3>
+       <div class="switchline"><label for="publish-NavFnDijkstra">NavFn — Dijkstra</label><input id="publish-NavFnDijkstra" type="checkbox"></div>
+       <div class="switchline"><label for="publish-NavFnAStar">NavFn — A*</label><input id="publish-NavFnAStar" type="checkbox"></div>
+       <div class="switchline"><label for="publish-Smac2D">Smac 2D</label><input id="publish-Smac2D" type="checkbox"></div>
+       <div class="switchline"><label for="publish-ThetaStar">Theta*</label><input id="publish-ThetaStar" type="checkbox"></div>
+     </div>
+     <div>
+       <div class="field"><label for="publish-default">Default planner for main simulation</label><select id="publish-default"></select></div>
+       <p id="publish-state" class="fineprint">Reading production planner configuration…</p>
+       <p id="publish-warning" class="warning fineprint"></p>
+       <p class="fineprint">Only <code>planner_server</code> in <code>src/scrobot_navigation/config/nav2_params.yaml</code> is updated. No controller, costmap, camera or RTF calibration is changed. Rebuild/source <code>scrobot_navigation</code> and restart the main Nav2 stack after publishing.</p>
+     </div>
+   </div>
+ </section>
+
  <section class="panel" id="performance-panel">
    <div class="between"><h2>Performance · live topic frequencies</h2><span>Measured wall Hz and simulated Hz (from /clock)</span></div>
    <div class="table-wrap"><table class="frequency-table">
@@ -218,6 +238,7 @@
 <footer class="actionbar"><div id="action-state">Simulation stopped</div>
   <div class="actions">
     <button class="btn outline" id="save">Save Lab YAML</button>
+    <button class="btn secondary" id="publish-main" type="button">Publish Planners to Main</button>
     <button class="btn secondary" id="start">Start simulation</button>
     <button class="btn danger" id="stop">Stop</button>
     <button class="btn outline" id="gui-open">Open Gazebo</button>
