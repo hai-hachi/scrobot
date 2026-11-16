@@ -12,7 +12,7 @@ from pathlib import Path
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE.parent))
 from tracking.core import metrics,reference,validate,projection,wrap
-from tracking.health import controller_failure
+from tracking.health import controller_failure,ready_for_tracking
 
 import rclpy
 from action_msgs.msg import GoalStatus
@@ -236,9 +236,9 @@ class Trial(Node):
         try:
             # Do NOT send a goal merely because server_is_ready() is true.
             # Nav2 creates /follow_path before lifecycle activation completes.
-            self.until(lambda:self.clock()>.1 and self.gt_count>=4 and
-                       self.odom_count>=4 and self.client.server_is_ready() and
-                       self.controller_active,
+            self.until(lambda:ready_for_tracking(
+                           self.clock(),self.gt_count,self.odom_count,
+                           self.client.server_is_ready(),self.controller_active),
                        timeout_wall=160.)
             if not self.last_gt:
                 raise RuntimeError("Ground truth unavailable")
