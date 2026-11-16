@@ -24,6 +24,7 @@ FILES = {
     "odometry": CONFIG_DIR / "odometry_lab.yaml",
     "yolo": CONFIG_DIR / "yolo_lab.yaml",
     "nav2": CONFIG_DIR / "nav2_lab.yaml",
+    "tracking": CONFIG_DIR / "tracking_lab.yaml",
     "mesh": CONFIG_DIR / "mesh_lab.yaml",
     "performance": CONFIG_DIR / "performance_lab.yaml",
 }
