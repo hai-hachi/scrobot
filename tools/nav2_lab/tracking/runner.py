@@ -17,6 +17,8 @@ from tracking.health import controller_failure
 import rclpy
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import TwistStamped,PoseStamped
+from lifecycle_msgs.msg import State
+from lifecycle_msgs.srv import GetState
 from nav_msgs.msg import Odometry,Path as NavPath
 from nav2_msgs.action import FollowPath
 from rclpy.action import ActionClient
@@ -69,6 +71,15 @@ class Trial(Node):
         self.stack_log=Path(stack_log) if stack_log else None
         self.points=reference(config["path"])
         self.client=ActionClient(self,FollowPath,"/follow_path")
+        # The FollowPath action appears in the ROS graph while the
+        # lifecycle controller is still INACTIVE. Action availability alone
+        # is not readiness: goals are rejected during activation.
+        self.lifecycle_client=self.create_client(
+            GetState,"/controller_server/get_state")
+        self.lifecycle_future=None
+        self.controller_lifecycle_state="unavailable"
+        self.controller_active=False
+        self.create_timer(.15,self.poll_controller_lifecycle)
         self.samples=[]
         self.trace=[]
         self.gt_count=0
@@ -99,6 +110,28 @@ class Trial(Node):
                                  self.on_command,10)
         self.create_subscription(TwistStamped,"/tracker/cmd_vel_raw",
                                  self.on_raw,10)
+
+    def poll_controller_lifecycle(self):
+        """Poll Nav2 controller_server lifecycle without blocking ROS callbacks."""
+        pending=self.lifecycle_future
+        if pending is not None:
+            if not pending.done():
+                return
+            self.lifecycle_future=None
+            try:
+                response=pending.result()
+                if response is None:
+                    raise RuntimeError("empty lifecycle response")
+                current=response.current_state
+                self.controller_lifecycle_state=current.label or str(current.id)
+                self.controller_active=(current.id==State.PRIMARY_STATE_ACTIVE)
+            except Exception as exc:
+                self.controller_lifecycle_state="query failed: "+str(exc)
+                self.controller_active=False
+        if (not self.controller_active and self.lifecycle_future is None and
+                self.lifecycle_client.service_is_ready()):
+            self.lifecycle_future=self.lifecycle_client.call_async(
+                GetState.Request())
 
     def on_wheel_odom(self,msg):
         self.odom_count+=1
@@ -170,6 +203,8 @@ class Trial(Node):
                 self.output["ground_truth_samples"]=self.gt_count
                 self.output["wheel_odom_samples"]=self.odom_count
                 self.output["action_server_ready"]=self.client.server_is_ready()
+                self.output["controller_lifecycle_state"]=self.controller_lifecycle_state
+                self.output["controller_active"]=self.controller_active
                 self.output["sim_clock_s"]=round(sim,3)
                 atomic_json(self.dir/"summary.json",self.output)
             if self.stack_log and now-last_controller_check>=.5:
@@ -199,12 +234,17 @@ class Trial(Node):
         atomic_json(summary,self.output)
         handle=None
         try:
+            # Do NOT send a goal merely because server_is_ready() is true.
+            # Nav2 creates /follow_path before lifecycle activation completes.
             self.until(lambda:self.clock()>.1 and self.gt_count>=4 and
-                       self.odom_count>=4 and self.client.server_is_ready(),
+                       self.odom_count>=4 and self.client.server_is_ready() and
+                       self.controller_active,
                        timeout_wall=160.)
             if not self.last_gt:
                 raise RuntimeError("Ground truth unavailable")
             self.output["status"]="running"
+            self.output["controller_lifecycle_state"]=self.controller_lifecycle_state
+            self.output["controller_active"]=self.controller_active
             self.output["start_sim_s"]=self.clock()
             self.active=True
             self.last_write=time.monotonic()
@@ -214,11 +254,29 @@ class Trial(Node):
             goal.controller_id=self.config["controller"]
             goal.goal_checker_id="goal_checker"
             goal.progress_checker_id="progress_checker"
-            accepted=self.client.send_goal_async(goal)
-            self.until(accepted.done,timeout_sim=8.)
-            handle=accepted.result()
-            if handle is None or not handle.accepted:
-                raise RuntimeError("Nav2 FollowPath rejected "+goal.controller_id)
+            # A lifecycle transition can still race a request; retry once
+            # after a fresh ACTIVE confirmation instead of failing an entire
+            # experiment on a brief activation window.
+            handle=None
+            for attempt in range(2):
+                accepted=self.client.send_goal_async(goal)
+                self.until(accepted.done,timeout_sim=8.)
+                candidate=accepted.result()
+                if candidate is not None and candidate.accepted:
+                    handle=candidate
+                    break
+                self.output["goal_rejections"]=attempt+1
+                self.controller_active=False
+                if attempt==0:
+                    self.until(
+                        lambda:self.controller_active and
+                               self.client.server_is_ready(),
+                        timeout_wall=30.)
+            if handle is None:
+                raise RuntimeError(
+                    "Nav2 FollowPath rejected "+goal.controller_id+
+                    " after active lifecycle confirmation; inspect "
+                    "controller_server logs and goal configuration")
             result_future=handle.get_result_async()
             self.until(result_future.done,
                        timeout_sim=self.config["max_sim_duration_s"])
