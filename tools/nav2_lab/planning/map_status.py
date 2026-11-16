@@ -18,6 +18,7 @@ import yaml
 import rclpy
 from geometry_msgs.msg import Point
 from nav_msgs.msg import OccupancyGrid
+from map_msgs.msg import OccupancyGridUpdate
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, qos_profile_sensor_data
@@ -35,7 +36,8 @@ TOPICS = (
     ("/camera/camera/depth/scan_raw", LaserScan, "best_effort"),
     ("/camera/camera/depth/scan", LaserScan, "best_effort"),
     ("/map", OccupancyGrid, "latched"),
-    ("/global_costmap/costmap", OccupancyGrid, "reliable"),
+    ("/global_costmap/costmap", OccupancyGrid, "latched"),
+    ("/global_costmap/costmap_updates", OccupancyGridUpdate, "latched"),
 )
 
 
@@ -199,8 +201,15 @@ class Monitor(Node):
             self.clock_marks.append((now,self.sim_time_s))
         self.topic_times[topic].append(now)
         self.topic_sim_times[topic].append(self.sim_time_s)
+        if topic=="/global_costmap/costmap_updates":
+            self.records[topic]={
+                "received":True,
+                "frame":msg.header.frame_id,
+                "width":int(msg.width),"height":int(msg.height),
+                "_wall_time":now,
+            }
         if topic in ("/map","/global_costmap/costmap"):
-            # Counting every occupied cell at 3Hz wastes CPU on large grids.
+            # Count occupied cells only on full-map events, not updates.
             self.records[topic]={
                 "received":True,"frame":msg.header.frame_id,
                 "width":int(msg.info.width),"height":int(msg.info.height),
@@ -254,7 +263,8 @@ class Monitor(Node):
         self.last_write=now
         status={}
         for label,topic in (("static_map","/map"),
-                            ("global_costmap","/global_costmap/costmap")):
+                            ("global_costmap","/global_costmap/costmap"),
+                            ("global_costmap_updates","/global_costmap/costmap_updates")):
             data=self.records.get(topic)
             if not data:
                 status[label]={"received":False}
@@ -283,7 +293,8 @@ class Monitor(Node):
             sim_span=recent[-1][1]-recent[0][1] if len(recent)>=2 else 0.
             # Full OccupancyGrid publications are change/latch events, not
             # periodic targets; do not report a misleading low Hz.
-            event_topic=(topic in ("/map","/global_costmap/costmap"))
+            event_topic=(topic in ("/map","/global_costmap/costmap",
+                                  "/global_costmap/costmap_updates"))
             wall_hz=None if event_topic else frequency(samples,now)
             sim_hz=(round((len(recent)-1)/sim_span,1)
                     if not event_topic and sim_span>1e-6 else None)
@@ -302,7 +313,9 @@ class Monitor(Node):
         if not status["static_map"]["received"]:
             status["hint"]="No /map: map_server must be active with the generated court YAML."
         elif not status["global_costmap"]["received"]:
-            status["hint"]="No global costmap: inspect planner_server lifecycle and depth layer."
+            status["hint"]="No full global costmap received: check planner lifecycle and transient-local QoS."
+        elif status["global_costmap_updates"]["received"]:
+            status["hint"]="Full map and incremental costmap updates observed. An old full-map timestamp does not mean the costmap is stale."
         elif not transforms["map_to_base_footprint"]:
             status["hint"]="Missing TF map -> odom -> base_footprint."
         elif not transforms["map_to_camera_depth_frame"]:
