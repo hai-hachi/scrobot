@@ -175,6 +175,9 @@ class TrackingService:
         self.last_cleanup_count=0
         self.sampler=ProcessSampler(psutil,interval_s=1.5)
 
+    def defaults(self):
+        return deepcopy(defaults())
+
     def config(self):
         saved=read_lab("tracking")
         return deepcopy(validate(saved if saved is not None else defaults()))
