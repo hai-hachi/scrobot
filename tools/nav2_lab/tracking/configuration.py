@@ -88,9 +88,17 @@ def generate(settings,dirpath):
       "robot_base_frame":"base_footprint",
       "rolling_window":True,"width":14,"height":14,
       "resolution":0.05,
-      "plugins":[],
+      # A ROS 2 parameter cannot be an untyped empty sequence here.
+      # Keep the production costmap plugin types, but configure a genuinely
+      # empty world with NO observation subscriptions. This prevents the
+      # Jazzy costmap startup crash ("parameter 'plugins': No value set").
+      "plugins":["obstacle_layer","inflation_layer"],
       "track_unknown_space":False,
     })
+    cfg["obstacle_layer"]["enabled"]=True
+    cfg["obstacle_layer"]["observation_sources"]=""
+    cfg["obstacle_layer"].pop("depth_scan",None)
+    cfg["inflation_layer"]["enabled"]=True
     output={
       "controller_server":{"ros__parameters":params},
       "local_costmap":cost,
