@@ -76,11 +76,21 @@ def test_manual_start_and_invalid_inputs():
     for field,value in (
         ("path","missing"),("controller","STANLEY"),
         ("spawn_mode","unknown"),("progress",1.1),
-        ("desired_speed_mps",.8),("max_sim_duration_s",0),
         ("seed",-1)):
         invalid=copy.deepcopy(cfg)
         invalid[field]=value
         with pytest.raises(ValueError):validate(invalid)
+    for field,value in (("desired_speed_mps",.8),("max_sim_duration_s",0),
+                        ("goal_yaw_tolerance_deg",0),("progress_radius_m",3)):
+        invalid=copy.deepcopy(cfg)
+        invalid["shared"][field]=value
+        with pytest.raises(ValueError):validate(invalid)
+    invalid=copy.deepcopy(cfg)
+    invalid["rpp"]["min_lookahead_dist"]=.7
+    with pytest.raises(ValueError,match="lookahead"):validate(invalid)
+    invalid=copy.deepcopy(cfg)
+    invalid["rpp"]["use_rotate_to_heading"]=1
+    with pytest.raises(ValueError,match="checkbox"):validate(invalid)
     cfg["smc"]["boundary_layer"]=0
     with pytest.raises(ValueError):validate(cfg)
 
@@ -149,6 +159,122 @@ def test_tracker_params_preserve_real_controller_and_physics(tmp_path):
     assert "drive_contact_mu" in physics
     assert "caster_contact_mu" in physics
     assert "wheel_collision_width" in physics
+
+
+def test_three_groups_save_migrate_and_keep_old_controller_tuning():
+    baseline=defaults()
+    assert set(baseline["shared"])=={
+        "desired_speed_mps","max_sim_duration_s",
+        "goal_xy_tolerance_m","goal_yaw_tolerance_deg",
+        "progress_radius_m","progress_timeout_sim_s"}
+    assert set(baseline["rpp"])=={
+        "lookahead_dist","min_lookahead_dist","max_lookahead_dist",
+        "lookahead_time","use_velocity_scaled_lookahead_dist",
+        "use_regulated_linear_velocity_scaling",
+        "regulated_linear_scaling_min_radius",
+        "regulated_linear_scaling_min_speed","use_rotate_to_heading",
+        "rotate_to_heading_angular_vel","rotate_to_heading_min_angle_deg",
+        "max_angular_accel","min_approach_linear_velocity"}
+    assert set(baseline["smc"])=={
+        "cross_gain","heading_gain","surface_lambda","switch_gain",
+        "boundary_layer","lookahead_m","feedforward_gain",
+        "goal_heading_gain","goal_align_threshold_m","max_angular_cmd"}
+
+    legacy=copy.deepcopy(baseline)
+    legacy["desired_speed_mps"]=.27
+    legacy["max_sim_duration_s"]=90
+    del legacy["shared"]
+    del legacy["rpp"]
+    legacy["smc"]={key:legacy["smc"][key] for key in (
+        "cross_gain","heading_gain","switch_gain","boundary_layer","lookahead_m")}
+    legacy["smc"]["cross_gain"]=3.2
+    migrated=validate(legacy)
+    assert migrated["shared"]["desired_speed_mps"]==.27
+    assert migrated["shared"]["max_sim_duration_s"]==90
+    assert migrated["smc"]["cross_gain"]==3.2
+    assert migrated["smc"]["surface_lambda"]==1.0
+    assert migrated["rpp"]==baseline["rpp"]
+    assert "desired_speed_mps" not in migrated
+    assert validate(migrated)==migrated
+    assert "shared" not in legacy  # No caller mutation
+
+
+def test_all_three_groups_change_real_generated_nav2_parameters(tmp_path):
+    values=defaults()
+    values["shared"].update({
+        "desired_speed_mps":.18,
+        "goal_xy_tolerance_m":.07,
+        "goal_yaw_tolerance_deg":12.,
+        "progress_radius_m":.25,
+        "progress_timeout_sim_s":17.,
+    })
+    values["rpp"].update({
+        "lookahead_dist":.5,"min_lookahead_dist":.3,
+        "max_lookahead_dist":.9,"lookahead_time":1.4,
+        "use_velocity_scaled_lookahead_dist":False,
+        "use_regulated_linear_velocity_scaling":False,
+        "regulated_linear_scaling_min_radius":.8,
+        "regulated_linear_scaling_min_speed":.12,
+        "use_rotate_to_heading":False,
+        "rotate_to_heading_angular_vel":1.3,
+        "rotate_to_heading_min_angle_deg":33.,
+        "max_angular_accel":2.2,
+        "min_approach_linear_velocity":.08,
+    })
+    values["smc"].update({
+        "cross_gain":2.3,"heading_gain":2.7,"surface_lambda":1.7,
+        "switch_gain":1.4,"boundary_layer":.42,"lookahead_m":.45,
+        "feedforward_gain":1.3,"goal_heading_gain":3.2,
+        "goal_align_threshold_m":.20,"max_angular_cmd":1.8,
+    })
+    result=generate(values,tmp_path)
+    cfg=yaml.safe_load(Path(result["nav2_params"]).read_text())
+    node=cfg["controller_server"]["ros__parameters"]
+    shared=values["shared"]
+    assert node["goal_checker"]["xy_goal_tolerance"]==.07
+    assert node["goal_checker"]["yaw_goal_tolerance"]==pytest.approx(
+        math.radians(12.))
+    assert node["progress_checker"]["required_movement_radius"]==.25
+    assert node["progress_checker"]["movement_time_allowance"]==17.
+    assert node["RPP"]["desired_linear_vel"]==.18
+    for name,expected in values["rpp"].items():
+        if name=="rotate_to_heading_min_angle_deg":
+            assert node["RPP"]["rotate_to_heading_min_angle"]==pytest.approx(
+                math.radians(expected))
+        else:
+            assert node["RPP"][name]==expected
+    assert node["SMC"]["linear_speed"]==.18
+    for name,expected in values["smc"].items():
+        assert node["SMC"][name]==expected
+    plugin=(REPO/"src/scrobot_tracker_controller/src/smc_controller.cpp").read_text()
+    for name in ("surface_lambda","feedforward_gain","goal_heading_gain",
+                 "goal_align_threshold_m","max_angular_cmd"):
+        assert '"'+name+'"' in plugin
+
+
+def test_tuning_ui_has_three_cards_all_bound_and_separate_resets():
+    html=(HERE/"web/index.html").read_text()
+    js=(HERE/"web/app.js").read_text()
+    server=(HERE.parent/"planning/web_server.py").read_text()
+    for name in ("shared","rpp","smc"):
+        assert 'id="card-'+name+'"' in html
+        assert 'id="reset-'+name+'"' in html
+    assert 'tracker-tuning-grid' in html
+    assert 'current[name]=structuredClone(defaultSettings[name]);' in js
+    assert "const x=await api('/config');setForm(x);" in js
+    assert "defaultSettings=await api('/defaults')" in js
+    assert '"/api/tracker/defaults"' in server
+    assert "shared:{" in js and "rpp:{" in js and "smc:{" in js
+    assert "highlightActiveController()" in js
+    for control in (
+        "goal-xy","goal-yaw","progress-radius","progress-timeout",
+        "rpp-lookahead","rpp-lookahead-min","rpp-lookahead-max",
+        "rpp-velocity-lookahead","rpp-curvature-slow","rpp-rotate",
+        "smc-lambda","smc-feedforward","smc-goal-heading",
+        "smc-goal-threshold","smc-max-angular",
+    ):
+        assert 'id="'+control+'"' in html
+        assert "'"+control+"'" in js
 
 
 def test_native_smc_plugin_has_complete_jazzy_interface():
