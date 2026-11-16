@@ -39,7 +39,7 @@ async function operate(task){
 function setButtons(){
   const stack=Boolean(lastStatus?.stack_running),trial=Boolean(lastStatus?.trial_running);
   const controls={
-    'save-settings':!trial,'load-settings':!trial,'save-speed':!trial,
+    'save-settings':!trial,'load-settings':!trial,
     'preview-button':!trial,'new-seed':!trial,
     'start':!stack&&!trial,'run':!trial,'cancel':trial,
     'stop':stack,'reset':!trial,
@@ -315,11 +315,6 @@ $('tracker-map').addEventListener('pointermove',ev=>{
 });
 for(const event of ['pointerup','pointercancel'])
   $('tracker-map').addEventListener(event,()=>{drag=null;});
-$('max-rtf').oninput=()=>$('max-rtf-text').textContent=fmt(num('max-rtf'),2)+'×';
-$('save-speed').onclick=()=>operate(async()=>{
-  const response=await api('/speed',{max_rtf:num('max-rtf')});
-  notify('Saved Tracker cap '+fmt(response.max_rtf,2)+'×. Restart Gazebo to apply it.');
-});
 $('save-settings').onclick=()=>operate(async()=>{
   await api('/save',readForm());
   notify('Saved tracking_lab.yaml (independent of production simulation).');
@@ -365,9 +360,6 @@ $('clear-history').onclick=()=>{
 (async()=>{
   try{
     const x=await api('/config');setForm(x);
-    const speed=await api('/speed');
-    $('max-rtf').value=speed.max_rtf;
-    $('max-rtf').oninput();
     await refreshPreview();
     await refresh();await history();
   }catch(e){notify(e.message,true);}
