@@ -161,9 +161,17 @@ class Trial(Node):
         cap=self.config.get("max_rtf",.25)
         guard=max(60.,3*(timeout_sim or 30.)/max(.1,cap))
         last_controller_check=0.
+        last_startup_progress=0.
         while not STOP:
             if condition():return
             now=time.monotonic();sim=self.clock()
+            if timeout_sim is None and now-last_startup_progress>=1.:
+                last_startup_progress=now
+                self.output["ground_truth_samples"]=self.gt_count
+                self.output["wheel_odom_samples"]=self.odom_count
+                self.output["action_server_ready"]=self.client.server_is_ready()
+                self.output["sim_clock_s"]=round(sim,3)
+                atomic_json(self.dir/"summary.json",self.output)
             if self.stack_log and now-last_controller_check>=.5:
                 last_controller_check=now
                 fatal=controller_failure(self.stack_log)
