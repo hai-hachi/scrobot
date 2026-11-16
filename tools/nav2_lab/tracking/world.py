@@ -24,11 +24,11 @@ def write_world(path,rtf):
       <diffuse>0.75 0.75 0.75 1</diffuse><specular>0.05 0.05 0.05 1</specular>
       <direction>-0.2 -0.3 -1</direction><cast_shadows>false</cast_shadows></light>
     <model name="tracking_floor"><static>true</static>
-      <link name="floor"><collision name="floor_collision"><pose>0 0 -0.05 0 0 0</pose>
-        <geometry><box><size>30 30 0.1</size></box></geometry>
-        <surface><friction><ode><mu>5.0</mu><mu2>5.0</mu2></ode></friction></surface>
-      </collision><visual name="floor_visual"><pose>0 0 -0.05 0 0 0</pose>
-        <geometry><box><size>30 30 0.1</size></box></geometry>
+      <link name="floor"><collision name="floor_collision">
+        <geometry><box><size>30 30 0.0200</size></box></geometry>
+        <surface><friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction></surface>
+      </collision><visual name="floor_visual"><pose>0 0 -0.001 0 0 0</pose>
+        <geometry><box><size>30 30 0.0180</size></box></geometry>
         <material><ambient>0.28 0.32 0.36 1</ambient><diffuse>0.3 0.34 0.38 1</diffuse></material>
       </visual></link></model>
   </world>
