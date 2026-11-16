@@ -332,7 +332,7 @@ def test_simulated_time_and_ground_truth_control():
     assert 'FollowPath.Goal()' in source
     assert 'goal.controller_id=self.config["controller"]' in source
     assert 'time_basis' in source
-    assert 'timeout_sim=self.config["max_sim_duration_s"]' in source
+    assert 'timeout_sim=self.config["shared"]["max_sim_duration_s"]' in source
     assert '"/evaluation/ground_truth_odom"' in tf
     assert '"odom"' in tf
     assert 'clamp_wheel_envelope' in router
