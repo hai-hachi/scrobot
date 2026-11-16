@@ -72,14 +72,54 @@ def preflight(env):
           "Nav2 ROS-clock controller overlay is not active. "
           "Run: python3 tools/performance_lab/prepare_nav2_sim_clock.py --build; "
           "source install/setup.bash. Unpatched Jazzy WallRate would invalidate 0.25 RTF tracking.")
-    topics=subprocess.run(["ros2","topic","list"],env=env,capture_output=True,
-                           text=True,timeout=10)
-    if topics.returncode:
-        raise RuntimeError("ROS graph unavailable")
-    forbidden={"/clock","/evaluation/ground_truth_odom",
-               "/controller_server","/diff_drive_controller/odom"}
-    if forbidden.intersection(topics.stdout.splitlines()):
-        raise RuntimeError("Tracking ROS domain already has an active simulator or controller")
+
+
+TRACKER_DOMAIN_CANDIDATES=tuple(range(78,90))
+TRACKER_ACTIVE_TOPICS=frozenset((
+    "/clock","/evaluation/ground_truth_odom",
+    "/diff_drive_controller/odom",
+    "/tracker/reference_path","/tracker/cmd_vel_safe",
+))
+# An unrelated ROS participant in a candidate domain is also sufficient
+# reason not to put the Tracker there. Unique per-session GZ_PARTITION prevents
+# Gazebo transport from attaching to a previous orphaned simulation.
+TRACKER_IGNORED_TOPICS=frozenset(("/rosout","/parameter_events"))
+
+
+def discover_domain_topics(env,domain):
+    """Fresh ROS graph probe: never trust a cached ros2 daemon after a crash."""
+    check_env=env.copy()
+    check_env["ROS_DOMAIN_ID"]=str(domain)
+    try:
+        result=subprocess.run(
+            ["ros2","topic","list","--no-daemon"],env=check_env,
+            capture_output=True,text=True,timeout=12)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"ROS graph probe timed out in domain {domain}; "
+            "check your sourced ROS 2 middleware and its discovery settings") from exc
+    if result.returncode:
+        detail=(result.stderr or result.stdout).strip()
+        raise RuntimeError(
+            f"Fresh ROS graph probe failed in domain {domain}: "
+            f"{detail[-600:] or 'unknown error'}")
+    return frozenset(result.stdout.splitlines())-TRACKER_IGNORED_TOPICS
+
+
+def choose_tracking_domain(env,probe=discover_domain_topics):
+    """Use 78 if free; otherwise find another isolated domain, never kill users."""
+    occupied={}
+    for domain in TRACKER_DOMAIN_CANDIDATES:
+        active=probe(env,domain)
+        if not active:
+            return domain,occupied
+        occupied[domain]=sorted(active)
+    details="; ".join(
+        f"{domain}: {', '.join(topics[:4])}" for domain,topics in occupied.items())
+    raise RuntimeError(
+        "No free Tracker ROS domain 78-89. Existing ROS participants: "+
+        details+". Stop old Tracker sessions or other owners; "
+        "the lab will not kill another simulation automatically.")
 
 
 class TrackingService:
@@ -97,6 +137,9 @@ class TrackingService:
         self.run_log=None
         self.settings_at_launch=None
         self.applied_rtf=None
+        self.domain_id=None
+        self.partition=None
+        self.occupied_domains={}
         self.sampler=ProcessSampler(psutil,interval_s=1.5)
 
     def config(self):
@@ -181,9 +224,11 @@ class TrackingService:
         if running(self.stack):
             raise RuntimeError("Tracker simulator is already running")
         self.env=os.environ.copy()
-        self.env["ROS_DOMAIN_ID"]="78"
-        self.env["GZ_PARTITION"]="scrobot_tracker_lab_78"
         preflight(self.env)
+        self.domain_id,self.occupied_domains=choose_tracking_domain(self.env)
+        self.partition=f"scrobot_tracker_lab_{self.domain_id}_{uuid.uuid4().hex[:8]}"
+        self.env["ROS_DOMAIN_ID"]=str(self.domain_id)
+        self.env["GZ_PARTITION"]=self.partition
         self.root.mkdir(parents=True,exist_ok=True)
         self.active_dir=self.root/"_tracking_active"
         self.active_dir.mkdir(parents=True,exist_ok=True)
@@ -331,6 +376,9 @@ class TrackingService:
             self.trial=None
             self.rviz=None
             self.applied_rtf=None
+            self.domain_id=None
+            self.partition=None
+            self.occupied_domains={}
             return self.status()
 
     def status(self):
@@ -339,6 +387,9 @@ class TrackingService:
             live=read_json(self.run_dir/"live.json") if self.run_dir else None
             return {
                 "stack_running":running(self.stack),
+                "ros_domain_id":self.domain_id if running(self.stack) else None,
+                "gazebo_partition":self.partition if running(self.stack) else None,
+                "occupied_ros_domains":self.occupied_domains,
                 "controller_error":controller_failure(self.stack_log)
                     if running(self.stack) else None,
                 "trial_running":running(self.trial),
