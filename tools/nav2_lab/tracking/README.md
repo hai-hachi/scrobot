@@ -191,6 +191,45 @@ update the branch, **Stop** the old tracker, then **Start / Reset** so
 free-space costmap plugins. Merely refreshing the browser does not regenerate
 the YAML or revive a crashed Nav2 controller.
 
+## Three-box Controller tuning
+
+The **Controller tuning** tab presents three separate, responsive cards.
+All three remain visible; the selected controller is highlighted and the
+other controller can still be edited for later comparisons.
+
+1. **Shared parameters:** reference speed, simulated trial timeout,
+   Nav2 goal XY and yaw tolerances, progress-check radius and progress
+   time allowance. These values apply equally to RPP and SMC, including
+   the common wheel-speed safety envelope, which remains locked to the
+   calibrated differential drive.
+2. **RPP tuning:** fixed and velocity-scaled lookahead (minimum,
+   maximum and lookahead time), curvature speed regulation, minimum
+   regulated speed, rotate-to-heading controls, angular acceleration
+   and final approach speed. Every field updates the corresponding
+   `nav2_regulated_pure_pursuit_controller` parameter in the generated
+   `tracking_controller.yaml`. Minimum RPP speeds are safely capped
+   by the Shared desired forward speed.
+3. **SMC tuning:** lateral and heading gains, sliding-surface heading
+   weight (lambda), switching gain and continuous boundary layer,
+   curvature lookahead, curvature feedforward gain, goal heading gain,
+   final-heading approach threshold and maximum angular command.
+   The SMC C++ plugin declares and uses all of these parameters.
+
+Each card has its **own Reset** button. Reset changes only that category
+in the browser (it does not discard the path/pose or change the other
+controller). **Save Lab YAML** commits the settings to
+`tools/configs/labs/tracking_lab.yaml`, and **Load Saved YAML** restores
+them. Earlier YAML files with flat desired speed and trial timeout and
+five original SMC gains are migrated automatically, preserving saved
+values and filling only the new defaults. This does not publish anything
+to production.
+
+Changing tuning parameters requires a new controller_server configuration:
+the Lab's **Run tracking** action regenerates the tracking-world
+configuration and restarts the environment when settings differ from
+the current launch. It does not dynamically reconfigure an already
+running `FollowPath` action.
+
 ## Metrics and performance
 
 Each run saves ground-truth samples, reported Nav2 action success/failure,
