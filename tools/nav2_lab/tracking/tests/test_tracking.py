@@ -161,6 +161,38 @@ def test_tracker_params_preserve_real_controller_and_physics(tmp_path):
     assert "wheel_collision_width" in physics
 
 
+def test_integer_form_inputs_serialize_as_ros_double_params(tmp_path):
+    """Regression: JS Number('1.0') -> JSON 1 must not crash Nav2 RPP."""
+    cfg=defaults()
+    cfg["controller"]="SMC"
+    cfg["rpp"].update({
+        "max_angular_accel":1,
+        "lookahead_time":1,
+        "regulated_linear_scaling_min_radius":1,
+        "rotate_to_heading_angular_vel":2,
+    })
+    # Also exercise integer-valued SMC/Shared fields.
+    cfg["smc"]["surface_lambda"]=1
+    cfg["shared"]["progress_timeout_sim_s"]=25
+    generated=generate(cfg,tmp_path)
+    raw=Path(generated["nav2_params"]).read_text()
+    nav=yaml.safe_load(raw)["controller_server"]["ros__parameters"]
+    rpp=nav["RPP"]
+    assert "max_angular_accel: 1.0" in raw
+    for name,value in cfg["rpp"].items():
+        if name=="rotate_to_heading_min_angle_deg":
+            assert type(rpp["rotate_to_heading_min_angle"]) is float
+        elif type(value) is bool:
+            assert type(rpp[name]) is bool
+        else:
+            assert type(rpp[name]) is float, name
+    for value in nav["SMC"].values():
+        if isinstance(value,(int,float)):
+            assert type(value) is float
+    assert type(nav["progress_checker"]["movement_time_allowance"]) is float
+    assert type(nav["goal_checker"]["yaw_goal_tolerance"]) is float
+
+
 def test_three_groups_save_migrate_and_keep_old_controller_tuning():
     baseline=defaults()
     assert set(baseline["shared"])=={
@@ -358,6 +390,32 @@ def test_tracker_detects_nav2_controller_startup_crash(tmp_path):
     log.write_text("[gazebo-1] normal startup\n")
     assert controller_failure(log) is None
     assert controller_failure(tmp_path/"missing.log") is None
+
+
+def test_tracker_detects_lifecycle_configure_abort_without_process_exit(tmp_path):
+    """Pasted 08:20 run: live controller_server remains unconfigured forever."""
+    logfile=tmp_path/"stack.log"
+    logfile.write_text(
+        "[controller_server-12] [ERROR] [1794878419.374918090] "
+        "[controller_server]: Caught exception in callback for transition 10\\n"
+        "[controller_server-12] [ERROR] [1794878419.374938923] "
+        "[controller_server]: Original error: parameter 'RPP.max_angular_accel' "
+        "has invalid type: Wrong parameter type, parameter {RPP.max_angular_accel} "
+        "is of type {double}, setting it to {integer} is not allowed.\\n"
+        "[controller_server-12] [FATAL] [1794878419.374952861] "
+        "[controller_server]: Lifecycle node controller_server does not have "
+        "error state implemented\\n"
+        "[lifecycle_manager-13] [ERROR] [1794878419.375161010] "
+        "[tracker_lifecycle]: Failed to change state for node: controller_server\\n"
+        "[lifecycle_manager-13] [ERROR] [1794878419.375203599] "
+        "[tracker_lifecycle]: Failed to bring up all requested nodes. "
+        "Aborting bringup.\\n"
+    )
+    failure=controller_failure(logfile)
+    assert "failed lifecycle configuration" in failure
+    assert "RPP.max_angular_accel" in failure
+    assert "integer" in failure
+    assert "Stop and restart" in failure
 
 
 def test_tracker_waits_fail_fast_and_reports_error_to_ui():
