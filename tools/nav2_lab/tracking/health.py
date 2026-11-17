@@ -19,15 +19,28 @@ def controller_failure(log_path):
             text = source.read().decode("utf-8", "replace")
     except (OSError, ValueError):
         return None
-    crashed = re.search(r"\[ERROR\] \[controller_server-\d+\]: process has died", text)
-    if not crashed:
+    # A Nav2 lifecycle configure failure may leave controller_server alive
+    # but forever UNCONFIGURED. The manager stops trying after this message,
+    # which previously made the Tracker hang at Initializing for 160 seconds.
+    aborted = re.search(
+        r"Failed to bring up all requested nodes\. Aborting bringup\.", text)
+    crashed = re.search(
+        r"\[ERROR\] \[controller_server-\d+\]: process has died", text)
+    if not aborted and not crashed:
         return None
-    reason = re.findall(r"what\(\):\s*([^\r\n]+)", text[:crashed.start()])
-    if reason:
-        detail = reason[-1].strip()
-    else:
-        detail = "ROS controller_server process terminated"
-    return ("Nav2 controller_server crashed: " + detail +
+    # Jazzy reports plugin parameter exceptions as "Original error:" in the
+    # controller_server lifecycle callback; subprocess aborts use "what():".
+    # Keep the actual reason, rather than a generic timeout or stale log tail.
+    match_end = max(m.start() for m in (aborted, crashed) if m)
+    reason = re.findall(
+        r"(?:Original error:|what\(\):)\s*([^\r\n]+)",
+        text[:match_end])
+    detail = reason[-1].strip() if reason else (
+        "Nav2 lifecycle manager could not configure controller_server"
+        if aborted else "ROS controller_server process terminated")
+    failure = ("failed lifecycle configuration" if aborted and not crashed
+               else "crashed")
+    return ("Nav2 controller_server " + failure + ": " + detail +
             ". Stop and restart the Tracker simulation after correcting the "
             "configuration; Gazebo wheel controllers alone cannot follow a path.")
 
