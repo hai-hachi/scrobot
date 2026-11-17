@@ -397,19 +397,19 @@ def test_tracker_detects_lifecycle_configure_abort_without_process_exit(tmp_path
     logfile=tmp_path/"stack.log"
     logfile.write_text(
         "[controller_server-12] [ERROR] [1794878419.374918090] "
-        "[controller_server]: Caught exception in callback for transition 10\\n"
+        "[controller_server]: Caught exception in callback for transition 10\n"
         "[controller_server-12] [ERROR] [1794878419.374938923] "
         "[controller_server]: Original error: parameter 'RPP.max_angular_accel' "
         "has invalid type: Wrong parameter type, parameter {RPP.max_angular_accel} "
-        "is of type {double}, setting it to {integer} is not allowed.\\n"
+        "is of type {double}, setting it to {integer} is not allowed.\n"
         "[controller_server-12] [FATAL] [1794878419.374952861] "
         "[controller_server]: Lifecycle node controller_server does not have "
-        "error state implemented\\n"
+        "error state implemented\n"
         "[lifecycle_manager-13] [ERROR] [1794878419.375161010] "
-        "[tracker_lifecycle]: Failed to change state for node: controller_server\\n"
+        "[tracker_lifecycle]: Failed to change state for node: controller_server\n"
         "[lifecycle_manager-13] [ERROR] [1794878419.375203599] "
         "[tracker_lifecycle]: Failed to bring up all requested nodes. "
-        "Aborting bringup.\\n"
+        "Aborting bringup.\n"
     )
     failure=controller_failure(logfile)
     assert "failed lifecycle configuration" in failure
