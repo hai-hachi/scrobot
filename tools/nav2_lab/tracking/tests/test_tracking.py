@@ -425,7 +425,7 @@ def test_tracker_waits_fail_fast_and_reports_error_to_ui():
     assert 'fatal=controller_failure(self.stack_log)' in runner
     assert '"--stack-log",str(self.stack_log)' in service
     assert '"controller_error":controller_failure(self.stack_log)' in service
-    assert "NAV2 CONTROLLER CRASHED" in frontend
+    assert "NAV2 CONTROLLER FAILED" in frontend
     assert "lastStatus?.controller_error" in frontend
 
 
