@@ -247,7 +247,7 @@ function showStatus(s){
   $('stack-dot').classList.toggle('on',running);
   $('stack-state').textContent=running?'Simulation running':'Simulation stopped';
   $('action-state').textContent=s.controller_error?
-    'NAV2 CONTROLLER CRASHED · Stop and restart Tracker':
+    'NAV2 CONTROLLER FAILED · Stop and restart Tracker':
     trial?'Tracking '+s.run_name+' · ROS '+(s.ros_domain_id??'—'):
     running?'Gazebo ready · ROS domain '+(s.ros_domain_id??'—')+
       ' · start a FollowPath trial':'Tracking simulator stopped';
