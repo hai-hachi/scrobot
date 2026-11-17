@@ -78,8 +78,15 @@ def generate(settings,dirpath):
             # The configured minimum must never force a faster speed than
             # the shared user-selected reference speed.
             params["RPP"][key]=min(float(value),requested_speed)
-        else:
+        elif type(value) is bool:
+            # RPP feature flags are ROS boolean parameters.
             params["RPP"][key]=value
+        else:
+            # HTML number inputs become JS Numbers; JSON represents "1.0"
+            # as 1, and YAML would emit an INTEGER parameter. Nav2 Jazzy
+            # declares these RPP tuning fields as doubles and refuses
+            # integer overrides during lifecycle configure.
+            params["RPP"][key]=float(value)
     # No collision checks are needed in this obstacle-free test world.
     params["RPP"]["use_collision_detection"]=False
     params["SMC"]={
