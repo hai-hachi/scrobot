@@ -2,6 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SCROBOT | Nav2 Tracker Lab</title>
 <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/tracker/style.css">
+<script defer src="/tracker/chart_scales.js"></script>
 <script defer src="/tracker/app.js"></script><script defer src="/lab-rtf.js"></script></head>
 <body><div class="shell">
 <aside class="sidebar">
@@ -178,15 +179,28 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
 <div class="metric"><small>DURATION</small><strong id="duration">—</strong><span>Simulated seconds</span></div>
 <div class="metric"><small>WHEEL LIMIT VIOLATIONS</small><strong id="violations">—</strong><span>After shared saturation</span></div>
 </div>
-<svg id="error-chart" viewBox="0 0 850 200" role="img" aria-label="Cross-track error versus simulated time">
+<div class="between plot-toolbar">
+  <div>
+    <h3>Cross-track error over time</h3>
+    <p class="fineprint">Signed lateral error (m) vs elapsed simulation time (s). All selected runs share one scale, starting at t = 0.</p>
+  </div>
+  <label class="plot-live-toggle"><input id="plot-live" type="checkbox" checked> Include current / latest run</label>
+</div>
+<svg id="error-chart" viewBox="0 0 850 260" role="img" aria-label="Signed cross-track error (metres) versus elapsed simulation time (seconds), with tick marks and saved-run overlays">
 <g id="error-grid"></g><g id="error-series"></g></svg>
+<div id="plot-legend" class="plot-legend" aria-live="polite">Select saved trials below to compare trajectories.</div>
+<p class="fineprint" id="plot-status">Select a saved run's Plot checkbox to overlay its error curve.</p>
 <p id="trial-details" class="fineprint">Run a controller to record ground-truth error, path and heading metrics.</p></div>
 <div class="panel">
-<div class="between"><h2>Saved comparisons</h2><button id="clear-history" class="btn small danger">Delete all experiments</button></div>
-<p class="fineprint">Each run is automatically saved with its controller, path, initial pose, random seed, calibrated physics snapshot, sampled trajectory and metrics. Run RPP and SMC with the same inputs; each controller starts in a clean Gazebo world.</p>
+<div class="between"><h2>Saved comparisons</h2>
+<div class="plot-actions">
+  <button id="clear-plot" class="btn outline small" type="button">Clear plot selection</button>
+  <button id="clear-history" class="btn small danger">Delete all experiments</button>
+</div></div>
+<p class="fineprint">Tick <strong>Plot</strong> for up to 8 saved runs to overlay their signed tracking-error curves above. Selection is independent of deleting files and does not restart Gazebo. Runs without a finished trace cannot be plotted. For a fair RPP/SMC comparison, select matching paths and initial poses.</p>
 <div class="table-wrap"><table>
-<thead><tr><th>Run</th><th>Path</th><th>Controller</th><th>Seed</th><th>Status</th><th>Cross RMSE (m)</th><th>Heading RMSE (°)</th><th>Sim duration (s)</th><th>Delete</th></tr></thead>
-<tbody id="history-body"><tr><td colspan="9">No tracking runs yet.</td></tr></tbody></table></div>
+<thead><tr><th>Plot</th><th>Run</th><th>Path</th><th>Controller</th><th>Seed</th><th>Status</th><th>Cross RMSE (m)</th><th>Heading RMSE (°)</th><th>Sim duration (s)</th><th>Delete</th></tr></thead>
+<tbody id="history-body"><tr><td colspan="10">No tracking runs yet.</td></tr></tbody></table></div>
 </div></section>
 
 <section class="tracker-view" data-view="performance" hidden>
