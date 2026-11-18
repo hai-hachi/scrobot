@@ -9,7 +9,7 @@ border-color:#258679;box-shadow:inset 0 -2px 0 var(--accent)}
 .tracker-view[hidden]{display:none}
 #tracker-map{display:block;width:100%;min-height:300px;background:#0d1a25;
 border:1px solid var(--line);border-radius:10px;touch-action:none;cursor:crosshair}
-#error-chart{display:block;width:100%;height:205px;border:1px solid var(--line);
+#error-chart{display:block;width:100%;height:auto;min-height:240px;border:1px solid var(--line);
 border-radius:8px;background:#101b26;margin:17px 0}
 .setup-grid{grid-template-columns:minmax(0,1.5fr) minmax(265px,1fr)}
 #random-fields[hidden],#relative-fields[hidden],#manual-fields[hidden]{display:none}
@@ -43,3 +43,28 @@ border-radius:8px;background:#101b26;margin:17px 0}
 .tracker-tuning-grid .tuning-hint{padding-top:10px;border-top:1px solid var(--line)}
 @media (max-width:1190px){.tracker-tuning-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tracker-tuning-grid .tuning-shared{grid-column:1/-1}}
 @media (max-width:750px){.tracker-tuning-grid{grid-template-columns:minmax(0,1fr)}.tracker-tuning-grid .tuning-shared{grid-column:auto}}
+
+/* Saved-run overlay comparison: both axes labeled, consistent scale + legend. */
+.plot-toolbar{align-items:flex-start;flex-wrap:wrap;gap:12px;margin-top:10px}
+.plot-toolbar h3{margin:0 0 5px;font-size:14px}
+.plot-toolbar .fineprint{margin:0}
+.plot-live-toggle{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;white-space:nowrap}
+.plot-live-toggle input,.plot-checkbox{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
+.plot-live-toggle input:disabled,.plot-checkbox:disabled{opacity:.4;cursor:not-allowed}
+#plot-status{margin:9px 0 12px}
+.plot-legend{display:flex;flex-wrap:wrap;gap:9px 18px;align-items:center;min-height:26px;
+padding:8px 0;border-bottom:1px solid var(--line);font-size:11px;color:var(--muted)}
+.plot-legend-item{display:inline-flex;align-items:center;gap:7px;max-width:100%}
+.plot-legend-swatch{width:23px;height:0;border-top:3px solid;flex:none}
+.plot-legend-name{white-space:normal;word-break:break-word}
+.plot-actions{display:flex;flex-wrap:wrap;gap:8px}
+.plot-checkbox-cell{text-align:center;min-width:56px}
+#history-body tr.plot-selected{background:rgba(47,189,167,.075)}
+#history-body tr.plot-selected td:first-child{border-left:3px solid var(--accent)}
+#history-body tr td:first-child{text-align:center}
+#error-chart text{font-family:inherit;font-size:11px;fill:#a4bac9}
+#error-chart .axis-label{font-size:12px;font-weight:600;fill:#d3e2eb}
+#error-chart .tick-label{font-size:11px;fill:#93a9b7}
+#error-chart .empty-chart{font-size:13px;fill:#94abb9}
+@media (max-width:700px){.plot-toolbar{display:block}.plot-live-toggle{margin-top:9px}
+  .plot-actions{width:100%}#error-chart{min-height:200px}}
