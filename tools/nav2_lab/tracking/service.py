@@ -271,18 +271,11 @@ class TrackingService:
             # Saved metrics are sampled, but older data can be much larger.
             # Preserve first/last and keep all selected overlays lightweight.
             if len(points)>1200:
+                last=points[-1]
                 interval=math.ceil((len(points)-1)/1199)
                 points=points[::interval]
-                if points[-1]["t"]!=float(saved[-1].get("sim_s",-1)):
-                    final=saved[-1]
-                    if (isinstance(final,dict) and
-                        type(final.get("sim_s")) in (int,float) and
-                        type(final.get("error_m")) in (int,float) and
-                        math.isfinite(final["sim_s"]) and
-                        math.isfinite(final["error_m"]) and
-                        final["sim_s"]>points[-1]["t"]):
-                        points.append({"t":round(float(final["sim_s"]),4),
-                                       "e":round(float(final["error_m"]),5)})
+                if points[-1]["t"]!=last["t"]:
+                    points.append(last)
             summary=read_json(folder/"summary.json") or {}
             return {
                 "name":folder.name,"controller":summary.get("controller"),
