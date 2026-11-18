@@ -257,6 +257,31 @@ Cancel, Stop, Open/Close Gazebo, Open/Close RViz; all four log windows are
 at the bottom. Saved settings live in
 `tools/configs/labs/tracking_lab.yaml`.
 
+## Saved-run error chart comparison
+
+The **Run & Results** tab now plots **signed cross-track error** against
+**elapsed simulated time** with numeric ticks, labelled axes (seconds and
+metres), a visible zero-error baseline, and a shared automatically adjusted
+scale for every curve. The chart legend identifies the controller, path and
+individual saved run. No per-run normalization is performed; overlaying runs
+with different paths is allowed but displays a comparability warning.
+
+The **Saved comparisons** table has a **Plot** checkbox in each row.
+Select up to eight completed runs to overlay their error curves; deselect
+any run to remove it. The **Include current / latest run** toggle keeps the
+live trace visible or hides it; selecting the current run's saved trace
+avoids drawing it twice. **Clear plot selection** removes all overlays
+without deleting any files. Deleting a saved experiment removes its overlay,
+and history refreshes do not erase selected comparison curves.
+
+The read-only endpoint `/api/tracker/history/trace?name=<run-id>`
+loads `series.json` from the managed experiment directory. It verifies
+the run identifier, rejects symlinks/path traversal, bounds payload size
+and downsamples older large series. Only saved runs with finalized traces
+offer an enabled Plot checkbox; initializing runs without `series.json`
+remain listed but cannot be plotted. Saved historical data is not modified,
+and choosing overlays does not launch Gazebo or affect control timing.
+
 ## Tests and limitations
 
 ```bash
