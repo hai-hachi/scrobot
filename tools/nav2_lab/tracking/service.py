@@ -280,6 +280,8 @@ class TrackingService:
             return {
                 "name":folder.name,"controller":summary.get("controller"),
                 "path":summary.get("path"),"seed":summary.get("seed"),
+                "start_pose":summary.get("start_pose"),
+                "requested_speed_mps":summary.get("requested_speed_mps"),
                 "status":summary.get("status"),
                 "cross_track_rmse_m":(summary.get("results") or {}).get(
                     "cross_track_rmse_m"),
