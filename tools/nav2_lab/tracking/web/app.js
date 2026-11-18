@@ -14,6 +14,12 @@ let settings=null,defaultSettings=null,preview=null,live=null,lastStatus=null,bu
 let lastHistoryRefresh=0,lastPreviewKey='',initializing=true,drag=null,previewSequence=0;
 let shownControllerError=null;
 let shownFallbackDomain=null;
+const plotRuns=new Map();
+const pendingPlotRuns=new Set();
+const MAX_PLOT_RUNS=8;
+const PLOT_PALETTE=['#55C9F6','#B89BFF','#50DDB9','#FF86A2',
+  '#E8D46C','#8CACFF','#DE96CE','#82E3E6'];
+const LIVE_PLOT_COLOR='#F4BB66';
 
 async function api(path,body){
   const opts=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},
@@ -50,7 +56,8 @@ function setButtons(){
     'gz-close':stack&&Boolean(lastStatus?.gazebo_gui?.running),
     'rviz-open':stack&&!lastStatus?.rviz_running,
     'rviz-close':stack&&Boolean(lastStatus?.rviz_running),
-    'clear-history':!trial
+    'clear-history':!trial,
+    'clear-plot':plotRuns.size>0||pendingPlotRuns.size>0
   };
   for(const [id,available] of Object.entries(controls))$(id).disabled=busy||!available;
 }
@@ -225,21 +232,141 @@ function guardedPreview(){
     catch(e){$('pose-label').textContent=e.message;}
   },100);
 }
-function renderChart(trace){
-  const grid=$('error-grid'),plot=$('error-series');
-  grid.replaceChildren();plot.replaceChildren();
-  for(let i=0;i<=4;i++){
-    const y=20+i*40;
-    addLine(grid,[25,y],[825,y],'#33495a',1,'4 4');
+function chartText(group,content,attrs){
+  const node=shape('text',attrs);
+  node.textContent=content;
+  group.append(node);
+}
+function plotLines(){
+  const lines=[];
+  const currentName=lastStatus?.run_name;
+  // Avoid drawing the latest experiment twice if its complete saved trace
+  // has already been chosen from the history table.
+  if($('plot-live').checked&&!plotRuns.has(currentName)&&live?.trace?.length>=2){
+    lines.push({
+      name:'Current / latest '+(lastStatus?.summary?.controller||'trial'),
+      path:lastStatus?.summary?.path||null,
+      color:LIVE_PLOT_COLOR,
+      points:live.trace.map(p=>({t:p.t,e:p.e}))
+    });
   }
-  if(!trace||trace.length<2)return;
-  const end=Math.max(1,trace[trace.length-1].t);
-  const bound=Math.max(.1,...trace.map(q=>Math.abs(q.e)));
-  const xy=trace.map(q=>[25+800*q.t/end,
-    100-78*q.e/bound]);
-  plot.append(shape('polyline',{points:xy.map(q=>q.join(',')).join(' '),
-    fill:'none',stroke:'#f4bb66','stroke-width':2.6,'stroke-linecap':'round'}));
-  addLine(plot,[25,100],[825,100],'#53aa9f',1.1);
+  for(const [name,run] of plotRuns){
+    lines.push({
+      name:run.controller+' · '+run.path+' · '+name,
+      path:run.path,color:run.color,points:run.points
+    });
+  }
+  return lines;
+}
+function renderChart(){
+  const grid=$('error-grid'),plot=$('error-series');
+  const legend=$('plot-legend');
+  grid.replaceChildren();plot.replaceChildren();legend.replaceChildren();
+  const lines=plotLines();
+  const scales=window.TrackerChartScales.scales(lines);
+  const fmtAxis=window.TrackerChartScales.label;
+  // SVG dimensions are fixed in viewBox; the browser scales it responsively.
+  const L=77,R=824,T=18,B=196;
+  const xTo=t=>L+(t-scales.xMin)/(scales.xMax-scales.xMin)*(R-L);
+  const yTo=e=>B-(e-scales.yMin)/(scales.yMax-scales.yMin)*(B-T);
+  // Explicit numeric ticks in simulated seconds and signed metres.
+  for(const t of scales.xTicks){
+    const x=xTo(t);
+    addLine(grid,[x,T],[x,B],'#293F50',.8,'3 5');
+    chartText(grid,fmtAxis(t,scales.xStep),
+      {x,y:B+20,'text-anchor':'middle',class:'tick-label'});
+  }
+  for(const e of scales.yTicks){
+    const y=yTo(e);
+    addLine(grid,[L,y],[R,y],
+      Math.abs(e)<1e-9?'#6B929F':'#293F50',Math.abs(e)<1e-9?1.5:.8,
+      Math.abs(e)<1e-9?'':'3 5');
+    chartText(grid,fmtAxis(e,scales.yStep),
+      {x:L-10,y:y+4,'text-anchor':'end',class:'tick-label'});
+  }
+  addLine(grid,[L,T],[L,B],'#839CAB',1.4);
+  addLine(grid,[L,B],[R,B],'#839CAB',1.4);
+  chartText(grid,'Elapsed simulation time (s)',
+    {x:(L+R)/2,y:248,'text-anchor':'middle',class:'axis-label'});
+  chartText(grid,'Cross-track error (m)',
+    {transform:'translate(16 110) rotate(-90)',
+     x:0,y:0,'text-anchor':'middle',class:'axis-label'});
+
+  if(!lines.length){
+    chartText(plot,'Select saved runs below or start a tracking trial',
+      {x:(L+R)/2,y:(T+B)/2,'text-anchor':'middle',class:'empty-chart'});
+  }
+  for(const line of lines){
+    const points=(line.points||[]).filter(p=>
+      Number.isFinite(p.t)&&Number.isFinite(p.e)&&p.t>=0);
+    if(points.length>=2){
+      plot.append(shape('polyline',{
+        points:points.map(p=>xTo(p.t).toFixed(2)+','+yTo(p.e).toFixed(2)).join(' '),
+        fill:'none',stroke:line.color,'stroke-width':2.7,
+        'stroke-linecap':'round','stroke-linejoin':'round'
+      }));
+    }
+    const item=document.createElement('span');
+    item.className='plot-legend-item';
+    const swatch=document.createElement('span');
+    swatch.className='plot-legend-swatch';
+    swatch.style.borderColor=line.color;
+    const label=document.createElement('span');
+    label.className='plot-legend-name';
+    label.textContent=line.name;
+    item.append(swatch,label);
+    legend.append(item);
+  }
+  if(!lines.length)legend.textContent='No curves visible.';
+  const paths=new Set(lines.map(line=>line.path).filter(Boolean));
+  $('plot-status').textContent=plotRuns.size+' saved run'+
+    (plotRuns.size===1?'':'s')+' selected (max '+MAX_PLOT_RUNS+
+    ').'+(paths.size>1?' Different reference paths selected: their errors share the same scale but are not directly equivalent.':
+    ' Curves are aligned at each trial\'s start (t = 0); no time normalization.');
+}
+function nextPlotColor(){
+  const used=new Set([...plotRuns.values()].map(run=>run.color));
+  return PLOT_PALETTE.find(color=>!used.has(color))||PLOT_PALETTE[0];
+}
+function syncPlotCheckboxes(){
+  const reached=plotRuns.size+pendingPlotRuns.size>=MAX_PLOT_RUNS;
+  for(const checkbox of document.querySelectorAll('.plot-checkbox')){
+    const name=checkbox.dataset.plotName;
+    checkbox.checked=plotRuns.has(name)||pendingPlotRuns.has(name);
+    checkbox.disabled=!checkbox.dataset.hasTrace||
+      pendingPlotRuns.has(name)||(reached&&!checkbox.checked);
+    checkbox.closest('tr')?.classList.toggle('plot-selected',checkbox.checked);
+  }
+  $('clear-plot').disabled=busy||(!plotRuns.size&&!pendingPlotRuns.size);
+}
+async function selectSavedTrace(name,checked){
+  if(!checked){
+    pendingPlotRuns.delete(name);
+    plotRuns.delete(name);
+    syncPlotCheckboxes();renderChart();
+    return;
+  }
+  if(plotRuns.has(name)||pendingPlotRuns.has(name))return;
+  if(plotRuns.size+pendingPlotRuns.size>=MAX_PLOT_RUNS){
+    notify('Only '+MAX_PLOT_RUNS+' comparison runs can be plotted at once.',true);
+    syncPlotCheckboxes();
+    return;
+  }
+  pendingPlotRuns.add(name);
+  syncPlotCheckboxes();
+  try{
+    const trace=await api('/history/trace?name='+encodeURIComponent(name));
+    if(!pendingPlotRuns.has(name))return; // cleared during an in-flight fetch
+    if(!Array.isArray(trace.points)||trace.points.length<2)
+      throw new Error('Saved experiment has no usable trace samples');
+    plotRuns.set(name,{...trace,color:nextPlotColor()});
+  }catch(e){
+    notify('Could not load '+name+': '+e.message,true);
+  }finally{
+    pendingPlotRuns.delete(name);
+    syncPlotCheckboxes();
+    renderChart();
+  }
 }
 function showStatus(s){
   lastStatus=s;
@@ -302,7 +429,7 @@ function showStatus(s){
     (current.raw_limit_requests??0)+
     ' · Path distance: '+fmt(result.reference_length_m,2)+' m':
     'Run a controller to record ground-truth error, path and heading metrics.';
-  draw();renderChart(live?.trace);
+  draw();renderChart();
   const resources=s.resources||{};
   $('perf-cpu').textContent=fmt(resources?.totals?.cpu_percent_one_core,1)+'%';
   $('perf-ram').textContent=fmt(resources?.totals?.rss_mb,1)+' MB';
@@ -328,10 +455,24 @@ async function history(){
   const rows=await api('/history');
   const table=$('history-body');table.replaceChildren();
   for(const item of rows){
-    const s=item.summary||{},r=s.results||{};
-    const tr=addRow(table,[item.name,s.path||'—',s.controller||'—',
-      s.seed??'—',s.status||'—',fmt(r.cross_track_rmse_m,4),
-      fmt(r.heading_rmse_deg,2),fmt(r.duration_sim_s,1)]);
+    const data=item.summary||{},result=data.results||{};
+    const tr=addRow(table,[item.name,data.path||'—',data.controller||'—',
+      data.seed??'—',data.status||'—',fmt(result.cross_track_rmse_m,4),
+      fmt(result.heading_rmse_deg,2),fmt(result.duration_sim_s,1)]);
+    const checkCell=document.createElement('td');
+    checkCell.className='plot-checkbox-cell';
+    const checkbox=document.createElement('input');
+    checkbox.type='checkbox';checkbox.className='plot-checkbox';
+    checkbox.dataset.plotName=item.name;
+    if(item.has_trace)checkbox.dataset.hasTrace='yes';
+    checkbox.title=item.has_trace?
+      'Add/remove this saved experiment from the comparison plot':
+      'No finalized trace yet; this run cannot be plotted';
+    checkbox.setAttribute('aria-label','Plot saved experiment '+item.name);
+    checkbox.checked=plotRuns.has(item.name)||pendingPlotRuns.has(item.name);
+    checkbox.addEventListener('change',()=>selectSavedTrace(item.name,checkbox.checked));
+    checkCell.append(checkbox);tr.insertBefore(checkCell,tr.firstChild);
+
     const td=document.createElement('td'),b=document.createElement('button');
     b.className='btn small danger';b.textContent='Delete';
     b.disabled=busy||Boolean(lastStatus?.trial_running);
@@ -339,12 +480,19 @@ async function history(){
       if(!confirm('Permanently delete tracking experiment '+item.name+'?'))return;
       operate(async()=>{
         await api('/history/delete',{name:item.name,confirm:true});
-        await history();notify('Experiment deleted.');
+        plotRuns.delete(item.name);pendingPlotRuns.delete(item.name);
+        await history();renderChart();
+        notify('Experiment deleted.');
       });
     };
     td.append(b);tr.append(td);
   }
-  if(!rows.length)addRow(table,['No completed or running experiments yet.']);
+  if(!rows.length){
+    const tr=document.createElement('tr'),td=document.createElement('td');
+    td.colSpan=10;td.textContent='No saved tracking runs yet.';
+    tr.append(td);table.append(tr);
+  }
+  syncPlotCheckboxes();
 }
 async function refresh(){
   const data=await api('/status');
@@ -461,10 +609,17 @@ for(const [id,path,message]of [
 ]){
   $(id).onclick=()=>operate(async()=>{await api(path,{});notify(message);});
 }
+$('plot-live').onchange=renderChart;
+$('clear-plot').onclick=()=>{
+  plotRuns.clear();pendingPlotRuns.clear();
+  syncPlotCheckboxes();renderChart();
+};
 $('clear-history').onclick=()=>{
   if(!confirm('Permanently delete ALL saved Tracker Lab experiments?'))return;
   operate(async()=>{const r=await api('/history/clear',{confirm:true});
-    await history();notify('Deleted '+r.deleted+' tracking experiments.');});
+    plotRuns.clear();pendingPlotRuns.clear();
+    await history();renderChart();
+    notify('Deleted '+r.deleted+' tracking experiments.');});
 };
 (async()=>{
   try{
