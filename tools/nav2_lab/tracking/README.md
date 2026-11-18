@@ -262,9 +262,10 @@ at the bottom. Saved settings live in
 The **Run & Results** tab now plots **signed cross-track error** against
 **elapsed simulated time** with numeric ticks, labelled axes (seconds and
 metres), a visible zero-error baseline, and a shared automatically adjusted
-scale for every curve. The chart legend identifies the controller, path and
-individual saved run. No per-run normalization is performed; overlaying runs
-with different paths is allowed but displays a comparability warning.
+scale for every curve. The chart legend identifies the controller, path,
+individual saved run, and its RMSE when available. No per-run normalization
+is performed; overlaying runs with different paths, starting poses, or
+requested speeds displays a comparability warning.
 
 The **Saved comparisons** table has a **Plot** checkbox in each row.
 Select up to eight completed runs to overlay their error curves; deselect
