@@ -17,7 +17,7 @@ from copy import deepcopy
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import yaml
 from planning.core import PLANNERS, nav2_params, validate
@@ -663,6 +663,17 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/tracker/defaults":return self.json_reply(self.tracking.defaults())
             if path=="/api/tracker/status":return self.json_reply(self.tracking.status())
             if path=="/api/tracker/history":return self.json_reply(self.tracking.history())
+            if path=="/api/tracker/history/trace":
+                names=parse_qs(urlparse(self.path).query).get("name",[])
+                if len(names)!=1:
+                    return self.json_reply({"error":"One experiment name is required"},400)
+                try:
+                    trace=self.tracking.history_trace(names[0])
+                except FileNotFoundError as exc:
+                    return self.json_reply({"error":str(exc)},404)
+                except ValueError as exc:
+                    return self.json_reply({"error":str(exc)},400)
+                return self.json_reply(trace)
             if path=="/api/tracker/speed":return self.json_reply(self.tracking.sim_speed())
             if path=="/api/sim-speed":return self.json_reply(self.shared_speed_status())
             if path=="/api/config":return self.json_reply(self.service.config())
