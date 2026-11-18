@@ -335,6 +335,80 @@ def test_tracker_backend_is_isolated_and_safe(tmp_path):
     with pytest.raises(ValueError):service.clear_history({"confirm":False})
 
 
+def test_saved_run_traces_are_safe_and_plottable(tmp_path):
+    service=TrackingService(run_root=tmp_path)
+    run_name="20261118_113400_tracking_ab123"
+    folder=tmp_path/run_name
+    folder.mkdir()
+    (folder/"summary.json").write_text(json.dumps({
+        "controller":"SMC","path":"straight","seed":2026,
+        "status":"success","results":{"cross_track_rmse_m":.12}
+    }))
+    # Historical runs without a finalized trace are listed but not selectable.
+    assert service.history()[0]["has_trace"] is False
+    samples=[
+        {"sim_s":0.0,"error_m":.4},
+        {"sim_s":.1,"error_m":.2},
+        {"sim_s":.2,"error_m":-.1},
+        {"sim_s":.2,"error_m":-.4},  # duplicate timestamp skipped
+        {"sim_s":.4,"error_m":.0},
+    ]
+    (folder/"series.json").write_text(json.dumps(samples))
+    assert service.history()[0]["has_trace"] is True
+    result=service.history_trace(run_name)
+    assert result["name"]==run_name
+    assert result["controller"]=="SMC"
+    assert result["path"]=="straight"
+    assert result["seed"]==2026
+    assert result["cross_track_rmse_m"]==.12
+    assert result["points"]==[
+        {"t":0.,"e":.4},{"t":.1,"e":.2},
+        {"t":.2,"e":-.1},{"t":.4,"e":0.},
+    ]
+    with pytest.raises(ValueError,match="Invalid experiment ID"):
+        service.history_trace("../../etc/passwd")
+    with pytest.raises(FileNotFoundError):
+        service.history_trace("20261118_113401_tracking_fffff")
+
+
+def test_saved_run_trace_rejects_symlinks_and_bad_payloads(tmp_path):
+    service=TrackingService(run_root=tmp_path)
+    folder=tmp_path/"20261118_113400_tracking_ab123"
+    folder.mkdir()
+    (folder/"summary.json").write_text('{"controller":"RPP"}')
+    external=tmp_path/"unrelated_trace.json"
+    external.write_text('[{"sim_s":0,"error_m":0.1}]')
+    (folder/"series.json").symlink_to(external)
+    assert service.history()[0]["has_trace"] is False
+    with pytest.raises(FileNotFoundError):
+        service.history_trace(folder.name)
+    (folder/"series.json").unlink()
+    (folder/"series.json").write_text('{"bad":"shape"}')
+    with pytest.raises(ValueError,match="JSON list"):
+        service.history_trace(folder.name)
+
+
+def test_plot_comparison_route_controls_and_saved_chart_bindings():
+    html=(HERE/"web/index.html").read_text()
+    app=(HERE/"web/app.js").read_text()
+    server=(HERE.parent/"planning/web_server.py").read_text()
+    for name in ("error-chart","error-grid","error-series","plot-live",
+                 "plot-legend","plot-status","clear-plot","history-body"):
+        assert 'id="'+name+'"' in html
+    assert 'src="/tracker/chart_scales.js"' in html
+    assert "/api/tracker/history/trace" in server
+    assert "parse_qs(urlparse(self.path).query)" in server
+    assert '"/tracker/chart_scales.js"' in server
+    assert 'MAX_PLOT_RUNS=8' in app
+    assert "selectSavedTrace(item.name,checkbox.checked)" in app
+    assert "plotRuns.set(name," in app
+    assert "elapsed" in html.lower()
+    assert "signed" in html.lower()
+    assert "renderChart()" in app
+    assert "window.TrackerChartScales.scales(lines)" in app
+    assert "plotRuns.delete(item.name)" in app
+
+
 def test_tracker_ui_routes_and_controls():
     script=(HERE/"web/app.js").read_text()
     html=(HERE/"web/index.html").read_text()
