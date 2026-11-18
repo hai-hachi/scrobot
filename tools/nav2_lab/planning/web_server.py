@@ -695,6 +695,7 @@ class Handler(BaseHTTPRequestHandler):
             tracker_file={"/tracker":"index.html","/tracker/":"index.html",
                           "/tracker/index.html":"index.html",
                           "/tracker/app.js":"app.js",
+                          "/tracker/chart_scales.js":"chart_scales.js",
                           "/tracker/style.css":"style.css"}.get(path)
             if tracker_file:
                 body=(HERE.parent/"tracking"/"web"/tracker_file).read_bytes()
