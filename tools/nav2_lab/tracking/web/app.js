@@ -252,7 +252,9 @@ function plotLines(){
   }
   for(const [name,run] of plotRuns){
     lines.push({
-      name:run.controller+' · '+run.path+' · '+name,
+      name:run.controller+' · '+run.path+' · '+name+
+        (typeof run.cross_track_rmse_m==='number'?
+          ' · RMSE '+run.cross_track_rmse_m.toFixed(3)+' m':''),
       path:run.path,color:run.color,points:run.points
     });
   }
@@ -319,10 +321,21 @@ function renderChart(){
   }
   if(!lines.length)legend.textContent='No curves visible.';
   const paths=new Set(lines.map(line=>line.path).filter(Boolean));
+  const saved=[...plotRuns.values()];
+  const poseKeys=new Set(saved.filter(p=>p.start_pose).map(p=>
+    JSON.stringify([p.start_pose.x,p.start_pose.y,p.start_pose.yaw_deg])));
+  const speeds=new Set(saved.filter(p=>Number.isFinite(p.requested_speed_mps))
+    .map(p=>Number(p.requested_speed_mps).toFixed(4)));
+  const cautions=[];
+  if(paths.size>1)cautions.push('Different paths');
+  if(poseKeys.size>1)cautions.push('different start poses');
+  if(speeds.size>1)cautions.push('different reference speeds');
   $('plot-status').textContent=plotRuns.size+' saved run'+
     (plotRuns.size===1?'':'s')+' selected (max '+MAX_PLOT_RUNS+
-    ').'+(paths.size>1?' Different reference paths selected: their errors share the same scale but are not directly equivalent.':
-    ' Curves are aligned at each trial\'s start (t = 0); no time normalization.');
+    '). '+(cautions.length?
+      'Comparison caution: '+cautions.join(', ')+'. ':
+      '')+
+    'Curves share the same axes and begin at t = 0; no time normalization.';
 }
 function nextPlotColor(){
   const used=new Set([...plotRuns.values()].map(run=>run.color));
