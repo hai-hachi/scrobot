@@ -31,6 +31,9 @@ jobs:
         run: |
           node --check tools/nav2_lab/planning/web/app.js
           node --check tools/nav2_lab/tracking/web/app.js
+          node --check tools/nav2_lab/tracking/web/chart_scales.js
           node --check tools/nav2_lab/shared/rtf_control.js
+      - name: Test Tracker multi-run plot axis scales
+        run: node --test tools/nav2_lab/tracking/tests/test_chart_scales.cjs
       - name: Validate config and geometric metrics
         run: python -m pytest -q tools/nav2_lab/tests tools/nav2_lab/planning/tests tools/nav2_lab/tracking/tests
