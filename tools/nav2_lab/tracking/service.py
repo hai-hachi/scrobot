@@ -226,11 +226,72 @@ class TrackingService:
                 continue
             summary=read_json(folder/"summary.json")
             if summary:
-                rows.append({"name":folder.name,"summary":summary})
+                trace_file=folder/"series.json"
+                rows.append({
+                    "name":folder.name,"summary":summary,
+                    "has_trace":trace_file.is_file() and not trace_file.is_symlink()
+                })
         return rows
 
     def history(self):
         return self._history_rows()[:50]
+
+    def history_trace(self,name):
+        """Load one saved trial's signed cross-track-error curve, read-only.
+
+        Never expose arbitrary paths or unbounded files through this API.
+        Historical runs without final series.json are intentionally not
+        selectable; they may have failed before tracking produced samples.
+        """
+        with self.lock:
+            folder=self._safe_folder(name)
+            source=folder/"series.json"
+            if source.is_symlink() or not source.is_file():
+                raise FileNotFoundError("This run has no completed tracking trace")
+            if source.stat().st_size>8_000_000:
+                raise ValueError("Saved tracking trace exceeds the safe size limit")
+            saved=read_json(source)
+            if not isinstance(saved,list):
+                raise ValueError("Saved tracking trace must be a JSON list")
+            points=[]
+            for sample in saved:
+                if not isinstance(sample,dict):
+                    continue
+                elapsed=sample.get("sim_s")
+                signed=sample.get("error_m")
+                if (type(elapsed) not in (int,float) or
+                    type(signed) not in (int,float) or
+                    not math.isfinite(elapsed) or not math.isfinite(signed) or
+                    elapsed<0 or (points and elapsed<=points[-1]["t"])):
+                    continue
+                points.append({"t":round(float(elapsed),4),
+                               "e":round(float(signed),5)})
+            if len(points)<2:
+                raise ValueError("This experiment has no plottable tracking samples")
+            # Saved metrics are sampled, but older data can be much larger.
+            # Preserve first/last and keep all selected overlays lightweight.
+            if len(points)>1200:
+                interval=math.ceil((len(points)-1)/1199)
+                points=points[::interval]
+                if points[-1]["t"]!=float(saved[-1].get("sim_s",-1)):
+                    final=saved[-1]
+                    if (isinstance(final,dict) and
+                        type(final.get("sim_s")) in (int,float) and
+                        type(final.get("error_m")) in (int,float) and
+                        math.isfinite(final["sim_s"]) and
+                        math.isfinite(final["error_m"]) and
+                        final["sim_s"]>points[-1]["t"]):
+                        points.append({"t":round(float(final["sim_s"]),4),
+                                       "e":round(float(final["error_m"]),5)})
+            summary=read_json(folder/"summary.json") or {}
+            return {
+                "name":folder.name,"controller":summary.get("controller"),
+                "path":summary.get("path"),"seed":summary.get("seed"),
+                "status":summary.get("status"),
+                "cross_track_rmse_m":(summary.get("results") or {}).get(
+                    "cross_track_rmse_m"),
+                "points":points,
+            }
 
     def delete(self,body):
         with self.lock:
