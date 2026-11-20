@@ -22,7 +22,8 @@ from shared.lab_ui import GazeboGUI,log_tail
 from shared.sim_speed import get as speed_get,save as speed_save
 from planning.process_metrics import ProcessSampler
 from tracking.core import (defaults,validate,reference,initial_pose,
-                           downsample_error_series,integrate_squared_error)
+                           downsample_error_series,integrate_squared_error,
+                           convergence_time)
 from tracking.physical_limits import capabilities
 from tracking.world import write_world
 from tracking.configuration import generate
@@ -296,14 +297,17 @@ class TrackingService:
                           for p in drawing],
             }
 
-    def history_comparison(self,names):
-        """Compare selected saved runs over identical simulated-time duration.
+    def history_comparison(self,names,tolerance_m=.05):
+        """Compare full-run RMSE, same-duration RMSE and sustained convergence.
 
-        Use full-resolution stored errors, NOT the decimated curve. Legacy
-        series may be sparse, and are explicitly marked approximate.
+        The adjustable tolerance changes only the convergence calculation;
+        the two RMSE metrics never depend on the tolerance. Full-resolution
+        saved errors, not plot-decimated points, are the basis of all three.
         """
-        if not isinstance(names,list) or not 2<=len(names)<=8:
-            raise ValueError("Select between two and eight experiments")
+        if not isinstance(names,list) or not 1<=len(names)<=8:
+            raise ValueError("Select between one and eight experiments")
+        if type(tolerance_m) not in (float,int) or not math.isfinite(tolerance_m) or not .01<=tolerance_m<=.50:
+            raise ValueError("Convergence tolerance must be between 0.01 and 0.50 m")
         if len(set(names))!=len(names):
             raise ValueError("Comparison contains duplicate experiment names")
         with self.lock:
@@ -328,10 +332,15 @@ class TrackingService:
             values=[]
             for run in runs:
                 observed=integrate_squared_error(run["series"],common_end)
+                settled=convergence_time(
+                    run["series"],tolerance_m,cutoff=common_end,
+                    minimum_settle_s=1.0)
                 values.append({
                     "name":run["name"],
                     "rmse_m":round(observed["rmse_m"],5)
                         if observed["rmse_m"] is not None else None,
+                    "convergence_sim_s":settled,
+                    "converged":settled is not None,
                     "observed_duration_sim_s":round(
                         observed["duration_sim_s"],5),
                     "excluded_gt_gaps":observed["gap_count"],
@@ -340,6 +349,9 @@ class TrackingService:
                 })
             return {
                 "common_end_sim_s":round(common_end,5),
+                "convergence_tolerance_m":float(tolerance_m),
+                "minimum_settle_sim_s":1.0,
+                "convergence_definition":"first entry into |e_y| <= tolerance held until common end with >=1s observed dwell",
                 "method":"sim_time_trapezoid_e_squared_v2",
                 "all_full_resolution":all(r["full_resolution"] for r in runs),
                 "same_path":len(set(str(r["path"]) for r in runs))==1,
