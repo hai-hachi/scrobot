@@ -24,6 +24,7 @@ def generate_launch_description():
     names=("world","path_json","monitor_file","nav2_params","controller_params",
            "robot_x","robot_y","robot_yaw","ground_truth_rate_hz",
            "enable_motor_response","tau_left","tau_right","gain_left","gain_right",
+           "motor_max_rpm","motor_accel_rpmps",
            "drive_contact_mu","caster_contact_mu","wheel_joint_damping",
            "wheel_collision_width","drive_slip1","drive_slip2")
     v={name:LaunchConfiguration(name) for name in names}
@@ -69,7 +70,10 @@ def generate_launch_description():
         condition=IfCondition(v["enable_motor_response"]),
         parameters=[{"use_sim_time":True,
           **{key:ParameterValue(v[key],value_type=float) for key in
-             ("tau_left","tau_right","gain_left","gain_right")}}])
+             ("tau_left","tau_right","gain_left","gain_right")},
+          "max_wheel_rpm":ParameterValue(v["motor_max_rpm"],value_type=float),
+          "max_wheel_accel_rpmps":ParameterValue(
+              v["motor_accel_rpmps"],value_type=float)}])
     display=ExecuteProcess(cmd=[sys.executable,str(HERE/"viz.py"),"--path",v["path_json"]],
                            output="screen")
     monitor=ExecuteProcess(cmd=[sys.executable,str(HERE/"monitor.py"),"--output",v["monitor_file"]],output="screen")
