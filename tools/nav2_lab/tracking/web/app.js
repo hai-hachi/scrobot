@@ -32,18 +32,39 @@ function showPhysicalLimits(limits){
   $('physical-max-rpm').textContent=limits.wheel_max_rpm.toFixed(1)+' RPM';
   $('physical-max-linear').textContent=limits.max_linear_mps.toFixed(4)+' m/s';
   $('physical-max-angular').textContent=limits.max_angular_radps.toFixed(4)+' rad/s';
+  $('physical-wheel-ramp').textContent=limits.wheel_max_rpm.toFixed(0)+
+    ' RPM / '+limits.wheel_full_speed_time_s.toFixed(2)+' s';
+  $('physical-wheel-accel').textContent=
+    limits.max_wheel_accel_mps2.toFixed(4)+' m/s²';
+  $('physical-max-linear-accel').textContent=
+    limits.max_linear_accel_mps2.toFixed(4)+' m/s²';
+  $('physical-max-angular-accel').textContent=
+    limits.max_angular_accel_radps2.toFixed(4)+' rad/s²';
   const h=limits.wheel_half_separation_m.toFixed(3);
   const v=limits.max_wheel_mps.toFixed(4);
   $('physical-coupled-envelope').textContent=
-    'Each wheel is limited by 100 RPM and a 0.50 m/s cap: |v − '+h+'ω| ≤ '+v+
+    'Each wheel is limited to '+limits.wheel_max_rpm.toFixed(0)+
+    ' RPM: |v − '+h+'ω| ≤ '+v+
     ' and |v + '+h+'ω| ≤ '+v+' m/s. '+
     'Equivalently, |v| + '+h+'|ω| ≤ '+v+' m/s.';
+  const a=limits.max_wheel_accel_mps2.toFixed(4);
+  $('physical-coupled-accel').textContent=
+    '100 RPM in 0.25 sim-s means |Δv − '+h+'Δω| ≤ '+a+
+    'Δt and |Δv + '+h+'Δω| ≤ '+a+
+    'Δt (wheel speed in m/s, Δt in simulated seconds).';
   for(const id of ['desired-speed','rpp-min-speed','rpp-min-approach']){
     $(id).max=String(limits.max_linear_mps);
   }
   for(const id of ['rpp-rotate-rate','smc1-max-angular-cmd',
                    'smc2-max-angular-cmd']){
     $(id).max=String(limits.max_angular_radps);
+  }
+  for(const id of ['smc1-max-linear-accel','smc2-max-linear-accel']){
+    $(id).max=String(limits.max_linear_accel_mps2);
+  }
+  for(const id of ['rpp-angular-accel','smc1-max-angular-accel',
+                   'smc2-max-angular-accel']){
+    $(id).max=String(limits.max_angular_accel_radps2);
   }
   updateTurningAllowance();
 }
@@ -57,7 +78,8 @@ function updateTurningAllowance(){
     fmt(omega,3)+' rad/s simultaneous rotation. '+
     'At v = 0, the physical maximum is '+
     fmt(physicalLimits.max_angular_radps,3)+' rad/s. '+
-    'The coupled wheel limiter scales both v and ω when necessary.';
+    'The coupled wheel limiter scales both v and ω when necessary; '+
+    'a final 100 sim-Hz motor ramp also limits each wheel acceleration.';
 }
 
 async function api(path,body){
