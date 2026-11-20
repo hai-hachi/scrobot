@@ -242,13 +242,19 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
     <div class="math-eq" data-formula="q"></div>
   </div>
   <p class="fineprint">The singular guard δD and all gains are independently tunable in each SMC card. When saturation is disabled, χsat = 0, so the η and ηx contributions vanish.</p>
+  <p class="math-group-title">Physical wheel kinematics (same for RPP, SMC-1s and SMC-2s)</p>
+  <div class="math-formula-grid">
+    <div class="math-eq" data-formula="wheel-kinematics"></div>
+    <div class="math-eq" data-formula="wheel-rpm"></div>
+    <div class="math-eq" data-formula="limit-spin"></div>
+  </div>
   <p class="math-group-title">Command limits applied after the full control laws</p>
   <div class="math-formula-grid">
     <div class="math-eq" data-formula="limit-angular"></div>
     <div class="math-eq" data-formula="limit-accel"></div>
     <div class="math-eq" data-formula="limit-wheel"></div>
   </div>
-  <p class="fineprint">ωmax, amax, αmax are individually tunable; the physical wheel limit is fixed. SMC-1s and SMC-2s both use the same drivetrain. The ideal reaching identities require a true unicycle reference and no actuator limiting; the robot-centered carrot does not necessarily satisfy those assumptions.</p>
+  <p class="fineprint">The drive wheels have radius 0.050 m, 0.420 m wheel-centre spacing and a 95 RPM limit. The rounded 0.50 m/s motor rating is slightly higher than the speed implied by 95 RPM, so 0.49742 m/s is used for each wheel. Individual angular and acceleration limits are tunable, but the coupled wheel RPM limit is enforced after those limits. RPP, SMC-1s and SMC-2s all use the same drivetrain. The ideal SMC reaching identities require a true unicycle reference and no actuator limiting.</p>
 </section>
 </section>
 
