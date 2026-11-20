@@ -9,6 +9,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(nav2_core REQUIRED)
 find_package(nav2_util REQUIRED)
@@ -18,7 +19,7 @@ find_package(pluginlib REQUIRED)
 
 add_library(scrobot_smc_controller SHARED src/smc_controller.cpp)
 ament_target_dependencies(scrobot_smc_controller
-  rclcpp rclcpp_lifecycle geometry_msgs nav_msgs nav2_core
+  rclcpp rclcpp_lifecycle geometry_msgs std_msgs nav_msgs nav2_core
   nav2_util nav2_costmap_2d tf2_ros pluginlib)
 pluginlib_export_plugin_description_file(nav2_core smc_plugins.xml)
 install(TARGETS scrobot_smc_controller
