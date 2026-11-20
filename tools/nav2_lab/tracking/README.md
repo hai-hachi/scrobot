@@ -328,8 +328,10 @@ The plugin explicitly fails if `|D|` is smaller than the configured guard
 or changes sign. Both versions use the same motor/wheel envelope, speed and
 acceleration limits **after** calculating the full control law. The source
 Python SMC lab's free-space kinematic actuator limits `vmax=0.60m/s` differ
-from the calibrated SCROBOT physical wheel limit, so this Gazebo lab retains
-the more restrictive shared `|v|+0.21|omega|<=0.50m/s` rule.
+from the SCROBOT 100 RPM motor capability. This Gazebo lab now applies
+`|v|+0.21|omega|<=0.5235988m/s`, with wheel-acceleration limits in
+simulated time. Requested angular/linear acceleration tuners may be
+more conservative than these hardware bounds.
 
 **Critical theoretical limitation:** because a robot-centered PP carrot is
 not guaranteed to satisfy the assumed unicycle reference kinematics, the
@@ -382,19 +384,60 @@ The separate ROS Jazzy colcon workflow checks plugin compilation.
 tracking quality require an on-machine run; offline tests are not proof of
 successful physics tracking.**
 
-### Rounded 100 RPM physical drivetrain limit
+### Physical 100 RPM speed and acceleration limits
 
-Wheel diameter is **0.100 m** and the drive wheel-centre separation is
-**0.420 m**, from the actual SCROBOT URDF. The rounded motor maximum is
-**100 RPM**, which by geometry implies **0.52360 m/s** rim speed.
-However, the separately specified maximum **0.50 m/s per wheel** is lower,
-so that rating is the effective speed limit in the controller and router.
-The maximum straight velocity is `0.50 m/s`, and the maximum pure spin is
-`2*0.50/0.420 = 2.38095 rad/s`.
+The robot's source URDF defines drive wheel radius **0.050 m** and
+wheel-centre separation **0.420 m**. Each motor reaches **100 RPM** from rest
+in **0.25 simulated seconds**. The corresponding wheel speed and
+acceleration limits are:
 
-For simultaneous motion, the exact coupled drivetrain restriction is
-`|v| + 0.210*|omega| <= 0.50 m/s`, equivalent to imposing both
-`|v - 0.210*omega| <= 0.50` and `|v + 0.210*omega| <= 0.50`.
-This is enforced in the common command router (RPP, SMC-1s, SMC-2s) and
-internally in the full SMC plugins. Separate requested linear/angular
-maxima do **not** mean both limits are reachable at the same time.
+```text
+wheel_max_speed = (100 RPM)*(2*pi*0.050 m)/(60 s/min)
+                = 0.5235987756 m/s
+wheel_max_accel = wheel_max_speed / 0.25 s
+                = 2.0943951024 m/s^2 = 400 RPM/s
+
+max_straight_speed = 0.5235987756 m/s
+max_pure_spin      = 2*wheel_max_speed / 0.420
+                   = 2.4933275028 rad/s
+max_linear_accel   = 2.0943951024 m/s^2
+max_pure_spin_accel= 2*wheel_max_accel / 0.420
+                   = 9.9733100118 rad/s^2
+```
+
+**Both wheels must satisfy the coupled inequalities**, not four
+independent chassis-coordinate clamps:
+
+```text
+left_wheel  = v - 0.210*omega
+right_wheel = v + 0.210*omega
+
+|v - 0.210*omega| <= 0.5235987756 m/s
+|v + 0.210*omega| <= 0.5235987756 m/s
+
+|delta_v - 0.210*delta_omega| <= 2.0943951024*delta_t
+|delta_v + 0.210*delta_omega| <= 2.0943951024*delta_t
+```
+
+The shared **100 sim-Hz** command router applies the speed envelope,
+limits each individual wheel's change at **400 RPM/s**, converts back to
+`v,omega`, and publishes `/tracker/cmd_vel_safe` to either
+`diff_drive_controller` or the calibrated motor response model.
+A command that stops arriving for 0.25 simulated seconds is replaced
+by a zero target and the wheels ramp down at the rated acceleration.
+ROS simulated time is used even when the Gazebo RTF is 0.25.
+
+If the Mobility Lab chooses `first_order` motor response, the *Tracker
+launch only* configures its downstream simulator with 100 RPM and
+400 RPM/s. The first-order motor gain/filter cannot violate the physical
+command limits after it filters the target. The independent production
+simulation and other labs retain their existing 95 RPM motor model
+defaults unless explicitly configured separately.
+
+The old 0.50 m/s figure is no longer used as an additional physical
+hard cap: it was a conservative nominal speed, whereas 100 RPM with
+a 10 cm diameter wheel corresponds to 0.5235988 m/s. The RPP and
+SMC per-controller acceleration tuners are limited to these physical
+values; the final wheel-space limiter is applied to all three
+controllers regardless of those preferences.
+
