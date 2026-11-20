@@ -11,7 +11,8 @@ from pathlib import Path
 
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE.parent))
-from tracking.core import metrics,reference,validate,projection,wrap
+from tracking.core import (TrackingMetrics,downsample_error_series,
+                           integrate_squared_error,reference,validate,projection,wrap)
 from tracking.health import controller_failure,ready_for_tracking
 from tracking.carrot import reference as estimated_carrot, errors as carrot_errors, surfaces as diagnostic_surfaces
 from tracking.physical_limits import WHEEL_SEPARATION,MAX_WHEEL_MPS
@@ -84,7 +85,7 @@ class Trial(Node):
         self.controller_active=False
         self.create_timer(.15,self.poll_controller_lifecycle)
         self.samples=[]
-        self.trace=[]
+        self.tracking_metrics=TrackingMetrics(self.points)
         self.timeline=[]
         self.latest_smc_diag=None
         self.latest_smc_diag_wall=-1.
@@ -180,21 +181,15 @@ class Trial(Node):
         stamp=msg.header.stamp.sec+msg.header.stamp.nanosec/1e9
         if stamp<=0:stamp=self.get_clock().now().nanoseconds*1e-9
         if self.samples and stamp<=self.samples[-1]["t"]:return
-        self.samples.append({"t":stamp,"x":p.position.x,
-                             "y":p.position.y,"yaw":yaw,
-                             "v":self.last_v,"w":self.last_w})
+        sample={"t":stamp,"x":p.position.x,"y":p.position.y,"yaw":yaw,
+                "v":self.last_v,"w":self.last_w}
+        self.samples.append(sample)
+        self.tracking_metrics.add(sample)
         if (not self.timeline or
                 stamp-self.output["start_sim_s"]>=0 and
                 (stamp-self.timeline[-1]["stamp"]>=.10 if self.timeline else True)):
             self.timeline.append(self.make_timeline_sample(stamp,p.position.x,
                                                           p.position.y,yaw))
-        if len(self.samples)%5==1:
-            nearest=projection(self.points,p.position.x,p.position.y)
-            self.trace.append({
-                "t":round(stamp-self.samples[0]["t"],3),
-                "x":round(p.position.x,4),"y":round(p.position.y,4),
-                "e":round(nearest["cross_track_m"],4)
-            })
         wall=time.monotonic()
         if wall-self.last_write>=.5:
             self.write_progress(wall)
@@ -261,13 +256,15 @@ class Trial(Node):
 
     def write_progress(self,wall):
         self.last_write=wall
-        # Incremental display samples a bounded recent window; final
-        # full-trajectory RMSE is computed once when the action completes.
-        data=metrics(self.samples[-250:],self.points)
+        # Accumulate full-run RMSE during live tracking, with the same
+        # signed errors and simulated-time intervals as the saved plot.
+        data=self.tracking_metrics.report(include_series=False)
         if not data["valid"]:return
-        # Preserve the entire traced path, bounded to ~600 SVG points.
-        status={**self.output,"results":{k:v for k,v in data.items() if k!="series"},
-                "trace":self.trace[::max(1,len(self.trace)//600)],
+        chart=downsample_error_series(self.tracking_metrics.series,600)
+        trace=[{"t":p["sim_s"],"x":p["x"],"y":p["y"],
+                "e":p["error_m"]} for p in chart]
+        status={**self.output,"results":data,
+                "trace":trace,
                 "last_truth":self.last_gt,
                 "ground_truth_samples":self.gt_count,
                 "wheel_odom_samples":self.odom_count,
@@ -390,8 +387,17 @@ class Trial(Node):
             self.output["error"]=str(exc)
         finally:
             self.active=False
-            data=metrics(self.samples,self.points)
-            series=data.pop("series",[])
+            data=self.tracking_metrics.report(include_series=False)
+            series=self.tracking_metrics.series
+            # Recompute from the exact saved signed-error stream, proving
+            # the table and chart derive from identical GT observations.
+            check=integrate_squared_error(series)
+            if check["rmse_m"] is not None and data.get("cross_track_rmse_m") is not None:
+                data["plot_series_rmse_m"]=round(check["rmse_m"],5)
+                data["plot_rmse_verified"]=(
+                    abs(data["cross_track_rmse_m"]-check["rmse_m"])<.00002)
+            data["plot_samples_saved"]=len(series)
+            data["plot_full_resolution"]=True
             self.output["results"]=data
             self.output["ground_truth_samples"]=self.gt_count
             self.output["wheel_odom_samples"]=self.odom_count
