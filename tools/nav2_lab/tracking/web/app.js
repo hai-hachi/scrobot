@@ -466,18 +466,32 @@ function renderPhasePortraits(){
     const base=yline(x);
     return [x,base+params.phi,x,base-params.phi];
   });
-  const band=shape('polygon',{
-    points:[...lines.map(v=>[pxy.X(v[0]),pxy.Y(v[1])]),
-      ...lines.slice().reverse().map(v=>[pxy.X(v[2]),pxy.Y(v[3])])]
-      .map(v=>v.join(',')).join(' '),
-    fill:'#59C9AE','fill-opacity':.12
-  });
-  $('phase-ey').insertBefore(band,$('phase-ey').firstChild);
-  polylineEquation($('phase-ey'),-bound,bound,pxy,yline,'#55C9B7','5 3');
+  if(which!=='RPP'){
+    const band=shape('polygon',{
+      points:[...lines.map(v=>[pxy.X(v[0]),pxy.Y(v[1])]),
+        ...lines.slice().reverse().map(v=>[pxy.X(v[2]),pxy.Y(v[3])])]
+        .map(v=>v.join(',')).join(' '),
+      fill:'#59C9AE','fill-opacity':.12
+    });
+    $('phase-ey').insertBefore(band,$('phase-ey').firstChild);
+    polylineEquation($('phase-ey'),-bound,bound,pxy,yline,'#55C9B7','5 3');
+  }
   phaseTrace($('phase-ey'),errors.map(e=>[e.ey,e.etheta]),pxy);
   const pexey=phaseAxes($('phase-exey'),-bound,bound,-bound,bound,
     'ex (m)','ey (m)');
   phaseTrace($('phase-exey'),errors.map(e=>[e.ex,e.ey]),pexey);
+  if(which==='RPP'){
+    for(const [id,xl,yl] of [
+      ['phase-s','s','ds/dt'],['phase-ex','ex (m)','dex/dt'],
+      ['sat-plot','z','sat(z)']
+    ]){
+      const svg=$(id);
+      phaseAxes(svg,-1,1,-1,1,xl,yl);
+      chartText(svg,'SMC diagnostic · not applicable to RPP',
+        {x:176,y:98,'text-anchor':'middle',class:'empty-chart'});
+    }
+    return;
+  }
 
   const angular=frames.map(f=>({
     t:f.t,s:which==='SMC_2S'?f.surfaces?.s2:f.surfaces?.s1
