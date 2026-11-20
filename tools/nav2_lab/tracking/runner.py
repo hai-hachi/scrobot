@@ -14,6 +14,7 @@ sys.path.insert(0,str(HERE.parent))
 from tracking.core import metrics,reference,validate,projection,wrap
 from tracking.health import controller_failure,ready_for_tracking
 from tracking.carrot import reference as estimated_carrot, errors as carrot_errors, surfaces as diagnostic_surfaces
+from tracking.physical_limits import WHEEL_SEPARATION,MAX_WHEEL_MPS
 
 import rclpy
 from action_msgs.msg import GoalStatus
@@ -165,7 +166,8 @@ class Trial(Node):
         self.last_w=msg.twist.angular.z
 
     def on_raw(self,msg):
-        if abs(msg.twist.linear.x)+.21*abs(msg.twist.angular.z)>.502:
+        if (abs(msg.twist.linear.x)+WHEEL_SEPARATION/2*abs(msg.twist.angular.z)
+                >MAX_WHEEL_MPS+1e-4):
             self.raw_limit_requests+=1
 
     def on_gt(self,msg):
