@@ -147,7 +147,15 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
 
   <section class="panel tuning-card controller-card" id="card-smc_1s" aria-labelledby="smc-1s-title">
     <div class="between tuning-head"><h2 id="smc-1s-title">SMC-1s · Full</h2><button class="btn outline small" type="button" id="reset-smc_1s">Reset SMC-1s</button></div>
-    <div class="math-equations" aria-label="Full SMC-1s control equations"><div class="math-eq">s = eθ + λy ey + λx ex</div><div class="math-eq">ω = [ωR + λy vR sin(eθ) − λx gx(ex) + q(s)] / D</div><div class="math-eq">v = vR cos(eθ) + ey ω + gx(ex)</div></div>
+    <div class="math-equations" aria-label="Full SMC-1s LaTeX equations">
+      <div class="math-eq" data-formula="smc1-s"></div>
+      <div class="math-eq" data-formula="gx"></div>
+      <div class="math-eq" data-formula="q"></div>
+      <div class="math-eq" data-formula="smc1-omega"></div>
+      <div class="math-eq" data-formula="smc1-v"></div>
+      <div class="math-eq" data-formula="smc1-reaching"></div>
+    </div>
+    <div class="math-value-list" id="smc1-math-values" aria-label="Current SMC-1s tuned parameter values"></div>
     <p class="fineprint">One combined angular sliding surface plus longitudinal correction. All equations use the PP-circle carrot.</p>
     <div class="tuning-fields">
       <div class="field"><label for="smc1-lambda-y">Lateral surface weight λy</label><input id="smc1-lambda-y" type="number" min="0.1" max="8" step="0.1" value="2.5"></div>
@@ -164,12 +172,20 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="field"><label for="smc1-max-angular-accel">Max dω/dt (rad/s²)</label><input id="smc1-max-angular-accel" type="number" min="0.1" max="6" step="0.1" value="2"></div>
       <label class="tuning-check"><input id="smc1-use-saturation" type="checkbox" checked> Enable boundary-layer saturation</label>
     </div>
-    <p class="fineprint tuning-hint">D = 1 + λy ex · gx(ex) = kx ex + ηx sat(ex / φx) · q(s) = ks s + η sat(s / φ). Without switching, η and ηx are both zero.</p>
+    <p class="fineprint tuning-hint">Equations shown above are the full-law requests before near-goal heading alignment, speed/acceleration limits, and the common physical wheel envelope. The symbolic terms match the controls below.</p>
   </section>
 
   <section class="panel tuning-card controller-card" id="card-smc_2s" aria-labelledby="smc-2s-title">
     <div class="between tuning-head"><h2 id="smc-2s-title">SMC-2s · Full</h2><button class="btn outline small" type="button" id="reset-smc_2s">Reset SMC-2s</button></div>
-    <div class="math-equations" aria-label="Full SMC-2s control equations"><div class="math-eq">s₁ = ex  ;  s₂ = eθ + λy ey</div><div class="math-eq">ω = [ωR + λy vR sin(eθ) + q(s₂)] / D</div><div class="math-eq">v = vR cos(eθ) + ey ω + gx(ex)</div></div>
+    <div class="math-equations" aria-label="Full SMC-2s LaTeX equations">
+      <div class="math-eq" data-formula="smc2-s"></div>
+      <div class="math-eq" data-formula="gx"></div>
+      <div class="math-eq" data-formula="q"></div>
+      <div class="math-eq" data-formula="smc2-omega"></div>
+      <div class="math-eq" data-formula="smc2-v"></div>
+      <div class="math-eq" data-formula="smc2-reaching"></div>
+    </div>
+    <div class="math-value-list" id="smc2-math-values" aria-label="Current SMC-2s tuned parameter values"></div>
     <p class="fineprint">Two surfaces: longitudinal error and heading-lateral error. All equations use the PP-circle carrot.</p>
     <div class="tuning-fields">
       <div class="field"><label for="smc2-lambda-y">Lateral surface weight λy</label><input id="smc2-lambda-y" type="number" min="0.1" max="8" step="0.1" value="2.5"></div>
@@ -185,16 +201,42 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="field"><label for="smc2-max-angular-accel">Max dω/dt (rad/s²)</label><input id="smc2-max-angular-accel" type="number" min="0.1" max="6" step="0.1" value="2"></div>
       <label class="tuning-check"><input id="smc2-use-saturation" type="checkbox" checked> Enable boundary-layer saturation</label>
     </div>
-    <p class="fineprint tuning-hint">D = 1 + λy ex · gx(ex) = kx ex + ηx sat(ex / φx) · q(s) = ks s + η sat(s / φ). Without switching, η and ηx are both zero.</p>
+    <p class="fineprint tuning-hint">Equations shown above are the full-law requests before near-goal heading alignment, speed/acceleration limits, and the common physical wheel envelope. The symbolic terms match the controls below.</p>
   </section>
 </div>
 <section class="panel equation-guide">
-  <h3>Common full SMC tracking reference</h3>
-  <div class="math-eq">ex = cos θ (xR − x) + sin θ (yR − y)</div>
-  <div class="math-eq">ey = −sin θ (xR − x) + cos θ (yR − y)</div>
-  <div class="math-eq">eθ = wrap(θR − θ) &nbsp; · &nbsp; ωR = vR κR</div>
-  <div class="math-eq">sat(z) = −1 (z&lt;−1), z (|z|≤1), +1 (z&gt;1)</div>
-  <p class="fineprint">Nominal carrot vR and ωR follow local path geometry, not necessarily the actual derivative of its robot-dependent pose. Ideal reaching laws require a kinematically valid reference and unsaturated actuators; the measured plots are the evidence, not a stability proof.</p>
+  <div class="between"><h3>Common reference, reaching and physical limits</h3><span class="fineprint">Rendered LaTeX · offline MathML fallback</span></div>
+  <p class="math-group-title">Robot-frame errors relative to the carrot</p>
+  <div class="math-formula-grid">
+    <div class="math-eq" data-formula="body-x"></div>
+    <div class="math-eq" data-formula="body-y"></div>
+    <div class="math-eq" data-formula="body-heading"></div>
+  </div>
+  <p class="math-group-title">Robot-centered PP carrot, three-position curvature and nominal feedforward</p>
+  <div class="math-formula-grid">
+    <div class="math-eq" data-formula="carrot-radius"></div>
+    <div class="math-eq" data-formula="carrot-window"></div>
+    <div class="math-eq" data-formula="carrot-curvature"></div>
+    <div class="math-eq" data-formula="reference-speed"></div>
+    <div class="math-eq" data-formula="reference-omega"></div>
+  </div>
+  <p class="fineprint">L = shared SMC lookahead radius; h = three-point curvature half-window. Nominal vR is reduced near an open-path endpoint and set to zero for the last 0.025 m of remaining path. The RPP carrot is selected by Nav2's separate RPP algorithm.</p>
+  <p class="math-group-title">Reaching law, saturation boundary and singularity guard</p>
+  <div class="math-formula-grid">
+    <div class="math-eq" data-formula="denominator"></div>
+    <div class="math-eq" data-formula="switch-enable"></div>
+    <div class="math-eq" data-formula="sat-definition"></div>
+    <div class="math-eq" data-formula="gx"></div>
+    <div class="math-eq" data-formula="q"></div>
+  </div>
+  <p class="fineprint">The singular guard δD and all gains are independently tunable in each SMC card. When saturation is disabled, χsat = 0, so the η and ηx contributions vanish.</p>
+  <p class="math-group-title">Command limits applied after the full control laws</p>
+  <div class="math-formula-grid">
+    <div class="math-eq" data-formula="limit-angular"></div>
+    <div class="math-eq" data-formula="limit-accel"></div>
+    <div class="math-eq" data-formula="limit-wheel"></div>
+  </div>
+  <p class="fineprint">ωmax, amax, αmax are individually tunable; the physical wheel limit is fixed. SMC-1s and SMC-2s both use the same drivetrain. The ideal reaching identities require a true unicycle reference and no actuator limiting; the robot-centered carrot does not necessarily satisfy those assumptions.</p>
 </section>
 </section>
 
