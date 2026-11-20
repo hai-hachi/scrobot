@@ -23,7 +23,10 @@ from tracking.health import controller_failure,ready_for_tracking
 from tracking.physical_limits import (
     WHEEL_RADIUS_M,WHEEL_SEPARATION,WHEEL_MAX_RPM,
     MAX_WHEEL_MPS,MAX_LINEAR_MPS,MAX_ANGULAR_RADPS,
-    RPM_WHEEL_MAX_MPS,capabilities,wheel_speeds)
+    RPM_WHEEL_MAX_MPS,capabilities,wheel_speeds,
+    MAX_WHEEL_ACCEL_MPS2,MAX_LINEAR_ACCEL_MPS2,
+    MAX_ANGULAR_ACCEL_RADPS2,WHEEL_FULL_SPEED_TIME_S,
+    WheelCommandLimiter,WHEEL_MAX_RPM_PER_S)
 from tracking.carrot import circle_carrot,reference as carrot_reference,errors as carrot_errors,surfaces,full_control
 
 
@@ -116,11 +119,11 @@ def test_urdf_wheel_geometry_and_100_rpm_speed_envelope():
     assert WHEEL_MAX_RPM==100.
     assert RPM_WHEEL_MAX_MPS==pytest.approx(
         100*math.pi*.10/60)
-    assert MAX_WHEEL_MPS==pytest.approx(.50)
+    assert MAX_WHEEL_MPS==pytest.approx(100*math.pi*.10/60)
     assert MAX_LINEAR_MPS==pytest.approx(MAX_WHEEL_MPS)
     assert MAX_ANGULAR_RADPS==pytest.approx(
         2*MAX_WHEEL_MPS/WHEEL_SEPARATION)
-    assert MAX_ANGULAR_RADPS==pytest.approx(2.38095,abs=1e-5)
+    assert MAX_ANGULAR_RADPS==pytest.approx(2.4933275,abs=1e-5)
     assert values["wheel_diameter_m"]==pytest.approx(.10)
     assert values["wheel_separation_m"]==pytest.approx(.42)
     assert values["wheel_max_rpm"]==100.
@@ -143,6 +146,91 @@ def test_urdf_wheel_geometry_and_100_rpm_speed_envelope():
     vv,ww=clamp_wheel_envelope(100.,0.)
     assert abs(vv)==pytest.approx(MAX_LINEAR_MPS)
     assert ww==0.
+
+
+def test_full_speed_in_quarter_second_and_independent_wheel_ramps():
+    assert WHEEL_FULL_SPEED_TIME_S==pytest.approx(.25)
+    assert WHEEL_MAX_RPM_PER_S==pytest.approx(400.)
+    assert MAX_WHEEL_ACCEL_MPS2==pytest.approx(
+        MAX_WHEEL_MPS/WHEEL_FULL_SPEED_TIME_S)
+    assert MAX_LINEAR_ACCEL_MPS2==pytest.approx(2.0943951,abs=1e-6)
+    assert MAX_ANGULAR_ACCEL_RADPS2==pytest.approx(9.9733100,abs=1e-6)
+    motor=WheelCommandLimiter()
+    v,w=motor.step(MAX_LINEAR_MPS,0,0.)
+    assert (v,w)==(0.,0.)
+    last=wheel_speeds(v,w)
+    for n in range(1,26):
+        t=n*.01
+        v,w=motor.step(MAX_LINEAR_MPS,0,t)
+        wheels=wheel_speeds(v,w)
+        assert all(abs(x)<=MAX_WHEEL_MPS+1e-9 for x in wheels)
+        assert all(abs(x-y)<=MAX_WHEEL_ACCEL_MPS2*.01+1e-9
+                   for x,y in zip(wheels,last))
+        last=wheels
+    assert v==pytest.approx(MAX_LINEAR_MPS,abs=1e-8)
+    assert w==pytest.approx(0)
+
+
+def test_coupled_wheel_acceleration_with_turn_and_reversal():
+    limiter=WheelCommandLimiter()
+    limiter.step(0.,0.,0.)
+    last=(0.,0.)
+    for tick in range(1,111):
+        t=tick*.01
+        if tick<25:
+            requested=(.48,2.2)
+        elif tick<50:
+            requested=(-.50,-2.3)
+        elif tick<75:
+            requested=(0.,MAX_ANGULAR_RADPS*3)
+        else:
+            requested=(0.,0.)
+        v,w=limiter.step(*requested,t)
+        wheels=wheel_speeds(v,w)
+        assert max(map(abs,wheels))<=MAX_WHEEL_MPS+1e-8
+        assert all(abs(a-b)<=MAX_WHEEL_ACCEL_MPS2*.01+1e-8
+                   for a,b in zip(wheels,last))
+        assert abs(v)+WHEEL_SEPARATION/2*abs(w)<=MAX_WHEEL_MPS+1e-8
+        last=wheels
+    limiter.reset()
+    assert limiter.step(.4,1.,0.)==(0.,0.)
+
+
+def test_controller_acceleration_knobs_must_respect_motor_rating():
+    config=defaults()
+    for path,value in (
+        (("rpp","max_angular_accel"),MAX_ANGULAR_ACCEL_RADPS2+.001),
+        (("smc_1s","max_linear_accel"),MAX_LINEAR_ACCEL_MPS2+.001),
+        (("smc_1s","max_angular_accel"),MAX_ANGULAR_ACCEL_RADPS2+.001),
+        (("smc_2s","max_linear_accel"),MAX_LINEAR_ACCEL_MPS2+.001),
+        (("smc_2s","max_angular_accel"),MAX_ANGULAR_ACCEL_RADPS2+.001),
+    ):
+        invalid=copy.deepcopy(config)
+        invalid[path[0]][path[1]]=value
+        with pytest.raises(ValueError,match="Invalid"):
+            validate(invalid)
+    config["rpp"]["max_angular_accel"]=MAX_ANGULAR_ACCEL_RADPS2
+    config["smc_1s"]["max_linear_accel"]=MAX_LINEAR_ACCEL_MPS2
+    config["smc_1s"]["max_angular_accel"]=MAX_ANGULAR_ACCEL_RADPS2
+    assert validate(config)
+
+
+def test_tracker_motor_response_is_clamped_after_first_order_filter():
+    simulator=(REPO/"src/scrobot_simulation/scripts/sim_motor_response.py").read_text()
+    router=(HERE/"command_router.py").read_text()
+    launch=(HERE/"launch/tracking.launch.py").read_text()
+    service=(HERE/"service.py").read_text()
+    assert 'self.declare_parameter("max_wheel_rpm", MAX_RPM)' in simulator
+    assert 'self.declare_parameter("max_wheel_accel_rpmps", 0.0)' in simulator
+    assert 'self.max_wheel_accel_rpmps*dt' in simulator
+    assert 'min(self.max_wheel_rpm,filtered)' in simulator
+    assert "SIM_COMMAND_PERIOD_S=0.01" in router
+    assert "COMMAND_STALE_AFTER_SIM_S=0.25" in router
+    assert "self.get_clock().now().nanoseconds" in router
+    assert 'v,omega=self.limiter.step(v,omega,sim_t)' in router
+    assert 'max_wheel_rpm' in launch and 'max_wheel_accel_rpmps' in launch
+    assert '"motor_max_rpm:="+str(capabilities()["wheel_max_rpm"])' in service
+    assert '"motor_accel_rpmps:="+str(capabilities()["wheel_max_rpm_per_s"])' in service
 
 
 def test_tracker_velocity_tuning_never_exceeds_mechanical_rating():
@@ -209,7 +297,7 @@ def test_tracker_params_preserve_real_controller_and_physics(tmp_path):
         assert cs[mode]["wheel_radius_m"]==WHEEL_RADIUS_M
         assert cs[mode]["wheel_separation_m"]==WHEEL_SEPARATION
         assert cs[mode]["wheel_max_rpm"]==100.0
-        assert cs[mode]["rated_wheel_max_mps"]==.50
+        assert cs[mode]["rated_wheel_max_mps"]==pytest.approx(MAX_WHEEL_MPS)
     local=params["local_costmap"]["local_costmap"]["ros__parameters"]
     assert local["plugins"]==["obstacle_layer","inflation_layer"]
     assert local["obstacle_layer"]["plugin"]=="nav2_costmap_2d::ObstacleLayer"
@@ -712,7 +800,8 @@ def test_simulated_time_and_ground_truth_control():
     assert 'timeout_sim=self.config["shared"]["max_sim_duration_s"]' in source
     assert '"/evaluation/ground_truth_odom"' in tf
     assert '"odom"' in tf
-    assert 'clamp_wheel_envelope' in router
+    assert 'WheelCommandLimiter' in router
+    assert 'self.create_timer(SIM_COMMAND_PERIOD_S,self.publish_safe)' in router
     assert '"/cmd_vel_motor_target"' in router
     assert 'sim_motor_response' in (HERE/"launch/tracking.launch.py").read_text()
     assert '"enable_motor_response"' in (HERE/"launch/tracking.launch.py").read_text()
