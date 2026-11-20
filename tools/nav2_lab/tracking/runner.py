@@ -236,13 +236,17 @@ class Trial(Node):
                     cp=self.latest_rpp_carrot
                     # RPP lookahead_point is in base_footprint/base_link frame.
                     # Never silently treat another frame as robot-local.
-                    if cp["frame"] in ("base_link","base_footprint"):
+                    if cp["frame"] in ("base_link","base_footprint","odom"):
                         dx=cp["x"];dy=cp["y"]
-                        ref["x"]=x+dx*math.cos(yaw)-dy*math.sin(yaw)
-                        ref["y"]=y+dx*math.sin(yaw)+dy*math.cos(yaw)
+                        if cp["frame"]=="odom":
+                            ref["x"],ref["y"]=dx,dy
+                            ref["radius"]=math.hypot(dx-x,dy-y)
+                        else:
+                            ref["x"]=x+dx*math.cos(yaw)-dy*math.sin(yaw)
+                            ref["y"]=y+dx*math.sin(yaw)+dy*math.cos(yaw)
+                            ref["radius"]=math.hypot(dx,dy)
                         tangent=projection(self.points,ref["x"],ref["y"])
                         ref["yaw"]=tangent["heading_rad"]
-                        ref["radius"]=math.hypot(dx,dy)
                         ref["fallback"]=False
                         ref["source"]="rpp_plugin"
             errors=carrot_errors(x,y,yaw,ref)
