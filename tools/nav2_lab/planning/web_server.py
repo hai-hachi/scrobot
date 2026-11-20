@@ -675,6 +675,15 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError as exc:
                     return self.json_reply({"error":str(exc)},400)
                 return self.json_reply(trace)
+            if path=="/api/tracker/history/comparison":
+                names=parse_qs(urlparse(self.path).query).get("name",[])
+                try:
+                    compared=self.tracking.history_comparison(names)
+                except FileNotFoundError as exc:
+                    return self.json_reply({"error":str(exc)},404)
+                except ValueError as exc:
+                    return self.json_reply({"error":str(exc)},400)
+                return self.json_reply(compared)
             if path=="/api/tracker/history/timeline":
                 names=parse_qs(urlparse(self.path).query).get("name",[])
                 if len(names)!=1:
