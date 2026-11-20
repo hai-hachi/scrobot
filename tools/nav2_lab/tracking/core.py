@@ -113,7 +113,7 @@ def clamp_wheel_envelope(v,omega):
     if not math.isfinite(v) or not math.isfinite(omega):
         raise ValueError("Non-finite velocity")
     # Equivalent to max(|v - B*omega/2|, |v + B*omega/2|).
-    # Enforces the 95 RPM rating of *each* physical wheel, simultaneously.
+    # Enforces the 100 RPM / 0.50 m/s constraints of *each* wheel, simultaneously.
     demand=abs(v)+WHEEL_SEPARATION/2*abs(omega)
     scale=min(1.,MAX_WHEEL_MPS/demand) if demand>0 else 1.
     return v*scale,omega*scale
