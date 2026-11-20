@@ -157,6 +157,7 @@ function setForm(x){
   $('rpp-rotate').checked=rpp.use_rotate_to_heading;
   setFullSMC('1',x.smc_1s);
   setFullSMC('2',x.smc_2s);
+  window.TrackerMath?.refresh();
   spawnVisible();
   highlightActiveController();
 }
@@ -821,6 +822,7 @@ for(const id of [
 ]){
   $(id).addEventListener('change',()=>{
     if(id==='controller-select')highlightActiveController();
+    window.TrackerMath?.refresh();
     lastPreviewKey='';guardedPreview();
   });
 }
