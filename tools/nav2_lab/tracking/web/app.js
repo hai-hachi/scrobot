@@ -48,7 +48,7 @@ function setButtons(){
   const stack=Boolean(lastStatus?.stack_running),trial=Boolean(lastStatus?.trial_running);
   const controls={
     'save-settings':!trial,'load-settings':!trial,
-    'reset-shared':!trial,'reset-rpp':!trial,'reset-smc':!trial,
+    'reset-shared':!trial,'reset-rpp':!trial,'reset-smc_1s':!trial,'reset-smc_2s':!trial,
     'preview-button':!trial,'new-seed':!trial,
     'start':!stack&&!trial,'run':!trial&&!lastStatus?.controller_error,'cancel':trial,
     'stop':stack,'reset':!trial,
@@ -60,6 +60,24 @@ function setButtons(){
     'clear-plot':plotRuns.size>0||pendingPlotRuns.size>0
   };
   for(const [id,available] of Object.entries(controls))$(id).disabled=busy||!available;
+}
+const smcKeys=['lambda_y','k_s','k_x','eta','phi','eta_x','phi_x',
+  'singular_guard','max_angular_cmd','max_linear_accel','max_angular_accel'];
+function smcInputId(group,key){
+  return 'smc'+group+'-'+key.replaceAll('_','-');
+}
+function readFullSMC(group){
+  const keys=group==='1'?[...smcKeys,'lambda_x']:smcKeys;
+  const out=Object.fromEntries(keys.map(key=>[key,num(smcInputId(group,key))]));
+  out.use_saturation=$(smcInputId(group,'use_saturation')).checked;
+  return out;
+}
+function setFullSMC(group,config){
+  for(const [key,value] of Object.entries(config)){
+    const element=$(smcInputId(group,key));
+    if(key==='use_saturation')element.checked=value;
+    else element.value=value;
+  }
 }
 function readForm(){
   if(!settings)return null;
@@ -78,7 +96,9 @@ function readForm(){
       goal_xy_tolerance_m:num('goal-xy'),
       goal_yaw_tolerance_deg:num('goal-yaw'),
       progress_radius_m:num('progress-radius'),
-      progress_timeout_sim_s:num('progress-timeout')
+      progress_timeout_sim_s:num('progress-timeout'),
+      lookahead_radius_m:num('carrot-radius'),
+      curvature_window_m:num('curvature-window')
     },
     rpp:{
       lookahead_dist:num('rpp-lookahead'),
@@ -95,20 +115,13 @@ function readForm(){
       max_angular_accel:num('rpp-angular-accel'),
       min_approach_linear_velocity:num('rpp-min-approach')
     },
-    smc:{
-      cross_gain:num('smc-cross'),heading_gain:num('smc-heading'),
-      surface_lambda:num('smc-lambda'),switch_gain:num('smc-switch'),
-      boundary_layer:num('smc-boundary'),lookahead_m:num('smc-lookahead'),
-      feedforward_gain:num('smc-feedforward'),
-      goal_heading_gain:num('smc-goal-heading'),
-      goal_align_threshold_m:num('smc-goal-threshold'),
-      max_angular_cmd:num('smc-max-angular')
-    }
+    smc_1s:readFullSMC('1'),
+    smc_2s:readFullSMC('2')
   };
 }
 function setForm(x){
   settings=structuredClone(x);
-  const shared=x.shared,rpp=x.rpp,smc=x.smc;
+  const shared=x.shared,rpp=x.rpp;
   const fields={
     'path-kind':x.path,'controller-select':x.controller,
     'spawn-mode':x.spawn_mode,'start-progress':x.progress,
@@ -122,6 +135,8 @@ function setForm(x){
     'goal-yaw':shared.goal_yaw_tolerance_deg,
     'progress-radius':shared.progress_radius_m,
     'progress-timeout':shared.progress_timeout_sim_s,
+    'carrot-radius':shared.lookahead_radius_m,
+    'curvature-window':shared.curvature_window_m,
     'rpp-lookahead':rpp.lookahead_dist,
     'rpp-lookahead-min':rpp.min_lookahead_dist,
     'rpp-lookahead-max':rpp.max_lookahead_dist,
@@ -132,24 +147,19 @@ function setForm(x){
     'rpp-rotate-threshold':rpp.rotate_to_heading_min_angle_deg,
     'rpp-angular-accel':rpp.max_angular_accel,
     'rpp-min-approach':rpp.min_approach_linear_velocity,
-    'smc-cross':smc.cross_gain,'smc-heading':smc.heading_gain,
-    'smc-lambda':smc.surface_lambda,'smc-switch':smc.switch_gain,
-    'smc-boundary':smc.boundary_layer,'smc-lookahead':smc.lookahead_m,
-    'smc-feedforward':smc.feedforward_gain,
-    'smc-goal-heading':smc.goal_heading_gain,
-    'smc-goal-threshold':smc.goal_align_threshold_m,
-    'smc-max-angular':smc.max_angular_cmd
   };
   for(const [id,v] of Object.entries(fields))$(id).value=v;
   $('rpp-velocity-lookahead').checked=rpp.use_velocity_scaled_lookahead_dist;
   $('rpp-curvature-slow').checked=rpp.use_regulated_linear_velocity_scaling;
   $('rpp-rotate').checked=rpp.use_rotate_to_heading;
+  setFullSMC('1',x.smc_1s);
+  setFullSMC('2',x.smc_2s);
   spawnVisible();
   highlightActiveController();
 }
 function highlightActiveController(){
   const selected=$('controller-select').value.toLowerCase();
-  for(const name of ['rpp','smc']){
+  for(const name of ['rpp','smc_1s','smc_2s']){
     $('card-'+name).classList.toggle('is-active',selected===name);
     $('card-'+name).classList.toggle('is-inactive',selected!==name);
   }
@@ -522,15 +532,11 @@ for(const button of document.querySelectorAll('.section-tabs [data-view]'))
 $('spawn-mode').onchange=()=>{
   spawnVisible();lastPreviewKey='';guardedPreview();
 };
-for(const id of ['path-kind','controller-select','start-progress','lateral-offset',
- 'heading-error','seed','random-lateral','random-heading','pose-x','pose-y','pose-yaw',
- 'desired-speed','max-duration','goal-xy','goal-yaw','progress-radius','progress-timeout',
- 'rpp-lookahead','rpp-lookahead-min','rpp-lookahead-max','rpp-lookahead-time',
- 'rpp-velocity-lookahead','rpp-curvature-slow','rpp-min-radius','rpp-min-speed',
- 'rpp-rotate','rpp-rotate-rate','rpp-rotate-threshold','rpp-angular-accel',
- 'rpp-min-approach','smc-cross','smc-heading','smc-lambda','smc-switch',
- 'smc-boundary','smc-lookahead','smc-feedforward','smc-goal-heading',
- 'smc-goal-threshold','smc-max-angular']){
+for(const id of [
+  'path-kind','controller-select','start-progress','lateral-offset',
+  'heading-error','seed','random-lateral','random-heading','pose-x','pose-y','pose-yaw',
+  ...Array.from(document.querySelectorAll('.tuning-fields input')).map(el=>el.id)
+]){
   $(id).addEventListener('change',()=>{
     if(id==='controller-select')highlightActiveController();
     lastPreviewKey='';guardedPreview();
@@ -570,7 +576,7 @@ $('tracker-map').addEventListener('pointermove',ev=>{
 });
 for(const event of ['pointerup','pointercancel'])
   $('tracker-map').addEventListener(event,()=>{drag=null;});
-for(const name of ['shared','rpp','smc']){
+for(const name of ['shared','rpp','smc_1s','smc_2s']){
   $('reset-'+name).onclick=()=>{
     if(!defaultSettings){notify('Tracker defaults have not loaded.',true);return;}
     const current=readForm();
