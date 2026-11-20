@@ -62,7 +62,7 @@ def generate(settings,dirpath):
     params["use_sim_time"]=True
     params["controller_frequency"]=25.0
     params["odom_topic"]="/diff_drive_controller/odom"
-    params["controller_plugins"]=["RPP","SMC"]
+    params["controller_plugins"]=["RPP","SMC_1S","SMC_2S"]
     shared=settings["shared"]
     requested_speed=float(shared["desired_speed_mps"])
     params["RPP"]=copy.deepcopy(production["controller_server"]["ros__parameters"]["FollowPath"])
@@ -89,11 +89,19 @@ def generate(settings,dirpath):
             params["RPP"][key]=float(value)
     # No collision checks are needed in this obstacle-free test world.
     params["RPP"]["use_collision_detection"]=False
-    params["SMC"]={
-      "plugin":"scrobot_tracker_controller::SMCController",
-      "linear_speed":requested_speed,
-      **{key:float(value) for key,value in settings["smc"].items()},
-    }
+    # Two full SMC modes run as independently tuned instances of the same
+    # C++ Nav2 plugin. Both receive the exact same robot-centered PP carrot
+    # algorithm, nominal vR, and wheel-envelope limits.
+    for key in ("SMC_1S","SMC_2S"):
+        smc=settings[key.lower()]
+        params[key]={
+          "plugin":"scrobot_tracker_controller::SMCController",
+          "linear_speed":requested_speed,
+          "lookahead_radius_m":float(shared["lookahead_radius_m"]),
+          "curvature_window_m":float(shared["curvature_window_m"]),
+          **{k:(v if type(v) is bool else float(v))
+             for k,v in smc.items()},
+        }
     params["progress_checker"]["required_movement_radius"]=float(
         shared["progress_radius_m"])
     params["progress_checker"]["movement_time_allowance"]=float(
