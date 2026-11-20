@@ -283,6 +283,87 @@ offer an enabled Plot checkbox; initializing runs without `series.json`
 remain listed but cannot be plotted. Saved historical data is not modified,
 and choosing overlays does not launch Gazebo or affect control timing.
 
+## Full SMC-1s and SMC-2s (reference: hai-hachi/smc)
+
+The Tracker runs **three** Nav2 FollowPath controllers: RPP, `SMC_1S`,
+and `SMC_2S`. The latter two implement the **full** SMC laws from the
+2026-11-20 Python lab summary, not the earlier simplified heading/lateral
+controller. Their saved gains live under independent `smc_1s` and `smc_2s`
+blocks. The shared `lookahead_radius_m` and `curvature_window_m` configure
+the same robot-centered PP-circle reference generator for both SMC versions.
+
+At each control cycle, the SMC plugin projects the robot on the current
+path, finds the first forward intersection of that path and a circle centered
+on the robot, computes a three-point tangent and signed curvature around the
+carrot, and sets nominal `vR` to the shared reference speed (with an
+open-path terminal slowdown) and `omegaR=vR*kappaR`. Fallbacks for
+no-intersection conditions are explicitly marked. **RPP also uses a
+carrot**, but uses Nav2's own regulated lookahead algorithm, not the SMC
+fixed-radius circle. RPP's published `/lookahead_point` is captured for
+replay when available.
+
+Errors in the robot frame:
+
+```text
+ex     =  cos(theta) (xR-x) + sin(theta) (yR-y)
+ey     = -sin(theta) (xR-x) + cos(theta) (yR-y)
+etheta = wrap(thetaR-theta)
+D      = 1 + lambda_y * ex
+
+sat(z) = clamp(z,-1,1)
+gx     = kx*ex + (use_saturation ? eta_x*sat(ex/phi_x) : 0)
+q(s)   = ks*s  + (use_saturation ? eta  *sat(s/phi)   : 0)
+
+SMC-1s:
+  s     = etheta + lambda_y*ey + lambda_x*ex
+  omega = (omegaR + lambda_y*vR*sin(etheta) - lambda_x*gx + q(s))/D
+  v     = vR*cos(etheta) + ey*omega + gx
+
+SMC-2s:
+  s1    = ex
+  s2    = etheta + lambda_y*ey
+  omega = (omegaR + lambda_y*vR*sin(etheta) + q(s2))/D
+  v     = vR*cos(etheta) + ey*omega + gx
+```
+
+The plugin explicitly fails if `|D|` is smaller than the configured guard
+or changes sign. Both versions use the same motor/wheel envelope, speed and
+acceleration limits **after** calculating the full control law. The source
+Python SMC lab's free-space kinematic actuator limits `vmax=0.60m/s` differ
+from the calibrated SCROBOT physical wheel limit, so this Gazebo lab retains
+the more restrictive shared `|v|+0.21|omega|<=0.50m/s` rule.
+
+**Critical theoretical limitation:** because a robot-centered PP carrot is
+not guaranteed to satisfy the assumed unicycle reference kinematics, the
+nominal `(vR,omegaR)` are not generally the actual carrot pose derivatives.
+Even when it does satisfy those kinematics, actuator saturation invalidates
+the ideal reaching behavior `ex_dot=-gx`, `s_dot=-q(s)`. The displayed
+phase portraits plot *observed* motion and theoretical curves distinctly;
+they are for comparison and diagnosis, not a proof of stability.
+
+### Timeline telemetry and diagnostic portraits
+
+New run directories include `timeline.json` with samples at about 10
+simulated Hz. Each contains the robot pose and commands, carrot pose and
+radius, nominal velocities, body-frame errors, and for SMC the actual
+controller-computed surfaces, reaching terms, denominator `D`, and
+pre-limiting commands. The SMC controller publishes
+`/tracker/smc_carrot` and `/tracker/smc_diagnostics`; RPP publishes
+`/lookahead_point`, which is transformed to world coordinates from the
+robot's ground-truth pose. If the RPP topic is unavailable, the inspector
+labels its geometric position and nominal reference fields as **estimated**,
+not as the exact Nav2 carrot.
+
+Select a saved run using its **Inspect** button or the timeline dropdown,
+then scrub the slider. The view shows the reference polyline, robot,
+carrot, robot-centered lookahead ellipse (world-correct radius), nominal
+vR/omegaR, tracking errors, and sliding variables. Four plots show
+`ey vs etheta`, the angular surface against its observed derivative,
+`ex vs ex_dot`, and `sat(z)` with boundary regions. Saved experiments
+predating `timeline.json` remain comparable in the error chart, but their
+Inspect button is disabled; measurements are never invented or reconstructed
+as if they had been logged.
+
 ## Tests and limitations
 
 ```bash
