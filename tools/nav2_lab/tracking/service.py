@@ -21,7 +21,8 @@ from shared.lab_configs import read as read_lab,save as save_lab,path_for
 from shared.lab_ui import GazeboGUI,log_tail
 from shared.sim_speed import get as speed_get,save as speed_save
 from planning.process_metrics import ProcessSampler
-from tracking.core import defaults,validate,reference,initial_pose
+from tracking.core import (defaults,validate,reference,initial_pose,
+                           downsample_error_series,integrate_squared_error)
 from tracking.physical_limits import capabilities
 from tracking.world import write_world
 from tracking.configuration import generate
@@ -243,56 +244,110 @@ class TrackingService:
     def history(self):
         return self._history_rows()[:50]
 
-    def history_trace(self,name):
-        """Load one saved trial's signed cross-track-error curve, read-only.
+    def _full_error_series(self,folder):
+        """Safe, validated, chronological error stream, full resolution."""
+        source=folder/"series.json"
+        if source.is_symlink() or not source.is_file():
+            raise FileNotFoundError("This run has no completed tracking trace")
+        if source.stat().st_size>8_000_000:
+            raise ValueError("Saved tracking trace exceeds the safe size limit")
+        saved=read_json(source)
+        if not isinstance(saved,list):
+            raise ValueError("Saved tracking trace must be a JSON list")
+        points=[]
+        for sample in saved:
+            if not isinstance(sample,dict):
+                continue
+            elapsed=sample.get("sim_s")
+            signed=sample.get("error_m")
+            if (type(elapsed) not in (int,float) or
+                type(signed) not in (int,float) or
+                not math.isfinite(elapsed) or not math.isfinite(signed) or
+                elapsed<0 or (points and elapsed<=points[-1]["sim_s"])):
+                continue
+            points.append({"sim_s":float(elapsed),"error_m":float(signed)})
+        if len(points)<2:
+            raise ValueError("This experiment has no plottable tracking samples")
+        return points
 
-        Never expose arbitrary paths or unbounded files through this API.
-        Historical runs without final series.json are intentionally not
-        selectable; they may have failed before tracking produced samples.
-        """
+    def history_trace(self,name):
+        """Only downsample the drawing, never the RMSE observation stream."""
         with self.lock:
             folder=self._safe_folder(name)
-            source=folder/"series.json"
-            if source.is_symlink() or not source.is_file():
-                raise FileNotFoundError("This run has no completed tracking trace")
-            if source.stat().st_size>8_000_000:
-                raise ValueError("Saved tracking trace exceeds the safe size limit")
-            saved=read_json(source)
-            if not isinstance(saved,list):
-                raise ValueError("Saved tracking trace must be a JSON list")
-            points=[]
-            for sample in saved:
-                if not isinstance(sample,dict):
-                    continue
-                elapsed=sample.get("sim_s")
-                signed=sample.get("error_m")
-                if (type(elapsed) not in (int,float) or
-                    type(signed) not in (int,float) or
-                    not math.isfinite(elapsed) or not math.isfinite(signed) or
-                    elapsed<0 or (points and elapsed<=points[-1]["t"])):
-                    continue
-                points.append({"t":round(float(elapsed),4),
-                               "e":round(float(signed),5)})
-            if len(points)<2:
-                raise ValueError("This experiment has no plottable tracking samples")
-            # Saved metrics are sampled, but older data can be much larger.
-            # Preserve first/last and keep all selected overlays lightweight.
-            if len(points)>1200:
-                last=points[-1]
-                interval=math.ceil((len(points)-1)/1199)
-                points=points[::interval]
-                if points[-1]["t"]!=last["t"]:
-                    points.append(last)
+            samples=self._full_error_series(folder)
             summary=read_json(folder/"summary.json") or {}
+            result=summary.get("results") or {}
+            drawing=downsample_error_series(samples,1200)
             return {
                 "name":folder.name,"controller":summary.get("controller"),
                 "path":summary.get("path"),"seed":summary.get("seed"),
                 "start_pose":summary.get("start_pose"),
                 "requested_speed_mps":summary.get("requested_speed_mps"),
                 "status":summary.get("status"),
-                "cross_track_rmse_m":(summary.get("results") or {}).get(
-                    "cross_track_rmse_m"),
-                "points":points,
+                "cross_track_rmse_m":result.get("cross_track_rmse_m"),
+                "duration_sim_s":result.get("duration_sim_s"),
+                "elapsed_sim_s":result.get("elapsed_sim_s"),
+                "rmse_method":result.get("rmse_method"),
+                "full_resolution":result.get("plot_full_resolution") is True,
+                "rmse_plot_verified":result.get("plot_rmse_verified"),
+                "source_samples":len(samples),
+                "shown_samples":len(drawing),
+                "points":[{"t":p["sim_s"],"e":p["error_m"]}
+                          for p in drawing],
+            }
+
+    def history_comparison(self,names):
+        """Compare selected saved runs over identical simulated-time duration.
+
+        Use full-resolution stored errors, NOT the decimated curve. Legacy
+        series may be sparse, and are explicitly marked approximate.
+        """
+        if not isinstance(names,list) or not 2<=len(names)<=8:
+            raise ValueError("Select between two and eight experiments")
+        if len(set(names))!=len(names):
+            raise ValueError("Comparison contains duplicate experiment names")
+        with self.lock:
+            runs=[]
+            for name in names:
+                folder=self._safe_folder(name)
+                series=self._full_error_series(folder)
+                summary=read_json(folder/"summary.json") or {}
+                result=summary.get("results") or {}
+                runs.append({
+                    "name":name,
+                    "series":series,
+                    "path":summary.get("path"),
+                    "start_pose":summary.get("start_pose"),
+                    "speed":summary.get("requested_speed_mps"),
+                    "full_resolution":result.get("plot_full_resolution") is True,
+                    "summary_rmse_m":result.get("cross_track_rmse_m")
+                })
+            common_end=min(r["series"][-1]["sim_s"] for r in runs)
+            if common_end<=0:
+                raise ValueError("Selected run has no positive overlap duration")
+            values=[]
+            for run in runs:
+                observed=integrate_squared_error(run["series"],common_end)
+                values.append({
+                    "name":run["name"],
+                    "rmse_m":round(observed["rmse_m"],5)
+                        if observed["rmse_m"] is not None else None,
+                    "observed_duration_sim_s":round(
+                        observed["duration_sim_s"],5),
+                    "excluded_gt_gaps":observed["gap_count"],
+                    "full_resolution":run["full_resolution"],
+                    "summary_rmse_m":run["summary_rmse_m"],
+                })
+            return {
+                "common_end_sim_s":round(common_end,5),
+                "method":"sim_time_trapezoid_e_squared_v2",
+                "all_full_resolution":all(r["full_resolution"] for r in runs),
+                "same_path":len(set(str(r["path"]) for r in runs))==1,
+                "same_start_pose":len(set(
+                    json.dumps(r["start_pose"],sort_keys=True) for r in runs))==1,
+                "same_reference_speed":len(set(
+                    r["speed"] for r in runs))==1,
+                "runs":values,
             }
 
     def history_timeline(self,name):
