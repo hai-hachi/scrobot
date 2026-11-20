@@ -3,6 +3,8 @@
 <title>SCROBOT | Nav2 Tracker Lab</title>
 <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/tracker/style.css">
 <script defer src="/tracker/chart_scales.js"></script>
+<script defer src="/tracker/timeline_geometry.js"></script>
+<script defer src="/tracker/math_formulas.js"></script>
 <script defer src="/tracker/app.js"></script><script defer src="/lab-rtf.js"></script></head>
 <body><div class="shell">
 <aside class="sidebar">
@@ -229,7 +231,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
   </div>
 </div>
 <div class="panel">
-  <div class="between"><h2>Saved-run timeline inspector</h2><span>Scrub the actual robot and carrot pose</span></div>
+  <div class="between"><h2>Saved-run timeline inspector</h2><span>Scrub the actual robot and carrot pose · equal metres on X/Y</span></div>
   <label class="field">Saved run <select id="timeline-run"><option value="">Choose a recorded experiment…</option></select></label>
   <div class="timeline-control">
     <label for="timeline-slider">Elapsed simulated time</label>
@@ -237,7 +239,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
     <strong id="timeline-time">— s</strong>
   </div>
   <svg id="timeline-map" viewBox="0 0 900 450" aria-label="Robot and carrot on the saved reference path">
-    <g id="timeline-path"></g><g id="timeline-trace"></g><g id="timeline-carrot"></g>
+    <g id="timeline-grid"></g><g id="timeline-path"></g><g id="timeline-trace"></g><g id="timeline-carrot"></g>
   </svg>
   <p id="timeline-fields" class="fineprint">Select a saved run with detailed telemetry. Earlier runs remain available for numeric comparison but may not include timeline samples.</p>
   <p class="fineprint">SMC displays the actual controller carrot, nominal vR/ωR and sliding surfaces. RPP displays Nav2's published lookahead point where available; geometric fallbacks are explicitly labelled.</p>
