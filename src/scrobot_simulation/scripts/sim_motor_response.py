@@ -54,6 +54,10 @@ def main():
             self.declare_parameter("gain_left", 1.0)
             self.declare_parameter("gain_right", 1.0)
             self.declare_parameter("command_timeout", 0.4)
+            # Optional tracker-only motor envelope. Disabled by default so
+            # this shared surrogate preserves other lab behavior.
+            self.declare_parameter("max_wheel_rpm", MAX_RPM)
+            self.declare_parameter("max_wheel_accel_rpmps", 0.0)
             self.tau = [
                 float(self.get_parameter("tau_left").value),
                 float(self.get_parameter("tau_right").value),
@@ -63,12 +67,21 @@ def main():
                 float(self.get_parameter("gain_right").value),
             ]
             self.timeout = float(self.get_parameter("command_timeout").value)
+            self.max_wheel_rpm = float(
+                self.get_parameter("max_wheel_rpm").value)
+            self.max_wheel_accel_rpmps = float(
+                self.get_parameter("max_wheel_accel_rpmps").value)
             if any(not 0.005 <= t <= 0.5 for t in self.tau):
                 raise ValueError("Motor time constants outside [0.005, 0.5] s")
             if any(not 0.8 <= k <= 1.1 for k in self.gain):
                 raise ValueError("Motor gains outside [0.8, 1.1]")
             if not 0.1 <= self.timeout <= 2.0:
                 raise ValueError("Invalid command_timeout")
+            if not math.isfinite(self.max_wheel_rpm) or self.max_wheel_rpm<=0:
+                raise ValueError("Invalid max_wheel_rpm")
+            if (not math.isfinite(self.max_wheel_accel_rpmps) or
+                    self.max_wheel_accel_rpmps<0):
+                raise ValueError("Invalid max_wheel_accel_rpmps")
             self.current = [0.0, 0.0]
             self.reference = [0.0, 0.0]
             self.last_command_ns = None
@@ -82,7 +95,9 @@ def main():
             self.create_timer(0.01, self.tick)
             self.get_logger().info(
                 f"Simulation-only motor response active: tau={self.tau} "
-                f"K={self.gain}; input=/cmd_vel_motor_target "
+                f"K={self.gain}, max_rpm={self.max_wheel_rpm}, "
+                f"max_rpm_per_s={self.max_wheel_accel_rpmps}; "
+                f"input=/cmd_vel_motor_target "
                 f"output=/diff_drive_controller/cmd_vel"
             )
 
@@ -92,7 +107,8 @@ def main():
             if not all(map(math.isfinite, (v, yaw))):
                 self.get_logger().warning("Discarding nonfinite motor target")
                 return
-            self.reference = list(limit_wheels(*twist_to_wheel_rpm(v, yaw)))
+            self.reference = list(limit_wheels(
+                *twist_to_wheel_rpm(v, yaw),limit=self.max_wheel_rpm))
             self.last_command_ns = self.get_clock().now().nanoseconds
 
         def tick(self):
@@ -110,11 +126,15 @@ def main():
                     now_ns - self.last_command_ns > self.timeout * 1e9):
                 self.reference = [0.0, 0.0]
             for i in (0, 1):
-                self.current[i] = filter_update(
+                filtered = filter_update(
                     self.current[i], self.reference[i], dt,
-                    self.tau[i], self.gain[i]
-                )
-            self.current = list(limit_wheels(*self.current))
+                    self.tau[i], self.gain[i])
+                if self.max_wheel_accel_rpmps>0:
+                    delta = self.max_wheel_accel_rpmps*dt
+                    filtered=max(self.current[i]-delta,
+                                 min(self.current[i]+delta,filtered))
+                self.current[i] = max(-self.max_wheel_rpm,
+                                      min(self.max_wheel_rpm,filtered))
             linear, angular = wheel_rpm_to_twist(*self.current)
             out = TwistStamped()
             out.header.stamp = self.get_clock().now().to_msg()
