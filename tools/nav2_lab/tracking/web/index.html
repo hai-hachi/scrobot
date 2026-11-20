@@ -268,7 +268,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
 
 <section class="tracker-view" data-view="results" hidden>
 <div class="panel">
-<div class="between"><h2>Ground-truth tracking metrics</h2><span>Simulation time · same initial pose per comparison</span></div>
+<div class="between"><h2>Ground-truth tracking metrics</h2><span>ROS simulation time · compare matching paths and initial poses</span></div>
 <div class="metrics">
 <div class="metric"><small>MAX LATERAL ERROR</small><strong id="max-error">—</strong><span>Metres</span></div>
 <div class="metric"><small>TRAVEL DISTANCE</small><strong id="travel-dist">—</strong><span>Metres</span></div>
@@ -278,14 +278,19 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
 <div class="between plot-toolbar">
   <div>
     <h3>Cross-track error over time</h3>
-    <p class="fineprint">Signed lateral error (m) vs elapsed simulation time (s). All selected runs share one scale, starting at t = 0.</p>
+    <p class="fineprint">All curves use ground-truth nearest-segment lateral error, in metres, from the same full sample stream as the RMSE. |e| is plotted by default; switch to signed error to inspect which side of the path the robot follows.</p>
   </div>
-  <label class="plot-live-toggle"><input id="plot-live" type="checkbox" checked> Include current / latest run</label>
+  <div class="row plot-view-toggles">
+    <label class="plot-live-toggle"><input id="plot-absolute" type="checkbox" checked> Show absolute error |e| (RMSE magnitude)</label>
+    <label class="plot-live-toggle"><input id="plot-live" type="checkbox" checked> Include current / latest run</label>
+  </div>
 </div>
 <svg id="error-chart" viewBox="0 0 850 260" role="img" aria-label="Signed cross-track error (metres) versus elapsed simulation time (seconds), with tick marks and saved-run overlays">
 <g id="error-grid"></g><g id="error-series"></g></svg>
 <div id="plot-legend" class="plot-legend" aria-live="polite">Select saved trials below to compare trajectories.</div>
 <p class="fineprint" id="plot-status">Select a saved run's Plot checkbox to overlay its error curve.</p>
+<div class="common-rmse" id="common-rmse" aria-live="polite">Select two or more saved experiments for a matching-duration RMSE comparison.</div>
+<p class="fineprint" id="rmse-method-note">Full-run RMSE uses simulated-time trapezoidal integration of squared ground-truth cross-track error. Trials with different durations can have different full-run RMSE even if their early curves overlap. Older experiments retain their original calculation.</p>
 <p id="trial-details" class="fineprint">Run a controller to record ground-truth error, path and heading metrics.</p></div>
 <div class="panel">
   <h2>SMC phase portraits &amp; boundary layers</h2>
