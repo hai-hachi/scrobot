@@ -229,7 +229,9 @@ class TrackingService:
                 trace_file=folder/"series.json"
                 rows.append({
                     "name":folder.name,"summary":summary,
-                    "has_trace":trace_file.is_file() and not trace_file.is_symlink()
+                    "has_trace":trace_file.is_file() and not trace_file.is_symlink(),
+                    "has_timeline":(folder/"timeline.json").is_file()
+                        and not (folder/"timeline.json").is_symlink()
                 })
         return rows
 
@@ -287,6 +289,39 @@ class TrackingService:
                     "cross_track_rmse_m"),
                 "points":points,
             }
+
+    def history_timeline(self,name):
+        """Read-only replay of robot, reference and SMC telemetry."""
+        with self.lock:
+            folder=self._safe_folder(name)
+            path=folder/"timeline.json"
+            if path.is_symlink() or not path.is_file():
+                raise FileNotFoundError("Detailed timeline unavailable for this older run")
+            if path.stat().st_size>12_000_000:
+                raise ValueError("Tracking timeline exceeds size limit")
+            frames=read_json(path)
+            if not isinstance(frames,list):
+                raise ValueError("Malformed tracking timeline")
+            data=[]
+            for frame in frames:
+                if not isinstance(frame,dict) or not isinstance(frame.get("ref"),dict):
+                    continue
+                time_value=frame.get("t")
+                if type(time_value) not in (int,float) or not math.isfinite(time_value) or time_value<0:
+                    continue
+                data.append(frame)
+            if len(data)<2:
+                raise ValueError("Saved run has no usable timeline frames")
+            if len(data)>2500:
+                last=data[-1]
+                stride=math.ceil((len(data)-1)/2499)
+                data=data[::stride]
+                if data[-1]["t"]!=last["t"]:data.append(last)
+            summary=read_json(folder/"summary.json") or {}
+            config=read_json(folder/"config_snapshot.json") or {}
+            reference=read_json(folder/"reference.json") or {}
+            return {"name":name,"controller":summary.get("controller"),
+                    "config":config,"reference":reference,"frames":data}
 
     def delete(self,body):
         with self.lock:
