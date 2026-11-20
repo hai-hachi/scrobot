@@ -345,7 +345,7 @@ def test_full_smc_numeric_equations_reference_feedforward_and_saturation():
     ref={"v_ref":.40,"w_ref":.37}
     p=cfg["smc_1s"]
     D=1+p["lambda_y"]*e["ex"]
-    gx=p["k_x"]*e["ex"]+p["eta_x"]*1.0
+    gx=p["k_x"]*e["ex"]+p["eta_x"]*max(-1.,min(1.,e["ex"]/p["phi_x"]))
     angular_s=e["etheta"]+p["lambda_y"]*e["ey"]+p["lambda_x"]*e["ex"]
     q=p["k_s"]*angular_s+p["eta"]*max(-1.,min(1.,angular_s/p["phi"]))
     omega1=(ref["w_ref"]+p["lambda_y"]*ref["v_ref"]*
