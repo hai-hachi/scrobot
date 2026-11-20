@@ -339,6 +339,79 @@ def test_native_smc_plugin_has_complete_jazzy_interface():
     assert "pluginlib_export_plugin_description_file(nav2_core smc_plugins.xml)" in build
 
 
+def test_full_smc_one_vs_two_surface_equations_are_not_truncated():
+    source=(REPO/"src/scrobot_tracker_controller/src/smc_controller.cpp").read_text()
+    assert "ref.wr+lambda_y_*ref.vr*std::sin(etheta)" in source
+    assert "one_surface_?lambda_x_*gx:0.0" in source
+    assert "ref.vr*std::cos(etheta)+ey*omega+gx" in source
+    assert "s2+lambda_x_*ex:ex" in source
+    assert "etheta+lambda_y_*ey" in source
+    assert "std::abs(D)<=singular_guard_" in source
+    assert "D*last_d_<0.0" in source
+    assert "use_saturation_?etax_*sat(ex/phix_):0.0" in source
+    assert "use_saturation_?eta_*sat(active/phi_):0.0" in source
+    # Nominal geometric reference is not the derivative of a robot-centered
+    # carrot; do not claim ideal ds/dt=-q(s) as unconditional stability.
+    assert "NOT guaranteed to be the actual carrot derivative" in source
+
+
+def test_timeline_safety_and_legacy_runs_remain_available(tmp_path):
+    service=TrackingService(run_root=tmp_path)
+    run_name="20261120_092010_tracking_abc12"
+    folder=tmp_path/run_name
+    folder.mkdir()
+    (folder/"summary.json").write_text(json.dumps({
+        "controller":"SMC_1S","path":"straight","status":"success"
+    }))
+    assert service.history()[0]["has_timeline"] is False
+    with pytest.raises(FileNotFoundError,match="older run"):
+        service.history_timeline(run_name)
+    source=folder/"timeline.json"
+    payload=[]
+    for i in range(4):
+        payload.append({
+            "t":i*.1,"x":1.,"y":.1,"yaw":0.,"v":.2,"w":0.,
+            "ref":{"x":1.6,"y":0.,"yaw":0.,"radius":.6,
+                   "v_ref":.4,"w_ref":0.,"source":"smc_plugin"},
+            "errors":{"ex":.6,"ey":-.1,"etheta":0.},
+            "surfaces":{"s1":.3,"s2":0.,"D":2.5}
+        })
+    source.write_text(json.dumps(payload))
+    (folder/"reference.json").write_text(json.dumps({
+        "points":[[0,0],[8,0]]
+    }))
+    result=service.history_timeline(run_name)
+    assert result["controller"]=="SMC_1S"
+    assert len(result["frames"])==4
+    assert result["frames"][2]["ref"]["radius"]==.6
+    assert result["reference"]["points"][1]==[8,0]
+    assert service.history()[0]["has_timeline"] is True
+    with pytest.raises(ValueError,match="Invalid experiment"):
+        service.history_timeline("../etc/passwd")
+    source.unlink()
+    source.symlink_to(folder/"summary.json")
+    with pytest.raises(FileNotFoundError):
+        service.history_timeline(run_name)
+
+
+def test_timeline_controls_phases_and_halved_axis_label_sizes():
+    html=(HERE/"web/index.html").read_text()
+    js=(HERE/"web/app.js").read_text()
+    css=(HERE/"web/style.css").read_text()
+    server=(HERE.parent/"planning/web_server.py").read_text()
+    for item in ("timeline-run","timeline-slider","timeline-map",
+                 "phase-ey","phase-s","phase-ex","sat-plot","timeline-fields"):
+        assert 'id="'+item+'"' in html
+    assert '"/api/tracker/history/timeline"' in server
+    assert "history_timeline" in server
+    assert "renderPhasePortraits()" in js
+    assert "loadTimeline(item.name)" in js
+    assert "loadTimeline($('timeline-run').value)" in js
+    assert "plot-status" in js
+    assert ".tick-label{font-size:5.5px}" in css
+    assert ".axis-label{font-size:6px}" in css
+
+
 def test_tracker_backend_is_isolated_and_safe(tmp_path):
     service=TrackingService(run_root=tmp_path)
     assert service.config()["path"]=="straight"
