@@ -126,3 +126,16 @@ padding:8px 0;border-bottom:1px solid var(--line);font-size:11px;color:var(--mut
 #timeline-map .map-tag{font-family:inherit;font-size:11px;font-weight:600;
   fill:#d5e7ef;paint-order:stroke;stroke:#101b26;stroke-width:2px}
 @media(max-width:1150px){.math-formula-grid{grid-template-columns:1fr}}
+
+/* RMSE comparison uses the same saved full-resolution GT error samples. */
+.plot-view-toggles{display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+.common-rmse{border:1px solid var(--line);border-radius:8px;
+  padding:13px 15px;background:#101e29;margin:10px 0 14px;
+  font-size:12px;line-height:1.6;min-height:45px}
+.common-rmse>strong{display:block;margin-bottom:4px;font-size:13px}
+.common-rmse-row{display:grid;grid-template-columns:16px minmax(0,1fr) auto;
+  gap:10px;align-items:center;padding:4px 0;
+  font-variant-numeric:tabular-nums}
+.common-rmse-row span:nth-child(2){overflow-wrap:anywhere}
+.common-rmse-row strong{font-size:13px;white-space:nowrap}
+.common-rmse-warning{margin:10px 0 0}
