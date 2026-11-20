@@ -7,7 +7,7 @@ import math
 import random
 
 KINDS=("straight","circle","curve","right_angles")
-CONTROLLERS=("RPP","SMC")
+CONTROLLERS=("RPP","SMC_1S","SMC_2S")
 WHEEL_SEPARATION=.42
 MAX_WHEEL_MPS=.50
 
@@ -133,6 +133,7 @@ def defaults():
             "desired_speed_mps":.30,"max_sim_duration_s":120.,
             "goal_xy_tolerance_m":.12,"goal_yaw_tolerance_deg":9.17,
             "progress_radius_m":.10,"progress_timeout_sim_s":25.,
+            "lookahead_radius_m":.60,"curvature_window_m":.14,
         },
         "rpp":{
             "lookahead_dist":.32,"min_lookahead_dist":.28,
@@ -147,41 +148,52 @@ def defaults():
             "max_angular_accel":1.00,
             "min_approach_linear_velocity":.10,
         },
-        "smc":{
-            "cross_gain":1.8,"heading_gain":2.0,
-            "surface_lambda":1.0,"switch_gain":1.1,
-            "boundary_layer":.30,"lookahead_m":.32,
-            "feedforward_gain":1.0,"goal_heading_gain":2.0,
-            "goal_align_threshold_m":.14,
-            "max_angular_cmd":2.3,
+        "smc_1s":{
+            "lambda_y":2.5,"lambda_x":.6,
+            "k_s":1.2,"k_x":.8,"eta":.4,"phi":.3,
+            "eta_x":.25,"phi_x":.3,"use_saturation":True,
+            "singular_guard":.06,"max_angular_cmd":1.5,
+            "max_linear_accel":1.0,"max_angular_accel":2.0,
+        },
+        "smc_2s":{
+            "lambda_y":2.5,
+            "k_s":1.2,"k_x":.8,"eta":.4,"phi":.3,
+            "eta_x":.25,"phi_x":.3,"use_saturation":True,
+            "singular_guard":.06,"max_angular_cmd":1.5,
+            "max_linear_accel":1.0,"max_angular_accel":2.0,
         },
     }
 
 
 def migrate(data):
-    """Upgrade saved pre-three-card YAML without discarding tuned SMC gains.
+    """Migrate legacy flat SMC configs without equating different control laws.
 
-    Unknown keys are NOT silently removed; validate still rejects them.
+    Old cross_gain/switch_gain are NOT interchangeable with the full SMC
+    coefficients. They remain in historical run snapshots. New full law
+    parameters start at independently documented lab baselines.
     """
     from copy import deepcopy
     if not isinstance(data,dict):
         raise ValueError("Tracking config must be an object")
     cfg=deepcopy(data)
     baseline=defaults()
+    if cfg.get("controller")=="SMC":
+        cfg["controller"]="SMC_1S"
     if "shared" not in cfg:
         cfg["shared"]=deepcopy(baseline["shared"])
         for old in ("desired_speed_mps","max_sim_duration_s"):
             if old in cfg:
                 cfg["shared"][old]=cfg.pop(old)
+    for name in baseline["shared"]:
+        cfg["shared"].setdefault(name,baseline["shared"][name])
     if "rpp" not in cfg:
         cfg["rpp"]=deepcopy(baseline["rpp"])
-    old_smc=cfg.get("smc")
-    if isinstance(old_smc,dict) and set(old_smc)=={
-        "cross_gain","heading_gain","switch_gain","boundary_layer","lookahead_m"
-    }:
-        cfg["smc"]={**deepcopy(baseline["smc"]),**old_smc}
+    # Retain the actual legacy values only in older saved run snapshots,
+    # not in a misleading new full SMC controller. No invented mapping.
+    cfg.pop("smc",None)
+    cfg.setdefault("smc_1s",deepcopy(baseline["smc_1s"]))
+    cfg.setdefault("smc_2s",deepcopy(baseline["smc_2s"]))
     return cfg
-
 
 def validate(data):
     if not isinstance(data,dict):raise ValueError("Tracking config must be an object")
@@ -207,7 +219,7 @@ def validate(data):
         raise ValueError("Invalid manual pose")
     for field,lo,hi in (("x",-7,7),("y",-6,6),("yaw_deg",-360,360)):
         number(cfg["pose"][field],lo,hi,"manual "+field)
-    for group in ("shared","rpp","smc"):
+    for group in ("shared","rpp","smc_1s","smc_2s"):
         if not isinstance(cfg[group],dict) or set(cfg[group])!=set(expected[group]):
             raise ValueError("Invalid "+group+" tracking settings")
 
@@ -219,6 +231,8 @@ def validate(data):
         ("goal_yaw_tolerance_deg",1,45),
         ("progress_radius_m",.02,1.0),
         ("progress_timeout_sim_s",2,60),
+        ("lookahead_radius_m",.10,2.0),
+        ("curvature_window_m",.04,.5),
     ):
         number(shared[key],lo,hi,"shared "+key)
 
@@ -242,16 +256,20 @@ def validate(data):
             raise ValueError("Invalid RPP "+key+" checkbox")
     if not rpp["min_lookahead_dist"]<=rpp["lookahead_dist"]<=rpp["max_lookahead_dist"]:
         raise ValueError("RPP lookahead distance must lie between min and max")
-    smc=cfg["smc"]
-    for key,lo,hi in (
-        ("cross_gain",.1,6),("heading_gain",.1,8),
-        ("surface_lambda",.1,5.),("switch_gain",.05,5),
-        ("boundary_layer",.05,2),("lookahead_m",.1,1.5),
-        ("feedforward_gain",0.,3.),("goal_heading_gain",.1,8.),
-        ("goal_align_threshold_m",.04,.5),
-        ("max_angular_cmd",.2,2.3),
-    ):
-        number(smc[key],lo,hi,"SMC "+key)
+    for name in ("smc_1s","smc_2s"):
+        smc=cfg[name]
+        for key,lo,hi in (
+            ("lambda_y",.1,8.),("k_s",.01,8.),("k_x",.01,8.),
+            ("eta",0.,3.),("phi",.02,2.),("eta_x",0.,2.),
+            ("phi_x",.02,2.),("singular_guard",.01,.5),
+            ("max_angular_cmd",.2,2.3),
+            ("max_linear_accel",.1,3.),("max_angular_accel",.1,6.),
+        ):
+            number(smc[key],lo,hi,name+" "+key)
+        if name=="smc_1s":
+            number(smc["lambda_x"],0.,5.,name+" lambda_x")
+        if type(smc["use_saturation"]) is not bool:
+            raise ValueError("Invalid "+name+" saturation checkbox")
     pose=initial_pose(cfg)
     if abs(pose["x"])>7 or abs(pose["y"])>6:
         raise ValueError("Starting pose exceeds tracking floor bounds")
