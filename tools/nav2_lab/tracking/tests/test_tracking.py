@@ -440,13 +440,20 @@ def test_saved_common_window_rmse_reverses_misleading_full_duration_ranking(tmp_
 
 
 def test_convergence_slider_interpolates_entry_and_requires_settling():
-    samples=[
-        {"sim_s":0.,"error_m":.5},
-        {"sim_s":1.,"error_m":.2},
-        {"sim_s":2.,"error_m":.02},
-        {"sim_s":3.,"error_m":.01},
-        {"sim_s":4.,"error_m":0.},
-    ]
+    def dense(keyframes):
+        """100 ms simulated ground-truth observations across keyframes."""
+        result=[]
+        for tick in range(int(keyframes[-1][0]*10)+1):
+            t=round(tick*.1,6)
+            for (start,e0),(end,e1) in zip(keyframes,keyframes[1:]):
+                if start<=t<=end:
+                    result.append({
+                        "sim_s":t,
+                        "error_m":e0+(e1-e0)*(t-start)/(end-start),
+                    })
+                    break
+        return result
+    samples=dense([(0.,.5),(1.,.2),(2.,.02),(3.,.01),(4.,0.)])
     assert convergence_time(samples,.05)==pytest.approx(1.83333,abs=.00002)
     assert convergence_time(samples,.10)==pytest.approx(1.55556,abs=.00002)
     assert convergence_time(samples,.01)==pytest.approx(3.,abs=.00002)
@@ -456,13 +463,15 @@ def test_convergence_slider_interpolates_entry_and_requires_settling():
     # Crossing the line at the last sample cannot count as settling.
     assert convergence_time(samples[:3],.05) is None
     # If it exits the tolerance again, the *last sustained entry* counts.
-    with_excursion=samples[:3]+[
-        {"sim_s":3.,"error_m":.3},
-        {"sim_s":3.5,"error_m":.0},
-        {"sim_s":4.,"error_m":0.},
-    ]
+    with_excursion=dense([
+        (0.,.5),(1.,.2),(2.,.02),(3.,.3),(3.5,0.),
+        (4.,0.)
+    ])
     assert convergence_time(with_excursion,.05) is None
-    with_excursion.append({"sim_s":4.6,"error_m":0.})
+    with_excursion=dense([
+        (0.,.5),(1.,.2),(2.,.02),(3.,.3),(3.5,0.),
+        (4.,0.),(4.6,0.)
+    ])
     assert convergence_time(with_excursion,.05)==pytest.approx(
         3.41667,abs=.00002)
     assert convergence_time([
@@ -506,7 +515,7 @@ def test_three_metrics_same_run_and_tolerance_changes_only_convergence(tmp_path)
     for strict_run,loose_run in zip(strict["runs"],loose["runs"]):
         assert strict_run["summary_rmse_m"]==loose_run["summary_rmse_m"]
         assert strict_run["rmse_m"]==loose_run["rmse_m"]
-        assert strict_run["convergence_sim_s"]==pytest.approx(.99,abs=.02)
+        assert loose_run["convergence_sim_s"]==pytest.approx(.99,abs=.02)
     solo=service.history_comparison([first],.05)
     assert solo["common_end_sim_s"]==pytest.approx(5.)
     with pytest.raises(ValueError,match="tolerance"):
