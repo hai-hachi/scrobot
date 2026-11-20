@@ -676,9 +676,14 @@ class Handler(BaseHTTPRequestHandler):
                     return self.json_reply({"error":str(exc)},400)
                 return self.json_reply(trace)
             if path=="/api/tracker/history/comparison":
-                names=parse_qs(urlparse(self.path).query).get("name",[])
+                query=parse_qs(urlparse(self.path).query)
+                names=query.get("name",[])
+                tolerance=query.get("tolerance_m",["0.05"])
                 try:
-                    compared=self.tracking.history_comparison(names)
+                    if len(tolerance)!=1:
+                        raise ValueError("Exactly one convergence tolerance is required")
+                    compared=self.tracking.history_comparison(
+                        names,float(tolerance[0]))
                 except FileNotFoundError as exc:
                     return self.json_reply({"error":str(exc)},404)
                 except ValueError as exc:
