@@ -17,6 +17,7 @@ let shownFallbackDomain=null;
 const plotRuns=new Map();
 const pendingPlotRuns=new Set();
 const MAX_PLOT_RUNS=8;
+let comparisonKey=null,comparisonRequest=0;
 const PLOT_PALETTE=['#55C9F6','#B89BFF','#50DDB9','#FF86A2',
   '#E8D46C','#8CACFF','#DE96CE','#82E3E6'];
 const LIVE_PLOT_COLOR='#F4BB66';
@@ -312,23 +313,31 @@ function chartText(group,content,attrs){
 }
 function plotLines(){
   const lines=[];
+  const absolute=$('plot-absolute').checked;
+  const show=e=>absolute?Math.abs(e):e;
   const currentName=lastStatus?.run_name;
   // Avoid drawing the latest experiment twice if its complete saved trace
   // has already been chosen from the history table.
   if($('plot-live').checked&&!plotRuns.has(currentName)&&live?.trace?.length>=2){
     lines.push({
-      name:'Current / latest '+(lastStatus?.summary?.controller||'trial'),
+      name:'Current / latest '+(lastStatus?.summary?.controller||'trial')+
+        (Number.isFinite(live?.results?.cross_track_rmse_m)?
+          ' · cumulative RMSE '+fmt(live.results.cross_track_rmse_m,4)+' m':''),
       path:lastStatus?.summary?.path||null,
       color:LIVE_PLOT_COLOR,
-      points:live.trace.map(p=>({t:p.t,e:p.e}))
+      points:live.trace.map(p=>({t:p.t,e:show(p.e)}))
     });
   }
   for(const [name,run] of plotRuns){
     lines.push({
       name:run.controller+' · '+run.path+' · '+name+
         (typeof run.cross_track_rmse_m==='number'?
-          ' · RMSE '+run.cross_track_rmse_m.toFixed(3)+' m':''),
-      path:run.path,color:run.color,points:run.points
+          ' · full-run RMSE '+run.cross_track_rmse_m.toFixed(4)+' m':'')+
+        (Number.isFinite(run.duration_sim_s)?
+          ' · '+fmt(run.duration_sim_s,1)+' s':'')+
+        (run.full_resolution?'':' · legacy saved plot'),
+      path:run.path,color:run.color,
+      points:run.points.map(p=>({t:p.t,e:show(p.e)}))
     });
   }
   return lines;
@@ -363,7 +372,8 @@ function renderChart(){
   addLine(grid,[L,B],[R,B],'#839CAB',1.4);
   chartText(grid,'Elapsed simulation time (s)',
     {x:(L+R)/2,y:248,'text-anchor':'middle',class:'axis-label'});
-  chartText(grid,'Cross-track error (m)',
+  chartText(grid,$('plot-absolute').checked?
+    'Absolute cross-track error |e| (m)':'Signed cross-track error e (m)',
     {transform:'translate(16 110) rotate(-90)',
      x:0,y:0,'text-anchor':'middle',class:'axis-label'});
 
@@ -408,7 +418,78 @@ function renderChart(){
     '). '+(cautions.length?
       'Comparison caution: '+cautions.join(', ')+'. ':
       '')+
-    'Curves share the same axes and begin at t = 0; no time normalization.';
+    'Curves share the same axes and begin at t = 0; no time normalization. '+
+    ($('plot-absolute').checked?
+      'Showing |e| (the quantity squared for RMSE).':
+      'Signed e: a curve lower on the chart can still have larger |e|.')+
+    ' Historical saved RMSE values are preserved.';
+  refreshCommonComparison();
+}
+async function refreshCommonComparison(){
+  const selected=[...plotRuns.keys()].sort();
+  const key=JSON.stringify(selected);
+  if(comparisonKey===key)return;
+  comparisonKey=key;
+  const request=++comparisonRequest;
+  const view=$('common-rmse');
+  view.replaceChildren();
+  if(selected.length<2){
+    view.textContent='Select two or more saved runs to compare their RMSE '+
+      'over exactly the same elapsed simulated time.';
+    return;
+  }
+  view.textContent='Calculating matching-duration RMSE from the saved '+
+    'ground-truth samples…';
+  try{
+    const query=selected.map(n=>'name='+encodeURIComponent(n)).join('&');
+    const result=await api('/history/comparison?'+query);
+    if(request!==comparisonRequest)return;
+    view.replaceChildren();
+    const heading=document.createElement('strong');
+    heading.textContent='Same-duration RMSE: 0–'+
+      fmt(result.common_end_sim_s,3)+' simulated seconds';
+    view.append(heading);
+    const detail=document.createElement('p');
+    detail.className='fineprint';
+    detail.textContent='Integrated from the complete saved error records '+
+      '(not the plot drawing): lower is better. Each full-run RMSE above '+
+      'covers its own duration.';
+    view.append(detail);
+    for(const entry of result.runs){
+      const record=plotRuns.get(entry.name);
+      const row=document.createElement('div');
+      row.className='common-rmse-row';
+      const dot=document.createElement('span');
+      dot.className='plot-legend-swatch';
+      dot.style.borderColor=record?.color||'#aaa';
+      const label=document.createElement('span');
+      label.textContent=(record?.controller||'Controller')+
+        ' · '+entry.name+
+        (entry.full_resolution?'':' · legacy sparse estimate');
+      const score=document.createElement('strong');
+      score.textContent=fmt(entry.rmse_m,4)+' m';
+      row.append(dot,label,score);
+      view.append(row);
+    }
+    const warnings=[];
+    if(!result.all_full_resolution)warnings.push(
+      'Older saved runs contain decimated error samples; their same-window '+
+      'RMSE is only an estimate and does not replace their original table values');
+    if(!result.same_path)warnings.push('Paths differ');
+    if(!result.same_start_pose)warnings.push('Starting poses differ');
+    if(!result.same_reference_speed)warnings.push('Reference speeds differ');
+    if(result.runs.some(r=>r.excluded_gt_gaps>0))warnings.push(
+      'Some ground-truth intervals were missing and excluded from integration');
+    if(warnings.length){
+      const note=document.createElement('p');
+      note.className='fineprint common-rmse-warning';
+      note.textContent='Caution: '+warnings.join('; ')+'.';
+      view.append(note);
+    }
+  }catch(error){
+    if(request===comparisonRequest)
+      view.textContent='Matching-duration calculation unavailable: '+error.message;
+  }
 }
 function nextPlotColor(){
   const used=new Set([...plotRuns.values()].map(run=>run.color));
@@ -974,6 +1055,7 @@ for(const [id,path,message]of [
   $(id).onclick=()=>operate(async()=>{await api(path,{});notify(message);});
 }
 $('plot-live').onchange=renderChart;
+$('plot-absolute').onchange=renderChart;
 $('timeline-run').onchange=()=>loadTimeline($('timeline-run').value);
 $('timeline-slider').oninput=drawTimeline;
 $('clear-plot').onclick=()=>{
