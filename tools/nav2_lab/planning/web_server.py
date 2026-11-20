@@ -661,6 +661,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path=="/api/tracker/config":return self.json_reply(self.tracking.config())
             if path=="/api/tracker/defaults":return self.json_reply(self.tracking.defaults())
+            if path=="/api/tracker/physical-limits":return self.json_reply(self.tracking.physical_limits())
             if path=="/api/tracker/status":return self.json_reply(self.tracking.status())
             if path=="/api/tracker/history":return self.json_reply(self.tracking.history())
             if path=="/api/tracker/history/trace":
