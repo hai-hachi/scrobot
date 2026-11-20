@@ -109,21 +109,21 @@ def test_wheel_coupling_maintains_curvature():
         with pytest.raises(ValueError):clamp_wheel_envelope(bad,1.)
 
 
-def test_urdf_wheel_geometry_and_95_rpm_speed_envelope():
+def test_urdf_wheel_geometry_and_100_rpm_speed_envelope():
     values=capabilities()
     assert WHEEL_RADIUS_M==pytest.approx(.05)
     assert WHEEL_SEPARATION==pytest.approx(.42)
-    assert WHEEL_MAX_RPM==95.
+    assert WHEEL_MAX_RPM==100.
     assert RPM_WHEEL_MAX_MPS==pytest.approx(
-        95*math.pi*.10/60)
-    assert MAX_WHEEL_MPS==pytest.approx(.4974188368,rel=1e-6)
+        100*math.pi*.10/60)
+    assert MAX_WHEEL_MPS==pytest.approx(.50)
     assert MAX_LINEAR_MPS==pytest.approx(MAX_WHEEL_MPS)
     assert MAX_ANGULAR_RADPS==pytest.approx(
         2*MAX_WHEEL_MPS/WHEEL_SEPARATION)
-    assert MAX_ANGULAR_RADPS==pytest.approx(2.36866,abs=1e-5)
+    assert MAX_ANGULAR_RADPS==pytest.approx(2.38095,abs=1e-5)
     assert values["wheel_diameter_m"]==pytest.approx(.10)
     assert values["wheel_separation_m"]==pytest.approx(.42)
-    assert values["wheel_max_rpm"]==95.
+    assert values["wheel_max_rpm"]==100.
 
     for v,w in ((.5,0.),(0.,5.),(.40,2.),(-.4,3.),
                 (.25,-1.8),(-.1,-5.)):
@@ -132,7 +132,7 @@ def test_urdf_wheel_geometry_and_95_rpm_speed_envelope():
         assert max(abs(left),abs(right))<=MAX_WHEEL_MPS+1e-9
         for wheel in (left,right):
             rpm=abs(wheel)/WHEEL_RADIUS_M*60/(2*math.pi)
-            assert rpm<=95+1e-7
+            assert rpm<=100+1e-7
         # This limiter scales both requests equally, keeping curvature
         # even when the individual wheel RPM rating is exceeded.
         if abs(v)+WHEEL_SEPARATION/2*abs(w)>MAX_WHEEL_MPS:
@@ -208,7 +208,7 @@ def test_tracker_params_preserve_real_controller_and_physics(tmp_path):
         assert cs[mode]["curvature_window_m"]==.14
         assert cs[mode]["wheel_radius_m"]==WHEEL_RADIUS_M
         assert cs[mode]["wheel_separation_m"]==WHEEL_SEPARATION
-        assert cs[mode]["wheel_max_rpm"]==95.0
+        assert cs[mode]["wheel_max_rpm"]==100.0
         assert cs[mode]["rated_wheel_max_mps"]==.50
     local=params["local_costmap"]["local_costmap"]["ros__parameters"]
     assert local["plugins"]==["obstacle_layer","inflation_layer"]
