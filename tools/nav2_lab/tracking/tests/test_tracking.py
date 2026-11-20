@@ -20,7 +20,7 @@ from tracking.configuration import generate,saved_physics
 from tracking.service import (TrackingService, choose_tracking_domain, discover_domain_topics,
                               cleanup_owned_session, TRACKER_DOMAIN_CANDIDATES)
 from tracking.health import controller_failure,ready_for_tracking
-from tracking.carrot import circle_carrot,reference as carrot_reference,errors as carrot_errors,surfaces
+from tracking.carrot import circle_carrot,reference as carrot_reference,errors as carrot_errors,surfaces,full_control
 
 
 def test_four_path_geometries_are_deterministic():
@@ -337,6 +337,41 @@ def test_native_smc_plugin_has_complete_jazzy_interface():
     assert "scrobot_tracker_controller::SMCController" in plugins
     build=(REPO/"src/scrobot_tracker_controller/CMakeLists.txt").read_text()
     assert "pluginlib_export_plugin_description_file(nav2_core smc_plugins.xml)" in build
+
+
+def test_full_smc_numeric_equations_reference_feedforward_and_saturation():
+    cfg=defaults()
+    e={"ex":.25,"ey":-.18,"etheta":.12}
+    ref={"v_ref":.40,"w_ref":.37}
+    p=cfg["smc_1s"]
+    D=1+p["lambda_y"]*e["ex"]
+    gx=p["k_x"]*e["ex"]+p["eta_x"]*1.0
+    angular_s=e["etheta"]+p["lambda_y"]*e["ey"]+p["lambda_x"]*e["ex"]
+    q=p["k_s"]*angular_s+p["eta"]*max(-1.,min(1.,angular_s/p["phi"]))
+    omega1=(ref["w_ref"]+p["lambda_y"]*ref["v_ref"]*
+            math.sin(e["etheta"])-p["lambda_x"]*gx+q)/D
+    value1=full_control(e,ref,cfg,"SMC_1S")
+    assert value1["desired_w"]==pytest.approx(omega1)
+    assert value1["desired_v"]==pytest.approx(
+        ref["v_ref"]*math.cos(e["etheta"])+e["ey"]*omega1+gx)
+    p2=cfg["smc_2s"]
+    s2=e["etheta"]+p2["lambda_y"]*e["ey"]
+    q2=p2["k_s"]*s2+p2["eta"]*max(-1.,min(1.,s2/p2["phi"]))
+    omega2=(ref["w_ref"]+p2["lambda_y"]*ref["v_ref"]*
+            math.sin(e["etheta"])+q2)/D
+    value2=full_control(e,ref,cfg,"SMC_2S")
+    assert value2["desired_w"]==pytest.approx(omega2)
+    assert value1["desired_w"]!=pytest.approx(value2["desired_w"])
+    assert value2["desired_v"]==pytest.approx(
+        ref["v_ref"]*math.cos(e["etheta"])+e["ey"]*omega2+gx)
+    cfg["smc_1s"]["use_saturation"]=False
+    value_no_sat=full_control(e,ref,cfg,"SMC_1S")
+    assert value_no_sat["gx"]==pytest.approx(cfg["smc_1s"]["k_x"]*e["ex"])
+    assert value_no_sat["q"]==pytest.approx(cfg["smc_1s"]["k_s"]*value_no_sat["s1"])
+    with pytest.raises(ArithmeticError,match="singular"):
+        full_control({"ex":-.4,"ey":0.,"etheta":0.},ref,cfg,"SMC_1S")
+    with pytest.raises(ArithmeticError,match="singular"):
+        full_control(e,ref,cfg,"SMC_1S",previous_D=-1.)
 
 
 def test_full_smc_one_vs_two_surface_equations_are_not_truncated():
