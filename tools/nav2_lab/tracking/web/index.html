@@ -111,14 +111,14 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="physical-limit-grid">
         <div><small>Drive wheel diameter</small><strong id="physical-wheel-diameter">0.100 m</strong></div>
         <div><small>Wheel separation (centre-to-centre)</small><strong id="physical-wheelbase">0.420 m</strong></div>
-        <div><small>Maximum wheel speed</small><strong id="physical-max-rpm">95.0 RPM</strong></div>
-        <div><small>Maximum straight speed</small><strong id="physical-max-linear">0.4974 m/s</strong></div>
-        <div><small>Maximum in-place rotation</small><strong id="physical-max-angular">2.3687 rad/s</strong></div>
+        <div><small>Maximum wheel speed</small><strong id="physical-max-rpm">100.0 RPM</strong></div>
+        <div><small>Maximum straight speed</small><strong id="physical-max-linear">0.5000 m/s</strong></div>
+        <div><small>Maximum in-place rotation</small><strong id="physical-max-angular">2.3810 rad/s</strong></div>
       </div>
-      <p class="fineprint" id="physical-coupled-envelope">Per-wheel limits: |v − 0.210ω| ≤ 0.4974 and |v + 0.210ω| ≤ 0.4974 m/s.</p>
+      <p class="fineprint" id="physical-coupled-envelope">Per-wheel limits: |v − 0.210ω| ≤ 0.5000 and |v + 0.210ω| ≤ 0.5000 m/s.</p>
       <p class="fineprint" id="physical-turning-allowance">At shared desired speed 0.40 m/s, the maximum simultaneous turn rate is 0.464 rad/s.</p>
     </div>
-    <p class="fineprint tuning-hint">ROS control 25 sim-Hz; wheel loop 100 sim-Hz. The 95 RPM limit is enforced for RPP and both SMC variants AFTER calculating their requested linear and angular speeds. Gazebo RTF is set separately.</p>
+    <p class="fineprint tuning-hint">ROS control 25 sim-Hz; wheel loop 100 sim-Hz. The 100 RPM rating and stricter 0.50 m/s cap are enforced for RPP and both SMC variants AFTER calculating their requested linear and angular speeds. Gazebo RTF is set separately.</p>
     <p class="fineprint" id="physics-source">Wheel and motor physics come from your saved Mobility Lab; odometry rates come from Odometry Lab. The floor uses the validated contact model.</p>
   </section>
 
@@ -146,7 +146,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <label class="tuning-check"><input id="rpp-rotate" type="checkbox" checked>
         Rotate to heading</label>
       <div class="field"><label for="rpp-rotate-rate">Rotate-to-heading speed (rad/s)</label>
-        <input id="rpp-rotate-rate" type="number" min=".1" max="2.36866" step=".01" value="1.6"></div>
+        <input id="rpp-rotate-rate" type="number" min=".1" max="2.380952380952381" step=".01" value="1.6"></div>
       <div class="field"><label for="rpp-rotate-threshold">Rotate threshold (degrees)</label>
         <input id="rpp-rotate-threshold" type="number" min="1" max="100" step="1" value="20"></div>
       <div class="field"><label for="rpp-angular-accel">Max angular acceleration (rad/s²)</label>
@@ -179,7 +179,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="field"><label for="smc1-eta-x">Longitudinal switching strength ηx</label><input id="smc1-eta-x" type="number" min="0" max="2" step="0.05" value="0.25"></div>
       <div class="field"><label for="smc1-phi-x">Longitudinal boundary width φx (m)</label><input id="smc1-phi-x" type="number" min="0.02" max="2" step="0.02" value="0.3"></div>
       <div class="field"><label for="smc1-singular-guard">Denominator guard |D|</label><input id="smc1-singular-guard" type="number" min="0.01" max="0.5" step="0.01" value="0.06"></div>
-      <div class="field"><label for="smc1-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc1-max-angular-cmd" type="number" min="0.2" max="2.36866" step="0.01" value="1.5"></div>
+      <div class="field"><label for="smc1-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc1-max-angular-cmd" type="number" min="0.2" max="2.380952380952381" step="0.01" value="1.5"></div>
       <div class="field"><label for="smc1-max-linear-accel">Max dv/dt (m/s²)</label><input id="smc1-max-linear-accel" type="number" min="0.1" max="3" step="0.1" value="1"></div>
       <div class="field"><label for="smc1-max-angular-accel">Max dω/dt (rad/s²)</label><input id="smc1-max-angular-accel" type="number" min="0.1" max="6" step="0.1" value="2"></div>
       <label class="tuning-check"><input id="smc1-use-saturation" type="checkbox" checked> Enable boundary-layer saturation</label>
@@ -208,7 +208,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="field"><label for="smc2-eta-x">Longitudinal switching strength ηx</label><input id="smc2-eta-x" type="number" min="0" max="2" step="0.05" value="0.25"></div>
       <div class="field"><label for="smc2-phi-x">Longitudinal boundary width φx (m)</label><input id="smc2-phi-x" type="number" min="0.02" max="2" step="0.02" value="0.3"></div>
       <div class="field"><label for="smc2-singular-guard">Denominator guard |D|</label><input id="smc2-singular-guard" type="number" min="0.01" max="0.5" step="0.01" value="0.06"></div>
-      <div class="field"><label for="smc2-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc2-max-angular-cmd" type="number" min="0.2" max="2.36866" step="0.01" value="1.5"></div>
+      <div class="field"><label for="smc2-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc2-max-angular-cmd" type="number" min="0.2" max="2.380952380952381" step="0.01" value="1.5"></div>
       <div class="field"><label for="smc2-max-linear-accel">Max dv/dt (m/s²)</label><input id="smc2-max-linear-accel" type="number" min="0.1" max="3" step="0.1" value="1"></div>
       <div class="field"><label for="smc2-max-angular-accel">Max dω/dt (rad/s²)</label><input id="smc2-max-angular-accel" type="number" min="0.1" max="6" step="0.1" value="2"></div>
       <label class="tuning-check"><input id="smc2-use-saturation" type="checkbox" checked> Enable boundary-layer saturation</label>
@@ -254,7 +254,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
     <div class="math-eq" data-formula="limit-accel"></div>
     <div class="math-eq" data-formula="limit-wheel"></div>
   </div>
-  <p class="fineprint">The drive wheels have radius 0.050 m, 0.420 m wheel-centre spacing and a 95 RPM limit. The rounded 0.50 m/s motor rating is slightly higher than the speed implied by 95 RPM, so 0.49742 m/s is used for each wheel. Individual angular and acceleration limits are tunable, but the coupled wheel RPM limit is enforced after those limits. RPP, SMC-1s and SMC-2s all use the same drivetrain. The ideal SMC reaching identities require a true unicycle reference and no actuator limiting.</p>
+  <p class="fineprint">The drive wheels have radius 0.050 m and 0.420 m centre-to-centre spacing. At 100 RPM, their geometric speed is 0.52360 m/s. The separately specified 0.50 m/s wheel limit is stricter and is used for each wheel. Individual angular and acceleration limits are tunable, but the coupled wheel RPM limit is enforced after those limits. RPP, SMC-1s and SMC-2s all use the same drivetrain. The ideal SMC reaching identities require a true unicycle reference and no actuator limiting.</p>
 </section>
 </section>
 
