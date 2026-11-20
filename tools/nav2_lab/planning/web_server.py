@@ -674,6 +674,17 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError as exc:
                     return self.json_reply({"error":str(exc)},400)
                 return self.json_reply(trace)
+            if path=="/api/tracker/history/timeline":
+                names=parse_qs(urlparse(self.path).query).get("name",[])
+                if len(names)!=1:
+                    return self.json_reply({"error":"One experiment name is required"},400)
+                try:
+                    timeline=self.tracking.history_timeline(names[0])
+                except FileNotFoundError as exc:
+                    return self.json_reply({"error":str(exc)},404)
+                except ValueError as exc:
+                    return self.json_reply({"error":str(exc)},400)
+                return self.json_reply(timeline)
             if path=="/api/tracker/speed":return self.json_reply(self.tracking.sim_speed())
             if path=="/api/sim-speed":return self.json_reply(self.shared_speed_status())
             if path=="/api/config":return self.json_reply(self.service.config())
