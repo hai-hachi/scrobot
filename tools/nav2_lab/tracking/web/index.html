@@ -90,7 +90,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
     <p class="fineprint">Same reference speed, tolerances and progress checks for both controllers. These values are held constant for a fair comparison.</p>
     <div class="tuning-fields">
       <div class="field"><label for="desired-speed">Desired forward speed (m/s)</label>
-        <input id="desired-speed" type="number" min=".05" max=".40" step=".01" value=".40"></div>
+        <input id="desired-speed" type="number" min=".05" max=".497418836" step=".001" value=".40"></div>
       <div class="field"><label for="max-duration">Trial timeout (sim seconds)</label>
         <input id="max-duration" type="number" min="10" max="360" step="5" value="120"></div>
       <div class="field"><label for="goal-xy">Goal position tolerance (m)</label>
@@ -106,7 +106,19 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="field"><label for="curvature-window">SMC three-point curvature half-window (m)</label>
         <input id="curvature-window" type="number" min=".04" max=".5" step=".01" value=".14"></div>
     </div>
-    <p class="fineprint tuning-hint">Wheel envelope: |v| + 0.21|ω| ≤ 0.50 m/s (physics-locked). ROS control 25 sim-Hz, wheel loop 100 sim-Hz. Gazebo speed is the common cap above the page.</p>
+    <div class="physical-limit-box" aria-label="Robot mechanical wheel and speed limitations">
+      <h3>Robot physical speed limits · read-only</h3>
+      <div class="physical-limit-grid">
+        <div><small>Drive wheel diameter</small><strong id="physical-wheel-diameter">0.100 m</strong></div>
+        <div><small>Wheel separation (centre-to-centre)</small><strong id="physical-wheelbase">0.420 m</strong></div>
+        <div><small>Maximum wheel speed</small><strong id="physical-max-rpm">95.0 RPM</strong></div>
+        <div><small>Maximum straight speed</small><strong id="physical-max-linear">0.4974 m/s</strong></div>
+        <div><small>Maximum in-place rotation</small><strong id="physical-max-angular">2.3687 rad/s</strong></div>
+      </div>
+      <p class="fineprint" id="physical-coupled-envelope">Per-wheel limits: |v − 0.210ω| ≤ 0.4974 and |v + 0.210ω| ≤ 0.4974 m/s.</p>
+      <p class="fineprint" id="physical-turning-allowance">At shared desired speed 0.40 m/s, the maximum simultaneous turn rate is 0.464 rad/s.</p>
+    </div>
+    <p class="fineprint tuning-hint">ROS control 25 sim-Hz; wheel loop 100 sim-Hz. The 95 RPM limit is enforced for RPP and both SMC variants AFTER calculating their requested linear and angular speeds. Gazebo RTF is set separately.</p>
     <p class="fineprint" id="physics-source">Wheel and motor physics come from your saved Mobility Lab; odometry rates come from Odometry Lab. The floor uses the validated contact model.</p>
   </section>
 
@@ -130,17 +142,17 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="field"><label for="rpp-min-radius">Regulation radius (m)</label>
         <input id="rpp-min-radius" type="number" min=".1" max="3" step=".05" value=".5"></div>
       <div class="field"><label for="rpp-min-speed">Minimum regulated speed (m/s)</label>
-        <input id="rpp-min-speed" type="number" min=".03" max=".40" step=".01" value=".25"></div>
+        <input id="rpp-min-speed" type="number" min=".03" max=".497418836" step=".001" value=".25"></div>
       <label class="tuning-check"><input id="rpp-rotate" type="checkbox" checked>
         Rotate to heading</label>
       <div class="field"><label for="rpp-rotate-rate">Rotate-to-heading speed (rad/s)</label>
-        <input id="rpp-rotate-rate" type="number" min=".1" max="2.3" step=".1" value="1.6"></div>
+        <input id="rpp-rotate-rate" type="number" min=".1" max="2.36866" step=".01" value="1.6"></div>
       <div class="field"><label for="rpp-rotate-threshold">Rotate threshold (degrees)</label>
         <input id="rpp-rotate-threshold" type="number" min="1" max="100" step="1" value="20"></div>
       <div class="field"><label for="rpp-angular-accel">Max angular acceleration (rad/s²)</label>
         <input id="rpp-angular-accel" type="number" min=".1" max="6" step=".1" value="1"></div>
       <div class="field"><label for="rpp-min-approach">Min final-approach speed (m/s)</label>
-        <input id="rpp-min-approach" type="number" min=".02" max=".40" step=".01" value=".10"></div>
+        <input id="rpp-min-approach" type="number" min=".02" max=".497418836" step=".001" value=".10"></div>
     </div>
     <p class="fineprint tuning-hint">Velocity-scaled lookahead uses min/max distance and lookahead time; fixed distance takes effect when disabled. Minimum speeds are capped by the shared desired speed in the generated Nav2 YAML.</p>
   </section>
@@ -167,7 +179,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="field"><label for="smc1-eta-x">Longitudinal switching strength ηx</label><input id="smc1-eta-x" type="number" min="0" max="2" step="0.05" value="0.25"></div>
       <div class="field"><label for="smc1-phi-x">Longitudinal boundary width φx (m)</label><input id="smc1-phi-x" type="number" min="0.02" max="2" step="0.02" value="0.3"></div>
       <div class="field"><label for="smc1-singular-guard">Denominator guard |D|</label><input id="smc1-singular-guard" type="number" min="0.01" max="0.5" step="0.01" value="0.06"></div>
-      <div class="field"><label for="smc1-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc1-max-angular-cmd" type="number" min="0.2" max="2.3" step="0.1" value="1.5"></div>
+      <div class="field"><label for="smc1-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc1-max-angular-cmd" type="number" min="0.2" max="2.36866" step="0.01" value="1.5"></div>
       <div class="field"><label for="smc1-max-linear-accel">Max dv/dt (m/s²)</label><input id="smc1-max-linear-accel" type="number" min="0.1" max="3" step="0.1" value="1"></div>
       <div class="field"><label for="smc1-max-angular-accel">Max dω/dt (rad/s²)</label><input id="smc1-max-angular-accel" type="number" min="0.1" max="6" step="0.1" value="2"></div>
       <label class="tuning-check"><input id="smc1-use-saturation" type="checkbox" checked> Enable boundary-layer saturation</label>
@@ -196,7 +208,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="field"><label for="smc2-eta-x">Longitudinal switching strength ηx</label><input id="smc2-eta-x" type="number" min="0" max="2" step="0.05" value="0.25"></div>
       <div class="field"><label for="smc2-phi-x">Longitudinal boundary width φx (m)</label><input id="smc2-phi-x" type="number" min="0.02" max="2" step="0.02" value="0.3"></div>
       <div class="field"><label for="smc2-singular-guard">Denominator guard |D|</label><input id="smc2-singular-guard" type="number" min="0.01" max="0.5" step="0.01" value="0.06"></div>
-      <div class="field"><label for="smc2-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc2-max-angular-cmd" type="number" min="0.2" max="2.3" step="0.1" value="1.5"></div>
+      <div class="field"><label for="smc2-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc2-max-angular-cmd" type="number" min="0.2" max="2.36866" step="0.01" value="1.5"></div>
       <div class="field"><label for="smc2-max-linear-accel">Max dv/dt (m/s²)</label><input id="smc2-max-linear-accel" type="number" min="0.1" max="3" step="0.1" value="1"></div>
       <div class="field"><label for="smc2-max-angular-accel">Max dω/dt (rad/s²)</label><input id="smc2-max-angular-accel" type="number" min="0.1" max="6" step="0.1" value="2"></div>
       <label class="tuning-check"><input id="smc2-use-saturation" type="checkbox" checked> Enable boundary-layer saturation</label>
