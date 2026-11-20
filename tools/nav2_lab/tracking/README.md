@@ -368,6 +368,65 @@ predating `timeline.json` remain comparable in the error chart, but their
 Inspect button is disabled; measurements are never invented or reconstructed
 as if they had been logged.
 
+## Cross-track RMSE: consistent with the saved plot
+
+The **signed** nearest-*segment* cross-track error is computed in the
+robot's world/odom frame from each ground-truth pose. A signed curve may
+appear lower on the chart while having a *larger magnitude*: RMSE always
+squares the error, so positive and negative deviations of equal
+magnitude are treated equally. The Results chart defaults to
+**absolute error |e|**, and its checkbox can switch back to signed
+error to show which side of the path the robot follows.
+
+**Live and final metrics now use the same cumulative ground-truth
+samples**, starting at the first FollowPath tracking observation. The
+former live metric used only the most recent 250 GT samples, whereas
+the final value covered the full run; the old trace also used every
+fifth GT sample, with further stride decimation. Those disjoint data
+windows could make chart/metric interpretation confusing.
+
+Current mathematical definition:
+
+```text
+e_i   = signed nearest-segment cross-track distance at GT sample i
+dt_i  = t_i - t_(i-1), where t is ROS simulation time
+I     = sum[ (e_(i-1)^2 + e_i^2) * dt_i / 2 ]
+T     = sum[ dt_i ]
+RMSE  = sqrt(I / T)
+```
+
+The rule includes only valid increasing GT intervals shorter than
+0.6 simulated seconds. Larger gaps are counted and reported rather
+than silently integrated. The heading RMSE uses the same trapezoidal
+simulation-time rule for the squared wrapped heading error. Every
+accepted GT cross-track observation is written to `series.json` for a
+new experiment, and the saved run records `plot_series_rmse_m`,
+`plot_rmse_verified`, `elapsed_sim_s`, `duration_sim_s`, and
+`excluded_gt_gaps`. The plot only down-samples **its rendering**, with
+per-bucket positive and negative extrema plus first/last samples.
+Narrow spikes are not dropped by stride sampling. The table continues
+to use the full-resolution integrated RMSE.
+
+### Common-duration comparison
+
+Each full-run RMSE is averaged over **that run's measured duration**.
+Different durations can reverse the ranking even when one controller
+has a larger error during the part where the runs overlap. When two
+to eight saved runs are selected in the comparison plot, the panel
+below the chart computes each run's RMSE over the same
+`0..min(run_elapsed_sim_s)` window using its *full saved signed error
+stream*. The last interval is interpolated if necessary so all runs
+stop at precisely the same simulation time. For meaningful comparisons
+use the same reference path, starting pose, and requested speed;
+mismatches produce visible warnings.
+
+**Historical experiments are not silently rewritten.** Older
+`series.json` was already decimated and older summary files used a
+right-endpoint squared-error integration rule. Their original table
+RMSE is kept for reproducibility. Same-duration comparisons involving
+older data are explicitly marked as estimates from sparse samples.
+Rerun RPP and both SMCs to obtain the verified full-resolution values.
+
 ## Tests and limitations
 
 ```bash
