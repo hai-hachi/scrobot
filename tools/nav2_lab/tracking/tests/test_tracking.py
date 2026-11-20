@@ -15,7 +15,8 @@ sys.path.insert(0,str(HERE.parent))
 from tracking.core import (
   KINDS,CONTROLLERS,defaults,validate,reference,
   cumulative,initial_pose,projection,at_fraction,clamp_wheel_envelope,metrics,wrap,
-  TrackingMetrics,integrate_squared_error,downsample_error_series)
+  TrackingMetrics,integrate_squared_error,downsample_error_series,
+  convergence_time)
 from tracking.world import write_world
 from tracking.configuration import generate,saved_physics
 from tracking.service import (TrackingService, choose_tracking_domain, discover_domain_topics,
@@ -427,12 +428,112 @@ def test_saved_common_window_rmse_reverses_misleading_full_duration_ranking(tmp_
     assert trace["rmse_plot_verified"] is True
     assert trace["points"][0]["e"]==1.
     assert trace["points"][-1]["t"]==pytest.approx(12.)
+    single=service.history_comparison([names[0]],tolerance_m=.05)
+    assert single["common_end_sim_s"]==pytest.approx(12.)
+    assert len(single["runs"])==1
     with pytest.raises(ValueError,match="Select between"):
-        service.history_comparison([names[0]])
+        service.history_comparison([])
     with pytest.raises(ValueError,match="duplicate"):
         service.history_comparison([names[0],names[0]])
     with pytest.raises(ValueError,match="Invalid experiment ID"):
         service.history_comparison([names[0],"../etc/passwd"])
+
+
+def test_convergence_slider_interpolates_entry_and_requires_settling():
+    samples=[
+        {"sim_s":0.,"error_m":.5},
+        {"sim_s":1.,"error_m":.2},
+        {"sim_s":2.,"error_m":.02},
+        {"sim_s":3.,"error_m":.01},
+        {"sim_s":4.,"error_m":0.},
+    ]
+    assert convergence_time(samples,.05)==pytest.approx(1.83333,abs=.00002)
+    assert convergence_time(samples,.10)==pytest.approx(1.55556,abs=.00002)
+    assert convergence_time(samples,.01)==pytest.approx(3.,abs=.00002)
+    assert convergence_time(samples,.05,cutoff=2.2) is None
+    assert convergence_time(samples,.05,cutoff=3.)==pytest.approx(
+        1.83333,abs=.00002)
+    # Crossing the line at the last sample cannot count as settling.
+    assert convergence_time(samples[:3],.05) is None
+    # If it exits the tolerance again, the *last sustained entry* counts.
+    with_excursion=samples[:3]+[
+        {"sim_s":3.,"error_m":.3},
+        {"sim_s":3.5,"error_m":.0},
+        {"sim_s":4.,"error_m":0.},
+    ]
+    assert convergence_time(with_excursion,.05) is None
+    with_excursion.append({"sim_s":4.6,"error_m":0.})
+    assert convergence_time(with_excursion,.05)==pytest.approx(
+        3.41667,abs=.00002)
+    assert convergence_time([
+        {"sim_s":0.,"error_m":0.},
+        {"sim_s":.5,"error_m":0.},
+        {"sim_s":1.5,"error_m":0.},
+        {"sim_s":2.5,"error_m":0.},
+        {"sim_s":3.,"error_m":0.},
+    ],.05) is None  # sample gaps >= 0.6 reset settling
+    for threshold in (0.,-.1,.5001,float("nan")):
+        with pytest.raises(ValueError,match="tolerance"):
+            convergence_time(samples,threshold)
+
+
+def test_three_metrics_same_run_and_tolerance_changes_only_convergence(tmp_path):
+    service=TrackingService(run_root=tmp_path)
+    first="20261120_123400_tracking_ab123"
+    second="20261120_123401_tracking_cd456"
+    for name,offset,duration in [(first,.3,5.),(second,.15,4.)]:
+        folder=tmp_path/name
+        folder.mkdir()
+        signed=[{"sim_s":i*.1,
+                 "error_m":offset if i*.1<1 else .02}
+                for i in range(int(duration*10)+1)]
+        (folder/"series.json").write_text(json.dumps(signed))
+        (folder/"summary.json").write_text(json.dumps({
+            "controller":"RPP" if name==first else "SMC_2S",
+            "path":"straight","start_pose":{"x":0,"y":0,"yaw_deg":0},
+            "requested_speed_mps":.4,"results":{
+                "cross_track_rmse_m":.23 if name==first else .11,
+                "plot_full_resolution":True,
+            }
+        }))
+    strict=service.history_comparison([first,second],.01)
+    loose=service.history_comparison([first,second],.05)
+    assert strict["convergence_tolerance_m"]==.01
+    assert strict["minimum_settle_sim_s"]==1.
+    assert strict["common_end_sim_s"]==pytest.approx(4.)
+    assert all(r["convergence_sim_s"] is None for r in strict["runs"])
+    assert all(r["convergence_sim_s"] is not None for r in loose["runs"])
+    for strict_run,loose_run in zip(strict["runs"],loose["runs"]):
+        assert strict_run["summary_rmse_m"]==loose_run["summary_rmse_m"]
+        assert strict_run["rmse_m"]==loose_run["rmse_m"]
+        assert strict_run["convergence_sim_s"]==pytest.approx(.99,abs=.02)
+    solo=service.history_comparison([first],.05)
+    assert solo["common_end_sim_s"]==pytest.approx(5.)
+    with pytest.raises(ValueError,match="tolerance"):
+        service.history_comparison([first,second],.6)
+
+
+def test_convergence_slider_and_all_three_metrics_in_results_interface():
+    html=(HERE/"web/index.html").read_text()
+    app=(HERE/"web/app.js").read_text()
+    css=(HERE/"web/style.css").read_text()
+    server=(HERE.parent/"planning/web_server.py").read_text()
+    assert 'id="convergence-tolerance"' in html
+    assert 'id="convergence-value"' in html
+    assert 'type="range" min="0.01" max="0.50" step="0.01"' in html
+    assert "1.0 simulated second" in html
+    assert "Full-run RMSE (m)" in app
+    assert "Common-duration RMSE (m)" in app
+    assert "Convergence time (sim-s)" in app
+    assert 'convergence_sim_s' in app
+    assert "tolerance_m=" in app
+    assert "if(!skipComparison)refreshCommonComparison();" in app
+    assert 'fill-opacity' in app and "ε =" in app
+    assert "setTimeout(refreshCommonComparison,140)" in app
+    assert "convergence_time" in (HERE/"core.py").read_text()
+    assert "float(tolerance[0])" in server
+    assert ".convergence-tuning" in css
+    assert ".comparison-metric-row" in css
 
 
 def test_rmse_plots_and_results_use_one_accumulator_not_rolling_window():
