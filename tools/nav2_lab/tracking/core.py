@@ -275,41 +275,184 @@ def validate(data):
     return cfg
 
 
-def metrics(samples,points):
-    """Independent world-ground-truth evaluation, sim-time weighted RMSE."""
-    if len(samples)<2:return {"samples":len(samples),"valid":False}
-    sums={"e2":0.,"yaw2":0.,"duration":0.,"max_e":0.,"distance":0.,
-          "cmd_change":0.,"violations":0}
-    series=[]
-    last=None
-    for sample in samples:
-        proj=projection(points,sample["x"],sample["y"])
-        yawerr=wrap(sample["yaw"]-proj["heading_rad"])
+def downsample_error_series(points,max_points=1200):
+    """Keep first/last and both signed extrema per consecutive time bucket.
+
+    This changes only the display curve, never the samples used to compute
+    RMSE. Unlike stride-based decimation, narrow error spikes are visible.
+    """
+    if len(points)<=max_points:
+        return list(points)
+    if max_points<4:
+        raise ValueError("Plot sample budget must be at least four")
+    buckets=max(1,(max_points-2)//2)
+    interior=len(points)-2
+    size=math.ceil(interior/buckets)
+    chosen=[points[0]]
+    for start in range(1,len(points)-1,size):
+        end=min(len(points)-1,start+size)
+        indices=range(start,end)
+        minimum=min(indices,key=lambda j:points[j]["error_m"])
+        maximum=max(indices,key=lambda j:points[j]["error_m"])
+        for j in sorted(set((minimum,maximum))):
+            chosen.append(points[j])
+    chosen.append(points[-1])
+    return chosen
+
+
+def integrate_squared_error(points,cutoff=None,max_interval_s=.6):
+    """Sim-time RMS from the very same signed cross-track error time series.
+
+    Samples represent signed error in metres. The integral uses trapezoids
+    on e(t)^2, with linear interpolation of e(t) at a requested cutoff.
+    Gaps >= max_interval_s are excluded rather than silently treated as
+    ordinary samples; reported duration is the actual covered sim time.
+    """
+    previous=None
+    area=0.
+    valid_duration=0.
+    gaps=0
+    if cutoff is not None and (not math.isfinite(cutoff) or cutoff<=0):
+        return {"rmse_m":None,"duration_sim_s":0.,"gap_count":0}
+    for item in points:
+        if isinstance(item,dict):
+            t=item.get("sim_s")
+            e=item.get("error_m")
+        else:
+            t,e=item
+        if (type(t) not in (int,float) or type(e) not in (int,float)
+                or not math.isfinite(t) or not math.isfinite(e)):
+            continue
+        if previous is None:
+            previous=(float(t),float(e))
+            continue
+        p_t,p_e=previous
+        if t<=p_t:
+            continue
+        original_end=float(t)
+        if cutoff is not None and p_t>=cutoff:
+            break
+        if original_end-p_t>=max_interval_s:
+            gaps+=1
+            previous=(original_end,float(e))
+            continue
+        end=min(original_end,cutoff) if cutoff is not None else original_end
+        end_e=p_e+(float(e)-p_e)*(end-p_t)/(original_end-p_t)
+        dt=end-p_t
+        if dt>0:
+            area+=(p_e*p_e+end_e*end_e)*dt/2.
+            valid_duration+=dt
+        previous=(original_end,float(e))
+        if cutoff is not None and original_end>=cutoff:
+            break
+    return {"rmse_m":math.sqrt(area/valid_duration) if valid_duration>0 else None,
+            "duration_sim_s":valid_duration,"gap_count":gaps}
+
+
+class TrackingMetrics:
+    """Single ground-truth accumulator for live, final, and saved plot data.
+
+    Both the chart and RMSE come from the exact same nearest-path-segment
+    signed lateral errors. No separate 1/5-rate projection exists.
+    """
+    algorithm="sim_time_trapezoid_e_squared_v2"
+
+    def __init__(self,points):
+        self.points=points
+        self.path_length=cumulative(points)[-1]
+        self.series=[]
+        self.previous=None
+        self.first_t=None
+        self.last_t=None
+        self.area_e2=0.
+        self.area_yaw2=0.
+        self.duration=0.
+        self.max_abs_error=0.
+        self.distance=0.
+        self.cmd_change=0.
+        self.violations=0
+        self.gap_count=0
+        self.final_progress=0.
+
+    def add(self,sample):
+        t=sample["t"]
+        x=sample["x"]
+        y=sample["y"]
+        yaw=sample["yaw"]
+        if any(not math.isfinite(v) for v in (t,x,y,yaw)):
+            raise ValueError("Non-finite ground-truth sample")
+        if self.previous is not None and t<=self.previous["t"]:
+            return None
+        proj=projection(self.points,x,y)
         e=proj["cross_track_m"]
-        if last is not None:
-            dt=max(0.,sample["t"]-last["t"])
-            if dt>0 and dt<.6:
-                sums["e2"]+=e*e*dt
-                sums["yaw2"]+=yawerr*yawerr*dt
-                sums["duration"]+=dt
-            sums["distance"]+=math.hypot(sample["x"]-last["x"],sample["y"]-last["y"])
-            sums["cmd_change"]+=abs(sample.get("w",0.)-last.get("w",0.))
-        sums["max_e"]=max(sums["max_e"],abs(e))
-        if abs(sample.get("v",0))+WHEEL_SEPARATION/2*abs(sample.get("w",0))>MAX_WHEEL_MPS+1e-4:
-            sums["violations"]+=1
-        series.append({"sim_s":round(sample["t"]-samples[0]["t"],3),
-                       "error_m":round(e,4),"heading_error_deg":round(math.degrees(yawerr),3),
-                       "x":round(sample["x"],4),"y":round(sample["y"],4),
-                       "progress_m":round(proj["s"],4)})
-        last=sample
-    duration=sums["duration"]
-    return {"valid":duration>0,"samples":len(samples),"duration_sim_s":round(duration,3),
-            "cross_track_rmse_m":round(math.sqrt(sums["e2"]/duration),5) if duration else None,
-            "heading_rmse_deg":round(math.degrees(math.sqrt(sums["yaw2"]/duration)),4) if duration else None,
-            "max_abs_cross_track_m":round(sums["max_e"],5),
-            "distance_traveled_m":round(sums["distance"],4),
-            "command_yaw_change_total":round(sums["cmd_change"],4),
-            "wheel_envelope_violations":sums["violations"],
-            "final_progress_m":round(series[-1]["progress_m"],4),
-            "reference_length_m":round(cumulative(points)[-1],4),
-            "series":series[::max(1,len(series)//600)]}
+        yawerr=wrap(yaw-proj["heading_rad"])
+        v=sample.get("v",0.)
+        omega=sample.get("w",0.)
+        if self.first_t is None:
+            self.first_t=t
+        if self.previous is not None:
+            prior=self.previous
+            dt=t-prior["t"]
+            if 0<dt<.6:
+                self.area_e2+=.5*(prior["e"]**2+e**2)*dt
+                self.area_yaw2+=.5*(prior["yawerr"]**2+yawerr**2)*dt
+                self.duration+=dt
+            else:
+                self.gap_count+=1
+            self.distance+=math.hypot(x-prior["x"],y-prior["y"])
+            self.cmd_change+=abs(omega-prior["w"])
+        if abs(v)+WHEEL_SEPARATION/2*abs(omega)>MAX_WHEEL_MPS+1e-4:
+            self.violations+=1
+        self.max_abs_error=max(self.max_abs_error,abs(e))
+        self.final_progress=proj["s"]
+        self.last_t=t
+        record={
+            "sim_s":round(t-self.first_t,6),
+            "error_m":round(e,8),
+            "heading_error_deg":round(math.degrees(yawerr),6),
+            "x":round(x,5),"y":round(y,5),
+            "progress_m":round(proj["s"],5)
+        }
+        self.series.append(record)
+        self.previous={"t":t,"x":x,"y":y,"w":omega,
+                       "e":e,"yawerr":yawerr}
+        return record
+
+    def report(self,include_series=True):
+        n=len(self.series)
+        if n<2:
+            data={"samples":n,"valid":False}
+            if include_series:
+                data["series"]=list(self.series)
+            return data
+        duration=self.duration
+        elapsed=(self.last_t-self.first_t) if self.first_t is not None else 0.
+        data={
+            "valid":duration>0,
+            "samples":n,
+            "rmse_method":self.algorithm,
+            "duration_sim_s":round(duration,5),
+            "elapsed_sim_s":round(elapsed,5),
+            "excluded_gt_gaps":self.gap_count,
+            "cross_track_rmse_m":round(math.sqrt(self.area_e2/duration),5)
+                if duration else None,
+            "heading_rmse_deg":round(math.degrees(math.sqrt(
+                self.area_yaw2/duration)),4) if duration else None,
+            "max_abs_cross_track_m":round(self.max_abs_error,5),
+            "distance_traveled_m":round(self.distance,4),
+            "command_yaw_change_total":round(self.cmd_change,4),
+            "wheel_envelope_violations":self.violations,
+            "final_progress_m":round(self.final_progress,4),
+            "reference_length_m":round(self.path_length,4),
+        }
+        if include_series:
+            data["series"]=list(self.series)
+        return data
+
+
+def metrics(samples,points):
+    """Full-trial sim-time RMSE using the same sample stream as the plot."""
+    tracker=TrackingMetrics(points)
+    for sample in samples:
+        tracker.add(sample)
+    return tracker.report()
