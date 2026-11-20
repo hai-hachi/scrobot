@@ -142,9 +142,17 @@ def main():
                 filtered = filter_update(
                     self.current[i], self.reference[i], dt,
                     self.tau[i], self.gain[i])
-                self.current[i] = bound_wheel_rpm(
-                    self.current[i],filtered,dt,
-                    self.max_wheel_rpm,self.max_wheel_accel_rpmps)
+                if self.max_wheel_accel_rpmps>0:
+                    self.current[i] = bound_wheel_rpm(
+                        self.current[i],filtered,dt,
+                        self.max_wheel_rpm,self.max_wheel_accel_rpmps)
+                else:
+                    # Legacy non-Tracker lab behavior: the old filter
+                    # proportionally scales both wheel rates together.
+                    self.current[i] = filtered
+            if self.max_wheel_accel_rpmps==0:
+                self.current=list(limit_wheels(
+                    *self.current,limit=self.max_wheel_rpm))
             linear, angular = wheel_rpm_to_twist(*self.current)
             out = TwistStamped()
             out.header.stamp = self.get_clock().now().to_msg()
