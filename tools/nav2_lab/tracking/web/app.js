@@ -35,7 +35,7 @@ function showPhysicalLimits(limits){
   const h=limits.wheel_half_separation_m.toFixed(3);
   const v=limits.max_wheel_mps.toFixed(4);
   $('physical-coupled-envelope').textContent=
-    'Each wheel is individually limited to 95 RPM: |v − '+h+'ω| ≤ '+v+
+    'Each wheel is limited by 100 RPM and a 0.50 m/s cap: |v − '+h+'ω| ≤ '+v+
     ' and |v + '+h+'ω| ≤ '+v+' m/s. '+
     'Equivalently, |v| + '+h+'|ω| ≤ '+v+' m/s.';
   for(const id of ['desired-speed','rpp-min-speed','rpp-min-approach']){
