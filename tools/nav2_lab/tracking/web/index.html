@@ -51,7 +51,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
 </div>
 <div>
 <div class="field"><label for="controller-select">Controller under test</label><select id="controller-select">
-<option value="RPP">RPP · Regulated Pure Pursuit</option><option value="SMC">SMC · Sliding Mode Control</option></select></div>
+<option value="RPP">RPP · Regulated Pure Pursuit</option><option value="SMC_1S">SMC-1s · Full one-surface</option><option value="SMC_2S">SMC-2s · Full two-surface</option></select></div>
 <div class="field"><label for="spawn-mode">Initial placement</label><select id="spawn-mode">
 <option value="relative">Relative to reference path</option>
 <option value="random">Seeded random pose</option>
@@ -99,6 +99,10 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
         <input id="progress-radius" type="number" min=".02" max="1" step=".01" value=".10"></div>
       <div class="field"><label for="progress-timeout">Progress timeout (sim seconds)</label>
         <input id="progress-timeout" type="number" min="2" max="60" step="1" value="25"></div>
+      <div class="field"><label for="carrot-radius">SMC robot-centered PP circle radius (m)</label>
+        <input id="carrot-radius" type="number" min=".1" max="2" step=".05" value=".6"></div>
+      <div class="field"><label for="curvature-window">SMC three-point curvature half-window (m)</label>
+        <input id="curvature-window" type="number" min=".04" max=".5" step=".01" value=".14"></div>
     </div>
     <p class="fineprint tuning-hint">Wheel envelope: |v| + 0.21|ω| ≤ 0.50 m/s (physics-locked). ROS control 25 sim-Hz, wheel loop 100 sim-Hz. Gazebo speed is the common cap above the page.</p>
     <p class="fineprint" id="physics-source">Wheel and motor physics come from your saved Mobility Lab; odometry rates come from Odometry Lab. The floor uses the validated contact model.</p>
@@ -139,35 +143,57 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
     <p class="fineprint tuning-hint">Velocity-scaled lookahead uses min/max distance and lookahead time; fixed distance takes effect when disabled. Minimum speeds are capped by the shared desired speed in the generated Nav2 YAML.</p>
   </section>
 
-  <section class="panel tuning-card controller-card" id="card-smc" aria-labelledby="smc-title">
-    <div class="between tuning-head"><h2 id="smc-title">SMC tuning</h2>
-      <button class="btn outline small" type="button" id="reset-smc">Reset SMC</button></div>
-    <p class="fineprint">Custom sliding-mode tracker. Tune convergence, the continuous switching boundary, curvature feedforward and final heading correction.</p>
+  <section class="panel tuning-card controller-card" id="card-smc_1s" aria-labelledby="smc-1s-title">
+    <div class="between tuning-head"><h2 id="smc-1s-title">SMC-1s · Full</h2><button class="btn outline small" type="button" id="reset-smc_1s">Reset SMC-1s</button></div>
+    <div class="math-equations" aria-label="Full SMC-1s control equations"><div class="math-eq">s = eθ + λy ey + λx ex</div><div class="math-eq">ω = [ωR + λy vR sin(eθ) − λx gx(ex) + q(s)] / D</div><div class="math-eq">v = vR cos(eθ) + ey ω + gx(ex)</div></div>
+    <p class="fineprint">One combined angular sliding surface plus longitudinal correction. All equations use the PP-circle carrot.</p>
     <div class="tuning-fields">
-      <div class="field"><label for="smc-cross">Cross-track error gain</label>
-        <input id="smc-cross" type="number" min=".1" max="6" step=".1" value="1.8"></div>
-      <div class="field"><label for="smc-heading">Heading error gain</label>
-        <input id="smc-heading" type="number" min=".1" max="8" step=".1" value="2"></div>
-      <div class="field"><label for="smc-lambda">Sliding-surface heading weight (λ)</label>
-        <input id="smc-lambda" type="number" min=".1" max="5" step=".1" value="1"></div>
-      <div class="field"><label for="smc-switch">Switching gain</label>
-        <input id="smc-switch" type="number" min=".05" max="5" step=".05" value="1.1"></div>
-      <div class="field"><label for="smc-boundary">Saturation boundary layer</label>
-        <input id="smc-boundary" type="number" min=".05" max="2" step=".05" value=".30"></div>
-      <div class="field"><label for="smc-lookahead">Curvature lookahead (m)</label>
-        <input id="smc-lookahead" type="number" min=".1" max="1.5" step=".05" value=".32"></div>
-      <div class="field"><label for="smc-feedforward">Curvature feedforward gain</label>
-        <input id="smc-feedforward" type="number" min="0" max="3" step=".1" value="1"></div>
-      <div class="field"><label for="smc-goal-heading">Final heading gain</label>
-        <input id="smc-goal-heading" type="number" min=".1" max="8" step=".1" value="2"></div>
-      <div class="field"><label for="smc-goal-threshold">Final heading threshold (m)</label>
-        <input id="smc-goal-threshold" type="number" min=".04" max=".50" step=".01" value=".14"></div>
-      <div class="field"><label for="smc-max-angular">Max tracking turn rate (rad/s)</label>
-        <input id="smc-max-angular" type="number" min=".2" max="2.3" step=".1" value="2.3"></div>
+      <div class="field"><label for="smc1-lambda-y">Lateral surface weight λy</label><input id="smc1-lambda-y" type="number" min="0.1" max="8" step="0.1" value="2.5"></div>
+      <div class="field"><label for="smc1-lambda-x">Longitudinal coupling λx (1s only)</label><input id="smc1-lambda-x" type="number" min="0" max="5" step="0.1" value="0.6"></div>
+      <div class="field"><label for="smc1-k-s">Angular reaching gain ks</label><input id="smc1-k-s" type="number" min="0.01" max="8" step="0.05" value="1.2"></div>
+      <div class="field"><label for="smc1-k-x">Longitudinal reaching gain kx</label><input id="smc1-k-x" type="number" min="0.01" max="8" step="0.05" value="0.8"></div>
+      <div class="field"><label for="smc1-eta">Angular switching strength η</label><input id="smc1-eta" type="number" min="0" max="3" step="0.05" value="0.4"></div>
+      <div class="field"><label for="smc1-phi">Angular boundary width φ</label><input id="smc1-phi" type="number" min="0.02" max="2" step="0.02" value="0.3"></div>
+      <div class="field"><label for="smc1-eta-x">Longitudinal switching strength ηx</label><input id="smc1-eta-x" type="number" min="0" max="2" step="0.05" value="0.25"></div>
+      <div class="field"><label for="smc1-phi-x">Longitudinal boundary width φx (m)</label><input id="smc1-phi-x" type="number" min="0.02" max="2" step="0.02" value="0.3"></div>
+      <div class="field"><label for="smc1-singular-guard">Denominator guard |D|</label><input id="smc1-singular-guard" type="number" min="0.01" max="0.5" step="0.01" value="0.06"></div>
+      <div class="field"><label for="smc1-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc1-max-angular-cmd" type="number" min="0.2" max="2.3" step="0.1" value="1.5"></div>
+      <div class="field"><label for="smc1-max-linear-accel">Max dv/dt (m/s²)</label><input id="smc1-max-linear-accel" type="number" min="0.1" max="3" step="0.1" value="1"></div>
+      <div class="field"><label for="smc1-max-angular-accel">Max dω/dt (rad/s²)</label><input id="smc1-max-angular-accel" type="number" min="0.1" max="6" step="0.1" value="2"></div>
+      <label class="tuning-check"><input id="smc1-use-saturation" type="checkbox" checked> Enable boundary-layer saturation</label>
     </div>
-    <p class="fineprint tuning-hint">Saturation reduces chattering; the coupled wheel-speed safety limit is applied to both controllers. SMC has no independently adjustable speed—both use the Shared reference speed.</p>
+    <p class="fineprint tuning-hint">D = 1 + λy ex · gx(ex) = kx ex + ηx sat(ex / φx) · q(s) = ks s + η sat(s / φ). Without switching, η and ηx are both zero.</p>
+  </section>
+
+  <section class="panel tuning-card controller-card" id="card-smc_2s" aria-labelledby="smc-2s-title">
+    <div class="between tuning-head"><h2 id="smc-2s-title">SMC-2s · Full</h2><button class="btn outline small" type="button" id="reset-smc_2s">Reset SMC-2s</button></div>
+    <div class="math-equations" aria-label="Full SMC-2s control equations"><div class="math-eq">s₁ = ex  ;  s₂ = eθ + λy ey</div><div class="math-eq">ω = [ωR + λy vR sin(eθ) + q(s₂)] / D</div><div class="math-eq">v = vR cos(eθ) + ey ω + gx(ex)</div></div>
+    <p class="fineprint">Two surfaces: longitudinal error and heading-lateral error. All equations use the PP-circle carrot.</p>
+    <div class="tuning-fields">
+      <div class="field"><label for="smc2-lambda-y">Lateral surface weight λy</label><input id="smc2-lambda-y" type="number" min="0.1" max="8" step="0.1" value="2.5"></div>
+      <div class="field"><label for="smc2-k-s">Angular reaching gain ks</label><input id="smc2-k-s" type="number" min="0.01" max="8" step="0.05" value="1.2"></div>
+      <div class="field"><label for="smc2-k-x">Longitudinal reaching gain kx</label><input id="smc2-k-x" type="number" min="0.01" max="8" step="0.05" value="0.8"></div>
+      <div class="field"><label for="smc2-eta">Angular switching strength η</label><input id="smc2-eta" type="number" min="0" max="3" step="0.05" value="0.4"></div>
+      <div class="field"><label for="smc2-phi">Angular boundary width φ</label><input id="smc2-phi" type="number" min="0.02" max="2" step="0.02" value="0.3"></div>
+      <div class="field"><label for="smc2-eta-x">Longitudinal switching strength ηx</label><input id="smc2-eta-x" type="number" min="0" max="2" step="0.05" value="0.25"></div>
+      <div class="field"><label for="smc2-phi-x">Longitudinal boundary width φx (m)</label><input id="smc2-phi-x" type="number" min="0.02" max="2" step="0.02" value="0.3"></div>
+      <div class="field"><label for="smc2-singular-guard">Denominator guard |D|</label><input id="smc2-singular-guard" type="number" min="0.01" max="0.5" step="0.01" value="0.06"></div>
+      <div class="field"><label for="smc2-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc2-max-angular-cmd" type="number" min="0.2" max="2.3" step="0.1" value="1.5"></div>
+      <div class="field"><label for="smc2-max-linear-accel">Max dv/dt (m/s²)</label><input id="smc2-max-linear-accel" type="number" min="0.1" max="3" step="0.1" value="1"></div>
+      <div class="field"><label for="smc2-max-angular-accel">Max dω/dt (rad/s²)</label><input id="smc2-max-angular-accel" type="number" min="0.1" max="6" step="0.1" value="2"></div>
+      <label class="tuning-check"><input id="smc2-use-saturation" type="checkbox" checked> Enable boundary-layer saturation</label>
+    </div>
+    <p class="fineprint tuning-hint">D = 1 + λy ex · gx(ex) = kx ex + ηx sat(ex / φx) · q(s) = ks s + η sat(s / φ). Without switching, η and ηx are both zero.</p>
   </section>
 </div>
+<section class="panel equation-guide">
+  <h3>Common full SMC tracking reference</h3>
+  <div class="math-eq">ex = cos θ (xR − x) + sin θ (yR − y)</div>
+  <div class="math-eq">ey = −sin θ (xR − x) + cos θ (yR − y)</div>
+  <div class="math-eq">eθ = wrap(θR − θ) &nbsp; · &nbsp; ωR = vR κR</div>
+  <div class="math-eq">sat(z) = −1 (z&lt;−1), z (|z|≤1), +1 (z&gt;1)</div>
+  <p class="fineprint">Nominal carrot vR and ωR follow local path geometry, not necessarily the actual derivative of its robot-dependent pose. Ideal reaching laws require a kinematically valid reference and unsaturated actuators; the measured plots are the evidence, not a stability proof.</p>
+</section>
 </section>
 
 <section class="tracker-view" data-view="results" hidden>
