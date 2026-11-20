@@ -180,6 +180,7 @@ class Trial(Node):
         if not self.active:return
         stamp=msg.header.stamp.sec+msg.header.stamp.nanosec/1e9
         if stamp<=0:stamp=self.get_clock().now().nanoseconds*1e-9
+        if stamp<self.output.get("start_sim_s",stamp):return
         if self.samples and stamp<=self.samples[-1]["t"]:return
         sample={"t":stamp,"x":p.position.x,"y":p.position.y,"yaw":yaw,
                 "v":self.last_v,"w":self.last_w}
