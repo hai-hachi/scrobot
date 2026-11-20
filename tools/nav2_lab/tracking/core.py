@@ -6,7 +6,8 @@ Metrics use closest SEGMENT projection, not nearest waypoint.
 import math
 import random
 from tracking.physical_limits import (
-    WHEEL_SEPARATION,MAX_WHEEL_MPS,MAX_LINEAR_MPS,MAX_ANGULAR_RADPS)
+    WHEEL_SEPARATION,MAX_WHEEL_MPS,MAX_LINEAR_MPS,MAX_ANGULAR_RADPS,
+    MAX_LINEAR_ACCEL_MPS2,MAX_ANGULAR_ACCEL_RADPS2,speed_envelope)
 
 KINDS=("straight","circle","curve","right_angles")
 CONTROLLERS=("RPP","SMC_1S","SMC_2S")
@@ -112,11 +113,7 @@ def clamp_wheel_envelope(v,omega):
     """Scale coupled differential commands, preserving curvature."""
     if not math.isfinite(v) or not math.isfinite(omega):
         raise ValueError("Non-finite velocity")
-    # Equivalent to max(|v - B*omega/2|, |v + B*omega/2|).
-    # Enforces the 100 RPM / 0.50 m/s constraints of *each* wheel, simultaneously.
-    demand=abs(v)+WHEEL_SEPARATION/2*abs(omega)
-    scale=min(1.,MAX_WHEEL_MPS/demand) if demand>0 else 1.
-    return v*scale,omega*scale
+    return speed_envelope(v,omega)
 
 
 def defaults():
@@ -248,7 +245,7 @@ def validate(data):
         ("regulated_linear_scaling_min_speed",.03,MAX_LINEAR_MPS),
         ("rotate_to_heading_angular_vel",.1,MAX_ANGULAR_RADPS),
         ("rotate_to_heading_min_angle_deg",1.,100.),
-        ("max_angular_accel",.1,6.),
+        ("max_angular_accel",.1,MAX_ANGULAR_ACCEL_RADPS2),
         ("min_approach_linear_velocity",.02,MAX_LINEAR_MPS),
     ):
         number(rpp[key],lo,hi,"RPP "+key)
@@ -265,7 +262,7 @@ def validate(data):
             ("eta",0.,3.),("phi",.02,2.),("eta_x",0.,2.),
             ("phi_x",.02,2.),("singular_guard",.01,.5),
             ("max_angular_cmd",.2,MAX_ANGULAR_RADPS),
-            ("max_linear_accel",.1,3.),("max_angular_accel",.1,6.),
+            ("max_linear_accel",.1,MAX_LINEAR_ACCEL_MPS2),("max_angular_accel",.1,MAX_ANGULAR_ACCEL_RADPS2),
         ):
             number(smc[key],lo,hi,name+" "+key)
         if name=="smc_1s":
