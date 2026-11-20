@@ -84,8 +84,10 @@ padding:8px 0;border-bottom:1px solid var(--line);font-size:11px;color:var(--mut
 .phase-grid svg{display:block;width:100%;max-height:260px}
 .phase-grid .tick-label{font-size:5.5px}
 .phase-grid .axis-label{font-size:6px}
-#timeline-map{display:block;width:100%;background:#101b26;
-  border:1px solid var(--line);border-radius:8px;max-height:400px}
+#timeline-map{display:block;width:100%;height:auto;aspect-ratio:2/1;
+  background:#101b26;border:1px solid var(--line);border-radius:8px;
+  /* Keep the native 900:450 viewport ratio: no stretched circles. */
+  max-height:none}
 .timeline-control{display:grid;grid-template-columns:170px minmax(0,1fr) 90px;
   gap:12px;align-items:center;margin:15px 0}
 .timeline-control label{font-size:12px}
@@ -98,3 +100,29 @@ padding:8px 0;border-bottom:1px solid var(--line);font-size:11px;color:var(--mut
  .phase-grid{grid-template-columns:1fr}
  .timeline-control{grid-template-columns:1fr 2fr}.timeline-control strong{
   grid-column:1/-1;text-align:left}}
+
+/* Mathematical source is LaTeX; native MathML is always available offline,
+   with KaTeX enhancement loaded without blocking the laboratory UI. */
+.math-equations{overflow-x:auto;gap:9px}
+.math-eq{font-family:inherit;font-size:13px;font-weight:400;line-height:1.6;
+  white-space:normal;overflow-x:auto;overflow-y:hidden;max-width:100%;
+  min-height:27px;display:block}
+.math-eq math{display:block;width:max-content;max-width:none;
+  font-family:math,"STIX Two Math","Cambria Math",serif;font-size:1.02em;
+  color:#dce9f0;padding:2px 0}
+.math-eq .katex-display{margin:.25em 0;font-size:.94em}
+.equation-guide .math-eq{padding:8px 7px;border:1px solid #294052;
+  border-radius:6px;background:#0c1e28;min-height:38px}
+.math-formula-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;margin:10px 0 14px}
+.math-group-title{margin:18px 0 8px;font-size:12px;font-weight:600;
+  color:#b9d5e3;letter-spacing:.02em}
+.math-value-list{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
+.math-value-chip{border:1px solid #315164;background:#122937;color:#d5e8f0;
+  border-radius:5px;padding:3px 6px;font-size:10px;font-variant-numeric:tabular-nums}
+#timeline-map .tick-label{font-family:inherit;font-size:10px;fill:#9bb7c7}
+#timeline-map .axis-label{font-family:inherit;font-size:12px;font-weight:600;
+  fill:#dfecf4}
+#timeline-map .map-tag{font-family:inherit;font-size:11px;font-weight:600;
+  fill:#d5e7ef;paint-order:stroke;stroke:#101b26;stroke-width:2px}
+@media(max-width:1150px){.math-formula-grid{grid-template-columns:1fr}}
