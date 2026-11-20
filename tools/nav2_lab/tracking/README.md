@@ -342,8 +342,8 @@ not as the exact Nav2 carrot.
 Select a saved run using its **Inspect** button or the timeline dropdown,
 then scrub the slider. The view shows the reference polyline, robot,
 carrot, robot-centered lookahead ellipse (world-correct radius), nominal
-vR/omegaR, tracking errors, and sliding variables. Four plots show
-`ey vs etheta`, the angular surface against its observed derivative,
+vR/omegaR, tracking errors, and sliding variables. Five plots show
+`ey vs etheta`, `ex vs ey`, the angular surface against its observed derivative,
 `ex vs ex_dot`, and `sat(z)` with boundary regions. Saved experiments
 predating `timeline.json` remain comparable in the error chart, but their
 Inspect button is disabled; measurements are never invented or reconstructed
