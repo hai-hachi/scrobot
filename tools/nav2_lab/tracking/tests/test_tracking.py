@@ -1057,7 +1057,7 @@ def test_plot_comparison_route_controls_and_saved_chart_bindings():
     assert "elapsed" in html.lower()
     assert "signed" in html.lower()
     assert "renderChart()" in app
-    assert "window.TrackerChartScales.scales(lines)" in app
+    assert "window.TrackerChartScales.scales(bounds)" in app
     assert "plotRuns.delete(item.name)" in app
 
 
