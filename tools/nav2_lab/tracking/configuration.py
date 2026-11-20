@@ -12,6 +12,9 @@ from planning.calibration import (
     _validate_mobility,_validate_odometry,generate_rate_profiles)
 from shared.lab_configs import read as read_lab,path_for
 from tracking.core import validate
+from tracking.physical_limits import (
+    WHEEL_RADIUS_M,WHEEL_SEPARATION,WHEEL_MAX_RPM,RATED_WHEEL_MAX_MPS,
+    MAX_WHEEL_MPS,MAX_LINEAR_MPS,MAX_ANGULAR_RADPS)
 
 
 def saved_physics():
@@ -64,7 +67,7 @@ def generate(settings,dirpath):
     params["odom_topic"]="/diff_drive_controller/odom"
     params["controller_plugins"]=["RPP","SMC_1S","SMC_2S"]
     shared=settings["shared"]
-    requested_speed=float(shared["desired_speed_mps"])
+    requested_speed=min(float(shared["desired_speed_mps"]),MAX_LINEAR_MPS)
     params["RPP"]=copy.deepcopy(production["controller_server"]["ros__parameters"]["FollowPath"])
     params["RPP"]["desired_linear_vel"]=requested_speed
     # All exposed RPP settings are copied into the generated ROS parameters.
@@ -97,6 +100,12 @@ def generate(settings,dirpath):
         params[key]={
           "plugin":"scrobot_tracker_controller::SMCController",
           "linear_speed":requested_speed,
+          # Source-of-truth geometry from scrobot.urdf.xacro. The full
+          # plugin recomputes the strict 95 RPM physical envelope itself.
+          "wheel_radius_m":float(WHEEL_RADIUS_M),
+          "wheel_separation_m":float(WHEEL_SEPARATION),
+          "wheel_max_rpm":float(WHEEL_MAX_RPM),
+          "rated_wheel_max_mps":float(RATED_WHEEL_MAX_MPS),
           "lookahead_radius_m":float(shared["lookahead_radius_m"]),
           "curvature_window_m":float(shared["curvature_window_m"]),
           **{k:(v if type(v) is bool else float(v))
