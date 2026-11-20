@@ -90,7 +90,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
     <p class="fineprint">Same reference speed, tolerances and progress checks for both controllers. These values are held constant for a fair comparison.</p>
     <div class="tuning-fields">
       <div class="field"><label for="desired-speed">Desired forward speed (m/s)</label>
-        <input id="desired-speed" type="number" min=".05" max=".50" step=".001" value=".40"></div>
+        <input id="desired-speed" type="number" min=".05" max=".523599" step="any" value=".40"></div>
       <div class="field"><label for="max-duration">Trial timeout (sim seconds)</label>
         <input id="max-duration" type="number" min="10" max="360" step="5" value="120"></div>
       <div class="field"><label for="goal-xy">Goal position tolerance (m)</label>
@@ -153,11 +153,11 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <label class="tuning-check"><input id="rpp-rotate" type="checkbox" checked>
         Rotate to heading</label>
       <div class="field"><label for="rpp-rotate-rate">Rotate-to-heading speed (rad/s)</label>
-        <input id="rpp-rotate-rate" type="number" min=".1" max="2.493327502849" step=".01" value="1.6"></div>
+        <input id="rpp-rotate-rate" type="number" min=".1" max="2.493327502849" step="any" value="1.6"></div>
       <div class="field"><label for="rpp-rotate-threshold">Rotate threshold (degrees)</label>
         <input id="rpp-rotate-threshold" type="number" min="1" max="100" step="1" value="20"></div>
       <div class="field"><label for="rpp-angular-accel">Max angular acceleration (rad/s²)</label>
-        <input id="rpp-angular-accel" type="number" min=".1" max="9.97331" step=".1" value="1"></div>
+        <input id="rpp-angular-accel" type="number" min=".1" max="9.97331" step="any" value="1"></div>
       <div class="field"><label for="rpp-min-approach">Min final-approach speed (m/s)</label>
         <input id="rpp-min-approach" type="number" min=".02" max=".50" step=".001" value=".10"></div>
     </div>
@@ -186,9 +186,9 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="field"><label for="smc1-eta-x">Longitudinal switching strength ηx</label><input id="smc1-eta-x" type="number" min="0" max="2" step="0.05" value="0.25"></div>
       <div class="field"><label for="smc1-phi-x">Longitudinal boundary width φx (m)</label><input id="smc1-phi-x" type="number" min="0.02" max="2" step="0.02" value="0.3"></div>
       <div class="field"><label for="smc1-singular-guard">Denominator guard |D|</label><input id="smc1-singular-guard" type="number" min="0.01" max="0.5" step="0.01" value="0.06"></div>
-      <div class="field"><label for="smc1-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc1-max-angular-cmd" type="number" min="0.2" max="2.493327502849" step="0.01" value="1.5"></div>
-      <div class="field"><label for="smc1-max-linear-accel">Max dv/dt (m/s²)</label><input id="smc1-max-linear-accel" type="number" min="0.1" max="2.0944" step="0.1" value="1"></div>
-      <div class="field"><label for="smc1-max-angular-accel">Max dω/dt (rad/s²)</label><input id="smc1-max-angular-accel" type="number" min="0.1" max="9.97331" step="0.1" value="2"></div>
+      <div class="field"><label for="smc1-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc1-max-angular-cmd" type="number" min="0.2" max="2.493327502849" step="any" value="1.5"></div>
+      <div class="field"><label for="smc1-max-linear-accel">Max dv/dt (m/s²)</label><input id="smc1-max-linear-accel" type="number" min="0.1" max="2.0944" step="any" value="1"></div>
+      <div class="field"><label for="smc1-max-angular-accel">Max dω/dt (rad/s²)</label><input id="smc1-max-angular-accel" type="number" min="0.1" max="9.97331" step="any" value="2"></div>
       <label class="tuning-check"><input id="smc1-use-saturation" type="checkbox" checked> Enable boundary-layer saturation</label>
     </div>
     <p class="fineprint tuning-hint">Equations shown above are the full-law requests before near-goal heading alignment, speed/acceleration limits, and the common physical wheel envelope. The symbolic terms match the controls below.</p>
@@ -215,9 +215,9 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="field"><label for="smc2-eta-x">Longitudinal switching strength ηx</label><input id="smc2-eta-x" type="number" min="0" max="2" step="0.05" value="0.25"></div>
       <div class="field"><label for="smc2-phi-x">Longitudinal boundary width φx (m)</label><input id="smc2-phi-x" type="number" min="0.02" max="2" step="0.02" value="0.3"></div>
       <div class="field"><label for="smc2-singular-guard">Denominator guard |D|</label><input id="smc2-singular-guard" type="number" min="0.01" max="0.5" step="0.01" value="0.06"></div>
-      <div class="field"><label for="smc2-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc2-max-angular-cmd" type="number" min="0.2" max="2.493327502849" step="0.01" value="1.5"></div>
-      <div class="field"><label for="smc2-max-linear-accel">Max dv/dt (m/s²)</label><input id="smc2-max-linear-accel" type="number" min="0.1" max="2.0944" step="0.1" value="1"></div>
-      <div class="field"><label for="smc2-max-angular-accel">Max dω/dt (rad/s²)</label><input id="smc2-max-angular-accel" type="number" min="0.1" max="9.97331" step="0.1" value="2"></div>
+      <div class="field"><label for="smc2-max-angular-cmd">Max |ω| (rad/s)</label><input id="smc2-max-angular-cmd" type="number" min="0.2" max="2.493327502849" step="any" value="1.5"></div>
+      <div class="field"><label for="smc2-max-linear-accel">Max dv/dt (m/s²)</label><input id="smc2-max-linear-accel" type="number" min="0.1" max="2.0944" step="any" value="1"></div>
+      <div class="field"><label for="smc2-max-angular-accel">Max dω/dt (rad/s²)</label><input id="smc2-max-angular-accel" type="number" min="0.1" max="9.97331" step="any" value="2"></div>
       <label class="tuning-check"><input id="smc2-use-saturation" type="checkbox" checked> Enable boundary-layer saturation</label>
     </div>
     <p class="fineprint tuning-hint">Equations shown above are the full-law requests before near-goal heading alignment, speed/acceleration limits, and the common physical wheel envelope. The symbolic terms match the controls below.</p>
