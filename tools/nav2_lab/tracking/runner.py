@@ -13,10 +13,12 @@ HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE.parent))
 from tracking.core import metrics,reference,validate,projection,wrap
 from tracking.health import controller_failure,ready_for_tracking
+from tracking.carrot import reference as estimated_carrot, errors as carrot_errors, surfaces as diagnostic_surfaces
 
 import rclpy
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import TwistStamped,PoseStamped
+from geometry_msgs.msg import TwistStamped,PoseStamped,PointStamped
+from std_msgs.msg import Float64MultiArray
 from lifecycle_msgs.msg import State
 from lifecycle_msgs.srv import GetState
 from nav_msgs.msg import Odometry,Path as NavPath
@@ -82,6 +84,11 @@ class Trial(Node):
         self.create_timer(.15,self.poll_controller_lifecycle)
         self.samples=[]
         self.trace=[]
+        self.timeline=[]
+        self.latest_smc_diag=None
+        self.latest_smc_diag_wall=-1.
+        self.latest_rpp_carrot=None
+        self.latest_rpp_carrot_wall=-1.
         self.gt_count=0
         self.odom_count=0
         self.last_gt=None
@@ -110,6 +117,12 @@ class Trial(Node):
                                  self.on_command,10)
         self.create_subscription(TwistStamped,"/tracker/cmd_vel_raw",
                                  self.on_raw,10)
+        self.create_subscription(Float64MultiArray,"/tracker/smc_diagnostics",
+                                 self.on_smc_diagnostics,10)
+        # Nav2 Jazzy RPP publishes the true chosen carrot in the ROBOT
+        # frame on lookahead_point. Convert to odom using the GT robot pose.
+        self.create_subscription(PointStamped,"/lookahead_point",
+                                 self.on_rpp_carrot,10)
 
     def poll_controller_lifecycle(self):
         """Poll Nav2 controller_server lifecycle without blocking ROS callbacks."""
@@ -132,6 +145,17 @@ class Trial(Node):
                 self.lifecycle_client.service_is_ready()):
             self.lifecycle_future=self.lifecycle_client.call_async(
                 GetState.Request())
+
+    def on_smc_diagnostics(self,msg):
+        if len(msg.data)==18:
+            self.latest_smc_diag=list(msg.data)
+            self.latest_smc_diag_wall=time.monotonic()
+
+    def on_rpp_carrot(self,msg):
+        self.latest_rpp_carrot={
+            "x":float(msg.point.x),"y":float(msg.point.y),
+            "frame":msg.header.frame_id}
+        self.latest_rpp_carrot_wall=time.monotonic()
 
     def on_wheel_odom(self,msg):
         self.odom_count+=1
@@ -157,6 +181,11 @@ class Trial(Node):
         self.samples.append({"t":stamp,"x":p.position.x,
                              "y":p.position.y,"yaw":yaw,
                              "v":self.last_v,"w":self.last_w})
+        if (not self.timeline or
+                stamp-self.output["start_sim_s"]>=0 and
+                (stamp-self.timeline[-1]["stamp"]>=.10 if self.timeline else True)):
+            self.timeline.append(self.make_timeline_sample(stamp,p.position.x,
+                                                          p.position.y,yaw))
         if len(self.samples)%5==1:
             nearest=projection(self.points,p.position.x,p.position.y)
             self.trace.append({
@@ -167,6 +196,62 @@ class Trial(Node):
         wall=time.monotonic()
         if wall-self.last_write>=.5:
             self.write_progress(wall)
+
+    def make_timeline_sample(self,stamp,x,y,yaw):
+        """Replay sample: exact SMC reference, or RPP's actual carrot topic.
+
+        Historical experiments lack these channels and are labelled unavailable.
+        Never describe nominal vR,wR as the true time derivatives of a PP
+        carrot; the carrot depends on the robot and can jump after replanning.
+        """
+        elapsed=max(0.,stamp-self.output["start_sim_s"])
+        common=self.config["shared"]
+        if (self.config["controller"].startswith("SMC_") and
+                self.latest_smc_diag is not None and
+                time.monotonic()-self.latest_smc_diag_wall<.75):
+            d=self.latest_smc_diag
+            ref={"x":d[0],"y":d[1],"yaw":d[2],
+                 "v_ref":d[3],"w_ref":d[4],"kappa":d[17],
+                 "radius":d[13],"fallback":d[14]>.5,
+                 "source":"smc_plugin"}
+            errors={"ex":d[5],"ey":d[6],"etheta":d[7]}
+            surfaces={"s1":d[8],"s2":d[9],"D":d[10],
+                      "gx":d[11],"q":d[12],
+                      "requested_v":d[15],"requested_w":d[16]}
+        else:
+            radius=common["lookahead_radius_m"]
+            if self.config["controller"]=="RPP":
+                rpp=self.config["rpp"]
+                if rpp["use_velocity_scaled_lookahead_dist"]:
+                    radius=max(rpp["min_lookahead_dist"],
+                               min(rpp["max_lookahead_dist"],
+                                   abs(self.last_v)*rpp["lookahead_time"]))
+                else:
+                    radius=rpp["lookahead_dist"]
+            ref=estimated_carrot(self.points,x,y,
+                                 common["desired_speed_mps"],radius,
+                                 common["curvature_window_m"])
+            if self.config["controller"]=="RPP" and self.latest_rpp_carrot:
+                if time.monotonic()-self.latest_rpp_carrot_wall<.75:
+                    cp=self.latest_rpp_carrot
+                    # RPP lookahead_point is in base_footprint/base_link frame.
+                    # Never silently treat another frame as robot-local.
+                    if cp["frame"] in ("base_link","base_footprint"):
+                        dx=cp["x"];dy=cp["y"]
+                        ref["x"]=x+dx*math.cos(yaw)-dy*math.sin(yaw)
+                        ref["y"]=y+dx*math.sin(yaw)+dy*math.cos(yaw)
+                        tangent=projection(self.points,ref["x"],ref["y"])
+                        ref["yaw"]=tangent["heading_rad"]
+                        ref["radius"]=math.hypot(dx,dy)
+                        ref["fallback"]=False
+                        ref["source"]="rpp_plugin"
+            errors=carrot_errors(x,y,yaw,ref)
+            surfaces=diagnostic_surfaces(errors,self.config,
+                                         self.config["controller"])
+        return {"stamp":round(stamp,4),"t":round(elapsed,4),
+                "x":round(x,5),"y":round(y,5),"yaw":round(yaw,5),
+                "v":round(self.last_v,5),"w":round(self.last_w,5),
+                "ref":ref,"errors":errors,"surfaces":surfaces}
 
     def write_progress(self,wall):
         self.last_write=wall
@@ -318,6 +403,7 @@ class Trial(Node):
             publisher.publish(zero)
             for _ in range(4):rclpy.spin_once(self,timeout_sec=.02)
             atomic_json(self.dir/"series.json",series)
+            atomic_json(self.dir/"timeline.json",self.timeline)
             atomic_json(self.dir/"summary.json",self.output)
             self.write_progress(time.monotonic())
         return self.output["status"]=="success"
