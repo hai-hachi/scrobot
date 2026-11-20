@@ -441,3 +441,10 @@ SMC per-controller acceleration tuners are limited to these physical
 values; the final wheel-space limiter is applied to all three
 controllers regardless of those preferences.
 
+**Hardware deployment distinction:** the existing real robot ROS 2
+hardware-interface URDF (`scrobot_description/urdf/ros2_control_real.xacro`)
+still specifies a conservative `max_wheel_rpm=95.0`. The Tracker Lab's
+new motor rating does not modify that real-hardware protection. A separate
+hardware calibration/review is required before changing the real driver's
+limit to 100 RPM.
+
