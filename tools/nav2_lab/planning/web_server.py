@@ -707,6 +707,8 @@ class Handler(BaseHTTPRequestHandler):
                           "/tracker/index.html":"index.html",
                           "/tracker/app.js":"app.js",
                           "/tracker/chart_scales.js":"chart_scales.js",
+                          "/tracker/timeline_geometry.js":"timeline_geometry.js",
+                          "/tracker/math_formulas.js":"math_formulas.js",
                           "/tracker/style.css":"style.css"}.get(path)
             if tracker_file:
                 body=(HERE.parent/"tracking"/"web"/tracker_file).read_bytes()
