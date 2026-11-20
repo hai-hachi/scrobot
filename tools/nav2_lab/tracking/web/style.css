@@ -139,3 +139,34 @@ padding:8px 0;border-bottom:1px solid var(--line);font-size:11px;color:var(--mut
 .common-rmse-row span:nth-child(2){overflow-wrap:anywhere}
 .common-rmse-row strong{font-size:13px;white-space:nowrap}
 .common-rmse-warning{margin:10px 0 0}
+
+
+/* Cross-track tolerance slider and all-three comparison scorecard. */
+.convergence-tuning{border:1px solid var(--line);border-radius:9px;
+  padding:13px 16px;margin:12px 0;background:#112431}
+.convergence-label{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  margin-bottom:9px;font-size:12px}
+.convergence-label label{cursor:pointer}
+#convergence-value{color:#50DDB9;white-space:nowrap;
+  font-variant-numeric:tabular-nums;font-size:14px}
+#convergence-tolerance{width:100%;accent-color:#50DDB9;cursor:pointer}
+.convergence-scale{display:flex;justify-content:space-between;
+  font-size:10px;color:var(--muted);margin:2px 0 9px}
+.convergence-tuning p{margin:7px 0 0}
+#error-chart .zone-label{fill:#50DDB9;font-size:7px;font-weight:600}
+.comparison-metric-row{display:grid;
+  grid-template-columns:minmax(170px,2.1fr) repeat(3,minmax(105px,1fr));
+  align-items:center;gap:12px;padding:10px 6px;
+  border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.comparison-metric-row strong{font-size:13px;font-weight:650;
+  white-space:normal;overflow-wrap:break-word}
+.comparison-head{color:var(--muted);font-size:10px;font-weight:600}
+.comparison-name{display:flex;align-items:center;gap:8px;min-width:0}
+.comparison-name span:last-child{overflow-wrap:anywhere}
+@media(max-width:760px){
+  .comparison-metric-row{grid-template-columns:minmax(110px,1.4fr)
+    repeat(3,minmax(70px,1fr));gap:7px}
+  .comparison-metric-row strong{font-size:11px}
+  .comparison-head{font-size:9px}
+  .convergence-tuning{padding:10px}
+}
