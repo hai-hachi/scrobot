@@ -196,6 +196,19 @@ The **Controller tuning** tab has separate cards for **Shared**, **RPP**,
 **SMC-1s full**, and **SMC-2s full**. Selecting one controller highlights its
 card while keeping the others available for fair follow-up comparisons.
 
+The two full-SMC tuning cards now show **typeset LaTeX equations** for
+their sliding surface(s), reaching corrections `g_x` and `q`, the
+complete pre-clamp angular command `omega`, linear command `v`, and
+conditional ideal reaching laws. The common equation guide covers
+robot-frame tracking errors, the PP-circle geometry and curvature sampling,
+nominal `vR/omegaR`, the saturation/boundary-layer function and switch,
+the singularity guard, and every adjustable angular/acceleration limit.
+The complete original TeX source is attached to each displayed formula.
+Native browser **MathML works offline**; where online access permits, an
+optional asynchronously loaded KaTeX renderer replaces it. Each SMC card
+also shows its current parameter values, updated after edits, YAML loads,
+or card resets. No control laws are changed by this display update.
+
 Shared settings specify nominal reference speed (default 0.40m/s from the
 source SMC lab), goal/progress checkers and a PP-circle lookahead radius
 (default 0.60m) and three-point curvature half-window (0.14m) for both SMCs.
@@ -341,8 +354,12 @@ not as the exact Nav2 carrot.
 
 Select a saved run using its **Inspect** button or the timeline dropdown,
 then scrub the slider. The view shows the reference polyline, robot,
-carrot, robot-centered lookahead ellipse (world-correct radius), nominal
-vR/omegaR, tracking errors, and sliding variables. Five plots show
+carrot, **true circular robot-centered lookahead radius**, nominal
+vR/omegaR, tracking errors, and sliding variables. The history map uses
+**equal metres per SVG unit on X and Y**, numeric X/Y tick marks and
+axis titles in metres. The view auto-fits the full recorded trajectory,
+reference points and all recorded lookahead ranges without distorting circles.
+Five plots show
 `ey vs etheta`, `ex vs ey`, the angular surface against its observed derivative,
 `ex vs ex_dot`, and `sat(z)` with boundary regions. Saved experiments
 predating `timeline.json` remain comparable in the error chart, but their
