@@ -21,8 +21,17 @@
 
 namespace scrobot_tracker_controller
 {
+// Defaults match scrobot_description/urdf/scrobot.urdf.xacro (0.050 m
+// radius and 0.420 m wheel-centre separation). Physical limits are
+// injected from that URDF by tracking/configuration.py at every lab run.
 constexpr double kWheelHalfBase=0.21;
-constexpr double kMaxWheelMps=0.50;
+constexpr double kWheelRadius=0.050;
+constexpr double kWheelMaxRpm=95.0;
+constexpr double kWheelRatedMps=0.50;
+constexpr double kPi=3.1415926535897932384626433832795;
+constexpr double kWheelRpmMps=kWheelRadius*2*kPi*kWheelMaxRpm/60.0;
+constexpr double kMaxWheelMps=kWheelRpmMps<kWheelRatedMps?
+  kWheelRpmMps:kWheelRatedMps;
 constexpr double kEps=1e-9;
 double wrap(double a) {return std::atan2(std::sin(a),std::cos(a));}
 double sat(double x) {return std::clamp(x,-1.0,1.0);}
@@ -61,7 +70,15 @@ public:
         node_,name_+"."+key,rclcpp::ParameterValue(value));
       return node_->get_parameter(name_+"."+key).as_bool();
     };
-    vr_nominal_=param("linear_speed",.30);
+    // The physical envelope is shared with RPP's command router. Read
+    // the actual URDF geometry propagated by the generated Nav2 YAML.
+    wheel_half_base_=param("wheel_separation_m",2*kWheelHalfBase)/2;
+    const double wheel_radius=param("wheel_radius_m",kWheelRadius);
+    const double wheel_rpm=param("wheel_max_rpm",kWheelMaxRpm);
+    const double rated_wheel_mps=param("rated_wheel_max_mps",kWheelRatedMps);
+    wheel_max_mps_=std::min(rated_wheel_mps,
+      2*kPi*wheel_radius*wheel_rpm/60.0);
+    vr_nominal_=param("linear_speed",.40);
     lookahead_=param("lookahead_radius_m",.60);
     curvature_window_=param("curvature_window_m",.14);
     lambda_y_=param("lambda_y",2.5);
@@ -74,14 +91,19 @@ public:
     phix_=param("phi_x",.30);
     use_saturation_=boolparam("use_saturation",true);
     singular_guard_=param("singular_guard",.06);
-    max_angular_=param("max_angular_cmd",1.50);
+    const double requested_max_angular=param("max_angular_cmd",1.50);
+    if(!std::isfinite(wheel_half_base_) || wheel_half_base_<=0 ||
+       !std::isfinite(wheel_max_mps_) || wheel_max_mps_<=0)
+      throw std::runtime_error("Invalid physical differential-drive wheel limits");
+    max_angular_=std::min(requested_max_angular,
+                          wheel_max_mps_/wheel_half_base_);
     accel_linear_=param("max_linear_accel",1.0);
     accel_angular_=param("max_angular_accel",2.0);
-    if(vr_nominal_<=0 || vr_nominal_>.50 || lookahead_<=0 ||
+    if(vr_nominal_<=0 || vr_nominal_>wheel_max_mps_ || lookahead_<=0 ||
        curvature_window_<=0 || lambda_y_<=0 || lambda_x_<0 ||
        ks_<=0 || kx_<=0 || eta_<0 || etax_<0 ||
        phi_<=0 || phix_<=0 || singular_guard_<=0 ||
-       max_angular_<=0 || max_angular_>2.3 ||
+       requested_max_angular<=0 || max_angular_<=0 ||
        accel_linear_<=0 || accel_angular_<=0)
       throw std::runtime_error("Invalid full SMC tuning parameters");
 
@@ -175,7 +197,7 @@ public:
       omega=std::clamp(2.*wrap(yawOf(plan_.poses.back().pose.orientation)-theta),
                        -max_angular_,max_angular_);
     }
-    v=std::clamp(v,0.,kMaxWheelMps*speed_ratio_);
+    v=std::clamp(v,0.,wheel_max_mps_*speed_ratio_);
     omega=std::clamp(omega,-max_angular_,max_angular_);
 
     // Rate-limits happen AFTER computing the exact full-law requests.
@@ -186,9 +208,11 @@ public:
       omega=std::clamp(omega,last_w_-accel_angular_*dt,
                           last_w_+accel_angular_*dt);
     }
-    double wheel_demand=std::abs(v)+kWheelHalfBase*std::abs(omega);
-    if(wheel_demand>kMaxWheelMps) {
-      const double factor=kMaxWheelMps/wheel_demand;
+    // Left/right wheel speeds = v +/- (wheel_separation/2)*omega.
+    // This coupled bound enforces *both* motor RPM ratings at once.
+    const double wheel_demand=std::abs(v)+wheel_half_base_*std::abs(omega);
+    if(wheel_demand>wheel_max_mps_) {
+      const double factor=wheel_max_mps_/wheel_demand;
       v*=factor;omega*=factor;
     }
     last_v_=v;last_w_=omega;last_command_stamp_=t;
@@ -325,7 +349,8 @@ private:
   rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::Float64MultiArray>::SharedPtr diagnostics_pub_;
   double last_path_s_{-1.},last_d_{std::numeric_limits<double>::quiet_NaN()};
   double last_command_stamp_{-1.},last_v_{0.},last_w_{0.};
-  double speed_ratio_{1.},vr_nominal_{.30};
+  double speed_ratio_{1.},vr_nominal_{.40};
+  double wheel_half_base_{kWheelHalfBase},wheel_max_mps_{kMaxWheelMps};
   double lookahead_{.60},curvature_window_{.14};
   double lambda_y_{2.5},lambda_x_{.6},ks_{1.2},kx_{.8};
   double eta_{.4},phi_{.3},etax_{.25},phix_{.3};
