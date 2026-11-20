@@ -351,6 +351,82 @@ def integrate_squared_error(points,cutoff=None,max_interval_s=.6):
             "duration_sim_s":valid_duration,"gap_count":gaps}
 
 
+def convergence_time(points,tolerance_m=.05,cutoff=None,
+                     minimum_settle_s=1.0,max_interval_s=.6):
+    """First entry into |cross-track error| <= tolerance that persists to end.
+
+    Uses the *full signed* ground-truth samples and ROS simulated time.
+    Crossing time is interpolated between adjacent samples. A missing
+    interval >= max_interval_s resets the in-zone dwell; if the common
+    comparison endpoint falls inside such a gap, convergence is unverified.
+    At least minimum_settle_s of continuous in-zone observations is required
+    to avoid calling a last-sample crossing "converged".
+    """
+    if (type(tolerance_m) not in (int,float) or
+            not math.isfinite(tolerance_m) or not .01<=tolerance_m<=.50):
+        raise ValueError("Convergence tolerance must be 0.01-0.50 m")
+    if (type(minimum_settle_s) not in (int,float) or
+            not math.isfinite(minimum_settle_s) or minimum_settle_s<=0):
+        raise ValueError("Invalid convergence settling duration")
+    if cutoff is not None and (
+            type(cutoff) not in (int,float) or
+            not math.isfinite(cutoff) or cutoff<0):
+        raise ValueError("Invalid convergence comparison duration")
+
+    observations=[]
+    for p in points:
+        if isinstance(p,dict):
+            t,e=p.get("sim_s"),p.get("error_m")
+        else:
+            t,e=p
+        if (type(t) not in (int,float) or
+                type(e) not in (int,float) or
+                not math.isfinite(t) or not math.isfinite(e) or
+                (observations and t<=observations[-1][0])):
+            continue
+        if cutoff is not None and t>cutoff:
+            if observations:
+                last_t,last_e=observations[-1]
+                dt=t-last_t
+                if dt>=max_interval_s:
+                    # Cannot infer the error at the endpoint across a
+                    # missing ground-truth interval.
+                    return None
+                e=last_e+(e-last_e)*(cutoff-last_t)/dt
+                observations.append((float(cutoff),float(e)))
+            break
+        observations.append((float(t),float(e)))
+    if len(observations)<2:
+        return None
+    end=observations[-1][0]
+    if cutoff is not None and end<cutoff-1e-6:
+        return None
+    start=observations[0][0]
+    if end-start<minimum_settle_s:
+        return None
+
+    candidate=start if abs(observations[0][1])<=tolerance_m else None
+    for (prev_t,prev_e),(now_t,now_e) in zip(
+            observations,observations[1:]):
+        gap=now_t-prev_t>=max_interval_s
+        if gap:
+            candidate=now_t if abs(now_e)<=tolerance_m else None
+            continue
+        if abs(now_e)>tolerance_m:
+            candidate=None
+        elif abs(prev_e)>tolerance_m:
+            # Linear interpolation of signed error crossing the correct
+            # +/- tolerance boundary. This is not a sample-index guess.
+            boundary=tolerance_m if prev_e>0 else -tolerance_m
+            fraction=(boundary-prev_e)/(now_e-prev_e)
+            candidate=prev_t+max(0.,min(1.,fraction))*(now_t-prev_t)
+        elif candidate is None:
+            candidate=prev_t
+    if candidate is None or end-candidate+1e-9<minimum_settle_s:
+        return None
+    return round(candidate-start,5)
+
+
 class TrackingMetrics:
     """Single ground-truth accumulator for live, final, and saved plot data.
 
