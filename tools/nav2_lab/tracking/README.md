@@ -407,18 +407,39 @@ per-bucket positive and negative extrema plus first/last samples.
 Narrow spikes are not dropped by stride sampling. The table continues
 to use the full-resolution integrated RMSE.
 
-### Common-duration comparison
+### Three metrics and adjustable convergence tolerance
 
-Each full-run RMSE is averaged over **that run's measured duration**.
-Different durations can reverse the ranking even when one controller
-has a larger error during the part where the runs overlap. When two
-to eight saved runs are selected in the comparison plot, the panel
-below the chart computes each run's RMSE over the same
-`0..min(run_elapsed_sim_s)` window using its *full saved signed error
-stream*. The last interval is interpolated if necessary so all runs
-stop at precisely the same simulation time. For meaningful comparisons
-use the same reference path, starting pose, and requested speed;
-mismatches produce visible warnings.
+The Results panel shows **all three** for each selected saved experiment:
+
+1. **Full-run cross-track RMSE**: the original saved value over that
+   experiment's own measured duration. Different run durations can
+   reverse the rankings even when one controller has higher error
+   during their overlapping part.
+2. **Common-duration RMSE**: recomputed from the *complete saved signed
+   error samples*, using exactly the same time window
+   `0..min(run_elapsed_sim_s)` for every selected run. The last
+   interval is interpolated if necessary. Selecting one run uses its
+   full duration. This value never changes when adjusting tolerance.
+3. **Convergence time**: the earliest simulated time after FollowPath
+   acceptance when `|cross_track_error| <= tolerance` and it stays
+   inside the band until the end of the comparison window, with
+   **at least 1.0 simulated second** of stable measurements. The entry
+   time is linearly interpolated between consecutive ground-truth
+   samples; excursions outside the band restart the convergence clock.
+   An observation gap of 0.6 simulated seconds or longer cannot count
+   as continuous settled operation. If there is no qualifying entry,
+   the UI reports **Not converged** rather than inventing a time.
+
+The green tolerance band on the plot updates as you drag the
+**Convergence tolerance** slider from **0.01 m to 0.50 m**
+(default **0.05 m**). In signed-error mode the zone covers
+`[-epsilon,+epsilon]`; in absolute-error mode it covers
+`[0,epsilon]`. The slider updates only convergence time;
+neither RMSE changes. This is a lateral-error settling metric, not
+proof of reaching the navigation goal or of final heading alignment.
+
+For meaningful comparisons, select runs with the same reference
+path, starting pose and requested speed; mismatches produce warnings.
 
 **Historical experiments are not silently rewritten.** Older
 `series.json` was already decimated and older summary files used a
