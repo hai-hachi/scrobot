@@ -94,8 +94,14 @@ public:
     plan_.poses.clear();lengths_.clear();node_.reset();
     carrot_pub_.reset();diagnostics_pub_.reset();
   }
-  void activate() override {}
-  void deactivate() override {}
+  void activate() override {
+    if(carrot_pub_)carrot_pub_->on_activate();
+    if(diagnostics_pub_)diagnostics_pub_->on_activate();
+  }
+  void deactivate() override {
+    if(carrot_pub_)carrot_pub_->on_deactivate();
+    if(diagnostics_pub_)diagnostics_pub_->on_deactivate();
+  }
   void reset() override {
     last_path_s_=-1.;
     last_d_=std::numeric_limits<double>::quiet_NaN();
@@ -314,8 +320,8 @@ private:
   bool one_surface_=true,use_saturation_=true;
   nav_msgs::msg::Path plan_;
   std::vector<double> lengths_;
-  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr carrot_pub_;
-  rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr diagnostics_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PoseStamped>::SharedPtr carrot_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::Float64MultiArray>::SharedPtr diagnostics_pub_;
   double last_path_s_{-1.},last_d_{std::numeric_limits<double>::quiet_NaN()};
   double last_command_stamp_{-1.},last_v_{0.},last_w_{0.};
   double speed_ratio_{1.},vr_nominal_{.30};
