@@ -20,6 +20,9 @@ const MAX_PLOT_RUNS=8;
 const PLOT_PALETTE=['#55C9F6','#B89BFF','#50DDB9','#FF86A2',
   '#E8D46C','#8CACFF','#DE96CE','#82E3E6'];
 const LIVE_PLOT_COLOR='#F4BB66';
+let timelineData=null;
+let timelineName='';
+
 
 async function api(path,body){
   const opts=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},
@@ -389,6 +392,197 @@ async function selectSavedTrace(name,checked){
     pendingPlotRuns.delete(name);
     syncPlotCheckboxes();
     renderChart();
+  }
+}
+
+function phaseAxes(svg,xlo,xhi,ylo,yhi,xLabel,yLabel){
+  svg.replaceChildren();
+  const L=39,R=311,T=17,B=189;
+  const X=x=>L+(x-xlo)/(xhi-xlo)*(R-L);
+  const Y=y=>B-(y-ylo)/(yhi-ylo)*(B-T);
+  for(let i=0;i<=4;i++){
+    const x=xlo+(xhi-xlo)*i/4,y=ylo+(yhi-ylo)*i/4;
+    addLine(svg,[X(x),T],[X(x),B],'#304552',.55,'3 4');
+    addLine(svg,[L,Y(y)],[R,Y(y)],'#304552',.55,'3 4');
+    chartText(svg,x.toFixed(2),{x:X(x),y:204,'text-anchor':'middle',class:'tick-label'});
+    chartText(svg,y.toFixed(2),{x:35,y:Y(y)+2,'text-anchor':'end',class:'tick-label'});
+  }
+  chartText(svg,xLabel,{x:172,y:218,'text-anchor':'middle',class:'axis-label'});
+  chartText(svg,yLabel,{transform:'translate(8 105) rotate(-90)',
+    x:0,y:0,'text-anchor':'middle',class:'axis-label'});
+  if(xlo<=0&&xhi>=0)addLine(svg,[X(0),T],[X(0),B],'#68949C',.8);
+  if(ylo<=0&&yhi>=0)addLine(svg,[L,Y(0)],[R,Y(0)],'#68949C',.8);
+  return {X,Y,L,R,T,B};
+}
+function phaseTrace(svg,coords,axes,color='#F4BB66'){
+  const points=coords.filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1]));
+  if(points.length<2)return;
+  svg.append(shape('polyline',{
+    points:points.map(p=>axes.X(p[0]).toFixed(2)+','+
+      axes.Y(p[1]).toFixed(2)).join(' '),
+    fill:'none',stroke:color,'stroke-width':2
+  }));
+  const last=points[points.length-1];
+  svg.append(shape('circle',{cx:axes.X(last[0]),cy:axes.Y(last[1]),
+    r:3.4,fill:color}));
+}
+function polylineEquation(svg,xlo,xhi,axes,equation,color,dash=''){
+  const coords=Array.from({length:151},(_,i)=>{
+    const x=xlo+(xhi-xlo)*i/150;return [x,equation(x)];
+  });
+  const path=shape('polyline',{
+    points:coords.map(([x,y])=>axes.X(x).toFixed(2)+','+
+      axes.Y(y).toFixed(2)).join(' '),
+    fill:'none',stroke:color,'stroke-width':1.5
+  });
+  if(dash)path.setAttribute('stroke-dasharray',dash);
+  svg.append(path);
+}
+function verticalBoundary(svg,axes,min,max){
+  const x1=axes.X(min),x2=axes.X(max);
+  svg.insertBefore(shape('rect',{
+    x:Math.min(x1,x2),y:axes.T,width:Math.abs(x2-x1),
+    height:axes.B-axes.T,fill:'#59C9AE','fill-opacity':.10
+  }),svg.firstChild);
+}
+function sat(x){return Math.max(-1,Math.min(1,x));}
+function renderPhasePortraits(){
+  const frames=timelineData?.frames||[];
+  const which=timelineData?.controller||$('controller-select').value;
+  const name=which==='SMC_2S'?'smc_2s':'smc_1s';
+  const params=timelineData?.config?.[name]||readForm()?.[name]||
+    defaultSettings?.[name];
+  if(!params)return;
+  const errors=frames.map(f=>f.errors||{});
+  const xs=errors.map(e=>e.ex).filter(Number.isFinite);
+  const ys=errors.map(e=>e.ey).filter(Number.isFinite);
+  const hs=errors.map(e=>e.etheta).filter(Number.isFinite);
+  const bound=Math.max(.6,...ys.map(Math.abs),...hs.map(Math.abs));
+  const pxy=phaseAxes($('phase-ey'),-bound,bound,-bound,bound,'ey (m)','eθ (rad)');
+  // Display s=0 slice at ex=0 and the angular boundary layer.
+  const yline=x=>-params.lambda_y*x;
+  const lines=Array.from({length:100},(_,i)=>{
+    const x=-bound+2*bound*i/99;
+    const base=yline(x);
+    return [x,base+params.phi,x,base-params.phi];
+  });
+  const band=shape('polygon',{
+    points:[...lines.map(v=>[pxy.X(v[0]),pxy.Y(v[1])]),
+      ...lines.slice().reverse().map(v=>[pxy.X(v[2]),pxy.Y(v[3])])]
+      .map(v=>v.join(',')).join(' '),
+    fill:'#59C9AE','fill-opacity':.12
+  });
+  $('phase-ey').insertBefore(band,$('phase-ey').firstChild);
+  polylineEquation($('phase-ey'),-bound,bound,pxy,yline,'#55C9B7','5 3');
+  phaseTrace($('phase-ey'),errors.map(e=>[e.ey,e.etheta]),pxy);
+
+  const angular=frames.map(f=>({
+    t:f.t,s:which==='SMC_2S'?f.surfaces?.s2:f.surfaces?.s1
+  })).filter(f=>Number.isFinite(f.s));
+  const dx=frames.map(f=>({t:f.t,x:f.errors?.ex}))
+    .filter(f=>Number.isFinite(f.x));
+  const deriv=data=>data.slice(1).map((b,i)=>{
+    const a=data[i],dt=b.t-a.t;
+    return dt>1e-6?[(a.s??a.x),((b.s??b.x)-(a.s??a.x))/dt]:
+      [NaN,NaN];
+  });
+  const sRange=Math.max(.6,params.phi*2,...angular.map(f=>Math.abs(f.s)));
+  const q=s=>params.k_s*s+(params.use_saturation?params.eta*sat(s/params.phi):0);
+  const rateRange=Math.max(1,...deriv(angular).map(p=>Math.abs(p[1])),
+    q(sRange),q(-sRange));
+  const ps=phaseAxes($('phase-s'),-sRange,sRange,-rateRange,rateRange,
+    'angular surface s','ds/dt (1/s)');
+  verticalBoundary($('phase-s'),ps,-params.phi,params.phi);
+  polylineEquation($('phase-s'),-sRange,sRange,ps,s=>-q(s),'#59DDB9','5 3');
+  phaseTrace($('phase-s'),deriv(angular),ps);
+
+  const eRange=Math.max(.6,params.phi_x*2,...dx.map(f=>Math.abs(f.x)));
+  const gx=x=>params.k_x*x+
+    (params.use_saturation?params.eta_x*sat(x/params.phi_x):0);
+  const eRate=Math.max(1,...deriv(dx).map(p=>Math.abs(p[1])),
+    gx(eRange),gx(-eRange));
+  const pe=phaseAxes($('phase-ex'),-eRange,eRange,-eRate,eRate,
+    'ex (m)','dex/dt (m/s)');
+  verticalBoundary($('phase-ex'),pe,-params.phi_x,params.phi_x);
+  polylineEquation($('phase-ex'),-eRange,eRange,pe,x=>-gx(x),'#59DDB9','5 3');
+  phaseTrace($('phase-ex'),deriv(dx),pe);
+  const psat=phaseAxes($('sat-plot'),-2,2,-1.2,1.2,'z = s / φ','sat(z)');
+  verticalBoundary($('sat-plot'),psat,-1,1);
+  polylineEquation($('sat-plot'),-2,2,psat,sat,'#F4BB66');
+}
+function drawTimeline(){
+  const pathGroup=$('timeline-path'),traceGroup=$('timeline-trace'),
+        carrotGroup=$('timeline-carrot');
+  for(const el of [pathGroup,traceGroup,carrotGroup])el.replaceChildren();
+  if(!timelineData?.frames?.length)return;
+  const frameIndex=Math.min(Number($('timeline-slider').value),
+    timelineData.frames.length-1);
+  const frame=timelineData.frames[frameIndex];
+  const ref=frame.ref;
+  const points=timelineData.reference?.points||[];
+  if(points.length>1)pathGroup.append(shape('polyline',{
+    points:points.map(p=>px(p[0])+','+py(p[1])).join(' '),
+    fill:'none',stroke:'#42d0c2','stroke-width':3
+  }));
+  const trail=timelineData.frames.slice(0,frameIndex+1);
+  if(trail.length>1)traceGroup.append(shape('polyline',{
+    points:trail.map(f=>px(f.x)+','+py(f.y)).join(' '),
+    fill:'none',stroke:'#F4BB66','stroke-width':2.5
+  }));
+  const rx=px(frame.x),ry=py(frame.y),cx=px(ref.x),cy=py(ref.y);
+  // The world plot has unequal pixel-per-metre scaling; ellipse preserves
+  // the circle's world-distance radius in the two displayed dimensions.
+  carrotGroup.append(shape('ellipse',{
+    cx:rx,cy:ry,rx:52*(ref.radius||0),ry:35*(ref.radius||0),
+    stroke:'#E5A94A','stroke-width':1.4,
+    'stroke-dasharray':'6 4',fill:'none'
+  }));
+  addLine(carrotGroup,[rx,ry],[cx,cy],'#E5A94A',1.5,'5 3');
+  carrotGroup.append(shape('circle',{cx,cy,r:6,fill:'#42d0c2'}));
+  carrotGroup.append(shape('circle',{cx:rx,cy:ry,r:8,fill:'#F4BB66'}));
+  addLine(carrotGroup,[rx,ry],
+    [rx+24*Math.cos(frame.yaw),ry-24*Math.sin(frame.yaw)],'#F4BB66',2.5);
+  addLine(carrotGroup,[cx,cy],
+    [cx+20*Math.cos(ref.yaw),cy-20*Math.sin(ref.yaw)],'#42d0c2',2);
+  $('timeline-time').textContent=fmt(frame.t,2)+' s';
+  const e=frame.errors||{},surface=frame.surfaces||{};
+  $('timeline-fields').textContent=
+    'Robot ('+fmt(frame.x,2)+', '+fmt(frame.y,2)+') m · '+
+    'carrot ('+fmt(ref.x,2)+', '+fmt(ref.y,2)+') m · '+
+    'range '+fmt(ref.radius,3)+' m · '+
+    'nominal vR '+fmt(ref.v_ref,3)+' m/s · nominal ωR '+
+    fmt(ref.w_ref,3)+' rad/s · '+
+    'eₓ '+fmt(e.ex,3)+' m · eᵧ '+fmt(e.ey,3)+' m · '+
+    'eθ '+fmt(e.etheta,3)+' rad · '+
+    's₁ '+fmt(surface.s1,3)+' · s₂ '+fmt(surface.s2,3)+
+    ' · D '+fmt(surface.D,3)+
+    ' · applied v '+fmt(frame.v,3)+' m/s · ω '+fmt(frame.w,3)+
+    ' rad/s · carrot source: '+(ref.source||'unknown')+
+    (ref.fallback?' (intersection fallback)':'');
+}
+async function loadTimeline(name){
+  timelineName=name;
+  timelineData=null;
+  $('timeline-run').value=name;
+  $('timeline-slider').disabled=true;
+  $('timeline-fields').textContent=name?'Loading detailed timeline…':
+    'Select a saved run with detailed telemetry.';
+  drawTimeline();
+  if(!name){renderPhasePortraits();return;}
+  try{
+    const response=await api('/history/timeline?name='+encodeURIComponent(name));
+    if(timelineName!==name)return;
+    timelineData=response;
+    $('timeline-slider').min='0';
+    $('timeline-slider').max=String(response.frames.length-1);
+    $('timeline-slider').value='0';
+    $('timeline-slider').disabled=false;
+    drawTimeline();renderPhasePortraits();
+  }catch(e){
+    if(timelineName===name){
+      $('timeline-fields').textContent=e.message;
+      notify('Could not open timeline: '+e.message,true);
+    }
   }
 }
 function showStatus(s){
