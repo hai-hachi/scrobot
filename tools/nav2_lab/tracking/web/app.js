@@ -528,31 +528,66 @@ function renderPhasePortraits(){
   polylineEquation($('sat-plot'),-2,2,psat,sat,'#F4BB66');
 }
 function drawTimeline(){
-  const pathGroup=$('timeline-path'),traceGroup=$('timeline-trace'),
-        carrotGroup=$('timeline-carrot');
-  for(const el of [pathGroup,traceGroup,carrotGroup])el.replaceChildren();
+  const grid=$('timeline-grid'),pathGroup=$('timeline-path'),
+    traceGroup=$('timeline-trace'),carrotGroup=$('timeline-carrot');
+  for(const el of [grid,pathGroup,traceGroup,carrotGroup])el.replaceChildren();
   if(!timelineData?.frames?.length)return;
-  const frameIndex=Math.min(Number($('timeline-slider').value),
-    timelineData.frames.length-1);
-  const frame=timelineData.frames[frameIndex];
-  const ref=frame.ref;
+
+  const frames=timelineData.frames;
   const points=timelineData.reference?.points||[];
+  const world=window.TrackerTimelineGeometry.geometry(points,frames);
+  const {box,x,y,scale,format}=world;
+  const left=box.left,right=world.width-box.right;
+  const top=box.top,bottom=world.height-box.bottom;
+
+  // Metre rulers, with the same world->pixel distance on BOTH axes.
+  // The plot border is visible even when world origin (0,0) is offscreen.
+  for(const value of world.xTicks){
+    const at=x(value);
+    addLine(grid,[at,top],[at,bottom],
+      Math.abs(value)<1e-9?'#607985':'#263C4C',
+      Math.abs(value)<1e-9?1.3:.7,'3 5');
+    addLine(grid,[at,bottom],[at,bottom+4],'#A0BCCB',1);
+    chartText(grid,format(value),{
+      x:at,y:bottom+17,'text-anchor':'middle',class:'tick-label'});
+  }
+  for(const value of world.yTicks){
+    const at=y(value);
+    addLine(grid,[left,at],[right,at],
+      Math.abs(value)<1e-9?'#607985':'#263C4C',
+      Math.abs(value)<1e-9?1.3:.7,'3 5');
+    addLine(grid,[left-4,at],[left,at],'#A0BCCB',1);
+    chartText(grid,format(value),{
+      x:left-8,y:at+3,'text-anchor':'end',class:'tick-label'});
+  }
+  addLine(grid,[left,top],[left,bottom],'#95AFBF',1.3);
+  addLine(grid,[left,bottom],[right,bottom],'#95AFBF',1.3);
+  chartText(grid,'X position (m)',{
+    x:(left+right)/2,y:world.height-8,
+    'text-anchor':'middle',class:'axis-label'});
+  chartText(grid,'Y position (m)',{
+    transform:'translate(18 '+(top+bottom)/2+') rotate(-90)',
+    x:0,y:0,'text-anchor':'middle',class:'axis-label'});
+  const frameIndex=Math.min(Math.max(0,Number($('timeline-slider').value)||0),
+    frames.length-1);
+  const frame=frames[frameIndex];
+  const ref=frame.ref;
   if(points.length>1)pathGroup.append(shape('polyline',{
-    points:points.map(p=>px(p[0])+','+py(p[1])).join(' '),
+    points:points.map(p=>x(p[0])+','+y(p[1])).join(' '),
     fill:'none',stroke:'#42d0c2','stroke-width':3
   }));
-  const trail=timelineData.frames.slice(0,frameIndex+1);
+  const trail=frames.slice(0,frameIndex+1);
   if(trail.length>1)traceGroup.append(shape('polyline',{
-    points:trail.map(f=>px(f.x)+','+py(f.y)).join(' '),
+    points:trail.map(f=>x(f.x)+','+y(f.y)).join(' '),
     fill:'none',stroke:'#F4BB66','stroke-width':2.5
   }));
-  const rx=px(frame.x),ry=py(frame.y),cx=px(ref.x),cy=py(ref.y);
-  // The world plot has unequal pixel-per-metre scaling; ellipse preserves
-  // the circle's world-distance radius in the two displayed dimensions.
-  carrotGroup.append(shape('ellipse',{
-    cx:rx,cy:ry,rx:52*(ref.radius||0),ry:35*(ref.radius||0),
-    stroke:'#E5A94A','stroke-width':1.4,
-    'stroke-dasharray':'6 4',fill:'none'
+  const rx=x(frame.x),ry=y(frame.y),cx=x(ref.x),cy=y(ref.y);
+  const radius=Number.isFinite(ref.radius)&&ref.radius>0?
+    world.radius(ref.radius):0;
+  // Equal scale is now guaranteed; this is a true SVG CIRCLE.
+  carrotGroup.append(shape('circle',{
+    cx:rx,cy:ry,r:radius,stroke:'#E5A94A',
+    'stroke-width':1.4,'stroke-dasharray':'6 4',fill:'none'
   }));
   addLine(carrotGroup,[rx,ry],[cx,cy],'#E5A94A',1.5,'5 3');
   carrotGroup.append(shape('circle',{cx,cy,r:6,fill:'#42d0c2'}));
@@ -561,6 +596,8 @@ function drawTimeline(){
     [rx+24*Math.cos(frame.yaw),ry-24*Math.sin(frame.yaw)],'#F4BB66',2.5);
   addLine(carrotGroup,[cx,cy],
     [cx+20*Math.cos(ref.yaw),cy-20*Math.sin(ref.yaw)],'#42d0c2',2);
+  chartText(carrotGroup,'Robot',{x:rx+10,y:ry-10,class:'map-tag'});
+  chartText(carrotGroup,'Carrot',{x:cx+9,y:cy-10,class:'map-tag'});
   $('timeline-time').textContent=fmt(frame.t,2)+' s';
   const e=frame.errors||{},surface=frame.surfaces||{};
   $('timeline-fields').textContent=
@@ -575,7 +612,8 @@ function drawTimeline(){
     ' · D '+fmt(surface.D,3)+
     ' · applied v '+fmt(frame.v,3)+' m/s · ω '+fmt(frame.w,3)+
     ' rad/s · carrot source: '+(ref.source||'unknown')+
-    (ref.fallback?' (intersection fallback)':'');
+    (ref.fallback?' (intersection fallback)':'')+
+    ' · equal-scale axes: 1 m on X = 1 m on Y';
 }
 async function loadTimeline(name){
   timelineName=name;
