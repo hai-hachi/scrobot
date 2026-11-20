@@ -130,7 +130,7 @@ def defaults():
         "random_heading_deg":55.0,
         "pose":{"x":-4.,"y":.4,"yaw_deg":12.},
         "shared":{
-            "desired_speed_mps":.30,"max_sim_duration_s":120.,
+            "desired_speed_mps":.40,"max_sim_duration_s":120.,
             "goal_xy_tolerance_m":.12,"goal_yaw_tolerance_deg":9.17,
             "progress_radius_m":.10,"progress_timeout_sim_s":25.,
             "lookahead_radius_m":.60,"curvature_window_m":.14,
