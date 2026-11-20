@@ -435,7 +435,7 @@ def test_timeline_controls_phases_and_halved_axis_label_sizes():
     css=(HERE/"web/style.css").read_text()
     server=(HERE.parent/"planning/web_server.py").read_text()
     for item in ("timeline-run","timeline-slider","timeline-map",
-                 "phase-ey","phase-s","phase-ex","sat-plot","timeline-fields"):
+                 "phase-ey","phase-exey","phase-s","phase-ex","sat-plot","timeline-fields"):
         assert 'id="'+item+'"' in html
     assert '"/api/tracker/history/timeline"' in server
     assert "history_timeline" in server
