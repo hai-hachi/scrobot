@@ -101,7 +101,7 @@ def generate(settings,dirpath):
           "plugin":"scrobot_tracker_controller::SMCController",
           "linear_speed":requested_speed,
           # Source-of-truth geometry from scrobot.urdf.xacro. The full
-          # plugin recomputes the strict 95 RPM physical envelope itself.
+          # plugin recomputes the 100 RPM plus 0.50 m/s physical envelope itself.
           "wheel_radius_m":float(WHEEL_RADIUS_M),
           "wheel_separation_m":float(WHEEL_SEPARATION),
           "wheel_max_rpm":float(WHEEL_MAX_RPM),
