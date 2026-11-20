@@ -218,6 +218,30 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
 <p class="fineprint" id="plot-status">Select a saved run's Plot checkbox to overlay its error curve.</p>
 <p id="trial-details" class="fineprint">Run a controller to record ground-truth error, path and heading metrics.</p></div>
 <div class="panel">
+  <h2>SMC phase portraits &amp; boundary layers</h2>
+  <p class="fineprint">Observed trajectories are measured; dashed reaching curves show the ideal model only. Nominal PP-carrot motion and actuator clipping do not guarantee the ideal reaching laws.</p>
+  <div class="phase-grid">
+    <div><h3>Body error phase plane · e<sub>y</sub> vs e<sub>θ</sub></h3><svg id="phase-ey" viewBox="0 0 320 220" aria-label="Heading and lateral-error phase portrait"></svg></div>
+    <div><h3>Angular surface · s vs observed ds/dt</h3><svg id="phase-s" viewBox="0 0 320 220" aria-label="Angular sliding surface phase portrait"></svg></div>
+    <div><h3>Longitudinal surface · e<sub>x</sub> vs observed de<sub>x</sub>/dt</h3><svg id="phase-ex" viewBox="0 0 320 220" aria-label="Longitudinal error phase portrait"></svg></div>
+    <div><h3>Boundary-layer saturation · sat(z)</h3><svg id="sat-plot" viewBox="0 0 320 220" aria-label="Continuous saturation reaching law"></svg></div>
+  </div>
+</div>
+<div class="panel">
+  <div class="between"><h2>Saved-run timeline inspector</h2><span>Scrub the actual robot and carrot pose</span></div>
+  <label class="field">Saved run <select id="timeline-run"><option value="">Choose a recorded experiment…</option></select></label>
+  <div class="timeline-control">
+    <label for="timeline-slider">Elapsed simulated time</label>
+    <input id="timeline-slider" type="range" min="0" max="0" step="1" value="0" disabled>
+    <strong id="timeline-time">— s</strong>
+  </div>
+  <svg id="timeline-map" viewBox="0 0 900 450" aria-label="Robot and carrot on the saved reference path">
+    <g id="timeline-path"></g><g id="timeline-trace"></g><g id="timeline-carrot"></g>
+  </svg>
+  <p id="timeline-fields" class="fineprint">Select a saved run with detailed telemetry. Earlier runs remain available for numeric comparison but may not include timeline samples.</p>
+  <p class="fineprint">SMC displays the actual controller carrot, nominal vR/ωR and sliding surfaces. RPP displays Nav2's published lookahead point where available; geometric fallbacks are explicitly labelled.</p>
+</div>
+<div class="panel">
 <div class="between"><h2>Saved comparisons</h2>
 <div class="plot-actions">
   <button id="clear-plot" class="btn outline small" type="button">Clear plot selection</button>
@@ -225,8 +249,8 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
 </div></div>
 <p class="fineprint">Tick <strong>Plot</strong> for up to 8 saved runs to overlay their signed tracking-error curves above. Selection is independent of deleting files and does not restart Gazebo. Runs without a finished trace cannot be plotted. For a fair RPP/SMC comparison, select matching paths and initial poses.</p>
 <div class="table-wrap"><table>
-<thead><tr><th>Plot</th><th>Run</th><th>Path</th><th>Controller</th><th>Seed</th><th>Status</th><th>Cross RMSE (m)</th><th>Heading RMSE (°)</th><th>Sim duration (s)</th><th>Delete</th></tr></thead>
-<tbody id="history-body"><tr><td colspan="10">No tracking runs yet.</td></tr></tbody></table></div>
+<thead><tr><th>Plot</th><th>Replay</th><th>Run</th><th>Path</th><th>Controller</th><th>Seed</th><th>Status</th><th>Cross RMSE (m)</th><th>Heading RMSE (°)</th><th>Sim duration (s)</th><th>Delete</th></tr></thead>
+<tbody id="history-body"><tr><td colspan="11">No tracking runs yet.</td></tr></tbody></table></div>
 </div></section>
 
 <section class="tracker-view" data-view="performance" hidden>
