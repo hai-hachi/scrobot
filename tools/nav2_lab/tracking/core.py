@@ -5,11 +5,11 @@ Metrics use closest SEGMENT projection, not nearest waypoint.
 """
 import math
 import random
+from tracking.physical_limits import (
+    WHEEL_SEPARATION,MAX_WHEEL_MPS,MAX_LINEAR_MPS,MAX_ANGULAR_RADPS)
 
 KINDS=("straight","circle","curve","right_angles")
 CONTROLLERS=("RPP","SMC_1S","SMC_2S")
-WHEEL_SEPARATION=.42
-MAX_WHEEL_MPS=.50
 
 
 def wrap(angle):
@@ -112,6 +112,8 @@ def clamp_wheel_envelope(v,omega):
     """Scale coupled differential commands, preserving curvature."""
     if not math.isfinite(v) or not math.isfinite(omega):
         raise ValueError("Non-finite velocity")
+    # Equivalent to max(|v - B*omega/2|, |v + B*omega/2|).
+    # Enforces the 95 RPM rating of *each* physical wheel, simultaneously.
     demand=abs(v)+WHEEL_SEPARATION/2*abs(omega)
     scale=min(1.,MAX_WHEEL_MPS/demand) if demand>0 else 1.
     return v*scale,omega*scale
@@ -225,7 +227,7 @@ def validate(data):
 
     shared=cfg["shared"]
     for key,lo,hi in (
-        ("desired_speed_mps",.05,.40),
+        ("desired_speed_mps",.05,MAX_LINEAR_MPS),
         ("max_sim_duration_s",10,360),
         ("goal_xy_tolerance_m",.02,.50),
         ("goal_yaw_tolerance_deg",1,45),
@@ -243,11 +245,11 @@ def validate(data):
         ("max_lookahead_dist",.10,2.0),
         ("lookahead_time",.1,3.),
         ("regulated_linear_scaling_min_radius",.1,3.),
-        ("regulated_linear_scaling_min_speed",.03,.40),
-        ("rotate_to_heading_angular_vel",.1,2.3),
+        ("regulated_linear_scaling_min_speed",.03,MAX_LINEAR_MPS),
+        ("rotate_to_heading_angular_vel",.1,MAX_ANGULAR_RADPS),
         ("rotate_to_heading_min_angle_deg",1.,100.),
         ("max_angular_accel",.1,6.),
-        ("min_approach_linear_velocity",.02,.4),
+        ("min_approach_linear_velocity",.02,MAX_LINEAR_MPS),
     ):
         number(rpp[key],lo,hi,"RPP "+key)
     for key in ("use_velocity_scaled_lookahead_dist",
@@ -262,7 +264,7 @@ def validate(data):
             ("lambda_y",.1,8.),("k_s",.01,8.),("k_x",.01,8.),
             ("eta",0.,3.),("phi",.02,2.),("eta_x",0.,2.),
             ("phi_x",.02,2.),("singular_guard",.01,.5),
-            ("max_angular_cmd",.2,2.3),
+            ("max_angular_cmd",.2,MAX_ANGULAR_RADPS),
             ("max_linear_accel",.1,3.),("max_angular_accel",.1,6.),
         ):
             number(smc[key],lo,hi,name+" "+key)
@@ -296,7 +298,7 @@ def metrics(samples,points):
             sums["distance"]+=math.hypot(sample["x"]-last["x"],sample["y"]-last["y"])
             sums["cmd_change"]+=abs(sample.get("w",0.)-last.get("w",0.))
         sums["max_e"]=max(sums["max_e"],abs(e))
-        if abs(sample.get("v",0))+WHEEL_SEPARATION/2*abs(sample.get("w",0))>MAX_WHEEL_MPS+.002:
+        if abs(sample.get("v",0))+WHEEL_SEPARATION/2*abs(sample.get("w",0))>MAX_WHEEL_MPS+1e-4:
             sums["violations"]+=1
         series.append({"sim_s":round(sample["t"]-samples[0]["t"],3),
                        "error_m":round(e,4),"heading_error_deg":round(math.degrees(yawerr),3),
