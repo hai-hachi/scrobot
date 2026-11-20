@@ -20,6 +20,7 @@ from tracking.configuration import generate,saved_physics
 from tracking.service import (TrackingService, choose_tracking_domain, discover_domain_topics,
                               cleanup_owned_session, TRACKER_DOMAIN_CANDIDATES)
 from tracking.health import controller_failure,ready_for_tracking
+from tracking.carrot import circle_carrot,reference as carrot_reference,errors as carrot_errors,surfaces
 
 
 def test_four_path_geometries_are_deterministic():
@@ -91,7 +92,7 @@ def test_manual_start_and_invalid_inputs():
     invalid=copy.deepcopy(cfg)
     invalid["rpp"]["use_rotate_to_heading"]=1
     with pytest.raises(ValueError,match="checkbox"):validate(invalid)
-    cfg["smc"]["boundary_layer"]=0
+    cfg["smc_1s"]["phi"]=0
     with pytest.raises(ValueError):validate(cfg)
 
 
@@ -138,11 +139,14 @@ def test_tracker_params_preserve_real_controller_and_physics(tmp_path):
     data=generate(settings,tmp_path)
     params=yaml.safe_load(Path(data["nav2_params"]).read_text())
     cs=params["controller_server"]["ros__parameters"]
-    assert cs["controller_plugins"]==["RPP","SMC"]
+    assert cs["controller_plugins"]==["RPP","SMC_1S","SMC_2S"]
     assert cs["controller_frequency"]==25.0
     assert cs["RPP"]["plugin"]=="nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-    assert cs["SMC"]["plugin"]=="scrobot_tracker_controller::SMCController"
-    assert cs["SMC"]["linear_speed"]==.3
+    for mode in ("SMC_1S","SMC_2S"):
+        assert cs[mode]["plugin"]=="scrobot_tracker_controller::SMCController"
+        assert cs[mode]["linear_speed"]==.3
+        assert cs[mode]["lookahead_radius_m"]==.6
+        assert cs[mode]["curvature_window_m"]==.14
     local=params["local_costmap"]["local_costmap"]["ros__parameters"]
     assert local["plugins"]==["obstacle_layer","inflation_layer"]
     assert local["obstacle_layer"]["plugin"]=="nav2_costmap_2d::ObstacleLayer"
@@ -172,7 +176,7 @@ def test_integer_form_inputs_serialize_as_ros_double_params(tmp_path):
         "rotate_to_heading_angular_vel":2,
     })
     # Also exercise integer-valued SMC/Shared fields.
-    cfg["smc"]["surface_lambda"]=1
+    cfg["smc_1s"]["lambda_y"]=1
     cfg["shared"]["progress_timeout_sim_s"]=25
     generated=generate(cfg,tmp_path)
     raw=Path(generated["nav2_params"]).read_text()
@@ -186,109 +190,92 @@ def test_integer_form_inputs_serialize_as_ros_double_params(tmp_path):
             assert type(rpp[name]) is bool
         else:
             assert type(rpp[name]) is float, name
-    for value in nav["SMC"].values():
-        if isinstance(value,(int,float)):
-            assert type(value) is float
+    for mode in ("SMC_1S","SMC_2S"):
+        for key,value in nav[mode].items():
+            if type(value) in (int,float):
+                assert type(value) is float, (mode,key)
+            if key=="use_saturation":
+                assert type(value) is bool
     assert type(nav["progress_checker"]["movement_time_allowance"]) is float
     assert type(nav["goal_checker"]["yaw_goal_tolerance"]) is float
 
 
-def test_three_groups_save_migrate_and_keep_old_controller_tuning():
+def test_four_groups_save_migrate_and_keep_full_law_tuning():
     baseline=defaults()
+    assert set(baseline)=={
+        "path","controller","spawn_mode","progress","lateral_m",
+        "heading_deg","seed","random_lateral_m","random_heading_deg",
+        "pose","shared","rpp","smc_1s","smc_2s"}
     assert set(baseline["shared"])=={
-        "desired_speed_mps","max_sim_duration_s",
-        "goal_xy_tolerance_m","goal_yaw_tolerance_deg",
-        "progress_radius_m","progress_timeout_sim_s"}
-    assert set(baseline["rpp"])=={
-        "lookahead_dist","min_lookahead_dist","max_lookahead_dist",
-        "lookahead_time","use_velocity_scaled_lookahead_dist",
-        "use_regulated_linear_velocity_scaling",
-        "regulated_linear_scaling_min_radius",
-        "regulated_linear_scaling_min_speed","use_rotate_to_heading",
-        "rotate_to_heading_angular_vel","rotate_to_heading_min_angle_deg",
-        "max_angular_accel","min_approach_linear_velocity"}
-    assert set(baseline["smc"])=={
-        "cross_gain","heading_gain","surface_lambda","switch_gain",
-        "boundary_layer","lookahead_m","feedforward_gain",
-        "goal_heading_gain","goal_align_threshold_m","max_angular_cmd"}
+        "desired_speed_mps","max_sim_duration_s","goal_xy_tolerance_m",
+        "goal_yaw_tolerance_deg","progress_radius_m",
+        "progress_timeout_sim_s","lookahead_radius_m",
+        "curvature_window_m"}
+    assert set(baseline["smc_1s"])==set(baseline["smc_2s"])|{"lambda_x"}
 
     legacy=copy.deepcopy(baseline)
+    legacy["controller"]="SMC"
     legacy["desired_speed_mps"]=.27
     legacy["max_sim_duration_s"]=90
     del legacy["shared"]
     del legacy["rpp"]
-    legacy["smc"]={key:legacy["smc"][key] for key in (
-        "cross_gain","heading_gain","switch_gain","boundary_layer","lookahead_m")}
-    legacy["smc"]["cross_gain"]=3.2
+    del legacy["smc_1s"]
+    del legacy["smc_2s"]
+    legacy["smc"]={"cross_gain":3.2,"heading_gain":2.0}
     migrated=validate(legacy)
+    assert migrated["controller"]=="SMC_1S"
     assert migrated["shared"]["desired_speed_mps"]==.27
+    assert migrated["shared"]["lookahead_radius_m"]==.6
     assert migrated["shared"]["max_sim_duration_s"]==90
-    assert migrated["smc"]["cross_gain"]==3.2
-    assert migrated["smc"]["surface_lambda"]==1.0
+    assert migrated["smc_1s"]["lambda_y"]==2.5
+    assert migrated["smc_2s"]["lambda_y"]==2.5
+    assert "smc" not in migrated
     assert migrated["rpp"]==baseline["rpp"]
-    assert "desired_speed_mps" not in migrated
     assert validate(migrated)==migrated
-    assert "shared" not in legacy  # No caller mutation
+    assert "smc" in legacy
 
 
-def test_all_three_groups_change_real_generated_nav2_parameters(tmp_path):
-    values=defaults()
-    values["shared"].update({
-        "desired_speed_mps":.18,
-        "goal_xy_tolerance_m":.07,
+def test_four_tuning_groups_generate_real_full_smc_parameters(tmp_path):
+    cfg=defaults()
+    cfg["shared"].update({
+        "desired_speed_mps":.18,"lookahead_radius_m":.8,
+        "curvature_window_m":.2,"goal_xy_tolerance_m":.07,
         "goal_yaw_tolerance_deg":12.,
-        "progress_radius_m":.25,
-        "progress_timeout_sim_s":17.,
+        "progress_radius_m":.25,"progress_timeout_sim_s":17.,
     })
-    values["rpp"].update({
-        "lookahead_dist":.5,"min_lookahead_dist":.3,
-        "max_lookahead_dist":.9,"lookahead_time":1.4,
-        "use_velocity_scaled_lookahead_dist":False,
-        "use_regulated_linear_velocity_scaling":False,
-        "regulated_linear_scaling_min_radius":.8,
-        "regulated_linear_scaling_min_speed":.12,
-        "use_rotate_to_heading":False,
-        "rotate_to_heading_angular_vel":1.3,
-        "rotate_to_heading_min_angle_deg":33.,
-        "max_angular_accel":2.2,
-        "min_approach_linear_velocity":.08,
-    })
-    values["smc"].update({
-        "cross_gain":2.3,"heading_gain":2.7,"surface_lambda":1.7,
-        "switch_gain":1.4,"boundary_layer":.42,"lookahead_m":.45,
-        "feedforward_gain":1.3,"goal_heading_gain":3.2,
-        "goal_align_threshold_m":.20,"max_angular_cmd":1.8,
-    })
-    result=generate(values,tmp_path)
-    cfg=yaml.safe_load(Path(result["nav2_params"]).read_text())
-    node=cfg["controller_server"]["ros__parameters"]
-    shared=values["shared"]
+    cfg["rpp"].update({"lookahead_dist":.5,"min_lookahead_dist":.3,
+                       "max_lookahead_dist":.9,"lookahead_time":1.4,
+                       "max_angular_accel":2.2})
+    cfg["smc_1s"].update({"lambda_y":3.0,"lambda_x":.9,
+                           "eta":.7,"use_saturation":False})
+    cfg["smc_2s"].update({"lambda_y":1.7,"k_s":2.2,
+                           "phi_x":.4,"max_angular_cmd":1.8})
+    result=generate(cfg,tmp_path)
+    node=yaml.safe_load(Path(result["nav2_params"]).read_text())[
+        "controller_server"]["ros__parameters"]
     assert node["goal_checker"]["xy_goal_tolerance"]==.07
     assert node["goal_checker"]["yaw_goal_tolerance"]==pytest.approx(
         math.radians(12.))
     assert node["progress_checker"]["required_movement_radius"]==.25
     assert node["progress_checker"]["movement_time_allowance"]==17.
     assert node["RPP"]["desired_linear_vel"]==.18
-    for name,expected in values["rpp"].items():
-        if name=="rotate_to_heading_min_angle_deg":
-            assert node["RPP"]["rotate_to_heading_min_angle"]==pytest.approx(
-                math.radians(expected))
-        else:
-            assert node["RPP"][name]==expected
-    assert node["SMC"]["linear_speed"]==.18
-    for name,expected in values["smc"].items():
-        assert node["SMC"][name]==expected
-    plugin=(REPO/"src/scrobot_tracker_controller/src/smc_controller.cpp").read_text()
-    for name in ("surface_lambda","feedforward_gain","goal_heading_gain",
-                 "goal_align_threshold_m","max_angular_cmd"):
-        assert '"'+name+'"' in plugin
+    assert node["RPP"]["lookahead_time"]==1.4
+    assert node["SMC_1S"]["linear_speed"]==node["SMC_2S"]["linear_speed"]==.18
+    for name in ("SMC_1S","SMC_2S"):
+        assert node[name]["lookahead_radius_m"]==.8
+        assert node[name]["curvature_window_m"]==.2
+        for key,expected in cfg[name.lower()].items():
+            assert node[name][key]==expected, (name,key)
+    assert node["SMC_1S"]["lambda_x"]==.9
+    assert "lambda_x" not in node["SMC_2S"]
+    assert node["SMC_1S"]["use_saturation"] is False
 
 
-def test_tuning_ui_has_three_cards_all_bound_and_separate_resets():
+def test_tuning_ui_has_four_cards_and_source_math():
     html=(HERE/"web/index.html").read_text()
     js=(HERE/"web/app.js").read_text()
     server=(HERE.parent/"planning/web_server.py").read_text()
-    for name in ("shared","rpp","smc"):
+    for name in ("shared","rpp","smc_1s","smc_2s"):
         assert 'id="card-'+name+'"' in html
         assert 'id="reset-'+name+'"' in html
     assert 'tracker-tuning-grid' in html
@@ -296,17 +283,41 @@ def test_tuning_ui_has_three_cards_all_bound_and_separate_resets():
     assert "const x=await api('/config');setForm(x);" in js
     assert "defaultSettings=await api('/defaults')" in js
     assert '"/api/tracker/defaults"' in server
-    assert "shared:{" in js and "rpp:{" in js and "smc:{" in js
-    assert "highlightActiveController()" in js
-    for control in (
-        "goal-xy","goal-yaw","progress-radius","progress-timeout",
-        "rpp-lookahead","rpp-lookahead-min","rpp-lookahead-max",
-        "rpp-velocity-lookahead","rpp-curvature-slow","rpp-rotate",
-        "smc-lambda","smc-feedforward","smc-goal-heading",
-        "smc-goal-threshold","smc-max-angular",
-    ):
+    assert "smc_1s:readFullSMC('1')" in js
+    assert "smc_2s:readFullSMC('2')" in js
+    assert "λy" in html and "λx" in html and "ωR" in html
+    assert "sat(z)" in html
+    for control in ("goal-xy","goal-yaw","progress-radius",
+                    "carrot-radius","curvature-window","rpp-lookahead",
+                    "smc1-lambda-y","smc2-lambda-y",
+                    "smc1-use-saturation","smc2-use-saturation"):
         assert 'id="'+control+'"' in html
-        assert "'"+control+"'" in js
+
+
+def test_robot_centered_pp_circle_carrot_and_kinematic_surfaces():
+    straight=[(0.,0.),(4.,0.),(8.,0.)]
+    s,reason=circle_carrot(straight,1.,0.,.6)
+    assert s==pytest.approx(1.6)
+    assert reason=="intersection"
+    ref=carrot_reference(straight,1.,0.,.4,.6,.14)
+    assert ref["x"]==pytest.approx(1.6)
+    assert ref["v_ref"]==pytest.approx(.4)
+    assert ref["w_ref"]==pytest.approx(0.)
+    assert ref["yaw"]==pytest.approx(0.)
+    e=carrot_errors(1.,.5,0.,ref)
+    assert e["ex"]==pytest.approx(.6)
+    assert e["ey"]==pytest.approx(-.5)
+    assert e["etheta"]==pytest.approx(0.)
+    cfg=defaults()
+    one=surfaces(e,cfg,"SMC_1S")
+    two=surfaces(e,cfg,"SMC_2S")
+    assert one["s1"]==pytest.approx(
+        e["etheta"]+2.5*e["ey"]+.6*e["ex"])
+    assert two["s1"]==pytest.approx(e["ex"])
+    assert two["s2"]==pytest.approx(e["etheta"]+2.5*e["ey"])
+    assert one["D"]==two["D"]==pytest.approx(1+2.5*e["ex"])
+    assert circle_carrot(straight,7.95,0.,.6)[1]=="end_fallback"
+
 
 
 def test_native_smc_plugin_has_complete_jazzy_interface():
@@ -316,7 +327,12 @@ def test_native_smc_plugin_has_complete_jazzy_interface():
         assert method in code
     assert "nav2_core::Controller" in code
     assert "kMaxWheelMps=0.50" in code
-    assert "sat(surface/boundary_)" in code
+    assert "sat(active/phi_)" in code
+    assert "sat(ex/phix_)" in code
+    assert "lambda_x_*gx" in code
+    assert "1.0+lambda_y_*ex" in code
+    assert "SMC_1S" in code and "SMC_2S" in code
+    assert "first forward path/circle intersection" in code
     plugins=(REPO/"src/scrobot_tracker_controller/smc_plugins.xml").read_text()
     assert "scrobot_tracker_controller::SMCController" in plugins
     build=(REPO/"src/scrobot_tracker_controller/CMakeLists.txt").read_text()
