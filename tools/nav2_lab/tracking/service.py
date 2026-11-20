@@ -22,6 +22,7 @@ from shared.lab_ui import GazeboGUI,log_tail
 from shared.sim_speed import get as speed_get,save as speed_save
 from planning.process_metrics import ProcessSampler
 from tracking.core import defaults,validate,reference,initial_pose
+from tracking.physical_limits import capabilities
 from tracking.world import write_world
 from tracking.configuration import generate
 from tracking.health import controller_failure
@@ -177,6 +178,10 @@ class TrackingService:
 
     def defaults(self):
         return deepcopy(defaults())
+
+    def physical_limits(self):
+        """Read-only true URDF/95rpm speed capabilities used by all trackers."""
+        return capabilities()
 
     def config(self):
         saved=read_lab("tracking")
