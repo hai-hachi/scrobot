@@ -289,8 +289,17 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
 <g id="error-grid"></g><g id="error-series"></g></svg>
 <div id="plot-legend" class="plot-legend" aria-live="polite">Select saved trials below to compare trajectories.</div>
 <p class="fineprint" id="plot-status">Select a saved run's Plot checkbox to overlay its error curve.</p>
-<div class="common-rmse" id="common-rmse" aria-live="polite">Select two or more saved experiments for a matching-duration RMSE comparison.</div>
-<p class="fineprint" id="rmse-method-note">Full-run RMSE uses simulated-time trapezoidal integration of squared ground-truth cross-track error. Trials with different durations can have different full-run RMSE even if their early curves overlap. Older experiments retain their original calculation.</p>
+<div class="convergence-tuning">
+  <div class="between convergence-label">
+    <label for="convergence-tolerance"><strong>Convergence tolerance zone</strong> · |e<sub>y</sub>| ≤ ε</label>
+    <strong id="convergence-value">±0.05 m</strong>
+  </div>
+  <input id="convergence-tolerance" type="range" min="0.01" max="0.50" step="0.01" value="0.05">
+  <div class="between convergence-scale"><span>0.01 m · strict</span><span>0.50 m · loose</span></div>
+  <p class="fineprint">Convergence time is the first entry into the tolerance band followed by at least 1.0 simulated second continuously within it, and no later exit before the comparison ends. The green band on the chart follows this slider.</p>
+</div>
+<div class="common-rmse" id="common-rmse" aria-live="polite">Select a saved experiment to inspect its full-run RMSE, same-duration RMSE and convergence time.</div>
+<p class="fineprint" id="rmse-method-note">Both RMSE values use simulated-time trapezoidal integration of squared ground-truth cross-track error. The common-duration value covers the same elapsed time for every selected run; the full-run value covers each run's complete duration. Convergence uses the adjustable tolerance above. Older experiments keep their original RMSE results.</p>
 <p id="trial-details" class="fineprint">Run a controller to record ground-truth error, path and heading metrics.</p></div>
 <div class="panel">
   <h2>SMC phase portraits &amp; boundary layers</h2>
