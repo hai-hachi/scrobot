@@ -350,6 +350,15 @@ def test_live_cumulative_rmse_and_extrema_preserving_plot_decimation():
     assert visual[-1]==analyzer.series[-1]
     assert max(p["error_m"] for p in visual)==pytest.approx(1.3)
     assert full["max_abs_cross_track_m"]==pytest.approx(1.3)
+    # |e| display must also retain narrow dips to zero even when a
+    # min/max-signed decimator would otherwise lose them.
+    zigzag=[{"sim_s":n*.01,"error_m":(-1.,0.,1.)[n%3]}
+            for n in range(2401)]
+    down=downsample_error_series(zigzag,600)
+    assert len(down)<=600
+    assert any(p["error_m"]==0. for p in down)
+    assert min(p["error_m"] for p in down)==-1.
+    assert max(p["error_m"] for p in down)==1.
     assert full["cross_track_rmse_m"]==pytest.approx(
         integrate_squared_error(analyzer.series)["rmse_m"],abs=.00001)
 
