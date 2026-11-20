@@ -41,6 +41,19 @@ def filter_update(state, reference, dt, tau, gain):
     return state + alpha * (gain * reference - state)
 
 
+def bound_wheel_rpm(previous,filtered,dt,max_rpm,max_accel_rpmps):
+    """Final individual wheel acceleration and RPM clamp after motor filtering."""
+    if not all(map(math.isfinite,(
+            previous,filtered,dt,max_rpm,max_accel_rpmps))):
+        raise ValueError("Non-finite simulated motor state")
+    if dt<0 or max_rpm<=0 or max_accel_rpmps<0:
+        raise ValueError("Invalid simulated motor limits")
+    if max_accel_rpmps>0:
+        delta=max_accel_rpmps*dt
+        filtered=max(previous-delta,min(previous+delta,filtered))
+    return max(-max_rpm,min(max_rpm,filtered))
+
+
 def main():
     import rclpy
     from geometry_msgs.msg import TwistStamped
@@ -129,12 +142,9 @@ def main():
                 filtered = filter_update(
                     self.current[i], self.reference[i], dt,
                     self.tau[i], self.gain[i])
-                if self.max_wheel_accel_rpmps>0:
-                    delta = self.max_wheel_accel_rpmps*dt
-                    filtered=max(self.current[i]-delta,
-                                 min(self.current[i]+delta,filtered))
-                self.current[i] = max(-self.max_wheel_rpm,
-                                      min(self.max_wheel_rpm,filtered))
+                self.current[i] = bound_wheel_rpm(
+                    self.current[i],filtered,dt,
+                    self.max_wheel_rpm,self.max_wheel_accel_rpmps)
             linear, angular = wheel_rpm_to_twist(*self.current)
             out = TwistStamped()
             out.header.stamp = self.get_clock().now().to_msg()
