@@ -24,7 +24,7 @@ border-radius:8px;background:#101b26;margin:17px 0}
 
 
 /* Three independent tuning cards: shared / RPP / SMC. */
-.tracker-tuning-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+.tracker-tuning-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;align-items:start}
 .tracker-tuning-grid .tuning-card{min-width:0;margin:0;padding:17px;display:flex;flex-direction:column;gap:11px;transition:border-color .15s ease,opacity .15s ease}
 .tracker-tuning-grid .tuning-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .tracker-tuning-grid .tuning-head h2{margin:0;font-size:16px}
@@ -63,8 +63,38 @@ padding:8px 0;border-bottom:1px solid var(--line);font-size:11px;color:var(--mut
 #history-body tr.plot-selected td:first-child{border-left:3px solid var(--accent)}
 #history-body tr td:first-child{text-align:center}
 #error-chart text{font-family:inherit;font-size:11px;fill:#a4bac9}
-#error-chart .axis-label{font-size:12px;font-weight:600;fill:#d3e2eb}
-#error-chart .tick-label{font-size:11px;fill:#93a9b7}
+#error-chart .axis-label{font-size:6px;font-weight:600;fill:#d3e2eb}
+#error-chart .tick-label{font-size:5.5px;fill:#93a9b7}
 #error-chart .empty-chart{font-size:13px;fill:#94abb9}
 @media (max-width:700px){.plot-toolbar{display:block}.plot-live-toggle{margin-top:9px}
   .plot-actions{width:100%}#error-chart{min-height:200px}}
+
+/* Source-matched mathematical formulas and four-card controller comparison. */
+.math-equations{border:1px solid var(--line);border-radius:8px;
+  background:#0c1e28;padding:9px 10px;display:grid;gap:6px;overflow-x:auto}
+.math-eq{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:11px;line-height:1.6;white-space:normal;overflow-wrap:anywhere;color:#dce9f0}
+.equation-guide{margin-top:14px;padding:18px}
+.equation-guide h3{margin:0 0 10px}
+.equation-guide .math-eq{padding:4px 0}
+.phase-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.phase-grid>div{min-width:0;border:1px solid var(--line);border-radius:9px;
+  background:#101b26;padding:10px}
+.phase-grid h3{font-size:12px;margin:0 0 8px;color:var(--text)}
+.phase-grid svg{display:block;width:100%;max-height:260px}
+.phase-grid .tick-label{font-size:5.5px}
+.phase-grid .axis-label{font-size:6px}
+#timeline-map{display:block;width:100%;background:#101b26;
+  border:1px solid var(--line);border-radius:8px;max-height:400px}
+.timeline-control{display:grid;grid-template-columns:170px minmax(0,1fr) 90px;
+  gap:12px;align-items:center;margin:15px 0}
+.timeline-control label{font-size:12px}
+.timeline-control input{accent-color:var(--accent);width:100%}
+.timeline-control strong{text-align:right;font-variant-numeric:tabular-nums}
+#timeline-fields{line-height:1.8}
+@media(max-width:1380px){.tracker-tuning-grid{
+  grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:750px){.tracker-tuning-grid{grid-template-columns:1fr}
+ .phase-grid{grid-template-columns:1fr}
+ .timeline-control{grid-template-columns:1fr 2fr}.timeline-control strong{
+  grid-column:1/-1;text-align:left}}
