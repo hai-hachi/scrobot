@@ -26,7 +26,7 @@ namespace scrobot_tracker_controller
 // injected from that URDF by tracking/configuration.py at every lab run.
 constexpr double kWheelHalfBase=0.21;
 constexpr double kWheelRadius=0.050;
-constexpr double kWheelMaxRpm=95.0;
+constexpr double kWheelMaxRpm=100.0;
 constexpr double kWheelRatedMps=0.50;
 constexpr double kPi=3.1415926535897932384626433832795;
 constexpr double kWheelRpmMps=kWheelRadius*2*kPi*kWheelMaxRpm/60.0;
