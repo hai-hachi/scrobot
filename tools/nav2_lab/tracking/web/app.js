@@ -18,6 +18,7 @@ const plotRuns=new Map();
 const pendingPlotRuns=new Set();
 const MAX_PLOT_RUNS=8;
 let comparisonKey=null,comparisonRequest=0;
+let convergenceRefreshTimer=null;
 const PLOT_PALETTE=['#55C9F6','#B89BFF','#50DDB9','#FF86A2',
   '#E8D46C','#8CACFF','#DE96CE','#82E3E6'];
 const LIVE_PLOT_COLOR='#F4BB66';
@@ -342,12 +343,16 @@ function plotLines(){
   }
   return lines;
 }
-function renderChart(){
+function renderChart(skipComparison=false){
   const grid=$('error-grid'),plot=$('error-series');
   const legend=$('plot-legend');
   grid.replaceChildren();plot.replaceChildren();legend.replaceChildren();
   const lines=plotLines();
-  const scales=window.TrackerChartScales.scales(lines);
+  const tolerance=Number($('convergence-tolerance').value);
+  const isAbsolute=$('plot-absolute').checked;
+  const bounds=[...lines,{points:[
+    {t:0,e:tolerance},{t:0,e:isAbsolute?0:-tolerance}]}];
+  const scales=window.TrackerChartScales.scales(bounds);
   const fmtAxis=window.TrackerChartScales.label;
   // SVG dimensions are fixed in viewBox; the browser scales it responsively.
   const L=77,R=824,T=18,B=196;
@@ -368,6 +373,21 @@ function renderChart(){
     chartText(grid,fmtAxis(e,scales.yStep),
       {x:L-10,y:y+4,'text-anchor':'end',class:'tick-label'});
   }
+  // The actual same tolerance used by convergence_time() is shown in
+  // either absolute mode (0..epsilon) or signed mode (-epsilon..+epsilon).
+  const bandTop=Math.max(T,Math.min(B,yTo(tolerance)));
+  const bandBottom=Math.max(T,Math.min(B,yTo(isAbsolute?0:-tolerance)));
+  grid.insertBefore(shape('rect',{
+    x:L,y:bandTop,width:R-L,height:Math.max(0,bandBottom-bandTop),
+    fill:'#50DDB9','fill-opacity':'.10'
+  }),grid.firstChild);
+  const limits=isAbsolute?[tolerance]:[-tolerance,tolerance];
+  for(const value of limits){
+    addLine(grid,[L,yTo(value)],[R,yTo(value)],'#50DDB9',1.1,'5 5');
+  }
+  chartText(grid,'ε = '+tolerance.toFixed(2)+' m',
+    {x:R-3,y:Math.max(T+9,Math.min(B-4,yTo(tolerance)-5)),
+     'text-anchor':'end',class:'zone-label'});
   addLine(grid,[L,T],[L,B],'#839CAB',1.4);
   addLine(grid,[L,B],[R,B],'#839CAB',1.4);
   chartText(grid,'Elapsed simulation time (s)',
@@ -423,72 +443,107 @@ function renderChart(){
       'Showing |e| (the quantity squared for RMSE).':
       'Signed e: a curve lower on the chart can still have larger |e|.')+
     ' Historical saved RMSE values are preserved.';
-  refreshCommonComparison();
+  if(!skipComparison)refreshCommonComparison();
 }
 async function refreshCommonComparison(){
   const selected=[...plotRuns.keys()].sort();
-  const key=JSON.stringify(selected);
+  const tolerance=Number($('convergence-tolerance').value);
+  const key=JSON.stringify([selected,tolerance]);
   if(comparisonKey===key)return;
   comparisonKey=key;
   const request=++comparisonRequest;
   const view=$('common-rmse');
   view.replaceChildren();
-  if(selected.length<2){
-    view.textContent='Select two or more saved runs to compare their RMSE '+
-      'over exactly the same elapsed simulated time.';
+  if(!selected.length){
+    view.textContent='Select a saved experiment using Plot below. '+
+      'Choose two or more to compare all three metrics over identical time.';
     return;
   }
-  view.textContent='Calculating matching-duration RMSE from the saved '+
-    'ground-truth samples…';
+  view.textContent='Computing three metrics from the saved full-resolution '+
+    'ground-truth error samples…';
   try{
-    const query=selected.map(n=>'name='+encodeURIComponent(n)).join('&');
+    const query=selected.map(n=>'name='+encodeURIComponent(n)).join('&')+
+      '&tolerance_m='+encodeURIComponent(tolerance.toFixed(2));
     const result=await api('/history/comparison?'+query);
     if(request!==comparisonRequest)return;
     view.replaceChildren();
+
     const heading=document.createElement('strong');
-    heading.textContent='Same-duration RMSE: 0–'+
-      fmt(result.common_end_sim_s,3)+' simulated seconds';
+    heading.textContent=selected.length===1?
+      'Single-run tracking metrics':
+      'Common-duration tracking comparison (0–'+
+        fmt(result.common_end_sim_s,3)+' sim-s)';
     view.append(heading);
-    const detail=document.createElement('p');
-    detail.className='fineprint';
-    detail.textContent='Integrated from the complete saved error records '+
-      '(not the plot drawing): lower is better. Each full-run RMSE above '+
-      'covers its own duration.';
-    view.append(detail);
+
+    const note=document.createElement('p');
+    note.className='fineprint';
+    note.textContent='Convergence: |eᵧ| ≤ '+tolerance.toFixed(2)+
+      ' m, continuously until the comparison ends, with at least '+
+      fmt(result.minimum_settle_sim_s,1)+' sim-s of stable observations. '+
+      'Lower is better for every metric.';
+    view.append(note);
+
+    const header=document.createElement('div');
+    header.className='comparison-metric-row comparison-head';
+    for(const label of [
+      'Saved experiment','Full-run RMSE (m)',
+      'Common-duration RMSE (m)','Convergence time (sim-s)']){
+      const cell=document.createElement('span');
+      cell.textContent=label;
+      header.append(cell);
+    }
+    view.append(header);
+
     for(const entry of result.runs){
       const record=plotRuns.get(entry.name);
       const row=document.createElement('div');
-      row.className='common-rmse-row';
+      row.className='comparison-metric-row';
+      const who=document.createElement('span');
+      who.className='comparison-name';
       const dot=document.createElement('span');
       dot.className='plot-legend-swatch';
       dot.style.borderColor=record?.color||'#aaa';
       const label=document.createElement('span');
-      label.textContent=(record?.controller||'Controller')+
-        ' · '+entry.name+
-        (entry.full_resolution?'':' · legacy sparse estimate');
-      const score=document.createElement('strong');
-      score.textContent=fmt(entry.rmse_m,4)+' m';
-      row.append(dot,label,score);
+      label.textContent=(record?.controller||'Controller')+' · '+
+        (record?.path||'path')+' · '+entry.name+
+        (entry.full_resolution?'':' (legacy estimate)');
+      who.append(dot,label);
+      const full=document.createElement('strong');
+      full.textContent=entry.summary_rmse_m==null?'—':
+        fmt(entry.summary_rmse_m,4);
+      full.title='Original full-trial RMSE over that run\'s own duration';
+      const shared=document.createElement('strong');
+      shared.textContent=entry.rmse_m==null?'—':fmt(entry.rmse_m,4);
+      shared.title='Recomputed from full saved samples through the common end time';
+      const convergence=document.createElement('strong');
+      convergence.textContent=entry.convergence_sim_s==null?
+        'Not converged':fmt(entry.convergence_sim_s,2)+' s';
+      convergence.title=entry.convergence_sim_s==null?
+        'Never entered and stayed within tolerance for the required hold':
+        'First sustained entry into tolerance zone from tracking start';
+      row.append(who,full,shared,convergence);
       view.append(row);
     }
-    const warnings=[];
-    if(!result.all_full_resolution)warnings.push(
-      'Older saved runs contain decimated error samples; their same-window '+
-      'RMSE is only an estimate and does not replace their original table values');
-    if(!result.same_path)warnings.push('Paths differ');
-    if(!result.same_start_pose)warnings.push('Starting poses differ');
-    if(!result.same_reference_speed)warnings.push('Reference speeds differ');
-    if(result.runs.some(r=>r.excluded_gt_gaps>0))warnings.push(
-      'Some ground-truth intervals were missing and excluded from integration');
-    if(warnings.length){
-      const note=document.createElement('p');
-      note.className='fineprint common-rmse-warning';
-      note.textContent='Caution: '+warnings.join('; ')+'.';
-      view.append(note);
+
+    const cautions=[];
+    if(!result.all_full_resolution)cautions.push(
+      'Legacy runs have sparse plotted samples: common RMSE and convergence '+
+      'are estimates. Their original full-run RMSE remains unchanged');
+    if(!result.same_path)cautions.push('Paths differ');
+    if(!result.same_start_pose)cautions.push('Starting poses differ');
+    if(!result.same_reference_speed)cautions.push('Reference speeds differ');
+    if(result.runs.some(r=>r.excluded_gt_gaps>0))cautions.push(
+      'Missing ground-truth intervals were excluded from RMSE and cannot '+
+      'count as sustained convergence');
+    if(cautions.length){
+      const warning=document.createElement('p');
+      warning.className='fineprint common-rmse-warning';
+      warning.textContent='Caution: '+cautions.join('; ')+'.';
+      view.append(warning);
     }
   }catch(error){
     if(request===comparisonRequest)
-      view.textContent='Matching-duration calculation unavailable: '+error.message;
+      view.textContent='Comparison calculation unavailable: '+error.message;
   }
 }
 function nextPlotColor(){
@@ -1056,6 +1111,21 @@ for(const [id,path,message]of [
 }
 $('plot-live').onchange=renderChart;
 $('plot-absolute').onchange=renderChart;
+$('convergence-tolerance').oninput=()=>{
+  const value=Number($('convergence-tolerance').value);
+  $('convergence-value').textContent='±'+value.toFixed(2)+' m';
+  // Redraw the threshold immediately. Debounce expensive saved-file
+  // integration until the user finishes dragging the slider.
+  comparisonRequest++;
+  comparisonKey=null;
+  renderChart(true);
+  clearTimeout(convergenceRefreshTimer);
+  convergenceRefreshTimer=setTimeout(refreshCommonComparison,140);
+};
+$('convergence-tolerance').onchange=()=>{
+  clearTimeout(convergenceRefreshTimer);
+  refreshCommonComparison();
+};
 $('timeline-run').onchange=()=>loadTimeline($('timeline-run').value);
 $('timeline-slider').oninput=drawTimeline;
 $('clear-plot').onclick=()=>{
