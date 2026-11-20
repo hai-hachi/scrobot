@@ -330,12 +330,12 @@ class Trial(Node):
                        timeout_wall=160.)
             if not self.last_gt:
                 raise RuntimeError("Ground truth unavailable")
-            self.output["status"]="running"
+            # Do not include controller-server activation, FollowPath
+            # dispatch, or rejected-goal waiting in RMSE/tracking plots.
+            # The measurement window starts only after goal acceptance.
+            self.output["status"]="dispatching"
             self.output["controller_lifecycle_state"]=self.controller_lifecycle_state
             self.output["controller_active"]=self.controller_active
-            self.output["start_sim_s"]=self.clock()
-            self.active=True
-            self.last_write=time.monotonic()
             atomic_json(summary,self.output)
             goal=FollowPath.Goal()
             goal.path=ros_path(self.points,self.get_clock().now().to_msg())
@@ -365,6 +365,17 @@ class Trial(Node):
                     "Nav2 FollowPath rejected "+goal.controller_id+
                     " after active lifecycle confirmation; inspect "
                     "controller_server logs and goal configuration")
+            # Identical measurement boundary for RPP, SMC-1s and SMC-2s:
+            # begin after FollowPath accepts the goal, not when the
+            # action server becomes visible or the request was sent.
+            self.samples.clear()
+            self.tracking_metrics=TrackingMetrics(self.points)
+            self.timeline.clear()
+            self.output["start_sim_s"]=self.clock()
+            self.output["status"]="running"
+            self.active=True
+            self.last_write=time.monotonic()
+            atomic_json(summary,self.output)
             result_future=handle.get_result_async()
             self.until(result_future.done,
                        timeout_sim=self.config["shared"]["max_sim_duration_s"])
