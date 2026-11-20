@@ -144,7 +144,7 @@ def test_tracker_params_preserve_real_controller_and_physics(tmp_path):
     assert cs["RPP"]["plugin"]=="nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
     for mode in ("SMC_1S","SMC_2S"):
         assert cs[mode]["plugin"]=="scrobot_tracker_controller::SMCController"
-        assert cs[mode]["linear_speed"]==.3
+        assert cs[mode]["linear_speed"]==.4
         assert cs[mode]["lookahead_radius_m"]==.6
         assert cs[mode]["curvature_window_m"]==.14
     local=params["local_costmap"]["local_costmap"]["ros__parameters"]
