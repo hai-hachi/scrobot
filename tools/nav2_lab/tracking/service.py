@@ -389,7 +389,9 @@ class TrackingService:
               "robot_x:="+str(pose["x"]),"robot_y:="+str(pose["y"]),
               "robot_yaw:="+str(math.radians(pose["yaw_deg"])),
               "ground_truth_rate_hz:="+str(odom["ground_truth_hz"]),
-              "enable_motor_response:="+("true" if motor["model"]=="first_order" else "false")]
+              "enable_motor_response:="+("true" if motor["model"]=="first_order" else "false"),
+              "motor_max_rpm:="+str(capabilities()["wheel_max_rpm"]),
+              "motor_accel_rpmps:="+str(capabilities()["wheel_max_rpm_per_s"])]
         args.extend(f"{name}:={value}" for name,value in physics.items())
         args.extend(f"{name}:={motor[name]}" for name in (
             "tau_left","tau_right","gain_left","gain_right"))
