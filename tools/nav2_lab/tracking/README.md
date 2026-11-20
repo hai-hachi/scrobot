@@ -126,11 +126,10 @@ teleporting the displaced robot without resetting wheel/odom state.
   with the published `FollowPath` production settings as the baseline
   (and the explicitly chosen test speed). Collision detection is disabled
   solely because the empty test world has no obstacles.
-- `SMC`: experimental C++ `nav2_core::Controller` plugin,
-  `scrobot_tracker_controller::SMCController`, using a sliding surface
-  combining body yaw and path-relative cross-track errors, bounded
-  saturation in place of discontinuous `sign(s)`, a curvature lookahead
-  feedforward, and a near-goal heading alignment step.
+- `SMC_1S` and `SMC_2S`: experimental **full** C++ `nav2_core::Controller`
+  laws with the same PP-circle carrot, body-frame `ex,ey,etheta`, nominal
+  `vR,omegaR`, denominator `D`, longitudinal `gx`, and angular reaching
+  `q`. See the exact mathematical definitions below.
 - Both are hosted by the same Nav2 ControllerServer at **25 simulated Hz**,
   with the same `FollowPath` action, progress/goal checkers and
   100 simulated Hz `diff_drive_controller`. Both send their
@@ -191,44 +190,30 @@ update the branch, **Stop** the old tracker, then **Start / Reset** so
 free-space costmap plugins. Merely refreshing the browser does not regenerate
 the YAML or revive a crashed Nav2 controller.
 
-## Three-box Controller tuning
+## Four-box Controller tuning
 
-The **Controller tuning** tab presents three separate, responsive cards.
-All three remain visible; the selected controller is highlighted and the
-other controller can still be edited for later comparisons.
+The **Controller tuning** tab has separate cards for **Shared**, **RPP**,
+**SMC-1s full**, and **SMC-2s full**. Selecting one controller highlights its
+card while keeping the others available for fair follow-up comparisons.
 
-1. **Shared parameters:** reference speed, simulated trial timeout,
-   Nav2 goal XY and yaw tolerances, progress-check radius and progress
-   time allowance. These values apply equally to RPP and SMC, including
-   the common wheel-speed safety envelope, which remains locked to the
-   calibrated differential drive.
-2. **RPP tuning:** fixed and velocity-scaled lookahead (minimum,
-   maximum and lookahead time), curvature speed regulation, minimum
-   regulated speed, rotate-to-heading controls, angular acceleration
-   and final approach speed. Every field updates the corresponding
-   `nav2_regulated_pure_pursuit_controller` parameter in the generated
-   `tracking_controller.yaml`. Minimum RPP speeds are safely capped
-   by the Shared desired forward speed.
-3. **SMC tuning:** lateral and heading gains, sliding-surface heading
-   weight (lambda), switching gain and continuous boundary layer,
-   curvature lookahead, curvature feedforward gain, goal heading gain,
-   final-heading approach threshold and maximum angular command.
-   The SMC C++ plugin declares and uses all of these parameters.
+Shared settings specify nominal reference speed (default 0.40m/s from the
+source SMC lab), goal/progress checkers and a PP-circle lookahead radius
+(default 0.60m) and three-point curvature half-window (0.14m) for both SMCs.
+RPP uses its independent Nav2-regulated carrot algorithm with its own
+lookahead settings; the speed reference is shared.
 
-Each card has its **own Reset** button. Reset changes only that category
-in the browser (it does not discard the path/pose or change the other
-controller). **Save Lab YAML** commits the settings to
-`tools/configs/labs/tracking_lab.yaml`, and **Load Saved YAML** restores
-them. Earlier YAML files with flat desired speed and trial timeout and
-five original SMC gains are migrated automatically, preserving saved
-values and filling only the new defaults. This does not publish anything
-to production.
+SMC-1s gains include `lambda_y,lambda_x,k_s,k_x,eta,phi,eta_x,phi_x`,
+saturation switch, denominator guard and angular/acceleration limits.
+SMC-2s has the same gains except `lambda_x`, which is not in its law.
+Both are implemented as instances of the same C++ controller plugin and use
+separate ROS parameter namespaces `SMC_1S` and `SMC_2S`.
 
-Changing tuning parameters requires a new controller_server configuration:
-the Lab's **Run tracking** action regenerates the tracking-world
-configuration and restarts the environment when settings differ from
-the current launch. It does not dynamically reconfigure an already
-running `FollowPath` action.
+Each card has an independent Reset button. **Save Lab YAML** persists all
+tuning into `tools/configs/labs/tracking_lab.yaml`. Existing simplified
+SMC saved settings are migrated to fresh full-law defaults, **not mapped
+numerically into unrelated gains**; older experiment snapshots remain
+untouched. No lab controller is published to production automatically.
+Changing parameters requires a fresh Tracker run to apply them to Nav2.
 
 ## Metrics and performance
 
