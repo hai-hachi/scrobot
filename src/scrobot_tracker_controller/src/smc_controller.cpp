@@ -27,7 +27,7 @@ namespace scrobot_tracker_controller
 constexpr double kWheelHalfBase=0.21;
 constexpr double kWheelRadius=0.050;
 constexpr double kWheelMaxRpm=100.0;
-constexpr double kWheelRatedMps=0.50;
+constexpr double kWheelRatedMps=0.5235987755982988;
 constexpr double kPi=3.1415926535897932384626433832795;
 constexpr double kWheelRpmMps=kWheelRadius*2*kPi*kWheelMaxRpm/60.0;
 constexpr double kMaxWheelMps=kWheelRpmMps<kWheelRatedMps?
@@ -97,8 +97,13 @@ public:
       throw std::runtime_error("Invalid physical differential-drive wheel limits");
     max_angular_=std::min(requested_max_angular,
                           wheel_max_mps_/wheel_half_base_);
-    accel_linear_=param("max_linear_accel",1.0);
-    accel_angular_=param("max_angular_accel",2.0);
+    // Per-controller tuning may be more conservative, never faster than
+    // 100 RPM reached in 0.25 s. The final command_router still enforces
+    // the *coupled per-wheel* acceleration envelope for all controllers.
+    const double wheel_accel=wheel_max_mps_/0.25;
+    accel_linear_=std::min(param("max_linear_accel",1.0),wheel_accel);
+    accel_angular_=std::min(
+      param("max_angular_accel",2.0),wheel_accel/wheel_half_base_);
     if(vr_nominal_<=0 || vr_nominal_>wheel_max_mps_ || lookahead_<=0 ||
        curvature_window_<=0 || lambda_y_<=0 || lambda_x_<0 ||
        ks_<=0 || kx_<=0 || eta_<0 || etax_<0 ||
@@ -200,7 +205,9 @@ public:
     v=std::clamp(v,0.,wheel_max_mps_*speed_ratio_);
     omega=std::clamp(omega,-max_angular_,max_angular_);
 
-    // Rate-limits happen AFTER computing the exact full-law requests.
+    // SMC-specific rate preferences happen AFTER the full-law requests.
+    // The shared 100 sim-Hz command router subsequently bounds changes
+    // of each wheel to <= 400 RPM/s regardless of combined v/omega motion.
     const double t=now.seconds();
     if(last_command_stamp_>=0 && t>last_command_stamp_) {
       const double dt=std::min(.5,t-last_command_stamp_);
