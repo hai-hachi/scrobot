@@ -150,10 +150,33 @@
         mi('Δ'),mi('t'),mo(';'),mo('|'),mi('Δ'),mi('ω'),mo('|'),mo('≤'),
         sub('α','max'),mi('Δ'),mi('t'))
     },
+    'wheel-kinematics':{
+      tex:'v_L=v-\\frac{b}{2}\\omega,\\qquad v_R=v+\\frac{b}{2}\\omega,\\qquad b=0.420\\;\\mathrm{m}',
+      mml:row(sub('v','L'),eq,mi('v'),minus,
+        frac(mi('b'),mn('2')),mi('ω'),mo(';'),
+        sub('v','R'),eq,mi('v'),plus,
+        frac(mi('b'),mn('2')),mi('ω'),mo(';'),
+        mi('b'),eq,mn('0.420'),mi('m'))
+    },
+    'wheel-rpm':{
+      tex:'v_{\\mathrm{wheel,max}}=\\min\\!\\left(0.50,\\frac{95\\cdot 2\\pi\\cdot0.050}{60}\\right)=0.49742\\;\\mathrm{m/s}',
+      mml:row(sub('v','wheel,max'),eq,
+        fn('min',row(mn('0.50'),mo(','),
+          frac(row(mn('95'),mo('×'),mn('2'),mi('π'),mn('0.050')),
+               mn('60')))),
+        eq,mn('0.49742'),mi('m/s'))
+    },
     'limit-wheel':{
-      tex:'|v_{\\mathrm{cmd}}|+0.21\\,|\\omega_{\\mathrm{cmd}}|\\le 0.50\\;\\mathrm{m/s}',
-      mml:row(mo('|'),sub('v','cmd'),mo('|'),plus,mn('0.21'),
-        mo('|'),sub('ω','cmd'),mo('|'),mo('≤'),mn('0.50'),mi('m/s'))
+      tex:'|v_{\\mathrm{cmd}}|+\\frac{0.420}{2}|\\omega_{\\mathrm{cmd}}|\\le0.49742\\;\\mathrm{m/s}',
+      mml:row(mo('|'),sub('v','cmd'),mo('|'),plus,
+        frac(mn('0.420'),mn('2')),
+        mo('|'),sub('ω','cmd'),mo('|'),mo('≤'),mn('0.49742'),mi('m/s'))
+    },
+    'limit-spin':{
+      tex:'|\\omega|_{\\max, v=0}=\\frac{2v_{\\mathrm{wheel,max}}}{b}=2.36866\\;\\mathrm{rad/s}',
+      mml:row(mo('|'),mi('ω'),mo('|'),sub('ω','max'),
+        eq,frac(row(mn('2'),sub('v','wheel,max')),mi('b')),
+        eq,mn('2.36866'),mi('rad/s'))
     }
   };
 
