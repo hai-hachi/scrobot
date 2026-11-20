@@ -22,7 +22,43 @@ const PLOT_PALETTE=['#55C9F6','#B89BFF','#50DDB9','#FF86A2',
 const LIVE_PLOT_COLOR='#F4BB66';
 let timelineData=null;
 let timelineName='';
+let physicalLimits=null;
 
+
+function showPhysicalLimits(limits){
+  physicalLimits=limits;
+  $('physical-wheel-diameter').textContent=limits.wheel_diameter_m.toFixed(3)+' m';
+  $('physical-wheelbase').textContent=limits.wheel_separation_m.toFixed(3)+' m';
+  $('physical-max-rpm').textContent=limits.wheel_max_rpm.toFixed(1)+' RPM';
+  $('physical-max-linear').textContent=limits.max_linear_mps.toFixed(4)+' m/s';
+  $('physical-max-angular').textContent=limits.max_angular_radps.toFixed(4)+' rad/s';
+  const h=limits.wheel_half_separation_m.toFixed(3);
+  const v=limits.max_wheel_mps.toFixed(4);
+  $('physical-coupled-envelope').textContent=
+    'Each wheel is individually limited to 95 RPM: |v − '+h+'ω| ≤ '+v+
+    ' and |v + '+h+'ω| ≤ '+v+' m/s. '+
+    'Equivalently, |v| + '+h+'|ω| ≤ '+v+' m/s.';
+  for(const id of ['desired-speed','rpp-min-speed','rpp-min-approach']){
+    $(id).max=String(limits.max_linear_mps);
+  }
+  for(const id of ['rpp-rotate-rate','smc1-max-angular-cmd',
+                   'smc2-max-angular-cmd']){
+    $(id).max=String(limits.max_angular_radps);
+  }
+  updateTurningAllowance();
+}
+function updateTurningAllowance(){
+  if(!physicalLimits)return;
+  const v=Math.abs(num('desired-speed'));
+  const remaining=physicalLimits.max_wheel_mps-v;
+  const omega=Math.max(0,remaining)/physicalLimits.wheel_half_separation_m;
+  $('physical-turning-allowance').textContent=
+    'At requested forward speed '+fmt(v,3)+' m/s, wheel RPM allows '+
+    fmt(omega,3)+' rad/s simultaneous rotation. '+
+    'At v = 0, the physical maximum is '+
+    fmt(physicalLimits.max_angular_radps,3)+' rad/s. '+
+    'The coupled wheel limiter scales both v and ω when necessary.';
+}
 
 async function api(path,body){
   const opts=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},
@@ -158,6 +194,7 @@ function setForm(x){
   setFullSMC('1',x.smc_1s);
   setFullSMC('2',x.smc_2s);
   window.TrackerMath?.refresh();
+  updateTurningAllowance();
   spawnVisible();
   highlightActiveController();
 }
@@ -823,9 +860,11 @@ for(const id of [
   $(id).addEventListener('change',()=>{
     if(id==='controller-select')highlightActiveController();
     window.TrackerMath?.refresh();
+    if(id==='desired-speed')updateTurningAllowance();
     lastPreviewKey='';guardedPreview();
   });
 }
+$('desired-speed').addEventListener('input',updateTurningAllowance);
 $('new-seed').onclick=()=>{
   $('seed').value=Math.floor(Math.random()*2147483647);
   lastPreviewKey='';guardedPreview();
@@ -930,6 +969,7 @@ $('clear-history').onclick=()=>{
 (async()=>{
   try{
     defaultSettings=await api('/defaults');
+    showPhysicalLimits(await api('/physical-limits'));
     const x=await api('/config');setForm(x);
     await refreshPreview();
     await refresh();await history();
