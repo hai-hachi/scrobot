@@ -275,6 +275,24 @@ def test_tracker_velocity_tuning_never_exceeds_mechanical_rating():
     assert validate(cfg)
 
 
+def test_generated_diff_drive_limits_agree_with_tracker_physical_envelope(tmp_path):
+    baseline=REPO/"src/scrobot_control/config/controllers.yaml"
+    original=baseline.read_text()
+    produced=generate(defaults(),tmp_path)
+    doc=yaml.safe_load(Path(produced["controller_params"]).read_text())
+    diff=doc["diff_drive_controller"]["ros__parameters"]
+    assert diff["linear.x.max_velocity"]==pytest.approx(MAX_LINEAR_MPS)
+    assert diff["linear.x.min_velocity"]==pytest.approx(-MAX_LINEAR_MPS)
+    assert diff["angular.z.max_velocity"]==pytest.approx(MAX_ANGULAR_RADPS)
+    assert diff["angular.z.min_velocity"]==pytest.approx(-MAX_ANGULAR_RADPS)
+    # The real robot/production YAML remains unchanged.
+    assert baseline.read_text()==original
+    prod=yaml.safe_load(original)["diff_drive_controller"]["ros__parameters"]
+    assert prod["linear.x.max_velocity"]==.50
+    assert prod["angular.z.max_velocity"]==2.30
+    assert "tracking_physical_controllers.yaml" in produced["controller_params"]
+
+
 def test_ground_truth_time_weighted_rmse():
     path=[(0.,0.),(4.,0.)]
     good=[{"t":i*.1,"x":i*.1,"y":.2,"yaw":0.,
