@@ -14,7 +14,8 @@ REPO=HERE.parents[2]
 sys.path.insert(0,str(HERE.parent))
 from tracking.core import (
   KINDS,CONTROLLERS,defaults,validate,reference,
-  cumulative,initial_pose,projection,at_fraction,clamp_wheel_envelope,metrics,wrap)
+  cumulative,initial_pose,projection,at_fraction,clamp_wheel_envelope,metrics,wrap,
+  TrackingMetrics,integrate_squared_error,downsample_error_series)
 from tracking.world import write_world
 from tracking.configuration import generate,saved_physics
 from tracking.service import (TrackingService, choose_tracking_domain, discover_domain_topics,
@@ -305,6 +306,142 @@ def test_ground_truth_time_weighted_rmse():
     assert data["wheel_envelope_violations"]==0
     assert data["duration_sim_s"]==pytest.approx(2.9)
     assert len(data["series"])==30
+
+
+def test_rmse_is_trapezoid_on_exact_same_signed_samples_as_plot():
+    points=[(0.,0.),(5.,0.)]
+    samples=[
+        {"t":0.,"x":1.,"y":0.,"yaw":0.,"v":0.,"w":0.},
+        {"t":.05,"x":1.,"y":.4,"yaw":0.,"v":0.,"w":0.},
+        {"t":.2,"x":1.,"y":.2,"yaw":0.,"v":0.,"w":0.},
+    ]
+    # e^2 trapezoids: .05*(0+.16)/2 + .15*(.16+.04)/2 = .019
+    expected=math.sqrt(.019/.2)
+    m=metrics(samples,points)
+    assert m["duration_sim_s"]==pytest.approx(.2)
+    assert m["cross_track_rmse_m"]==pytest.approx(expected,abs=.000006)
+    assert m["rmse_method"]=="sim_time_trapezoid_e_squared_v2"
+    assert [p["error_m"] for p in m["series"]]==pytest.approx([0.,.4,.2])
+    integral=integrate_squared_error(m["series"])
+    assert integral["rmse_m"]==pytest.approx(expected)
+    incremental=TrackingMetrics(points)
+    for sample in samples:
+        incremental.add(sample)
+    assert incremental.report()==m
+    assert incremental.report(include_series=False)["cross_track_rmse_m"]==(
+        m["cross_track_rmse_m"])
+
+
+def test_live_cumulative_rmse_and_extrema_preserving_plot_decimation():
+    points=[(0.,0.),(8.,0.)]
+    analyzer=TrackingMetrics(points)
+    for n in range(2401):
+        # Deliberate one-frame spike that stride[::5] used to lose.
+        error=1.3 if n==1702 else .09
+        analyzer.add({"t":n*.01,"x":1.,"y":error,
+                      "yaw":0.,"v":0.,"w":0.})
+    full=analyzer.report(include_series=False)
+    assert full["samples"]==2401
+    assert full["duration_sim_s"]==pytest.approx(24.)
+    assert len(analyzer.series)==2401
+    visual=downsample_error_series(analyzer.series,600)
+    assert len(visual)<=600
+    assert visual[0]==analyzer.series[0]
+    assert visual[-1]==analyzer.series[-1]
+    assert max(p["error_m"] for p in visual)==pytest.approx(1.3)
+    assert full["max_abs_cross_track_m"]==pytest.approx(1.3)
+    assert full["cross_track_rmse_m"]==pytest.approx(
+        integrate_squared_error(analyzer.series)["rmse_m"],abs=.00001)
+
+
+def test_missing_ground_truth_gaps_are_declared_and_not_integrated():
+    points=[(0.,0.),(4.,0.)]
+    samples=[
+        {"t":0.,"x":0.,"y":.3,"yaw":0.},
+        {"t":.1,"x":0.,"y":.3,"yaw":0.},
+        {"t":2.,"x":0.,"y":2.,"yaw":0.},
+        {"t":2.1,"x":0.,"y":2.,"yaw":0.},
+    ]
+    m=metrics(samples,points)
+    assert m["excluded_gt_gaps"]==1
+    assert m["duration_sim_s"]==pytest.approx(.2)
+    assert m["elapsed_sim_s"]==pytest.approx(2.1)
+    assert m["cross_track_rmse_m"]==pytest.approx(
+        math.sqrt((.3**2+2.**2)/2),abs=.00001)
+    assert integrate_squared_error(m["series"])["duration_sim_s"]==pytest.approx(.2)
+
+
+def test_saved_common_window_rmse_reverses_misleading_full_duration_ranking(tmp_path):
+    service=TrackingService(run_root=tmp_path)
+    base=[(0.,0.),(8.,0.)]
+    runs=[
+        ("20261120_120000_tracking_abcde","RPP",12.,lambda t:1. if t<=1 else 0.),
+        ("20261120_120001_tracking_abcde","SMC_1S",2.,lambda t:.4),
+    ]
+    for name,controller,duration,e_func in runs:
+        folder=tmp_path/name
+        folder.mkdir()
+        samples=[]
+        for i in range(int(duration*10)+1):
+            t=i*.1
+            samples.append({"t":t,"x":1.,"y":e_func(t),
+                            "yaw":0.,"v":0.,"w":0.})
+        m=metrics(samples,base)
+        full=m.pop("series")
+        original=m["cross_track_rmse_m"]
+        checked=integrate_squared_error(full)
+        assert original==pytest.approx(checked["rmse_m"],abs=.00001)
+        m.update({"plot_full_resolution":True,"plot_rmse_verified":True})
+        (folder/"series.json").write_text(json.dumps(full))
+        (folder/"summary.json").write_text(json.dumps({
+            "path":"straight","controller":controller,"status":"success",
+            "start_pose":{"x":1.,"y":0.,"yaw_deg":0.},
+            "requested_speed_mps":.4,"results":m
+        }))
+    names=[v[0] for v in runs]
+    comparison=service.history_comparison(names)
+    assert comparison["same_path"]
+    assert comparison["same_start_pose"]
+    assert comparison["same_reference_speed"]
+    assert comparison["all_full_resolution"]
+    assert comparison["common_end_sim_s"]==pytest.approx(2.)
+    values={r["name"]:r for r in comparison["runs"]}
+    rpp=values[names[0]]
+    smc=values[names[1]]
+    # Full RPP error is diluted by long straight/near-zero settling time.
+    assert rpp["summary_rmse_m"]<smc["summary_rmse_m"]
+    # The same first two seconds reveal the opposite ordering.
+    assert rpp["rmse_m"]>smc["rmse_m"]
+    trace=service.history_trace(names[0])
+    assert trace["source_samples"]==121
+    assert trace["full_resolution"] is True
+    assert trace["rmse_plot_verified"] is True
+    assert trace["points"][0]["e"]==1.
+    assert trace["points"][-1]["t"]==pytest.approx(12.)
+    with pytest.raises(ValueError,match="Select between"):
+        service.history_comparison([names[0]])
+    with pytest.raises(ValueError,match="duplicate"):
+        service.history_comparison([names[0],names[0]])
+    with pytest.raises(ValueError,match="Invalid experiment ID"):
+        service.history_comparison([names[0],"../etc/passwd"])
+
+
+def test_rmse_plots_and_results_use_one_accumulator_not_rolling_window():
+    runner=(HERE/"runner.py").read_text()
+    app=(HERE/"web/app.js").read_text()
+    html=(HERE/"web/index.html").read_text()
+    server=(HERE.parent/"planning/web_server.py").read_text()
+    assert "self.tracking_metrics=TrackingMetrics(self.points)" in runner
+    assert "data=self.tracking_metrics.report(include_series=False)" in runner
+    assert "series=self.tracking_metrics.series" in runner
+    assert "downsample_error_series(self.tracking_metrics.series,600)" in runner
+    assert "metrics(self.samples[-250:]" not in runner
+    assert "plot_series_rmse_m" in runner
+    assert 'id="plot-absolute"' in html
+    assert 'id="common-rmse"' in html
+    assert "$('plot-absolute').onchange=renderChart" in app
+    assert "'/history/comparison?'+query" in app
+    assert '"/api/tracker/history/comparison"' in server
 
 
 def test_lightweight_world_copies_contact_geometry(tmp_path):
