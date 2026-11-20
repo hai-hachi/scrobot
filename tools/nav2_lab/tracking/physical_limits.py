@@ -1,7 +1,8 @@
 """Physical drive envelope from the SCROBOT *actual* URDF wheel geometry.
 
-Wheel velocity rating is 95 rpm or 0.50 m/s (rounded) on a 10 cm wheel.
-Use the stricter of those two limits. The left/right wheel-centre distance
+Wheel motor speed is rounded to 100 RPM on a 10 cm diameter wheel.
+Its kinematic rim speed is 0.5236 m/s, but the independently specified
+0.50 m/s wheel-speed rating is lower. Apply the stricter 0.50 m/s cap. The left/right wheel-centre distance
 comes from the URDF wheel_separation property, not chassis mesh width.
 All experiments (RPP, SMC-1s, SMC-2s) share the same derived limits.
 """
@@ -26,7 +27,7 @@ def wheel_geometry(path=_DESCRIPTION):
 
 WHEEL_RADIUS_M,WHEEL_SEPARATION=wheel_geometry()
 WHEEL_DIAMETER_M=2*WHEEL_RADIUS_M
-WHEEL_MAX_RPM=95.0
+WHEEL_MAX_RPM=100.0
 RATED_WHEEL_MAX_MPS=0.50
 RPM_WHEEL_MAX_MPS=WHEEL_MAX_RPM*(2*math.pi/60)*WHEEL_RADIUS_M
 MAX_WHEEL_MPS=min(RATED_WHEEL_MAX_MPS,RPM_WHEEL_MAX_MPS)
