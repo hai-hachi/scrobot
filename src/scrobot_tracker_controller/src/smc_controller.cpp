@@ -16,6 +16,7 @@
 #include <nav2_util/node_utils.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
+#include <rclcpp_lifecycle/lifecycle_publisher.hpp>
 #include <std_msgs/msg/float64_multi_array.hpp>
 
 namespace scrobot_tracker_controller
