@@ -90,7 +90,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
     <p class="fineprint">Same reference speed, tolerances and progress checks for both controllers. These values are held constant for a fair comparison.</p>
     <div class="tuning-fields">
       <div class="field"><label for="desired-speed">Desired forward speed (m/s)</label>
-        <input id="desired-speed" type="number" min=".05" max=".497418836" step=".001" value=".40"></div>
+        <input id="desired-speed" type="number" min=".05" max=".50" step=".001" value=".40"></div>
       <div class="field"><label for="max-duration">Trial timeout (sim seconds)</label>
         <input id="max-duration" type="number" min="10" max="360" step="5" value="120"></div>
       <div class="field"><label for="goal-xy">Goal position tolerance (m)</label>
@@ -116,7 +116,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
         <div><small>Maximum in-place rotation</small><strong id="physical-max-angular">2.3810 rad/s</strong></div>
       </div>
       <p class="fineprint" id="physical-coupled-envelope">Per-wheel limits: |v − 0.210ω| ≤ 0.5000 and |v + 0.210ω| ≤ 0.5000 m/s.</p>
-      <p class="fineprint" id="physical-turning-allowance">At shared desired speed 0.40 m/s, the maximum simultaneous turn rate is 0.464 rad/s.</p>
+      <p class="fineprint" id="physical-turning-allowance">At shared desired speed 0.40 m/s, the maximum simultaneous turn rate is 0.476 rad/s.</p>
     </div>
     <p class="fineprint tuning-hint">ROS control 25 sim-Hz; wheel loop 100 sim-Hz. The 100 RPM rating and stricter 0.50 m/s cap are enforced for RPP and both SMC variants AFTER calculating their requested linear and angular speeds. Gazebo RTF is set separately.</p>
     <p class="fineprint" id="physics-source">Wheel and motor physics come from your saved Mobility Lab; odometry rates come from Odometry Lab. The floor uses the validated contact model.</p>
@@ -142,7 +142,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="field"><label for="rpp-min-radius">Regulation radius (m)</label>
         <input id="rpp-min-radius" type="number" min=".1" max="3" step=".05" value=".5"></div>
       <div class="field"><label for="rpp-min-speed">Minimum regulated speed (m/s)</label>
-        <input id="rpp-min-speed" type="number" min=".03" max=".497418836" step=".001" value=".25"></div>
+        <input id="rpp-min-speed" type="number" min=".03" max=".50" step=".001" value=".25"></div>
       <label class="tuning-check"><input id="rpp-rotate" type="checkbox" checked>
         Rotate to heading</label>
       <div class="field"><label for="rpp-rotate-rate">Rotate-to-heading speed (rad/s)</label>
@@ -152,7 +152,7 @@ aria-label="Tracking world. Click to position robot, then drag for heading.">
       <div class="field"><label for="rpp-angular-accel">Max angular acceleration (rad/s²)</label>
         <input id="rpp-angular-accel" type="number" min=".1" max="6" step=".1" value="1"></div>
       <div class="field"><label for="rpp-min-approach">Min final-approach speed (m/s)</label>
-        <input id="rpp-min-approach" type="number" min=".02" max=".497418836" step=".001" value=".10"></div>
+        <input id="rpp-min-approach" type="number" min=".02" max=".50" step=".001" value=".10"></div>
     </div>
     <p class="fineprint tuning-hint">Velocity-scaled lookahead uses min/max distance and lookahead time; fixed distance takes effect when disabled. Minimum speeds are capped by the shared desired speed in the generated Nav2 YAML.</p>
   </section>
