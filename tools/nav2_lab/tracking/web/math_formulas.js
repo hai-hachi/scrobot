@@ -151,10 +151,10 @@
         sub('α','max'),mi('Δ'),mi('t'))
     },
     'wheel-kinematics':{
-      tex:'v_L=v-\\frac{b}{2}\\omega,\\qquad v_R=v+\\frac{b}{2}\\omega,\\qquad b=0.420\\;\\mathrm{m}',
-      mml:row(sub('v','L'),eq,mi('v'),minus,
+      tex:'v_{L,w}=v-\\frac{b}{2}\\omega,\\qquad v_{R,w}=v+\\frac{b}{2}\\omega,\\qquad b=0.420\\;\\mathrm{m}',
+      mml:row(sub('v','L,w'),eq,mi('v'),minus,
         frac(mi('b'),mn('2')),mi('ω'),mo(';'),
-        sub('v','R'),eq,mi('v'),plus,
+        sub('v','R,w'),eq,mi('v'),plus,
         frac(mi('b'),mn('2')),mi('ω'),mo(';'),
         mi('b'),eq,mn('0.420'),mi('m'))
     },
