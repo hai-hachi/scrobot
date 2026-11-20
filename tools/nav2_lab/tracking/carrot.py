@@ -101,3 +101,30 @@ def surfaces(pose_error,config,controller):
     return {"s1":active if controller=="SMC_1S" else ex,
             "s2":0. if controller=="SMC_1S" else s2,
             "D":1+p["lambda_y"]*ex,"gx":gx,"q":q}
+
+
+def full_control(pose_error,ref,config,controller,previous_D=None):
+    """Exact full laws, before speed/acceleration/wheel saturation.
+
+    Pure deterministic mirror of the Python source lab for numerical tests.
+    Ideal reaching identities are conditional on true moving-reference
+    kinematics; this PP carrot generally violates that condition.
+    """
+    if controller not in ("SMC_1S","SMC_2S"):
+        raise ValueError("Unknown full SMC controller")
+    p=config[controller.lower()]
+    terms=surfaces(pose_error,config,controller)
+    D=terms["D"]
+    if abs(D)<=p["singular_guard"] or (
+            previous_D is not None and previous_D*D<0):
+        raise ArithmeticError("Full SMC singular denominator D")
+    et=pose_error["etheta"]
+    ex=pose_error["ex"]
+    ey=pose_error["ey"]
+    angular=(ref["w_ref"]+p["lambda_y"]*ref["v_ref"]*math.sin(et)+
+             terms["q"])
+    if controller=="SMC_1S":
+        angular-=p["lambda_x"]*terms["gx"]
+    omega=angular/D
+    v=ref["v_ref"]*math.cos(et)+ey*omega+terms["gx"]
+    return {"desired_v":v,"desired_w":omega,**terms}
