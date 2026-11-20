@@ -276,16 +276,17 @@ def validate(data):
 
 
 def downsample_error_series(points,max_points=1200):
-    """Keep first/last and both signed extrema per consecutive time bucket.
+    """Keep first/last, signed extrema, and closest-to-zero per bucket.
 
-    This changes only the display curve, never the samples used to compute
-    RMSE. Unlike stride-based decimation, narrow error spikes are visible.
+    The absolute-|e| view needs both the largest and the smallest absolute
+    errors, not just signed extrema. Drawing is decimated; the RMSE still
+    uses every ground-truth observation.
     """
     if len(points)<=max_points:
         return list(points)
     if max_points<4:
         raise ValueError("Plot sample budget must be at least four")
-    buckets=max(1,(max_points-2)//2)
+    buckets=max(1,(max_points-2)//3)
     interior=len(points)-2
     size=math.ceil(interior/buckets)
     chosen=[points[0]]
@@ -294,7 +295,8 @@ def downsample_error_series(points,max_points=1200):
         indices=range(start,end)
         minimum=min(indices,key=lambda j:points[j]["error_m"])
         maximum=max(indices,key=lambda j:points[j]["error_m"])
-        for j in sorted(set((minimum,maximum))):
+        closest_zero=min(indices,key=lambda j:abs(points[j]["error_m"]))
+        for j in sorted(set((minimum,maximum,closest_zero))):
             chosen.append(points[j])
     chosen.append(points[-1])
     return chosen
