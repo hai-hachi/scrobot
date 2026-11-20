@@ -222,8 +222,8 @@ def test_tracker_motor_response_is_clamped_after_first_order_filter():
     service=(HERE/"service.py").read_text()
     assert 'self.declare_parameter("max_wheel_rpm", MAX_RPM)' in simulator
     assert 'self.declare_parameter("max_wheel_accel_rpmps", 0.0)' in simulator
-    assert 'self.max_wheel_accel_rpmps*dt' in simulator
-    assert 'min(self.max_wheel_rpm,filtered)' in simulator
+    assert 'bound_wheel_rpm(' in simulator
+    assert 'self.max_wheel_rpm,self.max_wheel_accel_rpmps)' in simulator
     assert "SIM_COMMAND_PERIOD_S=0.01" in router
     assert "COMMAND_STALE_AFTER_SIM_S=0.25" in router
     assert "self.get_clock().now().nanoseconds" in router
@@ -231,6 +231,29 @@ def test_tracker_motor_response_is_clamped_after_first_order_filter():
     assert 'max_wheel_rpm' in launch and 'max_wheel_accel_rpmps' in launch
     assert '"motor_max_rpm:="+str(capabilities()["wheel_max_rpm"])' in service
     assert '"motor_accel_rpmps:="+str(capabilities()["wheel_max_rpm_per_s"])' in service
+
+
+def test_filtered_motor_output_is_bounded_even_with_110_percent_gain():
+    # Import the pure response helper without requiring a ROS runtime.
+    import runpy
+    ns=runpy.run_path(str(
+        REPO/"src/scrobot_simulation/scripts/sim_motor_response.py"))
+    bound=ns["bound_wheel_rpm"]
+    previous=0.
+    for n in range(25):
+        # A fast first-order filter and gain>1 can otherwise jump instantly
+        # to an RPM above the motor's rating.
+        command=110.0
+        next_value=bound(previous,command,.01,100.,400.)
+        assert abs(next_value-previous)<=4.+1e-9
+        assert abs(next_value)<=100.+1e-9
+        previous=next_value
+    assert previous==pytest.approx(100.)
+    assert bound(100.,-110.,.01,100.,400.)==pytest.approx(96.)
+    assert bound(96.,-110.,.01,100.,400.)==pytest.approx(92.)
+    assert bound(0.,110.,.01,95.,0.)==pytest.approx(95.)
+    with pytest.raises(ValueError):
+        bound(0.,float("nan"),.01,100.,400.)
 
 
 def test_tracker_velocity_tuning_never_exceeds_mechanical_rating():
