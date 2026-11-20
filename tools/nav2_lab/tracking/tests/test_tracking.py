@@ -20,6 +20,10 @@ from tracking.configuration import generate,saved_physics
 from tracking.service import (TrackingService, choose_tracking_domain, discover_domain_topics,
                               cleanup_owned_session, TRACKER_DOMAIN_CANDIDATES)
 from tracking.health import controller_failure,ready_for_tracking
+from tracking.physical_limits import (
+    WHEEL_RADIUS_M,WHEEL_SEPARATION,WHEEL_MAX_RPM,
+    MAX_WHEEL_MPS,MAX_LINEAR_MPS,MAX_ANGULAR_RADPS,
+    RPM_WHEEL_MAX_MPS,capabilities,wheel_speeds)
 from tracking.carrot import circle_carrot,reference as carrot_reference,errors as carrot_errors,surfaces,full_control
 
 
@@ -98,11 +102,66 @@ def test_manual_start_and_invalid_inputs():
 
 def test_wheel_coupling_maintains_curvature():
     v,w=clamp_wheel_envelope(.5,2.)
-    assert abs(v)+.21*abs(w)==pytest.approx(.5)
+    assert abs(v)+WHEEL_SEPARATION/2*abs(w)==pytest.approx(MAX_WHEEL_MPS)
     assert w/v==pytest.approx(4.)
     assert clamp_wheel_envelope(.2,.3)==pytest.approx((.2,.3))
     for bad in (float("nan"),float("inf")):
         with pytest.raises(ValueError):clamp_wheel_envelope(bad,1.)
+
+
+def test_urdf_wheel_geometry_and_95_rpm_speed_envelope():
+    values=capabilities()
+    assert WHEEL_RADIUS_M==pytest.approx(.05)
+    assert WHEEL_SEPARATION==pytest.approx(.42)
+    assert WHEEL_MAX_RPM==95.
+    assert RPM_WHEEL_MAX_MPS==pytest.approx(
+        95*math.pi*.10/60)
+    assert MAX_WHEEL_MPS==pytest.approx(.4974188368,rel=1e-6)
+    assert MAX_LINEAR_MPS==pytest.approx(MAX_WHEEL_MPS)
+    assert MAX_ANGULAR_RADPS==pytest.approx(
+        2*MAX_WHEEL_MPS/WHEEL_SEPARATION)
+    assert MAX_ANGULAR_RADPS==pytest.approx(2.36866,abs=1e-5)
+    assert values["wheel_diameter_m"]==pytest.approx(.10)
+    assert values["wheel_separation_m"]==pytest.approx(.42)
+    assert values["wheel_max_rpm"]==95.
+
+    for v,w in ((.5,0.),(0.,5.),(.40,2.),(-.4,3.),
+                (.25,-1.8),(-.1,-5.)):
+        vc,wc=clamp_wheel_envelope(v,w)
+        left,right=wheel_speeds(vc,wc)
+        assert max(abs(left),abs(right))<=MAX_WHEEL_MPS+1e-9
+        for wheel in (left,right):
+            rpm=abs(wheel)/WHEEL_RADIUS_M*60/(2*math.pi)
+            assert rpm<=95+1e-7
+        # This limiter scales both requests equally, keeping curvature
+        # even when the individual wheel RPM rating is exceeded.
+        if abs(v)+WHEEL_SEPARATION/2*abs(w)>MAX_WHEEL_MPS:
+            assert vc/v==pytest.approx(wc/w) if v and w else True
+    vv,ww=clamp_wheel_envelope(0.,100.)
+    assert vv==0.
+    assert abs(ww)==pytest.approx(MAX_ANGULAR_RADPS)
+    vv,ww=clamp_wheel_envelope(100.,0.)
+    assert abs(vv)==pytest.approx(MAX_LINEAR_MPS)
+    assert ww==0.
+
+
+def test_tracker_velocity_tuning_never_exceeds_mechanical_rating():
+    cfg=defaults()
+    for path,value in (
+        (("shared","desired_speed_mps"),MAX_LINEAR_MPS+.001),
+        (("rpp","rotate_to_heading_angular_vel"),MAX_ANGULAR_RADPS+.001),
+        (("smc_1s","max_angular_cmd"),MAX_ANGULAR_RADPS+.001),
+        (("smc_2s","max_angular_cmd"),MAX_ANGULAR_RADPS+.001),
+    ):
+        bad=copy.deepcopy(cfg)
+        bad[path[0]][path[1]]=value
+        with pytest.raises(ValueError):
+            validate(bad)
+    cfg["rpp"]["rotate_to_heading_angular_vel"]=MAX_ANGULAR_RADPS
+    cfg["smc_1s"]["max_angular_cmd"]=MAX_ANGULAR_RADPS
+    cfg["smc_2s"]["max_angular_cmd"]=MAX_ANGULAR_RADPS
+    cfg["shared"]["desired_speed_mps"]=MAX_LINEAR_MPS
+    assert validate(cfg)
 
 
 def test_ground_truth_time_weighted_rmse():
@@ -147,6 +206,10 @@ def test_tracker_params_preserve_real_controller_and_physics(tmp_path):
         assert cs[mode]["linear_speed"]==.4
         assert cs[mode]["lookahead_radius_m"]==.6
         assert cs[mode]["curvature_window_m"]==.14
+        assert cs[mode]["wheel_radius_m"]==WHEEL_RADIUS_M
+        assert cs[mode]["wheel_separation_m"]==WHEEL_SEPARATION
+        assert cs[mode]["wheel_max_rpm"]==95.0
+        assert cs[mode]["rated_wheel_max_mps"]==.50
     local=params["local_costmap"]["local_costmap"]["ros__parameters"]
     assert local["plugins"]==["obstacle_layer","inflation_layer"]
     assert local["obstacle_layer"]["plugin"]=="nav2_costmap_2d::ObstacleLayer"
@@ -328,7 +391,10 @@ def test_native_smc_plugin_has_complete_jazzy_interface():
                    "setPlan(", "computeVelocityCommands(", "setSpeedLimit("):
         assert method in code
     assert "nav2_core::Controller" in code
-    assert "kMaxWheelMps=0.50" in code
+    assert "kMaxWheelMps=kWheelRpmMps<kWheelRatedMps?" in code
+    assert 'wheel_separation_m' in code
+    assert 'wheel_max_rpm' in code
+    assert "wheel_demand>wheel_max_mps_" in code
     assert "sat(active/phi_)" in code
     assert "sat(ex/phix_)" in code
     assert "lambda_x_*gx" in code
@@ -447,6 +513,29 @@ def test_timeline_controls_phases_and_halved_axis_label_sizes():
     assert "plot-status" in js
     assert ".tick-label{font-size:5.5px}" in css
     assert ".axis-label{font-size:6px}" in css
+
+
+def test_physical_speed_limits_shown_read_only_and_via_backend():
+    html=(HERE/"web/index.html").read_text()
+    app=(HERE/"web/app.js").read_text()
+    server=(HERE.parent/"planning/web_server.py").read_text()
+    plugin=(REPO/"src/scrobot_tracker_controller/src/smc_controller.cpp").read_text()
+    assert '"/api/tracker/physical-limits"' in server
+    assert "self.tracking.physical_limits()" in server
+    assert "showPhysicalLimits(await api('/physical-limits'))" in app
+    for key in ("physical-wheel-diameter","physical-wheelbase",
+                "physical-max-rpm","physical-max-linear",
+                "physical-max-angular","physical-coupled-envelope",
+                "physical-turning-allowance"):
+        assert 'id="'+key+'"' in html
+    assert 'max_linear_mps' in app
+    assert 'max_angular_radps' in app
+    assert "wheel_half_separation_m" in app
+    assert "wheel_demand>wheel_max_mps_" in plugin
+    assert "wheel_max_mps_/wheel_half_base_" in plugin
+    assert 'data-formula="wheel-kinematics"' in html
+    assert 'data-formula="wheel-rpm"' in html
+    assert 'data-formula="limit-spin"' in html
 
 
 def test_history_timeline_has_equal_xy_metres_and_real_circle():
