@@ -285,8 +285,10 @@ def test_tuning_ui_has_four_cards_and_source_math():
     assert '"/api/tracker/defaults"' in server
     assert "smc_1s:readFullSMC('1')" in js
     assert "smc_2s:readFullSMC('2')" in js
-    assert "λy" in html and "λx" in html and "ωR" in html
-    assert "sat(z)" in html
+    assert "λy" in html and "λx" in html
+    assert 'data-formula="smc1-omega"' in html
+    assert 'data-formula="smc2-omega"' in html
+    assert 'data-formula="sat-definition"' in html
     for control in ("goal-xy","goal-yaw","progress-radius",
                     "carrot-radius","curvature-window","rpp-lookahead",
                     "smc1-lambda-y","smc2-lambda-y",
@@ -445,6 +447,62 @@ def test_timeline_controls_phases_and_halved_axis_label_sizes():
     assert "plot-status" in js
     assert ".tick-label{font-size:5.5px}" in css
     assert ".axis-label{font-size:6px}" in css
+
+
+def test_history_timeline_has_equal_xy_metres_and_real_circle():
+    html=(HERE/"web/index.html").read_text()
+    app=(HERE/"web/app.js").read_text()
+    css=(HERE/"web/style.css").read_text()
+    helper=(HERE/"web/timeline_geometry.js").read_text()
+    server=(HERE.parent/"planning/web_server.py").read_text()
+    assert 'id="timeline-grid"' in html
+    assert 'src="/tracker/timeline_geometry.js"' in html
+    assert '"/tracker/timeline_geometry.js"' in server
+    timeline=app.split("function drawTimeline(){",1)[1].split(
+        "async function loadTimeline(name)",1)[0]
+    assert "TrackerTimelineGeometry.geometry(points,frames)" in timeline
+    assert "world.xTicks" in timeline and "world.yTicks" in timeline
+    assert "'X position (m)'" in timeline
+    assert "'Y position (m)'" in timeline
+    assert "shape('circle',{" in timeline
+    assert "world.radius(ref.radius)" in timeline
+    assert "shape('ellipse'" not in timeline
+    assert "const px=x=>450+x*52" not in timeline
+    assert "const py=y=>225-y*35" not in timeline
+    assert "aspect-ratio:2/1" in css
+    assert "Math.min(plotW/(spanX*1.16),plotH/(spanY*1.16))" in helper
+    assert "metres*scale" in helper
+
+
+def test_complete_math_rendering_and_tunable_parameter_binding():
+    html=(HERE/"web/index.html").read_text()
+    js=(HERE/"web/app.js").read_text()
+    math=(HERE/"web/math_formulas.js").read_text()
+    server=(HERE.parent/"planning/web_server.py").read_text()
+    assert 'src="/tracker/math_formulas.js"' in html
+    assert '"/tracker/math_formulas.js"' in server
+    for formula in (
+        "body-x","body-y","body-heading","carrot-radius",
+        "carrot-window","carrot-curvature","reference-speed",
+        "reference-omega","denominator","switch-enable",
+        "sat-definition","gx","q","limit-angular","limit-accel",
+        "limit-wheel","smc1-s","smc1-omega","smc1-v","smc1-reaching",
+        "smc2-s","smc2-omega","smc2-v","smc2-reaching",
+    ):
+        assert 'data-formula="'+formula+'"' in html, formula
+        assert "'"+formula+"':{" in math, formula
+    for field in ("lambda_y","lambda_x","k_s","k_x","eta","eta_x",
+                  "phi","phi_x","singular_guard","max_angular_cmd",
+                  "max_linear_accel","max_angular_accel",
+                  "use_saturation"):
+        assert "'"+field+"'" in math, field
+    assert 'id="smc1-math-values"' in html
+    assert 'id="smc2-math-values"' in html
+    assert "window.TrackerMath?.refresh();" in js
+    assert "MathML" in math and "katex" in math
+    assert "document.createElement('script')" in math
+    assert "script.async=true" in math
+    assert "el.dataset.latex=formula.tex" in math
 
 
 def test_tracker_backend_is_isolated_and_safe(tmp_path):
