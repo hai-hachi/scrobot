@@ -436,6 +436,11 @@ def test_rmse_plots_and_results_use_one_accumulator_not_rolling_window():
     assert "series=self.tracking_metrics.series" in runner
     assert "downsample_error_series(self.tracking_metrics.series,600)" in runner
     assert "metrics(self.samples[-250:]" not in runner
+    assert 'self.output["status"]="dispatching"' in runner
+    assert 'self.output["status"]="running"' in runner
+    assert runner.index('if handle is None:')<runner.index(
+        'self.output["status"]="running"')
+    assert 'if stamp<self.output.get("start_sim_s",stamp):return' in runner
     assert "plot_series_rmse_m" in runner
     assert 'id="plot-absolute"' in html
     assert 'id="common-rmse"' in html
