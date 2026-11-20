@@ -59,6 +59,24 @@ def generate(settings,dirpath):
     directory.mkdir(parents=True,exist_ok=True)
     inputs=saved_physics()
     rates=generate_rate_profiles(inputs,directory)
+    # The production diff_drive_controller carries conservative 0.50 m/s
+    # and 2.30 rad/s body-axis caps. Override them ONLY in this generated
+    # Tracker profile to expose the true 100-RPM wheel capability. The
+    # shared 100 sim-Hz router enforces the tighter *coupled* two-wheel
+    # speed and acceleration restrictions after every controller request.
+    controller_doc=yaml.safe_load(
+        Path(rates["controller_params"]).read_text())
+    diff=controller_doc["diff_drive_controller"]["ros__parameters"]
+    diff.update({
+        "linear.x.max_velocity":float(MAX_LINEAR_MPS),
+        "linear.x.min_velocity":-float(MAX_LINEAR_MPS),
+        "angular.z.max_velocity":float(MAX_ANGULAR_RADPS),
+        "angular.z.min_velocity":-float(MAX_ANGULAR_RADPS),
+    })
+    tracker_controller_path=directory/"tracking_physical_controllers.yaml"
+    tracker_controller_path.write_text(
+        yaml.safe_dump(controller_doc,sort_keys=False))
+    rates["controller_params"]=str(tracker_controller_path)
     source=ROOT/"src/scrobot_navigation/config/nav2_params.yaml"
     production=yaml.safe_load(source.read_text())
     params=copy.deepcopy(production["controller_server"]["ros__parameters"])
