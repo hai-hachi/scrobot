@@ -689,6 +689,21 @@ async function history(){
     checkbox.checked=plotRuns.has(item.name)||pendingPlotRuns.has(item.name);
     checkbox.addEventListener('change',()=>selectSavedTrace(item.name,checkbox.checked));
     checkCell.append(checkbox);tr.insertBefore(checkCell,tr.firstChild);
+    const replayCell=document.createElement('td');
+    const replayButton=document.createElement('button');
+    replayButton.type='button';
+    replayButton.textContent='Inspect';
+    replayButton.className='btn small outline';
+    replayButton.disabled=!item.has_timeline;
+    replayButton.title=item.has_timeline?
+      'Load this saved run into the timeline inspector':
+      'Detailed timeline unavailable: recorded before the telemetry update';
+    replayButton.onclick=()=>{
+      loadTimeline(item.name);
+      $('timeline-run').scrollIntoView({behavior:'smooth',block:'center'});
+    };
+    replayCell.append(replayButton);
+    tr.insertBefore(replayCell,tr.children[1]);
 
     const td=document.createElement('td'),b=document.createElement('button');
     b.className='btn small danger';b.textContent='Delete';
@@ -698,6 +713,7 @@ async function history(){
       operate(async()=>{
         await api('/history/delete',{name:item.name,confirm:true});
         plotRuns.delete(item.name);pendingPlotRuns.delete(item.name);
+        if(timelineName===item.name)await loadTimeline('');
         await history();renderChart();
         notify('Experiment deleted.');
       });
@@ -706,10 +722,27 @@ async function history(){
   }
   if(!rows.length){
     const tr=document.createElement('tr'),td=document.createElement('td');
-    td.colSpan=10;td.textContent='No saved tracking runs yet.';
+    td.colSpan=11;td.textContent='No saved tracking runs yet.';
     tr.append(td);table.append(tr);
   }
   syncPlotCheckboxes();
+  const picker=$('timeline-run');
+  const previous=timelineName;
+  picker.replaceChildren();
+  const empty=document.createElement('option');
+  empty.value='';empty.textContent='Choose a recorded experiment…';
+  picker.append(empty);
+  for(const item of rows){
+    if(!item.has_timeline)continue;
+    const option=document.createElement('option');
+    option.value=item.name;
+    option.textContent=(item.summary?.controller||'—')+
+      ' · '+(item.summary?.path||'—')+' · '+item.name;
+    picker.append(option);
+  }
+  picker.value=rows.some(x=>x.name===previous&&x.has_timeline)?
+    previous:'';
+  if(previous&&!picker.value)loadTimeline('');
 }
 async function refresh(){
   const data=await api('/status');
@@ -823,6 +856,8 @@ for(const [id,path,message]of [
   $(id).onclick=()=>operate(async()=>{await api(path,{});notify(message);});
 }
 $('plot-live').onchange=renderChart;
+$('timeline-run').onchange=()=>loadTimeline($('timeline-run').value);
+$('timeline-slider').oninput=drawTimeline;
 $('clear-plot').onclick=()=>{
   plotRuns.clear();pendingPlotRuns.clear();
   syncPlotCheckboxes();renderChart();
@@ -831,6 +866,7 @@ $('clear-history').onclick=()=>{
   if(!confirm('Permanently delete ALL saved Tracker Lab experiments?'))return;
   operate(async()=>{const r=await api('/history/clear',{confirm:true});
     plotRuns.clear();pendingPlotRuns.clear();
+    await loadTimeline('');
     await history();renderChart();
     notify('Deleted '+r.deleted+' tracking experiments.');});
 };
@@ -840,6 +876,7 @@ $('clear-history').onclick=()=>{
     const x=await api('/config');setForm(x);
     await refreshPreview();
     await refresh();await history();
+    renderPhasePortraits();
   }catch(e){notify(e.message,true);}
   initializing=false;
   setInterval(async()=>{
