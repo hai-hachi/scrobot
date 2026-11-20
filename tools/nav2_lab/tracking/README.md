@@ -381,3 +381,20 @@ The separate ROS Jazzy colcon workflow checks plugin compilation.
 **Actual Gazebo controller integration, start/stop behavior and RPP-vs-SMC
 tracking quality require an on-machine run; offline tests are not proof of
 successful physics tracking.**
+
+### Rounded 100 RPM physical drivetrain limit
+
+Wheel diameter is **0.100 m** and the drive wheel-centre separation is
+**0.420 m**, from the actual SCROBOT URDF. The rounded motor maximum is
+**100 RPM**, which by geometry implies **0.52360 m/s** rim speed.
+However, the separately specified maximum **0.50 m/s per wheel** is lower,
+so that rating is the effective speed limit in the controller and router.
+The maximum straight velocity is `0.50 m/s`, and the maximum pure spin is
+`2*0.50/0.420 = 2.38095 rad/s`.
+
+For simultaneous motion, the exact coupled drivetrain restriction is
+`|v| + 0.210*|omega| <= 0.50 m/s`, equivalent to imposing both
+`|v - 0.210*omega| <= 0.50` and `|v + 0.210*omega| <= 0.50`.
+This is enforced in the common command router (RPP, SMC-1s, SMC-2s) and
+internally in the full SMC plugins. Separate requested linear/angular
+maxima do **not** mean both limits are reachable at the same time.
