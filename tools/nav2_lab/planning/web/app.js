@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 const SVG_NS='http://www.w3.org/2000/svg';
 let saved=null,scene=null,status=null,calibration=null,busy=false;
 let productionPlannerStatus=null;
-const PUBLISH_PLANNERS={NavFnDijkstra:'NavFn — Dijkstra',NavFnAStar:'NavFn — A*',Smac2D:'Smac 2D',ThetaStar:'Theta*'};
+const PUBLISH_PLANNERS={NavFnAStar:'NavFn — A*',SmacLattice:'Smac State Lattice',ThetaStar:'Theta*'};
 let venue={x:21,y:12},historyReady=false;
 
 async function api(route,body){
@@ -550,11 +550,11 @@ function renderResults(summary){
     ' · last cycle '+fmt(summary.last_cycle_wall_s,2)+' wall s · refresh requested '+
     fmt(summary.interval_s,1)+' SIM s (~'+
     fmt(summary.interval_s/(status?.map_status?.real_time_factor||.25),1)+
-    ' wall s at measured RTF). All four plugins are called sequentially; '+
+    ' wall s at measured RTF). All three plugins are called sequentially; '+
     'a changing costmap may make their paths differ. Last updated '+
     (typeof summary.last_updated_wall_time==='number'?
        new Date(summary.last_updated_wall_time*1000).toLocaleTimeString():'—')+'.':
-    'Single comparison mode. Switch to Live replan to repeatedly refresh all four paths as a cylinder moves.';
+    'Single comparison mode. Switch to Live replan to repeatedly refresh all three paths as a cylinder moves.';
 }
 async function refreshHistory(){
   try{
@@ -710,7 +710,7 @@ $('plan').onclick=()=>operation(async()=>{
   const interval_s=Number($('live-interval').value);
   await api('/api/plan',{mode,interval_s});
   notify(mode==='live'?
-    'Live replanning started: all four paths refresh until you press Stop live planning. The robot will not move.':
+    'Live replanning started: all three paths refresh until you press Stop live planning. The robot will not move.':
     'Single planner comparison started. The robot will not move.');
 });
 $('cancel').onclick=()=>operation(async()=>{await api('/api/cancel',{});notify('Cancel requested.');});

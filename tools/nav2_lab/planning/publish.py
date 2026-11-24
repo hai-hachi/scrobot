@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 import yaml
 
-from planning.core import PLANNERS, planner_profiles
+from planning.core import PLANNERS, LATTICE_RESOLUTION_M, planner_profiles
 
 
 _SECTION = re.compile(r"(?m)^planner_server:[ \t]*\n")
@@ -64,12 +64,12 @@ def _infer_alias(params):
     if not isinstance(alias,dict):
         return None
     plugin=alias.get("plugin")
-    if plugin==PLANNERS["Smac2D"]:
-        return "Smac2D"
+    if plugin==PLANNERS["SmacLattice"]:
+        return "SmacLattice"
     if plugin==PLANNERS["ThetaStar"]:
         return "ThetaStar"
     if plugin==PLANNERS["NavFnAStar"]:
-        return "NavFnAStar" if alias.get("use_astar") is True else "NavFnDijkstra"
+        return "NavFnAStar" if alias.get("use_astar") is True else None
     return None
 
 
@@ -107,12 +107,16 @@ def render_publish(original,enabled,default):
     old_params=document["planner_server"].get("ros__parameters")
     if not isinstance(old_params,dict):
         raise ValueError("Production planner ROS parameters missing")
+    if "SmacLattice" in selected:
+        resolution = document.get("global_costmap", {}).get("global_costmap", {}).get("ros__parameters", {}).get("resolution")
+        if resolution != LATTICE_RESOLUTION_M:
+            raise ValueError("Production global costmap must use 0.05 m resolution to publish Smac State Lattice")
     start,end=_section_span(text)
     params=deepcopy(old_params)
     old_ids=params.get("planner_plugins",[])
     if not isinstance(old_ids,list):
         raise ValueError("Existing planner_plugins must be a list")
-    for name in set(old_ids)|set(PLANNERS)|{"GridBased"}:
+    for name in set(old_ids)|set(PLANNERS)|{"GridBased", "NavFnDijkstra", "Smac2D"}:
         if isinstance(name,str):
             params.pop(name,None)
     profiles=planner_profiles()
