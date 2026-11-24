@@ -1,0 +1,68 @@
+# Saved Tracking Lab settings, not main simulation params.
+# Use the separate Publish button to transfer to production.
+schema_version: 1
+lab: tracking
+settings:
+  path: straight
+  controller: SMC_2S
+  spawn_mode: manual
+  progress: 0
+  lateral_m: 2
+  heading_deg: 15
+  seed: 2026
+  random_lateral_m: 1
+  random_heading_deg: 55
+  pose:
+    x: -4.795
+    y: 1.861
+    yaw_deg: 13.5
+  shared:
+    desired_speed_mps: 0.3
+    max_sim_duration_s: 120
+    goal_xy_tolerance_m: 0.1
+    goal_yaw_tolerance_deg: 5
+    progress_radius_m: 0.1
+    progress_timeout_sim_s: 25
+    lookahead_radius_m: 0.6
+    curvature_window_m: 0.14
+  rpp:
+    lookahead_dist: 0.32
+    min_lookahead_dist: 0.28
+    max_lookahead_dist: 0.45
+    lookahead_time: 0.8
+    use_velocity_scaled_lookahead_dist: true
+    use_regulated_linear_velocity_scaling: true
+    regulated_linear_scaling_min_radius: 0.5
+    regulated_linear_scaling_min_speed: 0.25
+    use_rotate_to_heading: true
+    rotate_to_heading_angular_vel: 1.6
+    rotate_to_heading_min_angle_deg: 20
+    max_angular_accel: 1
+    min_approach_linear_velocity: 0.1
+  smc_1s:
+    lambda_y: 2.5
+    k_s: 1.2
+    k_x: 0.8
+    eta: 0.4
+    phi: 0.3
+    eta_x: 0.25
+    phi_x: 0.3
+    singular_guard: 0.06
+    max_angular_cmd: 1.5
+    max_linear_accel: 1
+    max_angular_accel: 2
+    lambda_x: 0.6
+    use_saturation: true
+  smc_2s:
+    lambda_y: 4
+    k_s: 3.5
+    k_x: 0.5
+    eta: 0.8
+    phi: 0.2
+    eta_x: 0.4
+    phi_x: 0.3
+    singular_guard: 0.1
+    max_angular_cmd: 1.5
+    max_linear_accel: 1
+    max_angular_accel: 2
+    use_saturation: true

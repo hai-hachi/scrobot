@@ -1,0 +1,21 @@
+# Saved Nav2 scene; separate from planner and upstream calibration.
+schema_version: 1
+lab: nav2_scene
+settings:
+  robot:
+    x: -4.43
+    y: -1.33
+    yaw_deg: -165.1
+  obstacles:
+  - kind: box
+    x: -2.93
+    y: -1.47
+    size: 0.55
+  - kind: human
+    point_a:
+      x: -3.24
+      y: 1.96
+    point_b:
+      x: -2.07
+      y: -2.17
+    speed_mps: 0.2

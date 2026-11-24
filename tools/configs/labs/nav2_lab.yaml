@@ -19,20 +19,20 @@ settings:
     run_root: ~/scrobot_ws/evaluation_results/nav2_lab
   simulation:
     ros_domain_id: 77
-    start_x: 0.0
-    start_y: 0.0
-    start_yaw: 0.0
+    start_x: -4.43
+    start_y: -1.33
+    start_yaw: -2.8815385950426378
     use_magnetometer: false
   planning:
-    planner: NavFnDijkstra
+    planner: all
     depth_obstacles: true
-    resolution_m: 0.05
+    resolution_m: 0.02
     timeout_s: 25
     start:
-      x: -3
-      y: 0
-      yaw_deg: 0
+      x: -4.43
+      y: -1.33
+      yaw_deg: -165.1
     goal:
-      x: 3
-      y: 0
-      yaw_deg: 0
+      x: 0.71
+      y: 0.66
+      yaw_deg: 37.2

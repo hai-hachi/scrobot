@@ -1,0 +1,6 @@
+# Lab-only Gazebo RTF caps; never published as calibration.
+schema_version: 1
+lab: simulation_speed
+settings:
+  nav2: 1.0
+  tracking: 1.0
