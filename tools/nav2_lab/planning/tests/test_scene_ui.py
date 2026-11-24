@@ -56,6 +56,10 @@ def test_planner_tab_drag_clicks_cell_size_and_performance():
     assert 'value="human-b"' not in PAGE
     assert 'value="human"' in PAGE
     assert 'id="resolution" type="number"' in PAGE
+    assert 'value="0.05" readonly' in PAGE
+    assert 'value="SmacLattice"' in PAGE
+    assert 'value="Smac2D"' not in PAGE
+    assert 'value="NavFnDijkstra"' not in PAGE
     assert 'id="topic-rate-rows"' in PAGE
     assert "pointerdown" in SCRIPT and "pointermove" in SCRIPT
     assert "setPointerCapture" in SCRIPT

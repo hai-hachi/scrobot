@@ -21,7 +21,7 @@
  <div class="metrics">
    <div class="metric"><small>SIMULATION</small><strong>SCROBOT</strong><span>Calibrated Gazebo court</span></div>
    <div class="metric"><small>DEPTH SOURCE</small><strong id="depth-mode">Loading…</strong><span id="depth-rate">Saved Camera Lab</span></div>
-   <div class="metric"><small>PLANNERS</small><strong>4</strong><span>Dijkstra · A* · Smac · Theta*</span></div>
+   <div class="metric"><small>PLANNERS</small><strong>3</strong><span>NavFn A* · State Lattice · Theta*</span></div>
    <div class="metric"><small>ROS DOMAIN</small><strong id="domain">77</strong><span>Isolated lab</span></div>
  </div>
 
@@ -110,29 +110,28 @@
     <div>
      <div class="field"><label for="planner">Global planner</label>
        <select id="planner">
-        <option value="all">Compare all four planners</option>
-        <option value="NavFnDijkstra">NavFn — Dijkstra</option>
+        <option value="all">Compare all three planners</option>
         <option value="NavFnAStar">NavFn — A*</option>
-        <option value="Smac2D">Smac 2D</option>
+        <option value="SmacLattice">Smac State Lattice</option>
         <option value="ThetaStar">Theta*</option>
        </select></div>
      <div class="field"><label for="timeout">Planning timeout (simulated seconds)</label><input id="timeout" type="number" step="1" min="3" max="120"></div>
      <div class="field"><label for="planning-mode">Planning mode</label>
        <select id="planning-mode">
          <option value="single">Single comparison</option>
-         <option value="live">Live replan — all four planners</option>
+         <option value="live">Live replan — all three planners</option>
        </select>
      </div>
      <div class="field" id="live-interval-row" hidden>
        <label for="live-interval">Live refresh interval (simulated seconds)</label>
        <input id="live-interval" type="number" min="0.5" max="10.0" step="0.5" value="2.0">
-       <p class="fineprint">All four Nav2 planners replan sequentially from the stationary robot pose on Gazebo /clock. At RTF 0.25, a 2-second simulated refresh means about 8 wall seconds. No motion commands are sent.</p>
+       <p class="fineprint">All three Nav2 planners replan sequentially from the stationary robot pose on Gazebo /clock. At RTF 0.25, a 2-second simulated refresh means about 8 wall seconds. No motion commands are sent.</p>
      </div>
     </div>
     <div>
      <div class="switchline"><label for="depth-enabled">Use RealSense depth obstacle layer</label><input id="depth-enabled" type="checkbox"></div>
-     <div class="field"><label for="resolution">Cell size / map resolution (m)</label><input id="resolution" type="number" min="0.02" max="0.20" step="0.01" value="0.05"></div>
-     <p class="fineprint">Changing map resolution, depth layer or saved calibration requires a simulation restart.</p>
+     <div class="field"><label for="resolution">Cell size / map resolution (m)</label><input id="resolution" type="number" min="0.05" max="0.05" step="0.01" value="0.05" readonly></div>
+     <p class="fineprint">Map resolution is fixed at 0.05 m to match State Lattice differential-drive primitives. Changing the depth layer or saved calibration requires a simulation restart.</p>
     </div>
    </div>
  </section>
@@ -143,9 +142,8 @@
    <div class="grid">
      <div>
        <h3>Enabled global planners</h3>
-       <div class="switchline"><label for="publish-NavFnDijkstra">NavFn — Dijkstra</label><input id="publish-NavFnDijkstra" type="checkbox"></div>
        <div class="switchline"><label for="publish-NavFnAStar">NavFn — A*</label><input id="publish-NavFnAStar" type="checkbox"></div>
-       <div class="switchline"><label for="publish-Smac2D">Smac 2D</label><input id="publish-Smac2D" type="checkbox"></div>
+       <div class="switchline"><label for="publish-SmacLattice">Smac State Lattice</label><input id="publish-SmacLattice" type="checkbox"></div>
        <div class="switchline"><label for="publish-ThetaStar">Theta*</label><input id="publish-ThetaStar" type="checkbox"></div>
      </div>
      <div>
@@ -188,9 +186,8 @@
    </div>
    <p class="fineprint" id="map-hint">Start simulation, then open RViz. The map must have a publisher and the map → odom → base_footprint TF chain must be available.</p>
    <div class="legend">
-     <span><i style="background:#eeb345"></i> NavFn Dijkstra</span>
      <span><i style="background:#52a2ef"></i> NavFn A*</span>
-     <span><i style="background:#36d69a"></i> Smac 2D</span>
+     <span><i style="background:#36d69a"></i> Smac State Lattice</span>
      <span><i style="background:#c387f0"></i> Theta*</span>
    </div>
    <div class="legend">
@@ -212,7 +209,7 @@
  <section class="panel" id="benchmarks">
    <div class="between"><h2>4 · Planner benchmarks</h2><span id="run-name">No experiment</span></div>
    <p class="fineprint" id="result-note">Compare CPU/RAM, plan length, clearance and planning time. The robot does not drive during this experiment.</p>
-   <p class="fineprint" id="live-state">Single planning is ready. Choose Live replan to refresh all four planner paths as moving objects cross the depth camera view.</p>
+   <p class="fineprint" id="live-state">Single planning is ready. Choose Live replan to refresh all three planner paths as moving objects cross the depth camera view.</p>
    <div class="table-wrap"><table>
      <thead><tr><th>Planner</th><th>Status</th><th>Nav2 (ms)</th><th>Roundtrip (ms)</th>
      <th>Sim roundtrip (ms)</th><th>Path (m)</th><th>Clearance (m)</th><th>CPU (ms)</th><th>RSS (MB)</th><th>Δ RSS (MB)</th></tr></thead>

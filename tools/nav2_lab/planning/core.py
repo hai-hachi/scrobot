@@ -1,17 +1,41 @@
 """Path-planning-only profiles for the SCROBOT Nav2 Lab."""
 from copy import deepcopy
 import math
+import os
+from pathlib import Path
+
+LATTICE_RESOLUTION_M = 0.05
+LATTICE_PRIMITIVES = Path("sample_primitives/5cm_resolution/0.5m_turning_radius/diff/output.json")
+
+
+def lattice_filepath():
+    """Resolve installed ROS Jazzy differential-drive primitives, without ROS imports in CI."""
+    prefixes = [p for p in os.environ.get("AMENT_PREFIX_PATH", "").split(os.pathsep) if p]
+    prefixes.append("/opt/ros/jazzy")
+    candidates = [Path(p) / "share/nav2_smac_planner" / LATTICE_PRIMITIVES for p in prefixes]
+    return str(next((p for p in candidates if p.is_file()), candidates[-1]))
+
+
+def migrate_saved_config(config):
+    """Upgrade old saved planner settings, not historical benchmark records."""
+    config = deepcopy(config)
+    planning = config.get("planning", {})
+    if planning.get("planner") == "NavFnDijkstra":
+        planning["planner"] = "NavFnAStar"
+    elif planning.get("planner") == "Smac2D":
+        planning["planner"] = "SmacLattice"
+    if "resolution_m" in planning:
+        planning["resolution_m"] = LATTICE_RESOLUTION_M
+    return config
 
 PLANNERS = {
-    "NavFnDijkstra": "nav2_navfn_planner::NavfnPlanner",
     "NavFnAStar": "nav2_navfn_planner::NavfnPlanner",
-    "Smac2D": "nav2_smac_planner::SmacPlanner2D",
+    "SmacLattice": "nav2_smac_planner::SmacPlannerLattice",
     "ThetaStar": "nav2_theta_star_planner::ThetaStarPlanner",
 }
 COLORS = {
-    "NavFnDijkstra": (238, 179, 69),
     "NavFnAStar": (82, 162, 239),
-    "Smac2D": (54, 214, 154),
+    "SmacLattice": (54, 214, 154),
     "ThetaStar": (195, 135, 240),
 }
 WORLD_NAME = "badminton_court"
@@ -41,7 +65,9 @@ def validate(config):
             check(("planning",which,dim), -8.5 if dim=="x" else -4.5, 8.5 if dim=="x" else 4.5)
         check(("planning",which,"yaw_deg"), -360, 360)
     check(("planning","timeout_s"), 3, 120)
-    check(("planning","resolution_m"), .02, .20)
+    resolution = check(("planning","resolution_m"), .02, .20)
+    if not math.isclose(resolution, LATTICE_RESOLUTION_M, rel_tol=0.0, abs_tol=1e-9):
+        raise ValueError("Smac State Lattice requires a 0.05 m costmap for its differential-drive primitives")
     check(("simulation","ros_domain_id"), 1, 232)
     # World and costmap use the court-fixed map frame. A static map->odom TF
     # accounts for the robot's chosen spawn pose, so odom can stay robot-local.
@@ -60,18 +86,16 @@ def planner_profiles():
     algorithm selected in the lab has identical plugin parameters.
     """
     return {
-        "NavFnDijkstra": {
-            "plugin": PLANNERS["NavFnDijkstra"], "tolerance": .10,
-            "use_astar": False, "allow_unknown": False,
-        },
         "NavFnAStar": {
             "plugin": PLANNERS["NavFnAStar"], "tolerance": .10,
             "use_astar": True, "allow_unknown": False,
         },
-        "Smac2D": {
-            "plugin": PLANNERS["Smac2D"], "tolerance": .10,
-            "downsample_costmap": False, "allow_unknown": False,
-            "max_planning_time": 2.0, "cost_travel_multiplier": 2.0,
+        "SmacLattice": {
+            "plugin": PLANNERS["SmacLattice"], "tolerance": .10,
+            "allow_unknown": False, "max_planning_time": 2.0,
+            "lattice_filepath": lattice_filepath(), "cost_penalty": 2.0,
+            "rotation_penalty": 5.0, "allow_reverse_expansion": False,
+            "cache_obstacle_heuristic": False, "smooth_path": True,
         },
         "ThetaStar": {
             "plugin": PLANNERS["ThetaStar"], "how_many_corners": 8,

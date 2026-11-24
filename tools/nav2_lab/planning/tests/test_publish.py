@@ -23,16 +23,15 @@ def test_all_lab_profiles_are_canonical():
     profiles=planner_profiles()
     assert set(profiles)==set(PLANNERS)
     assert profiles["NavFnAStar"]["use_astar"] is True
-    assert profiles["NavFnDijkstra"]["use_astar"] is False
-    assert profiles["Smac2D"]["plugin"]==PLANNERS["Smac2D"]
+    assert "NavFnDijkstra" not in profiles and "Smac2D" not in profiles
+    assert profiles["SmacLattice"]["plugin"]==PLANNERS["SmacLattice"]
     assert profiles["ThetaStar"]["plugin"]==PLANNERS["ThetaStar"]
 
 
 @pytest.mark.parametrize("choices,default",[
-    (["NavFnDijkstra"],"NavFnDijkstra"),
     (["NavFnAStar"],"NavFnAStar"),
-    (["Smac2D","ThetaStar"],"ThetaStar"),
-    (list(PLANNERS),"Smac2D"),
+    (["SmacLattice","ThetaStar"],"ThetaStar"),
+    (list(PLANNERS),"SmacLattice"),
 ])
 def test_render_preserves_nonplanner_source_bytes(choices,default):
     original=PRODUCTION.read_text()
@@ -67,13 +66,13 @@ def test_publish_atomically_backs_up_original_and_guards_source(tmp_path):
     dest.write_text(original)
     backup_root=tmp_path/"backups"
     before=production_status(dest)
-    result=publish(dest,["ThetaStar","Smac2D"],"ThetaStar",
+    result=publish(dest,["ThetaStar","SmacLattice"],"ThetaStar",
                    before["sha256"],backup_root)
     assert result["changed"] is True
     assert result["restart_required"] is True
-    assert result["selected"]==["Smac2D","ThetaStar"]
+    assert result["selected"]==["SmacLattice","ThetaStar"]
     assert result["default"]=="ThetaStar"
-    assert result["plugin_ids"]==["GridBased","Smac2D","ThetaStar"]
+    assert result["plugin_ids"]==["GridBased","SmacLattice","ThetaStar"]
     assert Path(result["backup_path"]).read_text()==original
     assert dest.read_text()!=original
     assert not list(tmp_path.glob(".nav2_planner_publish_*.tmp"))
@@ -90,10 +89,10 @@ def test_invalid_publish_is_noop(tmp_path):
     fingerprint=sha256(original.encode()).hexdigest()
     for selection,default in (
         ([], "NavFnAStar"),
-        (["Smac2D","Smac2D"],"Smac2D"),
-        (["Smac2D"],"ThetaStar"),
+        (["SmacLattice","SmacLattice"],"SmacLattice"),
+        (["SmacLattice"],"ThetaStar"),
         (["BAD"],"BAD"),
-        ("Smac2D","Smac2D"),
+        ("SmacLattice","SmacLattice"),
     ):
         with pytest.raises(ValueError):
             publish(dest,selection,default,fingerprint,tmp_path/"backups")
@@ -115,3 +114,12 @@ def test_publisher_only_changes_production_planners_on_explicit_request():
     assert 'expected_sha256:productionPlannerStatus.sha256' in app
     assert 'await api("/api/planners/publish"' not in app
     assert "await api('/api/planners/publish'" in app
+
+
+def test_lattice_publish_rejects_incompatible_global_costmap():
+    data=yaml.safe_load(PRODUCTION.read_text())
+    data["global_costmap"]["global_costmap"]["ros__parameters"]["resolution"]=.10
+    original=yaml.safe_dump(data,sort_keys=False)
+    with pytest.raises(ValueError,match="0.05 m"):
+        render_publish(original,["SmacLattice"],"SmacLattice")
+    assert render_publish(original,["NavFnAStar"],"NavFnAStar")

@@ -60,7 +60,7 @@ layer). Neither button publishes to the production simulation.
 ## Publish tested planners to the main simulation
 
 The **Planner** page now includes **Publish planners to main simulation**,
-with four checkboxes (NavFn Dijkstra, NavFn A*, Smac 2D, Theta*), a
+with three checkboxes (NavFn A*, Smac State Lattice, Theta*), a
 **Default planner** dropdown restricted to the enabled selection, and a
 **Publish Planners to Main** button next to **Save Lab YAML**.
 
@@ -71,7 +71,7 @@ experiment. Only pressing the Publish button, then confirming, edits:
 
 The writer changes **only the top-level `planner_server` YAML section**.
 It copies the plugin configurations actually used by the Planner Lab:
-NavFn Dijkstra vs A* (`use_astar`), Smac 2D and Theta* settings. Everything
+NavFn A* (`use_astar`), Smac State Lattice and Theta* settings. Everything
 else—BT navigator, controllers, both costmaps, depth/odometry calibration,
 other lab YAMLs, and 0.25 RTF—remains untouched, including all unrelated
 production YAML comments.
@@ -159,10 +159,10 @@ frequent full maps as a performance failure.
   planning limit is **25 simulated seconds**, about 100 wall seconds if
   Gazebo achieves 0.25 RTF. A separate conservative wall watchdog and a
   12-wall-second stalled-/clock detector prevent permanent hangs.
-- Live all-four replanning uses a **simulated-second minimum cycle period**:
+- Live all-three replanning uses a **simulated-second minimum cycle period**:
   2.0 sim seconds normally means approximately 8 wall seconds at 0.25
-  measured RTF. Four planners are still executed sequentially, not on
-  four wall timers. Longer cycles are never queued up.
+  measured RTF. Three planners are still executed sequentially, not on
+  three wall timers. Longer cycles are never queued up.
 - Every planner run snapshots the **applied** Gazebo RTF cap (which may differ
   from a slider value saved after simulation startup) and records both
   **wall and simulation round-trip durations**. Do not compare wall latency
@@ -215,7 +215,7 @@ These are now integer values. The other important correction is the frame:
   to avoid depth fighting with occupancy layers.
 - Court paint is white, the mat outline lime, the outer clearance pink.
   Static map opacity is **0.30**, global costmap **0.22**. Robot/goal arrows,
-  thin collision footprint, camera link and four planner paths remain.
+  thin collision footprint, camera link and three planner paths remain.
 - RViz's Fixed Frame is `map`, with an independently configured static
   `/map` display (reliable/transient-local QoS) and live
   `/global_costmap/costmap` display (reliable/volatile QoS).
@@ -333,10 +333,9 @@ snapshot. The main `src/` simulation and all other labs remain unchanged.
 
 ## Continuous live replanning
 
-Choose **Live replan — all four planners** and a refresh interval
+Choose **Live replan — all three planners** and a refresh interval
 (0.5–10 seconds; default **2 seconds**), then press **Start live replanning**.
-This starts one persistent action client which invokes NavFn Dijkstra,
-NavFn A*, Smac 2D, and Theta* **sequentially** every cycle. Each new
+This starts one persistent action client which invokes NavFn A*, Smac State Lattice, and Theta* **sequentially** every cycle. Each new
 successful Nav2 result replaces that planner's retained RViz path.
 A failed planner clears its stale path. The lab records latest planning
 latency/path length/clearance, completed cycles, wall-clock cycle duration,
@@ -344,7 +343,7 @@ success/failure counts and changing-costmap fingerprints.
 
 The robot **never moves** in this test, and a moving cylinder is registered
 as an obstacle only if the real simulated depth-camera pipeline observes it.
-Because the four requests are sequential, a person may move and change the
+Because the three requests are sequential, a person may move and change the
 costmap between them: this mode measures **adaptation to new perception**,
 not a strictly controlled same-costmap planner benchmark.
 
@@ -353,7 +352,7 @@ added/removed and the scene YAML saved while live planning is running.
 To change the goal, robot pose, costmap resolution or depth-layer mode,
 stop live planning first (and restart simulation for changes requiring
 a new map/robot pose). The requested interval is a **minimum cycle period**:
-if all four planners take longer, they are not queued concurrently.
+if all three planners take longer, they are not queued concurrently.
 
 ## Performance diagnostics (why depth is below 30 Hz)
 
@@ -390,13 +389,23 @@ to avoid unnecessary Python PointCloud2 deserialization.
 
 Robot and goal markers use explicit two-point RViz ARROW geometry: **0.35 m
 shaft + 0.35 m taper**, shaft diameter **0.10 m** (one third thinner than
-the former 0.15 m), pointed head diameter **0.16 m**. The four planner
+the former 0.15 m), pointed head diameter **0.16 m**. The three planner
 paths are now **0.08 m** wide instead of 0.035 m. These are overlay
 settings only, not robot dimensions or collision geometry.
 
 ## Planner benchmark
 
-Choose NavFn Dijkstra, NavFn A*, Smac 2D, Theta*, or **all four**.
+All three planners share a fixed 0.05 m global costmap. State Lattice uses
+Nav2 Jazzy's packaged differential-drive control set (`diff/output.json`,
+5 cm grid, 0.5 m turning radius for moving arcs, in-place rotation primitives).
+Reverse expansion is disabled to match the forward-only production RPP setup.
+The lattice file is resolved from the sourced ROS installation; startup fails
+clearly if it is missing. Older saved Dijkstra/Smac2D selections migrate to
+NavFn A*/Smac State Lattice; old benchmark results are not rewritten.
+Publishing State Lattice requires the production global costmap to also use
+0.05 m resolution; the lab never changes that costmap automatically.
+
+Choose NavFn A*, Smac State Lattice, Theta*, or **all three**.
 The runner uses actual `ComputePathToPose` requests, explicit start/goal
 in `map` and costmaps created through real Nav2 plugins. The robot does
 not drive. For fair comparisons, leave any moving human stopped or remove

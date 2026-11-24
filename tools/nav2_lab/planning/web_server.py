@@ -20,7 +20,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import yaml
-from planning.core import PLANNERS, nav2_params, validate
+from planning.core import PLANNERS, lattice_filepath, migrate_saved_config, nav2_params, validate
 from planning.map_builder import write_court_map
 from planning.obstacles import Obstacles
 from planning.history_store import (list_runs as saved_runs,
@@ -107,6 +107,8 @@ def preflight(env):
     missing=sorted(required-installed)
     if missing:
         raise RuntimeError("Missing ROS packages: "+", ".join(missing))
+    if not Path(lattice_filepath()).is_file():
+        raise RuntimeError("Missing Nav2 differential-drive lattice primitives: "+lattice_filepath())
     graph=subprocess.run(["ros2","topic","list"],env=env,capture_output=True,
                          text=True,timeout=10,check=False)
     if graph.returncode:
@@ -194,7 +196,7 @@ class Service:
                 data=yaml.safe_load(TEMPLATE.read_text())
         else:
             data=yaml.safe_load(self.config_path.read_text())
-        return validate(data)
+        return validate(migrate_saved_config(data))
 
     def calibration_status(self):
         current=load_inputs()

@@ -296,7 +296,7 @@ def run(config,run_dir,cache,planner_pid=None):
 
 
 def run_live(config, run_dir, cache, interval_s, planner_pid=None):
-    """Continuously recompute all four Nav2 paths from the latest costmap."""
+    """Continuously recompute all three Nav2 paths from the latest costmap."""
     validate(config)
     interval=float(interval_s)
     if not math.isfinite(interval) or not .5<=interval<=10.0:
@@ -388,7 +388,7 @@ def main():
     parser.add_argument("--cache",required=True,type=Path)
     parser.add_argument("--planner-pid",type=int)
     parser.add_argument("--live-interval-s",type=float,default=None,
-                        help="Replan all four plugins every N simulated seconds (minimum cycle period)")
+                        help="Replan all three plugins every N simulated seconds (minimum cycle period)")
     a=parser.parse_args()
     signal.signal(signal.SIGINT,cancel_signal)
     signal.signal(signal.SIGTERM,cancel_signal)

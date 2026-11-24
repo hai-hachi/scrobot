@@ -25,7 +25,7 @@ simulation:
 # Path-planning-only lab. The static court map is generated from
 # scrobot_simulation/worlds/badminton_court.sdf + court_landmarks.yaml.
 planning:
-  planner: all  # all | NavFnDijkstra | NavFnAStar | Smac2D | ThetaStar
+  planner: all  # all | NavFnAStar | SmacLattice | ThetaStar
   depth_obstacles: true
   resolution_m: 0.05
   timeout_s: 25.0

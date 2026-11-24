@@ -11,7 +11,7 @@ REPO=HERE.parents[2]
 sys.path.insert(0,str(LAB))
 
 from planning.map_builder import court_geometry, occupancy, write_court_map
-from planning.core import PLANNERS, nav2_params, path_length, path_turning, validate
+from planning.core import PLANNERS, nav2_params, path_length, path_turning, validate, migrate_saved_config
 from planning.obstacles import sdf_fixture, pose_along_segment
 from planning.scene import validate_scene, load_scene, save_scene
 
@@ -62,7 +62,11 @@ def test_planner_plugins_production_config_not_mutated():
     planner=generated["planner_server"]["ros__parameters"]
     assert set(planner["planner_plugins"])==set(PLANNERS)
     assert planner["NavFnAStar"]["use_astar"] is True
-    assert planner["NavFnDijkstra"]["use_astar"] is False
+    assert set(PLANNERS)=={"NavFnAStar","SmacLattice","ThetaStar"}
+    lattice=planner["SmacLattice"]
+    assert lattice["plugin"]=="nav2_smac_planner::SmacPlannerLattice"
+    assert lattice["lattice_filepath"].endswith("/5cm_resolution/0.5m_turning_radius/diff/output.json")
+    assert lattice["allow_reverse_expansion"] is False
     cost=generated["global_costmap"]["global_costmap"]["ros__parameters"]
     assert cost["plugins"]==["static_layer","obstacle_layer","inflation_layer"]
     assert cost["static_layer"]["map_topic"]=="/map"
@@ -124,3 +128,17 @@ def test_scene_rejects_invalid_path_or_cube():
     scene["obstacles"]=[{"kind":"human","point_a":{"x":0,"y":0},
                          "point_b":{"x":0,"y":0},"speed_mps":.6}]
     with pytest.raises(ValueError):validate_scene(scene)
+
+
+@pytest.mark.parametrize("legacy,new",[("NavFnDijkstra","NavFnAStar"),("Smac2D","SmacLattice")])
+def test_saved_config_migration_and_lattice_resolution(legacy,new):
+    cfg=config()
+    cfg["planning"].update(planner=legacy,resolution_m=.10)
+    migrated=migrate_saved_config(cfg)
+    assert migrated["planning"]["planner"]==new
+    assert migrated["planning"]["resolution_m"]==.05
+    assert cfg["planning"]["planner"]==legacy
+    assert validate(migrated)
+    migrated["planning"]["resolution_m"]=.10
+    with pytest.raises(ValueError,match="0.05 m"):
+        validate(migrated)
